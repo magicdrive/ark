@@ -1,0 +1,11 @@
+### goreg.toml
+
+[import]
+local_module = ""  # Defines the local module path. If blank, it will be automatically guessed.
+organization_module = "github.com/magicdrive"  # Defines the organization's module path.
+order = "std,thirdparty,organization,local"  # Specifies the order of import groups.
+
+[format]
+minimize_group = false  # Do not separate import groups when an alias is present.
+sort_include_alias = false  # Sort imports with aliases within their respective groups.
+remove_import_comment = false  # Remove comments in the import.
