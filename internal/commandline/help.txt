@@ -1,0 +1,25 @@
+Usage: ark [OPTIONS] <dirname>
+
+Description:
+   Yet another alternate [directory|repository] represent text generator tool.
+
+Options:
+  -h, --help                                      Show this help message and exit.
+  -v, --version                                   Show version.
+  -n, --additionally-ignorerule <ignorerulefile>  Write formatted imports directory to the file. (optional)
+  -d, --ignore-dotfile <on|off>                   Specify the local module path. (optional. default 'on')
+  -x, --pattern-regex <regxp>                     Specify watch file pattern regexp. (optional.)
+  -i, --include-ext <extention>                   Specify include file extention. Allows comma separated list.(optional.)
+  -g, --exclude-dir-regex <regexp>                Specify include directory ignore pattern regexp. (optional.)
+  -G, --exclude-file-regex <regexp>               Specify watch file ignore pattern regexp. (optional.)
+  -e, --exclude-ext <extention>                   Specify watch exclude file extention. Allows comma separated list. (optional.)
+  -E, --exclude-dir <dirname>                     Specify watch exclude dirname. Allows comma separated list. (optional.)
+
+Arguments:
+  <dirname>                                       The directory name.
+  <extention>                                     file extention name.(example: go,ts,html)
+  <regexp>                                        regular expresion string. Interpreted with golang `regexp` package.
+
+See Also:
+  ark documentation: https://github.com/magicdrive/ark/README.md
+
