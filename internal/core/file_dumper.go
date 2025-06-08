@@ -4,68 +4,111 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
+	"io"
+	"mime"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"unicode/utf8"
+
+	"golang.org/x/net/html/charset"
+	"golang.org/x/text/transform"
+
+	"github.com/magicdrive/ark/internal/commandline"
 )
 
-type ReadOption struct {
-	WithLineNumber bool
-	ShowHeader     bool
-	SkipNonUTF8    bool
-}
+func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *commandline.Option) error {
+	outFile, err := os.Create(outputPath)
+	if err != nil {
+		return err
+	}
+	defer outFile.Close()
 
-func ReadAllFilesRecursively(root string, opt ReadOption) (string, error) {
-	var builder strings.Builder
+	writer := bufio.NewWriter(outFile)
+	defer writer.Flush()
 
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	writer.WriteString(treeStr + "\n")
+
+	err = filepath.WalkDir(root, func(fpath string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
+		if isHiddenFile(fpath) {
+			return nil
+		}
 
-		data, err := os.ReadFile(path)
+		data, err := os.ReadFile(fpath)
 		if err != nil {
 			return err
 		}
 
-		// check UTF-8
-		if opt.SkipNonUTF8 && !utf8.Valid(data) {
+		if isBinary(data) || isImage(fpath) {
 			return nil
 		}
 
-		// remove UTF-8 BOM
-		data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
-
-		if opt.ShowHeader {
-			builder.WriteString(fmt.Sprintf("\n=== %s ===\n", path))
+		decoded, err := convertToUTF8(bytes.NewReader(data))
+		if err != nil {
+			if opt.SkipNonUTF8Flag {
+				return nil
+			}
+			return fmt.Errorf("failed to convert %s: %w", fpath, err)
 		}
 
-		if opt.WithLineNumber {
-			scanner := bufio.NewScanner(bytes.NewReader(data))
-			lineNumber := 1
-			for scanner.Scan() {
-				builder.WriteString(fmt.Sprintf("%6d: %s\n", lineNumber, scanner.Text()))
-				lineNumber++
-			}
-			if err := scanner.Err(); err != nil {
-				return err
-			}
-		} else {
-			builder.Write(data)
-			if len(data) > 0 && data[len(data)-1] != '\n' {
-				builder.WriteByte('\n')
-			}
-		}
+		fmt.Fprintf(writer, "\n=== %s ===\n", fpath)
 
-		return nil
+		scanner := bufio.NewScanner(decoded)
+		lineNumber := 1
+		for scanner.Scan() {
+			line := scanner.Text()
+			if opt.WithLineNumberFlag {
+				fmt.Fprintf(writer, "%6d: %s\n", lineNumber, line)
+			} else {
+				writer.WriteString(line + "\n")
+			}
+			lineNumber++
+		}
+		return scanner.Err()
 	})
 
-	if err != nil {
-		return "", err
+	return err
+}
+
+func isBinary(data []byte) bool {
+	if len(data) == 0 {
+		return false
 	}
-	return builder.String(), nil
+	if bytes.Contains(data, []byte{0x00}) {
+		return true
+	}
+	if !utf8.Valid(data) {
+		return true
+	}
+	controlCount := 0
+	for _, b := range data {
+		if b < 0x20 && b != '\n' && b != '\r' && b != '\t' {
+			controlCount++
+		}
+	}
+	controlRatio := float64(controlCount) / float64(len(data))
+	return controlRatio > 0.1
+}
+
+func isImage(filename string) bool {
+	ext := strings.ToLower(path.Ext(filename))
+	mimeType := mime.TypeByExtension(ext)
+	return strings.HasPrefix(mimeType, "image/")
+}
+
+func convertToUTF8(r io.Reader) (io.Reader, error) {
+	buf := bufio.NewReader(r)
+	peek, err := buf.Peek(1024)
+	if err != nil && err != io.EOF {
+		return nil, err
+	}
+	encoding, _, _ := charset.DetermineEncoding(peek, "")
+	return transform.NewReader(buf, encoding.NewDecoder()), nil
 }

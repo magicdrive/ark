@@ -17,9 +17,12 @@ func OptParse(args []string) (int, *Option, error) {
 
 	fs := flag.NewFlagSet("ark", flag.ExitOnError)
 
-	// --write
-	writeFlagOpt := fs.Bool("write", false, "Show help message.")
-	fs.BoolVar(writeFlagOpt, "w", false, "Show help message.")
+	// --skip-non-utf8
+	skipNonUTF8FlagOpt := fs.Bool("skip-non-utf8", false, "Show help message.")
+
+	// --with-line-number
+	withLineNumberFlagOpt := fs.Bool("with-line-number", false, "Show help message.")
+	fs.BoolVar(withLineNumberFlagOpt, "num", false, "Show help message.")
 
 	// --help
 	helpFlagOpt := fs.Bool("help", false, "Show help message.")
@@ -31,7 +34,7 @@ func OptParse(args []string) (int, *Option, error) {
 
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, "\nHelpOption:")
-		fmt.Fprintln(os.Stderr, "    goreg --help")
+		fmt.Fprintln(os.Stderr, "    ark --help")
 	}
 	err := fs.Parse(args)
 	if err != nil {
@@ -45,10 +48,12 @@ func OptParse(args []string) (int, *Option, error) {
 	}
 
 	result := &Option{
-		TargetDirname: targetDirname,
-		HelpFlag:      *helpFlagOpt,
-		VersionFlag:   *versionFlagOpt,
-		FlagSet:       fs,
+		TargetDirname:      targetDirname,
+		SkipNonUTF8Flag:    *skipNonUTF8FlagOpt,
+		WithLineNumberFlag: *withLineNumberFlagOpt,
+		HelpFlag:           *helpFlagOpt,
+		VersionFlag:        *versionFlagOpt,
+		FlagSet:            fs,
 	}
 
 	OverRideHelp(fs)

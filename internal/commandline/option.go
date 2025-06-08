@@ -18,6 +18,8 @@ type Option struct {
 	ExcludeFileRegex             *regexp.Regexp
 	ExcludeExt                   string
 	ExcludeDir                   string
+	WithLineNumberFlag           bool
+	SkipNonUTF8Flag              bool
 	HelpFlag                     bool
 	VersionFlag                  bool
 	FlagSet                      *flag.FlagSet

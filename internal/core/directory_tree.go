@@ -11,7 +11,7 @@ func isHiddenFile(name string) bool {
 	return strings.HasPrefix(name, ".")
 }
 
-func PrintTree(path string, indent string) (string, error) {
+func GenerateTreeString(path string, indent string) (string, error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
 		return "", fmt.Errorf("Error reading directory %s: %v", path, err)
@@ -34,14 +34,14 @@ func PrintTree(path string, indent string) (string, error) {
 				b.WriteString("└── ")
 				b.WriteString(file.Name())
 				b.WriteString("/\n")
-				treeStr, _ := PrintTree(fullPath, indent+"    ")
+				treeStr, _ := GenerateTreeString(fullPath, indent+"    ")
 				b.WriteString(treeStr)
 			} else {
 				b.WriteString(indent)
 				b.WriteString("├── ")
 				b.WriteString(file.Name())
 				b.WriteString("/\n")
-				treeStr, _ := PrintTree(fullPath, indent+"│   ")
+				treeStr, _ := GenerateTreeString(fullPath, indent+"│   ")
 				b.WriteString(treeStr)
 			}
 		} else {
