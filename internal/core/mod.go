@@ -8,7 +8,7 @@ func Apply(opt *commandline.Option) error {
 	if treeStr, err := GenerateTreeString(opt.TargetDirname, ""); err != nil {
 		return err
 	} else {
-		if err := ReadAndWriteAllFiles(treeStr, "./", "output.txt", opt); err != nil {
+		if err := ReadAndWriteAllFiles(treeStr, opt.TargetDirname, "output.txt", opt); err != nil {
 			return err
 		}
 	}
