@@ -41,6 +41,10 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 			return nil
 		}
 
+		if !CanBoaded(opt, fpath) {
+			return nil
+		}
+
 		data, err := os.ReadFile(fpath)
 		if err != nil {
 			return err
@@ -61,6 +65,9 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 		fmt.Fprintf(writer, "\n=== %s ===\n", fpath)
 
 		scanner := bufio.NewScanner(decoded)
+		const maxCapacity = 10 * 1024 * 1024 // 10MB
+		buf := make([]byte, 0, 64*1024)
+		scanner.Buffer(buf, maxCapacity)
 		lineNumber := 1
 		for scanner.Scan() {
 			line := scanner.Text()

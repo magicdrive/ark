@@ -6,8 +6,11 @@ Description:
 Options:
   -h, --help                                      Show this help message and exit.
   -v, --version                                   Show version.
-  -n, --additionally-ignorerule <ignorerulefile>  Write formatted imports directory to the file. (optional)
-  -d, --ignore-dotfile <on|off>                   Specify the local module path. (optional. default 'on')
+  -o, --output-filename <filename>                Specify ark output txt filename. (optional. default: 'ark_output.txt')
+  -b, --scan-buffer <number|byte_string>          Specify the line scan buffer size. (optional. default: '10M')
+  -a, --additionally-ignorerule <ignorerulefile>  Write formatted imports directory to the file. (optional.)
+  -n, --with-line-number                          Write formatted imports directory to the file. (optional.)
+  -d, --ignore-dotfile <'on'|'off'>               Specify the local module path. (optional. default 'on')
   -x, --pattern-regex <regxp>                     Specify watch file pattern regexp. (optional.)
   -i, --include-ext <extention>                   Specify include file extention. Allows comma separated list.(optional.)
   -g, --exclude-dir-regex <regexp>                Specify include directory ignore pattern regexp. (optional.)
@@ -16,6 +19,7 @@ Options:
   -E, --exclude-dir <dirname>                     Specify watch exclude dirname. Allows comma separated list. (optional.)
 
 Arguments:
+  <byte_string>                                   byte size string. (ex) 1G, 10M, 100k
   <dirname>                                       The directory name.
   <extention>                                     file extention name.(example: go,ts,html)
   <regexp>                                        regular expresion string. Interpreted with golang `regexp` package.

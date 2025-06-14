@@ -1,0 +1,64 @@
+package common
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+)
+
+func CommaSeparated2StringList(s string) []string {
+	if s == "" {
+		return nil
+	}
+
+	seen := make(map[string]struct{}, 16)
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			if _, exists := seen[trimmed]; !exists {
+				seen[trimmed] = struct{}{}
+				result = append(result, trimmed)
+			}
+		}
+	}
+
+	return result
+}
+
+func FindGitignore() (string, error) {
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		gitignorePath := filepath.Join(dir, ".gitignore")
+		if _, err := os.Stat(gitignorePath); err == nil {
+			return gitignorePath, nil
+		}
+
+		parentDir := filepath.Dir(dir)
+		if parentDir == dir {
+			break
+		}
+		dir = parentDir
+	}
+
+	return "", errors.New("gitignore not found")
+}
+
+func GetCurrentDir() string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return cwd
+}
+
+func TrimDotSlash(path string) string {
+	return strings.TrimPrefix(path, "./")
+}

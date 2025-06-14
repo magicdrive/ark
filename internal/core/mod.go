@@ -5,10 +5,11 @@ import (
 )
 
 func Apply(opt *commandline.Option) error {
-	if treeStr, err := GenerateTreeString(opt.TargetDirname, ""); err != nil {
+	firstIndent := ""
+	if treeStr, err := GenerateTreeString(opt.TargetDirname, firstIndent); err != nil {
 		return err
 	} else {
-		if err := ReadAndWriteAllFiles(treeStr, opt.TargetDirname, "output.txt", opt); err != nil {
+		if err := ReadAndWriteAllFiles(treeStr, opt.TargetDirname, opt.OutputFilename, opt); err != nil {
 			return err
 		}
 	}
