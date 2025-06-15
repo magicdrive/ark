@@ -59,8 +59,8 @@ func OptParse(args []string) (int, *Option, error) {
 	fs := flag.NewFlagSet("ark", flag.ExitOnError)
 
 	// --output-filename
-	outputFilenameFlagOpt := fs.String("output-filename", "", "Show help message.")
-	fs.StringVar(outputFilenameFlagOpt, "o", "", "Show help message.")
+	outputFilenameOpt := fs.String("output-filename", "", "Show help message.")
+	fs.StringVar(outputFilenameOpt, "o", "", "Show help message.")
 
 	// --scan-buffer
 	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Show help message.")
@@ -75,8 +75,8 @@ func OptParse(args []string) (int, *Option, error) {
 	fs.StringVar(withLineNumberFlagOpt, "n", "off", "Show help message.")
 
 	// --output-format
-	outputFormatFlagOpt := fs.String("output-format", "", "Show help message.")
-	fs.StringVar(outputFormatFlagOpt, "f", "", "Show help message.")
+	outputFormatOpt := fs.String("output-format", "", "Show help message.")
+	fs.StringVar(outputFormatOpt, "f", "", "Show help message.")
 
 	// --additionally-ignorerule
 	ignoreDotfileFlagValueOpt := fs.String("ignore-dotfile", "on", "Show help message.")
@@ -138,7 +138,7 @@ func OptParse(args []string) (int, *Option, error) {
 	result := &Option{
 		WorkingDir:                      currentDir,
 		TargetDirname:                   targetDirname,
-		OutputFilename:                  *outputFilenameFlagOpt,
+		OutputFilename:                  *outputFilenameOpt,
 		ScanBufferValue:                 *scanBufferValueOpt,
 		AdditionallyIgnoreRuleFilenames: *additionallyIgnoreRuleFilenamesOpt,
 		IgnoreDotFileFlagValue:          *ignoreDotfileFlagValueOpt,
@@ -149,7 +149,7 @@ func OptParse(args []string) (int, *Option, error) {
 		ExcludeExt:                      *excludeExtOpt,
 		ExcludeDir:                      *excludeDirOpt,
 		WithLineNumberFlagValue:         *withLineNumberFlagOpt,
-		OutputFormatValue:               *outputFilenameFlagOpt,
+		OutputFormatValue:               *outputFormatOpt,
 		SkipNonUTF8Flag:                 *skipNonUTF8FlagOpt,
 		HelpFlag:                        *helpFlagOpt,
 		VersionFlag:                     *versionFlagOpt,
