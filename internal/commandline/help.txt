@@ -8,16 +8,17 @@ Options:
   -v, --version                                   Show version.
   -o, --output-filename <filename>                Specify ark output txt filename. (optional. default: 'ark_output.txt')
   -b, --scan-buffer <number|byte_string>          Specify the line scan buffer size. (optional. default: '10M')
-  -a, --additionally-ignorerule <ignorerulefile>  Write formatted imports directory to the file. (optional.)
-  -n, --with-line-number                          Write formatted imports directory to the file. (optional.)
-  -m, --mask-secrets <'on'|'off'>                 Write formatted imports directory to the file. (optional.)
-  -d, --ignore-dotfile <'on'|'off'>               Specify the local module path. (optional. default 'on')
+  -o, --output-format <'txt'|'md'>                Specify the format of the output file (optional. default: 'txt').
+  -a, --additionally-ignorerule <filepath>        Specify a file containing additional ignore rules. (optional.)
+  -n, --with-line-number <'on'|'off'>             Specify Whether to include file line numbers when outputting. (optional. default: 'on')
+  -d, --ignore-dotfile <'on'|'off'>               Specify ignore dot files. (optional. default 'on')
   -x, --pattern-regex <regxp>                     Specify watch file pattern regexp. (optional.)
   -i, --include-ext <extention>                   Specify include file extention. Allows comma separated list.(optional.)
   -g, --exclude-dir-regex <regexp>                Specify include directory ignore pattern regexp. (optional.)
   -G, --exclude-file-regex <regexp>               Specify watch file ignore pattern regexp. (optional.)
   -e, --exclude-ext <extention>                   Specify watch exclude file extention. Allows comma separated list. (optional.)
   -E, --exclude-dir <dirname>                     Specify watch exclude dirname. Allows comma separated list. (optional.)
+  -s, --skip-non-utf8                             Specify flag to ignore files that do not have utf8 charset. (optional.)
 
 Arguments:
   <byte_string>                                   byte size string. (ex) 1G, 10M, 100k
