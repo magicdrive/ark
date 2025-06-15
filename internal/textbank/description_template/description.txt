@@ -1,0 +1,13 @@
+Project: %s
+Root: %s
+Format: Tree structure with file path headers followed by content
+Note: Only UTF-8 text files are included. Binary and image files are excluded.
+
+This document contains the entire structure and content of a software project intended to help AI systems understand its design and implementation.
+It is suitable for use in tasks such as code summarization, documentation generation, code analysis, or question answering.
+
+Each file is marked with a header "=== path/to/file ===", and its contents follow immediately.
+
+--- BEGIN FILE DUMP ---
+
+

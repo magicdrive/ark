@@ -10,6 +10,7 @@ Options:
   -b, --scan-buffer <number|byte_string>          Specify the line scan buffer size. (optional. default: '10M')
   -a, --additionally-ignorerule <ignorerulefile>  Write formatted imports directory to the file. (optional.)
   -n, --with-line-number                          Write formatted imports directory to the file. (optional.)
+  -m, --mask-secrets <'on'|'off'>                 Write formatted imports directory to the file. (optional.)
   -d, --ignore-dotfile <'on'|'off'>               Specify the local module path. (optional. default 'on')
   -x, --pattern-regex <regxp>                     Specify watch file pattern regexp. (optional.)
   -i, --include-ext <extention>                   Specify include file extention. Allows comma separated list.(optional.)

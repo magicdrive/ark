@@ -28,20 +28,27 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 	writer := bufio.NewWriter(outFile)
 	defer writer.Flush()
 
-	writer.WriteString(treeStr + "\n")
+	var abspath string
+
+	abspath, err = filepath.Abs(root)
+	if err != nil {
+		abspath = root
+	}
+	projectName := filepath.Base(abspath)
+
+	writer.WriteString(PrependDescriptionWithFormat(projectName, root, opt.OutputFormat))
+
+	if opt.OutputFormat == "markdown" {
+		writer.WriteString("# Project Tree\n\n```\n" + treeStr + "\n```\n")
+	} else {
+		writer.WriteString(treeStr + "\n")
+	}
 
 	err = filepath.WalkDir(root, func(fpath string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() {
-			return nil
-		}
-		if isHiddenFile(fpath) {
-			return nil
-		}
-
-		if !CanBoaded(opt, fpath) {
+		if d.IsDir() || isHiddenFile(fpath) || !CanBoaded(opt, fpath) {
 			return nil
 		}
 
@@ -49,7 +56,6 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 		if err != nil {
 			return err
 		}
-
 		if isBinary(data) || isImage(fpath) {
 			return nil
 		}
@@ -62,23 +68,43 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 			return fmt.Errorf("failed to convert %s: %w", fpath, err)
 		}
 
-		fmt.Fprintf(writer, "\n=== %s ===\n", fpath)
+		decodedBytes, err := io.ReadAll(decoded)
+		if err != nil {
+			return fmt.Errorf("failed to read %s: %w", fpath, err)
+		}
+		content := string(decodedBytes)
 
-		scanner := bufio.NewScanner(decoded)
-		const maxCapacity = 10 * 1024 * 1024 // 10MB
+		if opt.OutputFormat == "markdown" {
+			writer.WriteString("\n---\n\n")
+			fmt.Fprintf(writer, "# File: %s\n", fpath)
+			fmt.Fprintf(writer, "```%s\n", detectLanguageTag(fpath))
+		} else {
+			fmt.Fprintf(writer, "\n=== %s ===\n", fpath)
+		}
+
+		scanner := bufio.NewScanner(strings.NewReader(content))
+		maxCapacity, _ := opt.ScanBuffer.Bytes()
 		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, maxCapacity)
+		scanner.Buffer(buf, int(maxCapacity))
+
 		lineNumber := 1
 		for scanner.Scan() {
 			line := scanner.Text()
-			if opt.WithLineNumberFlag {
+			if opt.WithLineNumberFlag.Bool() && opt.OutputFormat != "markdown" {
 				fmt.Fprintf(writer, "%6d: %s\n", lineNumber, line)
 			} else {
 				writer.WriteString(line + "\n")
 			}
 			lineNumber++
 		}
-		return scanner.Err()
+		if err := scanner.Err(); err != nil {
+			return err
+		}
+
+		if opt.OutputFormat == "markdown" {
+			writer.WriteString("```\n")
+		}
+		return nil
 	})
 
 	return err

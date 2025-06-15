@@ -3,7 +3,7 @@ package model_test
 import (
 	"testing"
 
-	"github.com/magicdrive/enma/internal/model"
+	"github.com/magicdrive/ark/internal/model"
 )
 
 func TestOnOffSwitch_Set(t *testing.T) {
