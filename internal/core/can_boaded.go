@@ -3,6 +3,7 @@ package core
 import (
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/common"
@@ -20,9 +21,10 @@ func CanBoaded(opt *commandline.Option, path string) bool {
 	}
 
 	if opt.ExcludeDir != "" {
-		ext := filepath.Ext(absPath)
-		if slices.Contains(opt.ExcludeDirList, ext) {
-			return false
+		for dirname := range strings.SplitSeq(filepath.ToSlash(filepath.Dir(path)), "/") {
+			if slices.Contains(opt.ExcludeDirList, dirname) {
+				return false
+			}
 		}
 	}
 
