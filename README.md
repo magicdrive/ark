@@ -75,27 +75,24 @@ hello world
 
 ### Markdown (`--output-format md`)
 
-```
+```````
 # Project Tree
 
-\`\`\`
-
+```
 example\_project
 ├── main.go
 └── sub
 └── sub.txt
-
-\`\`\`\`
+```
 
 ---
 
 # File: sub/sub.txt
-\`\`\`txt
+```txt
 hello world
-\`\`\`\`
+```
 
-````
-
+```````
 ---
 
 ## 🧩 Integrations
