@@ -1,0 +1,32 @@
+#compdef ark
+
+# Rich Zsh completion for ark CLI
+
+_ark() {
+  local state
+
+  _arguments -C \
+    '--help[Show this help message and exit]' \
+    '--version[Show version]' \
+    '(-o --output-filename)'{-o,--output-filename}'[Specify ark output txt filename]:output file:_files' \
+    '(-b --scan-buffer)'{-b,--scan-buffer}'[Specify the line scan buffer size]:buffer (e.g. 10M, 1G)' \
+    '(-f --output-format)'{-o,--output-format}'[Specify the format of the output file]:(txt md)' \
+    '(-a --additionally-ignorerule)'{-a,--additionally-ignorerule}'[Specify a file containing additional ignore rules]:ignore file:_files' \
+    '(-n --with-line-number)'{-n,--with-line-number}'[Include file line numbers (on/off)]:(on off)' \
+    '(-d --ignore-dotfile)'{-d,--ignore-dotfile}'[Ignore dot files (on/off)]:(on off)' \
+    '(-x --pattern-regex)'{-x,--pattern-regex}'[Pattern to match files]:regexp:' \
+    '(-i --include-ext)'{-i,--include-ext}'[Include file extensions (comma-separated)]:extensions:' \
+    '(-g --exclude-dir-regex)'{-g,--exclude-dir-regex}'[Ignore directories by regexp]:regexp:' \
+    '(-G --exclude-file-regex)'{-G,--exclude-file-regex}'[Ignore files by regexp]:regexp:' \
+    '(-e --exclude-ext)'{-e,--exclude-ext}'[Exclude file extensions (comma-separated)]:extensions:' \
+    '(-E --exclude-dir)'{-E,--exclude-dir}'[Exclude directory names (comma-separated)]:directory names:' \
+    '(-s --skip-non-utf8)'{-s,--skip-non-utf8}'[Ignore non-UTF8 files]' \
+    '*::dirname:->directory' && return 0
+
+  if [[ $state == directory ]]; then
+    _directories
+  fi
+}
+
+_ark "$@"
+
