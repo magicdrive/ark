@@ -6,9 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 )
 
+// SecretMatch holds information about a detected secret in a file.
 type SecretMatch struct {
 	File    string
 	Line    int
@@ -16,27 +18,67 @@ type SecretMatch struct {
 	Pattern string
 }
 
-var (
-	reAKIA   = regexp.MustCompile(`AKIA[0-9A-Z]{16}`)
-	reGHP    = regexp.MustCompile(`ghp_[A-Za-z0-9_]{36,255}`)
-	reJWT    = regexp.MustCompile(`eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}`)
-	reKeyVal = regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\s*[:=]\s*['"]?[^'"\s]+['"]?`)
-)
+// --- Default forbidden patterns (order = priority for detection) ---
+var defaultPatterns = []*regexp.Regexp{
+	// AWS
+	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
+	regexp.MustCompile(`ASIA[0-9A-Z]{16}`),
+	regexp.MustCompile(`A3T[A-Z0-9]{16}`),
+	regexp.MustCompile(`AGPA[A-Z0-9]{16}`),
+	regexp.MustCompile(`AIDA[A-Z0-9]{16}`),
+	regexp.MustCompile(`AROA[A-Z0-9]{16}`),
+	regexp.MustCompile(`AIPA[A-Z0-9]{16}`),
+	regexp.MustCompile(`ANPA[A-Z0-9]{16}`),
+	regexp.MustCompile(`ANVA[A-Z0-9]{16}`),
+	regexp.MustCompile(`(?i)aws(.{0,20})?(secret)?(.{0,20})?(key)?(.{0,20})?([=:])(.{0,100})`),
+	// GCP
+	regexp.MustCompile(`"type":\s*"service_account".*"private_key_id":\s*"[a-f0-9]+".*"private_key":\s*"-----BEGIN PRIVATE KEY-----[^"]+"`),
+	regexp.MustCompile(`AIza[0-9A-Za-z\-_]{35}`),
+	// Azure
+	regexp.MustCompile(`AccountKey=([A-Za-z0-9+/=]{88})`),
+	regexp.MustCompile(`[0-9a-f]{32}-[0-9a-f]{32}-[0-9a-f]{32}`),
+	// GitHub/GitLab
+	regexp.MustCompile(`ghp_[A-Za-z0-9_]{36,255}`),
+	regexp.MustCompile(`ghu_[A-Za-z0-9_]{36,255}`),
+	regexp.MustCompile(`ghs_[A-Za-z0-9_]{36,255}`),
+	regexp.MustCompile(`glpat-[0-9a-zA-Z\-\_]{20}`),
+	// Slack
+	regexp.MustCompile(`xox[baprs]-([0-9a-zA-Z]{10,48})?`),
+	// Stripe
+	regexp.MustCompile(`sk_live_[0-9a-zA-Z]{24}`),
+	regexp.MustCompile(`pk_live_[0-9a-zA-Z]{24}`),
+	// SendGrid
+	regexp.MustCompile(`SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`),
+	// Google OAuth/Client
+	regexp.MustCompile(`ya29\.[0-9A-Za-z\-_]+`),
+	regexp.MustCompile(`[0-9]+-([0-9A-Za-z_]{32})\.apps\.googleusercontent\.com`),
+	// Private Keys
+	regexp.MustCompile(`-----BEGIN (RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`),
+	regexp.MustCompile(`-----BEGIN OPENSSH PRIVATE KEY-----`),
+	// JWT
+	regexp.MustCompile(`JWT_SECRET(.{0,10})?([=:])(.{0,100})`),
+	regexp.MustCompile(`eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}`),
+	// Generic environment/config keys (password, secret, etc.)
+	regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\s*[:=]\s*['"]?[^'"\s]+['"]?`),
+}
 
+// --- Allow-list patterns (to avoid false positives for known test/demo values) ---
 var defaultAllowed = []*regexp.Regexp{
 	regexp.MustCompile(`AKIAIOSFODNN7EXAMPLE`),
 	regexp.MustCompile(`wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`),
 }
 
+// RuleSet holds a set of forbidden/allowed patterns.
 type RuleSet struct {
+	Patterns []*regexp.Regexp // Default+Added patterns (order matters!)
 	Allowed  []*regexp.Regexp
-	Patterns []*regexp.Regexp // AddPattern用
 }
 
+// New default ruleset (defaultPatterns at front, then AddPattern, order preserved)
 func DefaultRuleSet() *RuleSet {
 	return &RuleSet{
-		Allowed:  defaultAllowed,
-		Patterns: []*regexp.Regexp{},
+		Patterns: slices.Clone(defaultPatterns),
+		Allowed:  slices.Clone(defaultAllowed),
 	}
 }
 
@@ -58,66 +100,29 @@ func (r *RuleSet) AddAllowed(pattern string) error {
 	return nil
 }
 
+// ScanReader returns all matches for forbidden patterns (order=priority!).
 func (r *RuleSet) ScanReader(rd io.Reader, filename string) ([]SecretMatch, error) {
 	var matches []SecretMatch
 	scanner := bufio.NewScanner(rd)
 	lineNum := 0
 
+LINE:
 	for scanner.Scan() {
 		lineNum++
 		line := scanner.Text()
 		if r.isAllowed(line) {
 			continue
 		}
-
-		// 1. AddedPattern
-		matched := false
 		for _, pat := range r.Patterns {
 			if pat.MatchString(line) {
-				matches = append(matches, SecretMatch{filename, lineNum, line, pat.String()})
-				matched = true
-				break
+				matches = append(matches, SecretMatch{
+					File:    filename,
+					Line:    lineNum,
+					Text:    line,
+					Pattern: pat.String(),
+				})
+				continue LINE // Only 1 match per line, highest priority
 			}
-		}
-		if matched {
-			continue
-		}
-
-		// 2. key=val: check value section AKIA, ghp_, JWT
-		if m := regexp.MustCompile(`(?i)[\w-]+\s*[:=]\s*['"]?([^\s'"]+)['"]?`).FindStringSubmatch(line); m != nil {
-			val := m[1]
-			switch {
-			case reAKIA.MatchString(val):
-				matches = append(matches, SecretMatch{filename, lineNum, line, reAKIA.String()})
-				continue
-			case reGHP.MatchString(val):
-				matches = append(matches, SecretMatch{filename, lineNum, line, reGHP.String()})
-				continue
-			case reJWT.MatchString(val):
-				matches = append(matches, SecretMatch{filename, lineNum, line, reJWT.String()})
-				continue
-			}
-		}
-
-		// 3. AKIA
-		if reAKIA.MatchString(line) {
-			matches = append(matches, SecretMatch{filename, lineNum, line, reAKIA.String()})
-			continue
-		}
-		// 4. ghp_
-		if reGHP.MatchString(line) {
-			matches = append(matches, SecretMatch{filename, lineNum, line, reGHP.String()})
-			continue
-		}
-		// 5. JWT
-		if reJWT.MatchString(line) {
-			matches = append(matches, SecretMatch{filename, lineNum, line, reJWT.String()})
-			continue
-		}
-		// 6. key=val
-		if reKeyVal.MatchString(line) {
-			matches = append(matches, SecretMatch{filename, lineNum, line, reKeyVal.String()})
-			continue
 		}
 	}
 	return matches, scanner.Err()
@@ -130,28 +135,6 @@ func (r *RuleSet) isAllowed(s string) bool {
 		}
 	}
 	return false
-}
-
-func MaskLine(line string) string {
-	trim := strings.TrimSpace(line)
-	if reAKIA.MatchString(trim) && trim == reAKIA.FindString(trim) {
-		return "*****MASKED*****"
-	}
-	out := reJWT.ReplaceAllStringFunc(line, func(_ string) string {
-		return "*****MASKED*****"
-	})
-	out = regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?`).ReplaceAllStringFunc(out, func(s string) string {
-		m := regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?`).FindStringSubmatch(s)
-		if len(m) > 2 {
-			val := m[2]
-			if strings.HasPrefix(val, "ghp_") {
-				return s
-			}
-			return strings.Replace(s, val, "*****MASKED*****", 1)
-		}
-		return s
-	})
-	return out
 }
 
 func (r *RuleSet) ScanFile(path string) ([]SecretMatch, error) {
@@ -184,6 +167,7 @@ func (r *RuleSet) ScanDir(root string, recursive bool) ([]SecretMatch, error) {
 	return results, err
 }
 
+// IsTextFile returns true if a file is likely to be a text file.
 func IsTextFile(path string) bool {
 	f, err := os.Open(path)
 	if err != nil {
@@ -199,4 +183,52 @@ func IsTextFile(path string) bool {
 		}
 	}
 	return true
+}
+
+// MaskSecretKeyBlocks replaces entire private key PEM/OPENSSH blocks with *****MASKED*****
+func MaskSecretKeyBlocks(content string) string {
+	re := regexp.MustCompile(`(?ms)-----BEGIN (?:RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----.*?-----END (?:RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`)
+	return re.ReplaceAllString(content, "*****MASKED*****")
+}
+
+// MaskLine masks detected secrets for a single line (excl. multiline secret keys).
+func MaskLine(line string) string {
+	out := line
+	// 1. Mask full AKIA line
+	akia := regexp.MustCompile(`^AKIA[0-9A-Z]{16}$`)
+	if akia.MatchString(strings.TrimSpace(out)) {
+		return "*****MASKED*****"
+	}
+	// 2. Mask JWT value in text
+	out = regexp.MustCompile(`eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}`).ReplaceAllString(out, "*****MASKED*****")
+	// 3. Mask key=val value (but not ghp_/known patterns)
+	re := regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?`)
+	out = re.ReplaceAllStringFunc(out, func(s string) string {
+		m := re.FindStringSubmatch(s)
+		if len(m) > 2 {
+			val := m[2]
+			// Do not mask ghp_ tokens etc in key=val
+			if strings.HasPrefix(val, "ghp_") {
+				return s
+			}
+			return strings.Replace(s, val, "*****MASKED*****", 1)
+		}
+		return s
+	})
+	// 4. Mask PEM/OPENSSH headers (single line)
+	out = regexp.MustCompile(`-----BEGIN (RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`).ReplaceAllString(out, "*****MASKED*****")
+	out = regexp.MustCompile(`-----END (RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`).ReplaceAllString(out, "*****MASKED*****")
+	return out
+}
+
+// MaskAll applies secret key block masking (multiline) then per-line masking (password, tokens, etc).
+func MaskAll(content string) string {
+	// Mask all PEM/OPENSSH private key blocks (multiline)
+	content = MaskSecretKeyBlocks(content)
+	// Apply MaskLine to each line (password=, jwt, etc)
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		lines[i] = MaskLine(line)
+	}
+	return strings.Join(lines, "\n")
 }
