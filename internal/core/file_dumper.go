@@ -39,16 +39,21 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 	writer.WriteString(PrependDescriptionWithFormat(projectName, root, opt.OutputFormat))
 
 	if opt.OutputFormat == "markdown" {
-		writer.WriteString("# Project Tree\n\n```\n" + treeStr + "\n```\n")
+		writer.WriteString("# Project Tree\n\n```\n" + root + "\n" + treeStr + "\n```\n")
 	} else {
-		writer.WriteString(treeStr + "\n")
+		writer.WriteString(root + "\n" + treeStr + "\n")
 	}
 
 	err = filepath.WalkDir(root, func(fpath string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		if d.IsDir() || isHiddenFile(fpath) || !CanBoaded(opt, fpath) {
+
+		if IsUnderGitDir(fpath) {
+			return nil
+		}
+
+		if d.IsDir() || (opt.IgnoreDotFileFlag.Bool() && isHiddenFile(fpath)) || !CanBoaded(opt, fpath) {
 			return nil
 		}
 

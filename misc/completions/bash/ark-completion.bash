@@ -9,7 +9,8 @@ _ark_completion() {
     --output-filename -o \
     --scan-buffer -b \
     --output-format -o \
-    --additionally-ignorerule -a \
+    --allow-gitignore -a \
+    --additionally-ignorerule -p \
     --with-line-number -n \
     --ignore-dotfile -d \
     --pattern-regex -x \
@@ -37,7 +38,7 @@ _ark_completion() {
       COMPREPLY=( $( compgen -W "go js ts html css md json txt" -- "$cur" ) )
       return
       ;;
-    --exclude-dir|-E|--additionally-ignorerule|-a)
+    --exclude-dir|-E|--additionally-ignorerule|-p|--allow-gitignore|-a)
       _filedir
       return
       ;;

@@ -30,10 +30,11 @@ func main() {
 
 	opt := &commandline.Option{
 		OutputFormatValue:   "txt",
+		IgnoreDotFileFlag:   model.OnOffSwitch("off"),
 		WithLineNumberFlag:  model.OnOffSwitch("on"),
 		ScanBuffer:          model.ByteString("1M"),
 		SkipNonUTF8Flag:     false,
-		IgnoreDotFileFlag:   "off",
+		AllowGitignoreFlag:  model.OnOffSwitch("on"),
 		WorkingDir:          rootDir,
 		PatternRegexpString: "",
 		IncludeExtList:      []string{".go"},
@@ -71,6 +72,8 @@ func TestReadAndWriteAllFiles_CreatesOutputFile(t *testing.T) {
 	outputFile := filepath.Join(dir, "out.txt")
 	opt := &commandline.Option{
 		OutputFormatValue:  "txt",
+		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
+		AllowGitignoreFlag: model.OnOffSwitch("on"),
 		OutputFormat:       model.OutputFormat("plaintext"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
@@ -106,6 +109,8 @@ func TestReadAndWriteAllFiles_MarkdownFormat(t *testing.T) {
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
+		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
+		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
 	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, opt)
@@ -142,6 +147,8 @@ func TestReadAndWriteAllFiles_WithLineNumber(t *testing.T) {
 		WithLineNumberFlag: model.OnOffSwitch("on"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
+		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
+		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
 	err := core.ReadAndWriteAllFiles("main.txt", dir, outputFile, opt)
@@ -177,6 +184,8 @@ func TestReadAndWriteAllFiles_MarkdownOutput(t *testing.T) {
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
+		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
+		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
 	err := core.ReadAndWriteAllFiles("test.go", dir, outputFile, opt)
@@ -212,6 +221,8 @@ func TestReadAndWriteAllFiles_SkipNonUTF8File(t *testing.T) {
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
+		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
+		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
 	err := core.ReadAndWriteAllFiles("weird.txt", dir, outputFile, opt)
@@ -248,6 +259,8 @@ func TestReadAndWriteAllFiles_OutputFormatPlainText(t *testing.T) {
 		OutputFormat:       model.OutputFormat("plaintext"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("10M"),
+		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
+		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
 	err := core.ReadAndWriteAllFiles(treeStr, dir, outputFile, opt)
