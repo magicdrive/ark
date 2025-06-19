@@ -1,4 +1,4 @@
-# [BETA] ark
+# [BETA] Ark
 
 > Yet another alternate \[directory | repository] represent text generator tool
 
@@ -45,8 +45,9 @@ Yet another alternate \[directory|repository] represent text generator tool.
 | `--version`                            | `-v`            | Show version                                         |
 | `--output-filename <filename>`         | `-o`            | Specify output file name (default: `ark_output.txt`) |
 | `--scan-buffer <byte>`                 | `-b`            | Line scan buffer size (default: `10M`)               |
-| `--output-format <'txt'\|'md'>`        | `-o`            | Format of the output file (default: `txt`)           |
-| `--additionally-ignorerule <filepath>` | `-a`            | Additional `.gitignore`-like rules                   |
+| `--output-format <'txt'\|'md'>`        | `-f`            | Format of the output file (default: `txt`)           |
+| `--allow-gitignore <'on'\|'off'>`      | `-a`            | Enable `.gitignore` file filter                      |
+| `--additionally-ignorerule <filepath>` | `-p`            | Additional `.gitignore`-like rules                   |
 | `--with-line-number <'on'\|'off'>`     | `-n`            | Show line numbers (default: `on`)                    |
 | `--ignore-dotfile <'on'\|'off'>`       | `-d`            | Ignore dotfiles (default: `on`)                      |
 | `--pattern-regex <regexp>`             | `-x`            | File match pattern                                   |

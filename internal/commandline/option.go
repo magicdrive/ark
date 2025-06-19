@@ -22,6 +22,8 @@ type Option struct {
 	OutputFilename                     string
 	ScanBufferValue                    string
 	ScanBuffer                         model.ByteString
+	AllowGitignoreFlagValue            string
+	AllowGitignoreFlag                 model.OnOffSwitch
 	AdditionallyIgnoreRuleFilenames    string
 	AdditionallyIgnoreRuleFilenameList []string
 	GitIgnoreRule                      *libgitignore.GitIgnore
@@ -66,9 +68,13 @@ func OptParse(args []string) (int, *Option, error) {
 	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Show help message.")
 	fs.StringVar(scanBufferValueOpt, "b", "10M", "Show help message.")
 
+	// --allow-gitignore
+	allowGitignoreFlagOpt := fs.String("allow-gitignore", "on", "Show help message.")
+	fs.StringVar(allowGitignoreFlagOpt, "a", "on", "Show help message.")
+
 	// --additionally-ignorerule
 	additionallyIgnoreRuleFilenamesOpt := fs.String("additionally-ignorerule", "", "Show help message.")
-	fs.StringVar(additionallyIgnoreRuleFilenamesOpt, "a", "", "Show help message.")
+	fs.StringVar(additionallyIgnoreRuleFilenamesOpt, "p", "", "Show help message.")
 
 	// --with-line-number
 	withLineNumberFlagOpt := fs.String("with-line-number", "off", "Show help message.")
@@ -78,13 +84,13 @@ func OptParse(args []string) (int, *Option, error) {
 	outputFormatOpt := fs.String("output-format", "", "Show help message.")
 	fs.StringVar(outputFormatOpt, "f", "", "Show help message.")
 
-	// --additionally-ignorerule
-	ignoreDotfileFlagValueOpt := fs.String("ignore-dotfile", "on", "Show help message.")
-	fs.StringVar(ignoreDotfileFlagValueOpt, "d", "on", "Show help message.")
+	// --ignore-dotfile
+	ignoreDotfileFlagValueOpt := fs.String("ignore-dotfile", "off", "Show help message.")
+	fs.StringVar(ignoreDotfileFlagValueOpt, "d", "off", "Show help message.")
 
 	// --pattern-regex
-	patternRegexOpt := fs.String("pattern-regex", ".*", "Specify watch file pattern regexp (optional)")
-	fs.StringVar(patternRegexOpt, "x", ".*", "Specify watch file pattern regexp (optional)")
+	patternRegexOpt := fs.String("pattern-regex", "", "Specify watch file pattern regexp (optional)")
+	fs.StringVar(patternRegexOpt, "x", "", "Specify watch file pattern regexp (optional)")
 
 	// --include-ext
 	includeExtOpt := fs.String("include-ext", "", "Specify watch file extension (optional)")
@@ -140,6 +146,7 @@ func OptParse(args []string) (int, *Option, error) {
 		TargetDirname:                   targetDirname,
 		OutputFilename:                  *outputFilenameOpt,
 		ScanBufferValue:                 *scanBufferValueOpt,
+		AllowGitignoreFlagValue:         *allowGitignoreFlagOpt,
 		AdditionallyIgnoreRuleFilenames: *additionallyIgnoreRuleFilenamesOpt,
 		IgnoreDotFileFlagValue:          *ignoreDotfileFlagValueOpt,
 		PatternRegexpString:             *patternRegexOpt,
@@ -190,6 +197,11 @@ func (cr *Option) Normalize() error {
 		errorMessages = append(errorMessages, fmt.Sprintf("--scan-buffer %s", err.Error()))
 	}
 
+	// allow-gitignore
+	if err := cr.AllowGitignoreFlag.Set(cr.AllowGitignoreFlagValue); err != nil {
+		errorMessages = append(errorMessages, fmt.Sprintf("--allow-gitignore %s", err.Error()))
+	}
+
 	// ignore-dotfile
 	if err := cr.IgnoreDotFileFlag.Set(cr.IgnoreDotFileFlagValue); err != nil {
 		errorMessages = append(errorMessages, fmt.Sprintf("--ignore-dotfile %s", err.Error()))
@@ -230,7 +242,15 @@ func (cr *Option) Normalize() error {
 	} else {
 		cr.AdditionallyIgnoreRuleFilenameList = []string{}
 	}
-	gitignorePath, _ := common.FindGitignore()
+	if arkIgnorePath, err := common.FindArkignore(); err != nil {
+		cr.AdditionallyIgnoreRuleFilenameList = append(cr.AdditionallyIgnoreRuleFilenameList, arkIgnorePath)
+	}
+
+	var gitignorePath = ""
+	if cr.AllowGitignoreFlag.Bool() {
+		gitignorePath, _ = common.FindGitignore()
+	}
+
 	cr.GitIgnoreRule = libgitignore.GenerateIntegratedGitIgnore(cr.WorkingDir, gitignorePath, cr.AdditionallyIgnoreRuleFilenameList)
 
 	// compile regexp

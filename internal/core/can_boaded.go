@@ -12,6 +12,12 @@ import (
 func CanBoaded(opt *commandline.Option, path string) bool {
 	absPath, _ := filepath.Abs(path)
 
+	if opt.GitIgnoreRule != nil {
+		if opt.GitIgnoreRule.Matches(common.TrimDotSlash(path)) {
+			return false
+		}
+	}
+
 	if opt.PatternRegexp != nil {
 		baseName := filepath.Base(absPath)
 		result := opt.PatternRegexp.MatchString(baseName)
@@ -47,12 +53,6 @@ func CanBoaded(opt *commandline.Option, path string) bool {
 		baseName := filepath.Base(absPath)
 		result := opt.ExcludeFileRegexp.MatchString(baseName)
 		if result == true {
-			return false
-		}
-	}
-
-	if opt.GitIgnoreRule != nil {
-		if opt.GitIgnoreRule.Matches(common.TrimDotSlash(path)) {
 			return false
 		}
 	}

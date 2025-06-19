@@ -12,7 +12,8 @@ if [[ -n ${ZSH_VERSION-} ]]; then
       '(-o --output-filename)'{-o,--output-filename}'[Specify output filename]:output file:_files' \
       '(-b --scan-buffer)'{-b,--scan-buffer}'[Line scan buffer size]:buffer (e.g. 10M, 1G)' \
       '(-f --output-format)'{-o,--output-format}'[Output file format]:(txt md)' \
-      '(-a --additionally-ignorerule)'{-a,--additionally-ignorerule}'[Additional ignore rule file]:file:_files' \
+      '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore(on/off)]:(on off)' \
+      '(-p --additionally-ignorerule)'{-a,--additionally-ignorerule}'[Additional ignore rule file]:file:_files' \
       '(-n --with-line-number)'{-n,--with-line-number}'[Line number output (on/off)]:(on off)' \
       '(-d --ignore-dotfile)'{-d,--ignore-dotfile}'[Ignore dotfiles (on/off)]:(on off)' \
       '(-x --pattern-regex)'{-x,--pattern-regex}'[File match pattern]:regexp:' \
@@ -40,7 +41,7 @@ elif [[ -n ${BASH_VERSION-} ]]; then
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     opts="--help --version -o --output-filename -b --scan-buffer -f --output-format \
---additionally-ignorerule -a -n --with-line-number -d --ignore-dotfile \
+-p --additionally-ignorerule -a --allow-gitignore -n --with-line-number -d --ignore-dotfile \
 -x --pattern-regex -i --include-ext -g --exclude-dir-regex \
 -G --exclude-file-regex -e --exclude-ext -E --exclude-dir -s --skip-non-utf8"
 
@@ -57,7 +58,7 @@ elif [[ -n ${BASH_VERSION-} ]]; then
         COMPREPLY=( $(compgen -W "txt md" -- "$cur") )
         return 0
         ;;
-      -n|--with-line-number|-d|--ignore-dotfile)
+      -n|--with-line-number|-d|--ignore-dotfile|-p|--allow-gitignore|-a)
         COMPREPLY=( $(compgen -W "on off" -- "$cur") )
         return 0
         ;;

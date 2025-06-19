@@ -51,6 +51,29 @@ func FindGitignore() (string, error) {
 	return "", errors.New("gitignore not found")
 }
 
+func FindArkignore() (string, error) {
+
+	dir, err := os.Getwd()
+	if err != nil {
+		return "", err
+	}
+
+	for {
+		arkignorePath := filepath.Join(dir, ".arkignore")
+		if _, err := os.Stat(arkignorePath); err == nil {
+			return arkignorePath, nil
+		}
+
+		parentDir := filepath.Dir(dir)
+		if parentDir == dir {
+			break
+		}
+		dir = parentDir
+	}
+
+	return "", errors.New("arkignore not found")
+}
+
 func GetCurrentDir() string {
 	cwd, err := os.Getwd()
 	if err != nil {
