@@ -7,6 +7,21 @@ import (
 	"strings"
 )
 
+func MergeAllowFileList(a, b map[string]bool) map[string]bool {
+	merged := make(map[string]bool)
+	for k, v := range a {
+		if v {
+			merged[k] = true
+		}
+	}
+	for k, v := range b {
+		if v {
+			merged[k] = true
+		}
+	}
+	return merged
+}
+
 func CommaSeparated2StringList(s string) []string {
 	if s == "" {
 		return nil

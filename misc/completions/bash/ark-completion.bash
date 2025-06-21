@@ -10,6 +10,7 @@ _ark_completion() {
     --scan-buffer -b \
     --output-format -o \
     --allow-gitignore -a \
+    --mask-secrets -m \
     --additionally-ignorerule -p \
     --with-line-number -n \
     --ignore-dotfile -d \
@@ -26,19 +27,19 @@ _ark_completion() {
       COMPREPLY=( $( compgen -W "txt md" -- "$cur" ) )
       return
       ;;
-    --with-line-number|-n|--ignore-dotfile|-d)
+    --with-line-number|-n|--ignore-dotfile|-d|--allow-gitignore|-a|--mask-secrets|-m)
       COMPREPLY=( $( compgen -W "on off" -- "$cur" ) )
       return
       ;;
     --scan-buffer|-b)
-      COMPREPLY=( $( compgen -W "1K 100K 1M 10M 100M 1G" -- "$cur" ) )
+      COMPREPLY=( $( compgen -W "1K 100K 1M 10M 100M" -- "$cur" ) )
       return
       ;;
     --include-ext|-i|--exclude-ext|-e)
       COMPREPLY=( $( compgen -W "go js ts html css md json txt" -- "$cur" ) )
       return
       ;;
-    --exclude-dir|-E|--additionally-ignorerule|-p|--allow-gitignore|-a)
+    --exclude-dir|-E|--additionally-ignorerule|-p)
       _filedir
       return
       ;;

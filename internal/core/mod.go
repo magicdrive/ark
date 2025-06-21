@@ -6,10 +6,11 @@ import (
 
 func Apply(opt *commandline.Option) error {
 	firstIndent := ""
-	if treeStr, err := GenerateTreeString(opt.TargetDirname, firstIndent, opt); err != nil {
+	var firstAllowdFileListMap = map[string]bool{}
+	if treeStr, allowdFileList, err := GenerateTreeString(opt.TargetDirname, firstIndent, firstAllowdFileListMap, opt); err != nil {
 		return err
 	} else {
-		if err := ReadAndWriteAllFiles(treeStr, opt.TargetDirname, opt.OutputFilename, opt); err != nil {
+		if err := ReadAndWriteAllFiles(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
 			return err
 		}
 	}

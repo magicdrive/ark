@@ -12,6 +12,7 @@ if [[ -n ${ZSH_VERSION-} ]]; then
       '(-o --output-filename)'{-o,--output-filename}'[Specify output filename]:output file:_files' \
       '(-b --scan-buffer)'{-b,--scan-buffer}'[Line scan buffer size]:buffer (e.g. 10M, 1G)' \
       '(-f --output-format)'{-o,--output-format}'[Output file format]:(txt md)' \
+      '(-m --mask-secrets)'{-m,--mask-secrets}'[mask secret string (on/off)]:(on off)' \
       '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore(on/off)]:(on off)' \
       '(-p --additionally-ignorerule)'{-a,--additionally-ignorerule}'[Additional ignore rule file]:file:_files' \
       '(-n --with-line-number)'{-n,--with-line-number}'[Line number output (on/off)]:(on off)' \
@@ -42,7 +43,7 @@ elif [[ -n ${BASH_VERSION-} ]]; then
 
     opts="--help --version -o --output-filename -b --scan-buffer -f --output-format \
 -p --additionally-ignorerule -a --allow-gitignore -n --with-line-number -d --ignore-dotfile \
--x --pattern-regex -i --include-ext -g --exclude-dir-regex \
+-x --pattern-regex -i --include-ext -g --exclude-dir-regex -m --mask-secrets\
 -G --exclude-file-regex -e --exclude-ext -E --exclude-dir -s --skip-non-utf8"
 
     case "$prev" in
@@ -58,7 +59,7 @@ elif [[ -n ${BASH_VERSION-} ]]; then
         COMPREPLY=( $(compgen -W "txt md" -- "$cur") )
         return 0
         ;;
-      -n|--with-line-number|-d|--ignore-dotfile|-p|--allow-gitignore|-a)
+      -n|--with-line-number|-d|--ignore-dotfile|-p|--allow-gitignore|-a|--mask-secrets|-m)
         COMPREPLY=( $(compgen -W "on off" -- "$cur") )
         return 0
         ;;

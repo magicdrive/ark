@@ -31,6 +31,7 @@ func main() {
 	opt := &commandline.Option{
 		OutputFormatValue:   "txt",
 		IgnoreDotFileFlag:   model.OnOffSwitch("off"),
+		MaskSecretsFlag:     model.OnOffSwitch("on"),
 		WithLineNumberFlag:  model.OnOffSwitch("on"),
 		ScanBuffer:          model.ByteString("1M"),
 		SkipNonUTF8Flag:     false,
@@ -42,7 +43,9 @@ func main() {
 		ExcludeExtList:      []string{},
 	}
 
-	err := core.ReadAndWriteAllFiles("mock tree string", rootDir, outFile, opt)
+	var fileListMap = map[string]bool{}
+	fileListMap[testFile] = true
+	err := core.ReadAndWriteAllFiles("mock tree string", rootDir, outFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("execution failed: %v", err)
 	}
@@ -74,13 +77,16 @@ func TestReadAndWriteAllFiles_CreatesOutputFile(t *testing.T) {
 		OutputFormatValue:  "txt",
 		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
+		MaskSecretsFlag:    model.OnOffSwitch("on"),
 		OutputFormat:       model.OutputFormat("plaintext"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
 	}
 
-	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, opt)
+	var fileListMap = map[string]bool{}
+	fileListMap[dummyInput] = true
+	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -106,6 +112,7 @@ func TestReadAndWriteAllFiles_MarkdownFormat(t *testing.T) {
 	opt := &commandline.Option{
 		OutputFormatValue:  "md",
 		OutputFormat:       model.OutputFormat("markdown"),
+		MaskSecretsFlag:    model.OnOffSwitch("on"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
@@ -113,7 +120,9 @@ func TestReadAndWriteAllFiles_MarkdownFormat(t *testing.T) {
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
-	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, opt)
+	var fileListMap = map[string]bool{}
+	fileListMap[dummyInput] = true
+	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -143,6 +152,7 @@ func TestReadAndWriteAllFiles_WithLineNumber(t *testing.T) {
 	outputFile := filepath.Join(dir, "output.txt")
 	opt := &commandline.Option{
 		OutputFormatValue:  "txt",
+		MaskSecretsFlag:    model.OnOffSwitch("on"),
 		OutputFormat:       model.OutputFormat("plaintext"),
 		WithLineNumberFlag: model.OnOffSwitch("on"),
 		ScanBuffer:         model.ByteString("1M"),
@@ -151,7 +161,9 @@ func TestReadAndWriteAllFiles_WithLineNumber(t *testing.T) {
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
-	err := core.ReadAndWriteAllFiles("main.txt", dir, outputFile, opt)
+	var fileListMap = map[string]bool{}
+	fileListMap[dummyInput] = true
+	err := core.ReadAndWriteAllFiles("main.txt", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -181,6 +193,7 @@ func TestReadAndWriteAllFiles_MarkdownOutput(t *testing.T) {
 	opt := &commandline.Option{
 		OutputFormatValue:  "markdown",
 		OutputFormat:       model.OutputFormat("markdown"),
+		MaskSecretsFlag:    model.OnOffSwitch("on"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
@@ -188,7 +201,9 @@ func TestReadAndWriteAllFiles_MarkdownOutput(t *testing.T) {
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
-	err := core.ReadAndWriteAllFiles("test.go", dir, outputFile, opt)
+	var fileListMap = map[string]bool{}
+	fileListMap[dummyFile] = true
+	err := core.ReadAndWriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -218,6 +233,7 @@ func TestReadAndWriteAllFiles_SkipNonUTF8File(t *testing.T) {
 		OutputFormatValue:  "txt",
 		OutputFormat:       model.OutputFormat("plaintext"),
 		SkipNonUTF8Flag:    true,
+		MaskSecretsFlag:    model.OnOffSwitch("on"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
 		ScanBuffer:         model.ByteString("1M"),
 		WorkingDir:         dir,
@@ -225,7 +241,9 @@ func TestReadAndWriteAllFiles_SkipNonUTF8File(t *testing.T) {
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
-	err := core.ReadAndWriteAllFiles("weird.txt", dir, outputFile, opt)
+	var fileListMap = map[string]bool{}
+	fileListMap[nonUtf8File] = true
+	err := core.ReadAndWriteAllFiles("weird.txt", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -239,7 +257,7 @@ func TestReadAndWriteAllFiles_SkipNonUTF8File(t *testing.T) {
 	}
 }
 
-func createTempDirWithTree(t *testing.T) (string, string) {
+func createTempDirWithTree(t *testing.T) (string, string, map[string]bool) {
 	t.Helper()
 	dir := t.TempDir()
 	subDir := filepath.Join(dir, "sub")
@@ -247,23 +265,27 @@ func createTempDirWithTree(t *testing.T) (string, string) {
 
 	os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}"), 0644)
 	os.WriteFile(filepath.Join(subDir, "sub.txt"), []byte("hello world"), 0644)
+	var fileListMap = map[string]bool{}
+	fileListMap[filepath.Join(dir, "main.go")] = true
+	fileListMap[filepath.Join(subDir, "sub.txt")] = true
 
-	return dir, "example project tree"
+	return dir, "example project tree", fileListMap
 }
 
 func TestReadAndWriteAllFiles_OutputFormatPlainText(t *testing.T) {
-	dir, treeStr := createTempDirWithTree(t)
+	dir, treeStr, fileListMap := createTempDirWithTree(t)
 	outputFile := filepath.Join(t.TempDir(), "output.txt")
 
 	opt := &commandline.Option{
 		OutputFormat:       model.OutputFormat("plaintext"),
 		WithLineNumberFlag: model.OnOffSwitch("off"),
+		MaskSecretsFlag:    model.OnOffSwitch("on"),
 		ScanBuffer:         model.ByteString("10M"),
 		IgnoreDotFileFlag:  model.OnOffSwitch("on"),
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
-	err := core.ReadAndWriteAllFiles(treeStr, dir, outputFile, opt)
+	err := core.ReadAndWriteAllFiles(treeStr, dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
