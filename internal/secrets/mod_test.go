@@ -148,8 +148,8 @@ func TestScanReader_MultiplePatterns(t *testing.T) {
 		line      string
 		wantMatch bool
 	}{
-		// GCP "private_key_id"などは現状ルールでは検知しないのでfalseに
-		{`private_key_id="abcdefabcdefabcdef"`, false},
+		// GCP "private_key_id"
+		{`private_key_id="abcdefabcdefabcdefabcdefabcdefab"`, true},
 		// JSON private_key
 		{`"type": "service_account", "private_key_id": "abcdef1234", "private_key": "-----BEGIN PRIVATE KEY-----MIIBVwIBADANBg..."`, true},
 		// Azure

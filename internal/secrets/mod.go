@@ -34,6 +34,10 @@ var defaultPatterns = []*regexp.Regexp{
 	// GCP
 	regexp.MustCompile(`"type":\s*"service_account".*"private_key_id":\s*"[a-f0-9]+".*"private_key":\s*"-----BEGIN PRIVATE KEY-----[^"]+"`),
 	regexp.MustCompile(`AIza[0-9A-Za-z\-_]{35}`),
+	// GCP service account keys
+	regexp.MustCompile(`private_key_id\s*=\s*"[a-f0-9]{32}"`),
+	regexp.MustCompile(`"private_key_id"\s*:\s*"[a-f0-9]{32}"`),
+	regexp.MustCompile(`"private_key"\s*:\s*"(-----BEGIN PRIVATE KEY-----[^"]+)"`),
 	// Azure
 	regexp.MustCompile(`AccountKey=([A-Za-z0-9+/=]{88})`),
 	regexp.MustCompile(`[0-9a-f]{32}-[0-9a-f]{32}-[0-9a-f]{32}`),
