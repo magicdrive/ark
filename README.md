@@ -2,10 +2,6 @@
 
 > Yet another alternate \[directory | repository] represent text generator tool
 
----
-
-## 🚀 Overview
-
 **ark** is a powerful CLI tool designed to recursively scan a directory and generate a readable and well-formatted text representation of its structure and contents. Ideal for:
 
 * 📚 Sharing codebases with LLMs
