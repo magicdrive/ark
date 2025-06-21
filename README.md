@@ -97,7 +97,7 @@ hello world
 ```````
 ---
 
-## 🗂 Example `.arkgnore`
+## 🗂 Example `.arkignore`
 
 * ignore rule file.
 The syntax of .arkignore is a compatible syntax of [.gitignore](https://git-scm.com/docs/gitignore).
