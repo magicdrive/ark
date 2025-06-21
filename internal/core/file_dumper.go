@@ -16,9 +16,10 @@ import (
 	"golang.org/x/text/transform"
 
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/secrets"
 )
 
-func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *commandline.Option) error {
+func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, allowedFileListMap map[string]bool, opt *commandline.Option) error {
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return err
@@ -53,7 +54,11 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 			return nil
 		}
 
-		if d.IsDir() || (opt.IgnoreDotFileFlag.Bool() && isHiddenFile(fpath)) || !CanBoaded(opt, fpath) {
+		if d.IsDir() {
+			return nil
+		}
+
+		if _, ok := allowedFileListMap[fpath]; !ok {
 			return nil
 		}
 
@@ -77,7 +82,11 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", fpath, err)
 		}
-		content := string(decodedBytes)
+		var content = string(decodedBytes)
+
+		if opt.MaskSecretsFlag.Bool() {
+			content = secrets.MaskAll(content)
+		}
 
 		if opt.OutputFormat == "markdown" {
 			writer.WriteString("\n---\n\n")
@@ -90,7 +99,7 @@ func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, opt *c
 		scanner := bufio.NewScanner(strings.NewReader(content))
 		maxCapacity, _ := opt.ScanBuffer.Bytes()
 		buf := make([]byte, 0, 64*1024)
-		scanner.Buffer(buf, int(maxCapacity))
+		scanner.Buffer(buf, maxCapacity)
 
 		lineNumber := 1
 		for scanner.Scan() {

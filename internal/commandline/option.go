@@ -22,6 +22,8 @@ type Option struct {
 	OutputFilename                     string
 	ScanBufferValue                    string
 	ScanBuffer                         model.ByteString
+	MaskSecretsFlagValue               string
+	MaskSecretsFlag                    model.OnOffSwitch
 	AllowGitignoreFlagValue            string
 	AllowGitignoreFlag                 model.OnOffSwitch
 	AdditionallyIgnoreRuleFilenames    string
@@ -65,28 +67,32 @@ func OptParse(args []string) (int, *Option, error) {
 	fs.StringVar(outputFilenameOpt, "o", "", "Show help message.")
 
 	// --scan-buffer
-	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Show help message.")
-	fs.StringVar(scanBufferValueOpt, "b", "10M", "Show help message.")
+	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Specify the line scan buffer size.")
+	fs.StringVar(scanBufferValueOpt, "b", "10M", "Specify the line scan buffer size.")
+
+	// --mask-secrets
+	maskSecretsFlagOpt := fs.String("mask-secrets", "on", "Specify Detect the secrets string and convert it to masked.")
+	fs.StringVar(maskSecretsFlagOpt, "m", "on", "Specify Detect the secrets string and convert it to masked.")
 
 	// --allow-gitignore
-	allowGitignoreFlagOpt := fs.String("allow-gitignore", "on", "Show help message.")
-	fs.StringVar(allowGitignoreFlagOpt, "a", "on", "Show help message.")
+	allowGitignoreFlagOpt := fs.String("allow-gitignore", "on", "Specify enable .gitignore.")
+	fs.StringVar(allowGitignoreFlagOpt, "a", "on", "Specify enable .gitignore.")
 
 	// --additionally-ignorerule
-	additionallyIgnoreRuleFilenamesOpt := fs.String("additionally-ignorerule", "", "Show help message.")
-	fs.StringVar(additionallyIgnoreRuleFilenamesOpt, "p", "", "Show help message.")
+	additionallyIgnoreRuleFilenamesOpt := fs.String("additionally-ignorerule", "", "Specify a file containing additional ignore rules.")
+	fs.StringVar(additionallyIgnoreRuleFilenamesOpt, "p", "", "Specify a file containing additional ignore rules.")
 
 	// --with-line-number
-	withLineNumberFlagOpt := fs.String("with-line-number", "off", "Show help message.")
-	fs.StringVar(withLineNumberFlagOpt, "n", "off", "Show help message.")
+	withLineNumberFlagOpt := fs.String("with-line-number", "off", "Specify Whether to include file line numbers when outputting.")
+	fs.StringVar(withLineNumberFlagOpt, "n", "off", "Specify Whether to include file line numbers when outputting.")
 
 	// --output-format
-	outputFormatOpt := fs.String("output-format", "", "Show help message.")
-	fs.StringVar(outputFormatOpt, "f", "", "Show help message.")
+	outputFormatOpt := fs.String("output-format", "", "Specify the format of the output file.")
+	fs.StringVar(outputFormatOpt, "f", "", "Specify the format of the output file.")
 
 	// --ignore-dotfile
-	ignoreDotfileFlagValueOpt := fs.String("ignore-dotfile", "off", "Show help message.")
-	fs.StringVar(ignoreDotfileFlagValueOpt, "d", "off", "Show help message.")
+	ignoreDotfileFlagValueOpt := fs.String("ignore-dotfile", "off", "Specify ignore dot files.")
+	fs.StringVar(ignoreDotfileFlagValueOpt, "d", "off", "Specify ignore dot files.")
 
 	// --pattern-regex
 	patternRegexOpt := fs.String("pattern-regex", "", "Specify watch file pattern regexp (optional)")
@@ -133,19 +139,24 @@ func OptParse(args []string) (int, *Option, error) {
 		return optLength, nil, err
 	}
 
+	currentDir := common.GetCurrentDir()
+
 	var targetDirname = ""
 	_args := fs.Args()
 	if len(_args) > 0 {
 		targetDirname = _args[0]
 	}
-
-	currentDir := common.GetCurrentDir()
+	if targetDirname == "" {
+		// default targetDirname
+		targetDirname = currentDir
+	}
 
 	result := &Option{
 		WorkingDir:                      currentDir,
 		TargetDirname:                   targetDirname,
 		OutputFilename:                  *outputFilenameOpt,
 		ScanBufferValue:                 *scanBufferValueOpt,
+		MaskSecretsFlagValue:            *maskSecretsFlagOpt,
 		AllowGitignoreFlagValue:         *allowGitignoreFlagOpt,
 		AdditionallyIgnoreRuleFilenames: *additionallyIgnoreRuleFilenamesOpt,
 		IgnoreDotFileFlagValue:          *ignoreDotfileFlagValueOpt,
@@ -195,6 +206,11 @@ func (cr *Option) Normalize() error {
 	// scan-buffer
 	if err := cr.ScanBuffer.Set(cr.ScanBufferValue); err != nil {
 		errorMessages = append(errorMessages, fmt.Sprintf("--scan-buffer %s", err.Error()))
+	}
+
+	// mask-secrets
+	if err := cr.MaskSecretsFlag.Set(cr.MaskSecretsFlagValue); err != nil {
+		errorMessages = append(errorMessages, fmt.Sprintf("--mask-secrets %s", err.Error()))
 	}
 
 	// allow-gitignore

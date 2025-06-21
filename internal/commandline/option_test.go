@@ -13,6 +13,7 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		"-o", "out.txt",
 		"-b", "20K",
 		"-a", "on",
+		"-m", "on",
 		"-p", "ignore1,.ignore2",
 		"-n", "on",
 		"-f", "md",

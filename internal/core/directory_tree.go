@@ -4,29 +4,16 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/common"
 )
 
-func isHiddenFile(name string) bool {
-	return strings.HasPrefix(name, ".")
-}
-
-func IsUnderGitDir(path string) bool {
-	absPath := filepath.Clean(path)
-	parts := strings.Split(absPath, string(filepath.Separator))
-	if slices.Contains(parts, ".git") {
-		return true
-	}
-	return false
-}
-
-func GenerateTreeString(path string, indent string, opt *commandline.Option) (string, error) {
+func GenerateTreeString(path string, indent string, allowedFileListMap map[string]bool, opt *commandline.Option) (string, map[string]bool, error) {
 	files, err := os.ReadDir(path)
 	if err != nil {
-		return "", fmt.Errorf("Error reading directory %s: %v", path, err)
+		return "", nil, fmt.Errorf("Error reading directory %s: %v", path, err)
 	}
 
 	ApplySort(files)
@@ -34,7 +21,7 @@ func GenerateTreeString(path string, indent string, opt *commandline.Option) (st
 	var b strings.Builder
 
 	for i, file := range files {
-		if opt.IgnoreDotFileFlag.Bool() && isHiddenFile(file.Name()) {
+		if opt.IgnoreDotFileFlag.Bool() && IsHiddenFile(file.Name()) {
 			continue
 		}
 
@@ -56,14 +43,16 @@ func GenerateTreeString(path string, indent string, opt *commandline.Option) (st
 				b.WriteString("└── ")
 				b.WriteString(file.Name())
 				b.WriteString("/\n")
-				treeStr, _ := GenerateTreeString(fullPath, indent+"    ", opt)
+				treeStr, fl, _ := GenerateTreeString(fullPath, indent+"    ", allowedFileListMap, opt)
+				allowedFileListMap = common.MergeAllowFileList(fl, allowedFileListMap)
 				b.WriteString(treeStr)
 			} else {
 				b.WriteString(indent)
 				b.WriteString("├── ")
 				b.WriteString(file.Name())
 				b.WriteString("/\n")
-				treeStr, _ := GenerateTreeString(fullPath, indent+"│   ", opt)
+				treeStr, fl, _ := GenerateTreeString(fullPath, indent+"│   ", allowedFileListMap, opt)
+				allowedFileListMap = common.MergeAllowFileList(fl, allowedFileListMap)
 				b.WriteString(treeStr)
 			}
 		} else {
@@ -75,8 +64,10 @@ func GenerateTreeString(path string, indent string, opt *commandline.Option) (st
 			}
 			b.WriteString(file.Name())
 			b.WriteString("\n")
+			allowedFileListMap[fullPath] = true
 		}
+
 	}
 
-	return b.String(), nil
+	return b.String(), allowedFileListMap, nil
 }
