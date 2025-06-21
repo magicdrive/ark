@@ -14,7 +14,7 @@ if [[ -n ${ZSH_VERSION-} ]]; then
       '(-f --output-format)'{-o,--output-format}'[Output file format]:(txt md)' \
       '(-m --mask-secrets)'{-m,--mask-secrets}'[mask secret string (on/off)]:(on off)' \
       '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore(on/off)]:(on off)' \
-      '(-p --additionally-ignorerule)'{-a,--additionally-ignorerule}'[Additional ignore rule file]:file:_files' \
+      '(-p --additionally-ignorerule)'{-p,--additionally-ignorerule}'[Additional ignore rule file]:file:_files' \
       '(-n --with-line-number)'{-n,--with-line-number}'[Line number output (on/off)]:(on off)' \
       '(-d --ignore-dotfile)'{-d,--ignore-dotfile}'[Ignore dotfiles (on/off)]:(on off)' \
       '(-x --pattern-regex)'{-x,--pattern-regex}'[File match pattern]:regexp:' \
