@@ -16,6 +16,30 @@ Supports both **plaintext** and **markdown** outputs, full UTF-8 support with op
 
 ---
 
+## 🚀 Quick Start
+
+### 1. Installation
+
+```bash
+go install github.com/magicdrive/ark@latest
+```
+
+You can install enma using `homebrew`:
+
+```bash
+brew install magicdrive/tap/ark
+```
+
+Alternatively, you can download a pre-built binary from the [Releases page](https://github.com/magicdrive/enma/releases).
+
+### 2. Generate ark_output.txt
+
+```bash
+ark <dirname>
+```
+
+---
+
 ## 🧰 Usage
 
 ```sh
