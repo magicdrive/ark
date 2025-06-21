@@ -11,6 +11,7 @@ _ark() {
     '(-o --output-filename)'{-o,--output-filename}'[Specify ark output txt filename]:output file:_files' \
     '(-b --scan-buffer)'{-b,--scan-buffer}'[Specify the line scan buffer size]:buffer (e.g. 10M, 1G)' \
     '(-f --output-format)'{-o,--output-format}'[Specify the format of the output file]:(txt md)' \
+    '(-m --mask-secrets)'{-m,--mask-secrets}'[Specify Detect the secrets string and convert it to masked. (on/off)]:(on off)' \
     '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore file filter (on/off)]:(on off)' \
     '(-p --additionally-ignorerule)'{-p,--additionally-ignorerule}'[Specify a file containing additional ignore rules]:ignore file:_files' \
     '(-n --with-line-number)'{-n,--with-line-number}'[Include file line numbers (on/off)]:(on off)' \

@@ -8,8 +8,9 @@ Options:
   -v, --version                                   Show version.
   -o, --output-filename <filename>                Specify ark output txt filename. (optional. default: 'ark_output.txt')
   -b, --scan-buffer <number|byte_string>          Specify the line scan buffer size. (optional. default: '10M')
-  -f, --output-format <'txt'|'md'>                Specify the format of the output file (optional. default: 'txt').
-  -a, --allow-gitignore <'on'|'off'>              Specify enable .gitignore. (optional. default: 'on')
+  -f, --output-format <'txt'|'md'>                Specify the format of the output file. (optional. default: 'txt').
+  -m, --mask-secrets <'on'|'off'>                 Specify Detect the secrets and convert it to masked output. (optional. default: 'on').
+  -a, --allow-gitignore <'on'|'off'>              Specify enable .gitignore filter rule. (optional. default: 'on')
   -p, --additionally-ignorerule <filepath>        Specify a file containing additional ignore rules. (optional.)
   -n, --with-line-number <'on'|'off'>             Specify Whether to include file line numbers when outputting. (optional. default: 'on')
   -d, --ignore-dotfile <'on'|'off'>               Specify ignore dot files. (optional. default 'off')

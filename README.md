@@ -39,24 +39,25 @@ Yet another alternate \[directory|repository] represent text generator tool.
 
 ## ⚙️ Options
 
-| Option                                 | Alias           | Description                                          |
-| -------------------------------------- | --------------- | ---------------------------------------------------- |
-| `--help`                               | `-h`            | Show help message and exit                           |
-| `--version`                            | `-v`            | Show version                                         |
-| `--output-filename <filename>`         | `-o`            | Specify output file name (default: `ark_output.txt`) |
-| `--scan-buffer <byte>`                 | `-b`            | Line scan buffer size (default: `10M`)               |
-| `--output-format <'txt'\|'md'>`        | `-f`            | Format of the output file (default: `txt`)           |
-| `--allow-gitignore <'on'\|'off'>`      | `-a`            | Enable `.gitignore` file filter                      |
-| `--additionally-ignorerule <filepath>` | `-p`            | Additional `.gitignore`-like rules                   |
-| `--with-line-number <'on'\|'off'>`     | `-n`            | Show line numbers (default: `on`)                    |
-| `--ignore-dotfile <'on'\|'off'>`       | `-d`            | Ignore dotfiles (default: `on`)                      |
-| `--pattern-regex <regexp>`             | `-x`            | File match pattern                                   |
-| `--include-ext <ext>`                  | `-i`            | Include file extensions (comma separated)            |
-| `--exclude-dir-regex <regexp>`         | `-g`            | Exclude directories matching regex                   |
-| `--exclude-file-regex <regexp>`        | `-G`            | Exclude files matching regex                         |
-| `--exclude-ext <ext>`                  | `-e`            | Exclude file extensions (comma separated)            |
-| `--exclude-dir <dir>`                  | `-E`            | Exclude specific directory names                     |
-| `--skip-non-utf8`                      | `-s`            | Skip files that are not UTF-8 encoded                |
+| Option                                 | Alias           | Description                                                          |
+| -------------------------------------- | --------------- | ---------------------------------------------------------------------|
+| `--help`                               | `-h`            | Show help message and exit                                           |
+| `--version`                            | `-v`            | Show version                                                         |
+| `--output-filename <filename>`         | `-o`            | Specify output file name (default: `ark_output.txt`)                 |
+| `--scan-buffer <byte>`                 | `-b`            | Line scan buffer size (default: `10M`)                               |
+| `--output-format <'txt'\|'md'>`        | `-f`            | Format of the output file (default: `txt`)                           |
+| `--mask-secrets <'on'\|'off'>`         | `-m`            | Detect the secrets and convert it to masked output. (default: `on`') |
+| `--allow-gitignore <'on'\|'off'>`      | `-a`            | Enable `.gitignore` file filter                                      |
+| `--additionally-ignorerule <filepath>` | `-p`            | Additional `.gitignore`-like rules                                   |
+| `--with-line-number <'on'\|'off'>`     | `-n`            | Show line numbers (default: `on`)                                    |
+| `--ignore-dotfile <'on'\|'off'>`       | `-d`            | Ignore dotfiles (default: `on`)                                      |
+| `--pattern-regex <regexp>`             | `-x`            | File match pattern                                                   |
+| `--include-ext <ext>`                  | `-i`            | Include file extensions (comma separated)                            |
+| `--exclude-dir-regex <regexp>`         | `-g`            | Exclude directories matching regex                                   |
+| `--exclude-file-regex <regexp>`        | `-G`            | Exclude files matching regex                                         |
+| `--exclude-ext <ext>`                  | `-e`            | Exclude file extensions (comma separated)                            |
+| `--exclude-dir <dir>`                  | `-E`            | Exclude specific directory names                                     |
+| `--skip-non-utf8`                      | `-s`            | Skip files that are not UTF-8 encoded                                |
 
 ---
 
@@ -96,6 +97,31 @@ hello world
 ```````
 ---
 
+## 🗂 Example `.arkgnore`
+
+* ignore rule file.
+The syntax of .arkignore is a compatible syntax of [.gitignore](https://git-scm.com/docs/gitignore).
+
+```
+# =============================
+# VCS / Version Control
+# =============================
+.git/
+.hg/
+.svn/
+
+# =============================
+# Editors / IDEs
+# =============================
+.idea/
+.vscode/
+*.code-workspace
+*.sublime-project
+*.sublime-workspace
+```
+
+---
+
 ## 🧩 Integrations
 
 - 🐚 Shell completions for **bash** and **zsh** included!
@@ -112,3 +138,14 @@ source completions/ark-completion.sh  # bash or zsh
 * Project URL: [https://github.com/magicdrive/ark](https://github.com/magicdrive/ark)
 * `ark` documentation: [README.md](https://github.com/magicdrive/ark/README.md)
 
+---
+
+## Author
+
+Copyright (c) 2025 Hiroshi IKEGAMI
+
+---
+
+## License
+
+This project is licensed under the [MIT License](https://github.com/magicdrive/ark/blob/main/LICENSE)
