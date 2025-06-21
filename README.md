@@ -1,4 +1,4 @@
-# [BETA] Ark
+# Ark
 
 > Yet another alternate \[directory | repository] represent text generator tool
 

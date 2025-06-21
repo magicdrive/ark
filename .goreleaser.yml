@@ -1,0 +1,60 @@
+project_name: ark
+
+release:
+  github:
+    owner: magicdrive
+    name: ark
+  draft: false
+  prerelease: "false"
+
+builds:
+  - id: ark
+    goos:
+      - linux
+      - darwin
+      - windows
+    ignore:
+      - goos: darwin
+        goarch: "386"
+    ldflags:
+      - -s -w -X "main.version=v{{.Version}}"
+    env:
+      - CGO_ENABLED=0
+    binary: ark
+    main: ./main.go
+
+archives:
+  - id: tar.gz
+    format: tar.gz
+    files:
+     - src: misc/completions/ark-completion.sh
+       dst: completions/ark-completion.sh
+     - src: misc/completions/zsh/_ark
+       dst: completions/zsh/_ark
+     - src: misc/completions/bash/ark-completion.bash
+       dst: completions//bash/ark-completion.bash
+
+checksum:
+  name_template: "{{ .ProjectName }}_checksums.txt"
+
+brews:
+  - name: ark
+    repository:
+      owner: magicdrive
+      name: homebrew-tap
+      branch: main
+    homepage: "https://github.com/magicdrive/ark"
+    description: "Yet another alternate [directory | repository] represent text generator tool"
+    license: "MIT"
+    ids: [tar.gz]
+    install: |
+      bin.install "ark"
+    extra_install: |
+      bash_completion.install "completions/bash/ark-completion.bash" => "ark"
+      zsh_completion.install "completions/zsh/_ark" => "_ark"
+    test: |
+      system "#{bin}/ark", "--version"
+    commit_author:
+      name: magicdrive bot
+      email: hiroshi.ikegami+githubbot@magicdrive.jp
+

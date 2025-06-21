@@ -1,0 +1,19 @@
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "19:00"
+      timezone: "UTC"
+    commit-message:
+      prefix: "deps"
+      include: "scope"
+    open-pull-requests-limit: 10
+    #ignore:
+    #  - dependency-name: "github.com/some/dependency"
+    #    versions:
+    #      - ">=1.5.0"
+
