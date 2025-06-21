@@ -191,7 +191,6 @@ func MaskSecretKeyBlocks(content string) string {
 	return re.ReplaceAllString(content, "*****MASKED*****")
 }
 
-// MaskLine masks detected secrets for a single line (excl. multiline secret keys).
 func MaskLine(line string) string {
 	out := line
 	// 1. Mask full AKIA line
@@ -201,25 +200,61 @@ func MaskLine(line string) string {
 	}
 	// 2. Mask JWT value in text
 	out = regexp.MustCompile(`eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}`).ReplaceAllString(out, "*****MASKED*****")
-	// 3. Mask key=val value (but not ghp_/known patterns)
-	re := regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\s*[:=]\s*['"]?([^\s'"]+)['"]?`)
-	out = re.ReplaceAllStringFunc(out, func(s string) string {
-		m := re.FindStringSubmatch(s)
-		if len(m) > 2 {
-			val := m[2]
-			// Do not mask ghp_ tokens etc in key=val
+
+	// 3-1. Single quote
+	singleQuoteRe := regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)(\s*[:=]\s*)'([^']*)'`)
+	out = singleQuoteRe.ReplaceAllStringFunc(out, func(s string) string {
+		m := singleQuoteRe.FindStringSubmatch(s)
+		if len(m) > 3 {
+			key := m[1]
+			sep := m[2]
+			val := m[3]
 			if strings.HasPrefix(val, "ghp_") {
 				return s
 			}
-			return strings.Replace(s, val, "*****MASKED*****", 1)
+			return key + sep + "'" + "*****MASKED*****" + "'"
 		}
 		return s
 	})
+
+	// 3-2. Double quote
+	doubleQuoteRe := regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)(\s*[:=]\s*)"([^"]*)"`)
+	out = doubleQuoteRe.ReplaceAllStringFunc(out, func(s string) string {
+		m := doubleQuoteRe.FindStringSubmatch(s)
+		if len(m) > 3 {
+			key := m[1]
+			sep := m[2]
+			val := m[3]
+			if strings.HasPrefix(val, "ghp_") {
+				return s
+			}
+			return key + sep + `"` + "*****MASKED*****" + `"`
+		}
+		return s
+	})
+
+	// 3-3. No quote
+	noQuoteRe := regexp.MustCompile(`(?i)(secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)(\s*[:=]\s*)([^\s'"]+)`)
+	out = noQuoteRe.ReplaceAllStringFunc(out, func(s string) string {
+		m := noQuoteRe.FindStringSubmatch(s)
+		if len(m) > 3 {
+			key := m[1]
+			sep := m[2]
+			val := m[3]
+			if strings.HasPrefix(val, "ghp_") {
+				return s
+			}
+			return key + sep + "*****MASKED*****"
+		}
+		return s
+	})
+
 	// 4. Mask PEM/OPENSSH headers (single line)
 	out = regexp.MustCompile(`-----BEGIN (RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`).ReplaceAllString(out, "*****MASKED*****")
 	out = regexp.MustCompile(`-----END (RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`).ReplaceAllString(out, "*****MASKED*****")
 	return out
 }
+
 
 // MaskAll applies secret key block masking (multiline) then per-line masking (password, tokens, etc).
 func MaskAll(content string) string {

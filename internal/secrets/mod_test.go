@@ -77,7 +77,6 @@ func TestMaskLine(t *testing.T) {
 	}
 }
 
-
 func TestIsTextFile(t *testing.T) {
 	textContent := []byte("normal ascii content\npassword=secret\n")
 	binaryContent := []byte{0x00, 0x01, 0x02, 0x03, 0xff, 0xfe, 0xfd, 0xfc}
@@ -140,5 +139,96 @@ allowme=password
 	}
 	if !found {
 		t.Errorf("should detect testpattern")
+	}
+}
+
+func TestScanReader_MultiplePatterns(t *testing.T) {
+	rs := secrets.DefaultRuleSet()
+	cases := []struct {
+		line      string
+		wantMatch bool
+	}{
+		// GCP "private_key_id"などは現状ルールでは検知しないのでfalseに
+		{`private_key_id="abcdefabcdefabcdef"`, false},
+		// JSON private_key
+		{`"type": "service_account", "private_key_id": "abcdef1234", "private_key": "-----BEGIN PRIVATE KEY-----MIIBVwIBADANBg..."`, true},
+		// Azure
+		{`AccountKey=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=`, true},
+		// GitLab
+		{`glpat-abc123def456ghi789jklmn`, true},
+		// Slack
+		{`xoxb-1234567890abcdef`, true},
+		// Stripe
+		{`sk_live_1234567890abcdefABCDEF12`, true},
+		// SendGrid
+		{`SG.abcdefghijklmnopqrstuv.abcdEFGHIJKLMN_opqrstuvw0123456789abcdefGHIJKL`, true},
+		// Google OAuth
+		{`ya29.A0ARrdaM-0123456789abcdefGHIJKLMNOPQRSTUVWXYZ`, true},
+		// Google ClientID
+		{`123456789012-abcdefghijklmnopqrstuvwxyzABCDEF.apps.googleusercontent.com`, true},
+		// JWT
+		{`eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6.abcdefghij`, true},
+		// large case
+		{`TOKEN=abcd1234`, true},
+		// hypen
+		{`api-key: xyzzy`, true},
+		// colon space quite
+		{`PASSWORD : "foo"`, true},
+		// single quote
+		{`pass='bar'`, true},
+		// pw
+		{`pw="baz"`, true},
+		// not 'secret'
+		{`normal=abcdef`, false},
+		// allow-list
+		{`AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE`, false},
+	}
+	for _, c := range cases {
+		ms, err := rs.ScanReader(strings.NewReader(c.line), "f.env")
+		if err != nil {
+			t.Fatalf("ScanReader error: %v", err)
+		}
+		if c.wantMatch && len(ms) == 0 {
+			t.Errorf("should detect: %q", c.line)
+		}
+		if !c.wantMatch && len(ms) > 0 {
+			t.Errorf("should NOT detect: %q", c.line)
+		}
+	}
+}
+
+func TestMaskAll_SecretKeyBlocks(t *testing.T) {
+	src := `
+-----BEGIN ENCRYPTED PRIVATE KEY-----
+MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDME3YzOw6f
+hogehoge
+-----END ENCRYPTED PRIVATE KEY-----
+this line is normal_line
+`
+	masked := secrets.MaskAll(src)
+	if !strings.Contains(masked, "*****MASKED*****") {
+		t.Error("PEM key block should be masked")
+	}
+	if strings.Contains(masked, "BEGIN ENCRYPTED PRIVATE KEY") || strings.Contains(masked, "MIIEvQ") {
+		t.Error("Key material should not appear")
+	}
+	if !strings.Contains(masked, "this line is normal_line") {
+		t.Error("Normal lines should not be masked")
+	}
+}
+
+func TestMaskLine_Variants(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{`password : foo`, `password : *****MASKED*****`},
+		{`token=123456`, `token=*****MASKED*****`},
+		{`api_key:'abc'`, `api_key:'*****MASKED*****'`},
+		{`PRIVATE_KEY="xyz"`, `PRIVATE_KEY="*****MASKED*****"`},
+		{`secret='foo bar'`, `secret='*****MASKED*****'`},
+	}
+	for _, c := range cases {
+		got := secrets.MaskLine(c.in)
+		if got != c.want {
+			t.Errorf("MaskLine(%q) = %q; want %q", c.in, got, c.want)
+		}
 	}
 }
