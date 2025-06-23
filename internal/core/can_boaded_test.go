@@ -108,7 +108,7 @@ func TestCanBoaded_ExcludeExt(t *testing.T) {
 
 func TestCanBoaded_GitIgnore(t *testing.T) {
 	opt := createTestOption()
-	matcher, err := libgitignore.CompileIgnoreLines("*.tmp")
+	matcher, err := libgitignore.CompileIgnoreLines([]string{"*.tmp"}, "./", 1)
 	if err != nil {
 		t.Fatalf("Failed to compile gitignore: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestCanBoaded_GitIgnore(t *testing.T) {
 
 func TestCanBoaded_GitIgnore_NoMatch(t *testing.T) {
 	opt := createTestOption()
-	matcher, err := libgitignore.CompileIgnoreLines("*.log")
+	matcher, err := libgitignore.CompileIgnoreLines([]string{"*.log"}, "./", 1)
 	if err != nil {
 		t.Fatalf("Failed to compile gitignore: %v", err)
 	}

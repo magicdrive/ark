@@ -1,16 +1,44 @@
 package libgitignore
 
-func GenerateIntegratedGitIgnore(workingDir string, gitignorePath string, additionallyFileList []string) *GitIgnore {
-	var gi *GitIgnore
+import (
+	"os"
+	"path/filepath"
+)
 
-	if gitignorePath != "" {
-		gi, _ = CompileIgnoreFile(gitignorePath)
-	} else {
-		gi = NewPlainIgnoreRule()
+// GenerateIntegratedGitIgnore collects all .gitignore under root recursively
+func GenerateIntegratedGitIgnore(allowGitignore bool, root string, additionallyFileList []string) (*GitIgnore, error) {
+	gi := NewGitIgnore()
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			gitignore := filepath.Join(path, ".gitignore")
+			arkignore := filepath.Join(path, ".arkignore")
+			if _, err := os.Stat(gitignore); allowGitignore && err == nil {
+				_, err := AppendIgnoreFileWithDir(gi, gitignore, path)
+				if err != nil {
+					return err
+				}
+			} else if _, err := os.Stat(arkignore); err == nil {
+				_, err := AppendIgnoreFileWithDir(gi, gitignore, path)
+				if err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	if res, err := AppendIgnoreFileList(gi, workingDir, additionallyFileList); err == nil {
-		gi = res
+	if len(additionallyFileList) != 0 {
+		for _, ignoreFilePath := range additionallyFileList {
+			AppendIgnoreFileWithDir(gi, ignoreFilePath, root)
+		}
 	}
-	return gi
+
+	gi.Root = root
+	return gi, nil
 }

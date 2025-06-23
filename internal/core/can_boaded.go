@@ -13,7 +13,7 @@ func CanBoaded(opt *commandline.Option, path string) bool {
 	absPath, _ := filepath.Abs(path)
 
 	if opt.GitIgnoreRule != nil {
-		if opt.GitIgnoreRule.Matches(common.TrimDotSlash(path)) {
+		if opt.GitIgnoreRule.MatchesPath(common.TrimDotSlash(path)) {
 			return false
 		}
 	}

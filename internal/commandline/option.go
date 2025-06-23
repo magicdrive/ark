@@ -258,16 +258,8 @@ func (cr *Option) Normalize() error {
 	} else {
 		cr.AdditionallyIgnoreRuleFilenameList = []string{}
 	}
-	if arkIgnorePath, err := common.FindArkignore(); err != nil {
-		cr.AdditionallyIgnoreRuleFilenameList = append(cr.AdditionallyIgnoreRuleFilenameList, arkIgnorePath)
-	}
 
-	var gitignorePath = ""
-	if cr.AllowGitignoreFlag.Bool() {
-		gitignorePath, _ = common.FindGitignore()
-	}
-
-	cr.GitIgnoreRule = libgitignore.GenerateIntegratedGitIgnore(cr.WorkingDir, gitignorePath, cr.AdditionallyIgnoreRuleFilenameList)
+	cr.GitIgnoreRule,_  = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
 
 	// compile regexp
 	if cr.PatternRegexpString != "" {
