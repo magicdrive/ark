@@ -158,7 +158,7 @@ func TestGitIgnore_SubdirAndParentGitignore(t *testing.T) {
 			t.Fatalf("filepath.Rel: %v", err)
 		}
 		matched, pat := gi.MatchesPathHow(relPath)
-		t.Logf("path=%q, matched=%v, pat=%v (dir=%v)", tc.path, matched, pat.Raw, pat.Dir)
+		//t.Logf("path=%q, matched=%v, pat=%v (dir=%v)", tc.path, matched, pat.Raw, pat.Dir)
 
 		if matched != tc.expected {
 			t.Errorf("MatchesPathHow(%q) = %v; want %v", tc.path, matched, tc.expected)
