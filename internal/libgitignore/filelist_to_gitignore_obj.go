@@ -49,7 +49,7 @@ func NewGitignore(workingDir string, fileList []string) (*GitIgnore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return CompileIgnoreLines(fileLine...)
+	return CompileIgnoreLines(fileLine, workingDir, 1)
 }
 
 func ensureTrailingSlash(path string) string {
