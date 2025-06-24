@@ -1,9 +1,7 @@
 package common
 
 import (
-	"errors"
 	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -41,52 +39,6 @@ func CommaSeparated2StringList(s string) []string {
 	}
 
 	return result
-}
-
-func FindGitignore() (string, error) {
-
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		gitignorePath := filepath.Join(dir, ".gitignore")
-		if _, err := os.Stat(gitignorePath); err == nil {
-			return gitignorePath, nil
-		}
-
-		parentDir := filepath.Dir(dir)
-		if parentDir == dir {
-			break
-		}
-		dir = parentDir
-	}
-
-	return "", errors.New("gitignore not found")
-}
-
-func FindArkignore() (string, error) {
-
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-
-	for {
-		arkignorePath := filepath.Join(dir, ".arkignore")
-		if _, err := os.Stat(arkignorePath); err == nil {
-			return arkignorePath, nil
-		}
-
-		parentDir := filepath.Dir(dir)
-		if parentDir == dir {
-			break
-		}
-		dir = parentDir
-	}
-
-	return "", errors.New("arkignore not found")
 }
 
 func GetCurrentDir() string {
