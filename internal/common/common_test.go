@@ -2,7 +2,6 @@ package common_test
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/common"
@@ -76,43 +75,3 @@ func TestGetCurrentDir(t *testing.T) {
 	}
 }
 
-func TestFindGitignoreAndArkignore(t *testing.T) {
-	tmpDir := t.TempDir()
-	oldwd, _ := os.Getwd()
-	defer os.Chdir(oldwd)
-	os.Chdir(tmpDir)
-
-	// .gitignore
-	gi := filepath.Join(tmpDir, ".gitignore")
-	os.WriteFile(gi, []byte("foo"), 0644)
-	if path, err := common.FindGitignore(); err != nil || !equalPath(path, gi) {
-		t.Errorf("FindGitignore: got %q, err=%v, want %q", path, err, gi)
-	}
-	os.Remove(gi)
-	if _, err := common.FindGitignore(); err == nil {
-		t.Error("FindGitignore: want error for missing .gitignore")
-	}
-
-	// .arkignore
-	ai := filepath.Join(tmpDir, ".arkignore")
-	os.WriteFile(ai, []byte("bar"), 0644)
-	if path, err := common.FindArkignore(); err != nil || !equalPath(path, ai) {
-		t.Errorf("FindArkignore: got %q, err=%v, want %q", path, err, ai)
-	}
-	os.Remove(ai)
-	if _, err := common.FindArkignore(); err == nil {
-		t.Error("FindArkignore: want error for missing .arkignore")
-	}
-}
-
-func equalPath(a, b string) bool {
-	ap, err := filepath.EvalSymlinks(a)
-	if err != nil {
-		ap = a
-	}
-	bp, err := filepath.EvalSymlinks(b)
-	if err != nil {
-		bp = b
-	}
-	return ap == bp
-}

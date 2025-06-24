@@ -23,7 +23,7 @@ func TestGitIgnore_Matches(t *testing.T) {
 		"a/**/b/*.txt",
 	}
 
-	gi, err := libgitignore.CompileIgnoreLines(patterns, "./", 1)
+	gi, err := libgitignore.CompileIgnoreLines(patterns, "./", 1, "./")
 	if err != nil {
 		t.Fatalf("failed to compile patterns: %v", err)
 	}
@@ -74,7 +74,7 @@ func TestGitIgnore_ExtraCases(t *testing.T) {
 		"**/*.bak",
 		"lib/**/test/*.go",
 	}
-	gi, err := libgitignore.CompileIgnoreLines(patterns, "./", 1)
+	gi, err := libgitignore.CompileIgnoreLines(patterns, "./", 1, "./")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,11 @@ func TestGitIgnore_SubdirAndParentGitignore(t *testing.T) {
 
 	// 1. root .gitignore
 	rootGitignore := filepath.Join(tmp, ".gitignore")
-	err := os.WriteFile(rootGitignore, []byte("*.log\n!keep.log\nfoo/\n"), 0644)
+	err := os.WriteFile(rootGitignore, []byte(`
+*.log
+!keep.log
+foo/
+	`), 0644)
 	if err != nil {
 		t.Fatalf("write .gitignore: %v", err)
 	}
@@ -124,7 +128,12 @@ func TestGitIgnore_SubdirAndParentGitignore(t *testing.T) {
 		t.Fatalf("mkdir: %v", err)
 	}
 	subGitignore := filepath.Join(subdir, ".gitignore")
-	err = os.WriteFile(subGitignore, []byte("*.txt\nbar/\n!note.txt\n"), 0644)
+	err = os.WriteFile(subGitignore, []byte(`
+*.txt
+bar/
+!note.txt
+/ddd
+	`), 0644)
 	if err != nil {
 		t.Fatalf("write sub/.gitignore: %v", err)
 	}
@@ -139,16 +148,18 @@ func TestGitIgnore_SubdirAndParentGitignore(t *testing.T) {
 		expected bool
 		fromDir  string
 	}{
-		{"foo/bar.log", true, tmp},                            // ルート.gitignore "*.log"
-		{"keep.log", false, ""},                               // ルート.gitignore "!keep.log" (除外)
-		{"sub/file.txt", true, filepath.Join(tmp, "sub")},     // サブdir .gitignore "*.txt"
-		{"sub/note.txt", false, ""},                           // sub/.gitignore "!note.txt"
-		{"sub/bar/data.txt", true, filepath.Join(tmp, "sub")}, // sub/.gitignore "*.txt"
-		{"foo/baz.txt", true, ""},                             // ルート.gitignore効かない（*.txt無い）
-		{"sub/bar/baz.log", true, filepath.Join(tmp, "sub")},  // ルート.gitignore "*.log"適用
-		{"sub/bar/abc.md", true, ""},                          // どちらにもマッチしない
-		{"sub/bar/", true, filepath.Join(tmp, "sub")},         // sub/.gitignore "bar/"
-		{"foo/", true, tmp},                                   // ルート.gitignore "foo/"
+		{"foo/bar.log", true, tmp},
+		{"keep.log", false, ""},
+		{"sub/file.txt", true, filepath.Join(tmp, "sub")},
+		{"sub/note.txt", false, ""},
+		{"sub/bar/data.txt", true, filepath.Join(tmp, "sub")},
+		{"foo/baz.txt", true, ""},
+		{"sub/bar/baz.log", true, filepath.Join(tmp, "sub")},
+		{"sub/bar/abc.md", true, ""},
+		{"sub/bar/", true, filepath.Join(tmp, "sub")},
+		{"foo/", true, tmp},
+		{"sub/ddd/a.bin", true, filepath.Join(tmp, "sub")},
+		{"sub/ddd/", true, filepath.Join(tmp, "sub")},
 	}
 
 	for _, tc := range tests {
