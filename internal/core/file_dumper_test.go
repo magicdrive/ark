@@ -45,7 +45,7 @@ func main() {
 
 	var fileListMap = map[string]bool{}
 	fileListMap[testFile] = true
-	err := core.ReadAndWriteAllFiles("mock tree string", rootDir, outFile, fileListMap, opt)
+	err := core.WriteAllFiles("mock tree string", rootDir, outFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("execution failed: %v", err)
 	}
@@ -86,7 +86,7 @@ func TestReadAndWriteAllFiles_CreatesOutputFile(t *testing.T) {
 
 	var fileListMap = map[string]bool{}
 	fileListMap[dummyInput] = true
-	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
+	err = core.WriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -122,7 +122,7 @@ func TestReadAndWriteAllFiles_MarkdownFormat(t *testing.T) {
 
 	var fileListMap = map[string]bool{}
 	fileListMap[dummyInput] = true
-	err = core.ReadAndWriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
+	err = core.WriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestReadAndWriteAllFiles_WithLineNumber(t *testing.T) {
 
 	var fileListMap = map[string]bool{}
 	fileListMap[dummyInput] = true
-	err := core.ReadAndWriteAllFiles("main.txt", dir, outputFile, fileListMap, opt)
+	err := core.WriteAllFiles("main.txt", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -203,7 +203,7 @@ func TestReadAndWriteAllFiles_MarkdownOutput(t *testing.T) {
 
 	var fileListMap = map[string]bool{}
 	fileListMap[dummyFile] = true
-	err := core.ReadAndWriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
+	err := core.WriteAllFiles("test.go", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestReadAndWriteAllFiles_SkipNonUTF8File(t *testing.T) {
 
 	var fileListMap = map[string]bool{}
 	fileListMap[nonUtf8File] = true
-	err := core.ReadAndWriteAllFiles("weird.txt", dir, outputFile, fileListMap, opt)
+	err := core.WriteAllFiles("weird.txt", dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestReadAndWriteAllFiles_OutputFormatPlainText(t *testing.T) {
 		AllowGitignoreFlag: model.OnOffSwitch("on"),
 	}
 
-	err := core.ReadAndWriteAllFiles(treeStr, dir, outputFile, fileListMap, opt)
+	err := core.WriteAllFiles(treeStr, dir, outputFile, fileListMap, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

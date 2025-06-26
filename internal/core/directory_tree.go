@@ -45,6 +45,7 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 				b.WriteString("/\n")
 				treeStr, fl, _ := GenerateTreeString(fullPath, indent+"    ", allowedFileListMap, opt)
 				allowedFileListMap = common.MergeAllowFileList(fl, allowedFileListMap)
+				allowedFileListMap[fullPath] = true
 				b.WriteString(treeStr)
 			} else {
 				b.WriteString(indent)
@@ -53,6 +54,7 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 				b.WriteString("/\n")
 				treeStr, fl, _ := GenerateTreeString(fullPath, indent+"│   ", allowedFileListMap, opt)
 				allowedFileListMap = common.MergeAllowFileList(fl, allowedFileListMap)
+				allowedFileListMap[fullPath] = true
 				b.WriteString(treeStr)
 			}
 		} else {

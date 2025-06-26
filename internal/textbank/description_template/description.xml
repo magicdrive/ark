@@ -1,0 +1,9 @@
+<Meta>
+<ProjectName>%s</ProjectName>
+<RootDir>%s</RootDir>
+<Format>Tree-like directory listing with file content below each file path.</Format>
+<Note>Binary and non-UTF-8 files are excluded.</Note>
+<Description>
+  This document contains the complete project structure and source code, intended for AI systems to assist with tasks such as code summarization, documentation generation, static analysis, or question answering.
+</Description>
+</Meta>

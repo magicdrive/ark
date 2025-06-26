@@ -7,6 +7,8 @@ import (
 const (
 	Markdown  = "markdown"
 	PlainText = "plaintext"
+	XML       = "xml"
+	Auto      = "auto"
 )
 
 var OutputFormatUnitMap = map[string]string{
@@ -14,15 +16,21 @@ var OutputFormatUnitMap = map[string]string{
 	"Markdown":   Markdown,
 	"MarkDown":   Markdown,
 	"mark_down":  Markdown,
+	"mark-down":  Markdown,
 	"md":         Markdown,
 	"mdn":        Markdown,
 	"mkd":        Markdown,
 	"plaintext":  PlainText,
 	"plain_text": PlainText,
+	"plain-text": PlainText,
 	"PlainText":  PlainText,
 	"Plaintext":  PlainText,
 	"text":       PlainText,
 	"txt":        PlainText,
+	"xml":        XML,
+	"Xml":        XML,
+	"XML":        XML,
+	"auto":       Auto,
 }
 
 type OutputFormat string
@@ -40,7 +48,7 @@ func (m *OutputFormat) Set(value string) error {
 		*m = OutputFormat(unit)
 		return nil
 	} else {
-		return fmt.Errorf("invalid value: %q. Allowed values are 'markdown', 'plaintext'", value)
+		return fmt.Errorf("invalid value: %q. Allowed values are 'markdown', 'plaintext', 'xml', 'auto'", value)
 
 	}
 }
