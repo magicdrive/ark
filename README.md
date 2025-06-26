@@ -65,7 +65,7 @@ Yet another alternate \[directory|repository] represent text generator tool.
 | `--version`                            | `-v`            | Show version                                                         |
 | `--output-filename <filename>`         | `-o`            | Specify output file name (default: `ark_output.txt`)                 |
 | `--scan-buffer <byte>`                 | `-b`            | Line scan buffer size (default: `10M`)                               |
-| `--output-format <'txt'\|'md'>`        | `-f`            | Format of the output file (default: `txt`)                           |
+| `--output-format <'txt'\|'md'\|'xml'>` | `-f`            | Format of the output file (default: `txt`)                           |
 | `--mask-secrets <'on'\|'off'>`         | `-m`            | Detect the secrets and convert it to masked output. (default: `on`') |
 | `--allow-gitignore <'on'\|'off'>`      | `-a`            | Enable `.gitignore` file filter                                      |
 | `--additionally-ignorerule <filepath>` | `-p`            | Additional `.gitignore`-like rules                                   |
