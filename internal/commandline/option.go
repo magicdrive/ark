@@ -87,8 +87,8 @@ func OptParse(args []string) (int, *Option, error) {
 	fs.StringVar(withLineNumberFlagOpt, "n", "off", "Specify Whether to include file line numbers when outputting.")
 
 	// --output-format
-	outputFormatOpt := fs.String("output-format", "", "Specify the format of the output file.")
-	fs.StringVar(outputFormatOpt, "f", "", "Specify the format of the output file.")
+	outputFormatOpt := fs.String("output-format", "auto", "Specify the format of the output file.")
+	fs.StringVar(outputFormatOpt, "f", "auto", "Specify the format of the output file.")
 
 	// --ignore-dotfile
 	ignoreDotfileFlagValueOpt := fs.String("ignore-dotfile", "off", "Specify ignore dot files.")
@@ -228,12 +228,25 @@ func (cr *Option) Normalize() error {
 		errorMessages = append(errorMessages, fmt.Sprintf("--with-line-number %s", err.Error()))
 	}
 
+	// --output-format
+	if err := cr.OutputFormat.Set(cr.OutputFormatValue); err != nil {
+		errorMessages = append(errorMessages, fmt.Sprintf("--output-format %s", err.Error()))
+	}
+
 	// output-format
-	if cr.OutputFormatValue == "" && cr.OutputFilename != "" {
-		ext := filepath.Ext(cr.OutputFilename)
-		cr.OutputFormatValue = model.Ext2OutputFormat(ext)
-	} else if cr.OutputFormatValue == "" {
-		cr.OutputFormatValue = model.PlainText
+
+	if cr.OutputFormat.String() == model.Auto {
+		if cr.OutputFilename != "" {
+			ext := filepath.Ext(cr.OutputFilename)
+			ditectFormatValue := model.Ext2OutputFormat(ext)
+
+			cr.OutputFormatValue = ditectFormatValue
+			cr.OutputFormat.Set(cr.OutputFormatValue)
+		} else {
+			// plaintext
+			cr.OutputFormatValue = model.PlainText
+			cr.OutputFormat.Set(cr.OutputFormatValue)
+		}
 	}
 
 	// output-filename
@@ -243,13 +256,11 @@ func (cr *Option) Normalize() error {
 			cr.OutputFilename = "ark_output.md"
 		case model.PlainText:
 			cr.OutputFilename = "ark_output.txt"
+		case model.XML:
+			cr.OutputFilename = "ark_output.xml"
 		default:
 			cr.OutputFilename = "ark_output.txt"
 		}
-	}
-
-	if err := cr.OutputFormat.Set(cr.OutputFormatValue); err != nil {
-		errorMessages = append(errorMessages, fmt.Sprintf("--output-format %s", err.Error()))
 	}
 
 	// gitignorerule
@@ -259,7 +270,7 @@ func (cr *Option) Normalize() error {
 		cr.AdditionallyIgnoreRuleFilenameList = []string{}
 	}
 
-	cr.GitIgnoreRule,_  = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
+	cr.GitIgnoreRule, _ = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
 
 	// compile regexp
 	if cr.PatternRegexpString != "" {

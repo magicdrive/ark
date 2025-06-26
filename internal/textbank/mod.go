@@ -7,3 +7,6 @@ var DescriptionTemplateMarkdown string
 
 //go:embed description_template/description.txt
 var DescriptionTemplateText string
+
+//go:embed description_template/description.xml
+var DescriptionTemplateXML string

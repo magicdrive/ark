@@ -2,6 +2,7 @@ package core
 
 import (
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/model"
 )
 
 func Apply(opt *commandline.Option) error {
@@ -10,8 +11,14 @@ func Apply(opt *commandline.Option) error {
 	if treeStr, allowdFileList, err := GenerateTreeString(opt.TargetDirname, firstIndent, firstAllowdFileListMap, opt); err != nil {
 		return err
 	} else {
-		if err := ReadAndWriteAllFiles(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
-			return err
+		if opt.OutputFormat.String() == model.XML {
+			if err := WriteAllFilesAsXML(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
+				return err
+			}
+		} else {
+			if err := WriteAllFiles(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

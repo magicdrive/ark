@@ -19,7 +19,7 @@ import (
 	"github.com/magicdrive/ark/internal/secrets"
 )
 
-func ReadAndWriteAllFiles(treeStr string, root string, outputPath string, allowedFileListMap map[string]bool, opt *commandline.Option) error {
+func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileListMap map[string]bool, opt *commandline.Option) error {
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return err
