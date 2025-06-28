@@ -46,7 +46,7 @@ func main() {
 	}
 	text := string(data)
 
-	t.Logf("ArkLite output:\n%s", text)
+	//t.Logf("ArkLite output:\n%s", text)
 
 	if !strings.Contains(text, "# ArkLite Format Overview") {
 		t.Error("Missing ArkLite header")
