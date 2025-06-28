@@ -74,4 +74,3 @@ func TestGetCurrentDir(t *testing.T) {
 		t.Errorf("GetCurrentDir = %q, want %q", got, want)
 	}
 }
-
