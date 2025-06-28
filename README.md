@@ -175,7 +175,7 @@ hello world
 ---
 
 
-### Arklite (`--output-format arklite`)
+#### 🤔  What's Arklite?
 
 Arklite format is a highly compact format tailored for LLM input efficiency. It consists of:
 
