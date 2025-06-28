@@ -48,6 +48,7 @@ type Option struct {
 	OutputFormatValue                  string
 	OutputFormat                       model.OutputFormat
 	SkipNonUTF8Flag                    bool
+	SilentFlag                         bool
 	HelpFlag                           bool
 	VersionFlag                        bool
 	FlagSet                            *flag.FlagSet
@@ -119,8 +120,12 @@ func OptParse(args []string) (int, *Option, error) {
 	fs.StringVar(excludeDirOpt, "E", "", "Specify watch exclude directory (optional)")
 
 	// --skik-non-utf8
-	skipNonUTF8FlagOpt := fs.Bool("skip-non-utf8", false, "Show help message.")
-	fs.BoolVar(skipNonUTF8FlagOpt, "s", false, "Show help message.")
+	skipNonUTF8FlagOpt := fs.Bool("skip-non-utf8", false, "Specify ignore files that do not have utf8 charset.")
+	fs.BoolVar(skipNonUTF8FlagOpt, "s", false, "Specify ignore files that do not have utf8 charset.")
+
+	// --silent
+	silentFlagOpt := fs.Bool("silent", false, "Specify flag process without displaying messages during processing.")
+	fs.BoolVar(silentFlagOpt, "S", false, "Specify flag process without displaying messages during processing.")
 
 	// --help
 	helpFlagOpt := fs.Bool("help", false, "Show help message.")
@@ -169,6 +174,7 @@ func OptParse(args []string) (int, *Option, error) {
 		WithLineNumberFlagValue:         *withLineNumberFlagOpt,
 		OutputFormatValue:               *outputFormatOpt,
 		SkipNonUTF8Flag:                 *skipNonUTF8FlagOpt,
+		SilentFlag:                      *silentFlagOpt,
 		HelpFlag:                        *helpFlagOpt,
 		VersionFlag:                     *versionFlagOpt,
 		FlagSet:                         fs,
