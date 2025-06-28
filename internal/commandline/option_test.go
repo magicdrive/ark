@@ -88,7 +88,7 @@ func TestOptParse_Defaults(t *testing.T) {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if opt.OutputFilename != "ark_output.txt" {
+	if opt.OutputFilename != "ark-output.txt" {
 		t.Errorf("Expected default output filename, got %s", opt.OutputFilename)
 	}
 	if opt.WithLineNumberFlag.String() != "off" {
