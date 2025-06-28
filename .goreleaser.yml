@@ -34,7 +34,7 @@ archives:
      - src: misc/completions/bash/ark-completion.bash
        dst: completions//bash/ark-completion.bash
      - src: misc/completions/fish/ark.fish
-       dst: completions//bash/ark.fish
+       dst: completions//fish/ark.fish
 
 checksum:
   name_template: "{{ .ProjectName }}_checksums.txt"
