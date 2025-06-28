@@ -48,6 +48,7 @@ type Option struct {
 	OutputFormatValue                  string
 	OutputFormat                       model.OutputFormat
 	SkipNonUTF8Flag                    bool
+	DeleteCommentsFlag                 bool
 	SilentFlag                         bool
 	HelpFlag                           bool
 	VersionFlag                        bool
@@ -127,6 +128,10 @@ func OptParse(args []string) (int, *Option, error) {
 	silentFlagOpt := fs.Bool("silent", false, "Specify flag process without displaying messages during processing.")
 	fs.BoolVar(silentFlagOpt, "S", false, "Specify flag process without displaying messages during processing.")
 
+	// --delete-comments
+	deleteCommentsFlagOpt := fs.Bool("delete-comment", false, "Specify flag delete code comments.")
+	fs.BoolVar(deleteCommentsFlagOpt, "D", false, "Specify flag delete code comments.")
+
 	// --help
 	helpFlagOpt := fs.Bool("help", false, "Show help message.")
 	fs.BoolVar(helpFlagOpt, "h", false, "Show help message.")
@@ -175,6 +180,7 @@ func OptParse(args []string) (int, *Option, error) {
 		OutputFormatValue:               *outputFormatOpt,
 		SkipNonUTF8Flag:                 *skipNonUTF8FlagOpt,
 		SilentFlag:                      *silentFlagOpt,
+		DeleteCommentsFlag:              *deleteCommentsFlagOpt,
 		HelpFlag:                        *helpFlagOpt,
 		VersionFlag:                     *versionFlagOpt,
 		FlagSet:                         fs,
@@ -264,6 +270,8 @@ func (cr *Option) Normalize() error {
 			cr.OutputFilename = "ark_output.txt"
 		case model.XML:
 			cr.OutputFilename = "ark_output.xml"
+		case model.Arklite:
+			cr.OutputFilename = "ark_output.arklite"
 		default:
 			cr.OutputFilename = "ark_output.txt"
 		}

@@ -47,6 +47,20 @@ func withSpinner(opt *commandline.Option) error {
 func createDumpFile(opt *commandline.Option) error {
 	firstIndent := ""
 	var firstAllowdFileListMap = map[string]bool{}
+
+	// arklite
+	if opt.OutputFormat.String() == model.Arklite {
+		if treeStr, allowdFileList, err := GenerateTreeJSONString(opt.TargetDirname, firstAllowdFileListMap, opt); err != nil {
+			return err
+		} else {
+			if err := WriteAllFilesAsArkLite(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
+	// text, markdown, xml
 	if treeStr, allowdFileList, err := GenerateTreeString(opt.TargetDirname, firstIndent, firstAllowdFileListMap, opt); err != nil {
 		return err
 	} else {
@@ -59,7 +73,6 @@ func createDumpFile(opt *commandline.Option) error {
 				return err
 			}
 		}
+		return nil
 	}
-	return nil
-
 }

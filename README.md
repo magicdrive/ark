@@ -1,6 +1,6 @@
 # Ark
 
-> Yet another alternate \[directory | repository] represent text generator tool
+> Yet another alternate [directory | repository] represent text generator tool
 
 **ark** is a powerful CLI tool designed to recursively scan a directory and generate a readable and well-formatted text representation of its structure and contents. Ideal for:
 
@@ -8,7 +8,7 @@
 * 🧪 Static analysis workflows
 * 🗂️ Snapshotting source trees with clean formatting
 
-Supports both **plaintext** and **markdown** outputs, full UTF-8 support with optional skip behavior, and extensive filtering options.
+Supports both **plaintext**, **markdown**, **xml**, and **arklite** outputs, full UTF-8 support with optional skip behavior, and extensive filtering options.
 
 ---
 
@@ -20,13 +20,15 @@ Supports both **plaintext** and **markdown** outputs, full UTF-8 support with op
 go install github.com/magicdrive/ark@latest
 ```
 
-You can install ark using `homebrew`:
+Using Homebrew:
 
 ```bash
 brew install magicdrive/tap/ark
 ```
 
-Alternatively, you can download a pre-built binary from the [Releases page](https://github.com/magicdrive/ark/releases).
+Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark/releases).
+
+---
 
 ### 2. Generate ark_output.txt
 
@@ -42,11 +44,7 @@ ark <dirname>
 ark [OPTIONS] <dirname>
 ```
 
-### 🔸 Description
-
-Yet another alternate \[directory|repository] represent text generator tool.
-
-### 🔸 Arguments
+### Arguments
 
 | Argument        | Description                             |
 | --------------- | --------------------------------------- |
@@ -59,26 +57,27 @@ Yet another alternate \[directory|repository] represent text generator tool.
 
 ## ⚙️ Options
 
-| Option                                 | Alias           | Description                                                          |
-| -------------------------------------- | --------------- | ---------------------------------------------------------------------|
-| `--help`                               | `-h`            | Show help message and exit                                           |
-| `--version`                            | `-v`            | Show version                                                         |
-| `--output-filename <filename>`         | `-o`            | Specify output file name (default: `ark_output.txt`)                 |
-| `--scan-buffer <byte>`                 | `-b`            | Line scan buffer size (default: `10M`)                               |
-| `--output-format <'txt'\|'md'\|'xml'>` | `-f`            | Format of the output file (default: `txt`)                           |
-| `--mask-secrets <'on'\|'off'>`         | `-m`            | Detect the secrets and convert it to masked output. (default: `on`') |
-| `--allow-gitignore <'on'\|'off'>`      | `-a`            | Enable `.gitignore` file filter                                      |
-| `--additionally-ignorerule <filepath>` | `-p`            | Additional `.gitignore`-like rules                                   |
-| `--with-line-number <'on'\|'off'>`     | `-n`            | Show line numbers (default: `on`)                                    |
-| `--ignore-dotfile <'on'\|'off'>`       | `-d`            | Ignore dotfiles (default: `on`)                                      |
-| `--pattern-regex <regexp>`             | `-x`            | File match pattern                                                   |
-| `--include-ext <ext>`                  | `-i`            | Include file extensions (comma separated)                            |
-| `--exclude-dir-regex <regexp>`         | `-g`            | Exclude directories matching regex                                   |
-| `--exclude-file-regex <regexp>`        | `-G`            | Exclude files matching regex                                         |
-| `--exclude-ext <ext>`                  | `-e`            | Exclude file extensions (comma separated)                            |
-| `--exclude-dir <dir>`                  | `-E`            | Exclude specific directory names                                     |
-| `--skip-non-utf8`                      | `-s`            | Skip files that are not UTF-8 encoded                                |
-| `--silent`                             | `-S`            | Process without displaying messages during processing.               |
+| Option                                            | Alias           | Description                                                                       |
+| ------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------|
+| `--help`                                          | `-h`            | Show help message and exit                                                        |
+| `--version`                                       | `-v`            | Show version                                                                      |
+| `--output-filename <filename>`                    | `-o`            | Output file name (default: `ark_output.txt`)                                      |
+| `--scan-buffer <byte>`                            | `-b`            | Line scan buffer size (default: `10M`)                                            |
+| `--output-format <'txt'|'md'|'xml'|'arklite'>`    | `-f`            | Output file format (default: `txt`)                                               |
+| `--mask-secrets <'on'|'off'>`                     | `-m`            | Detect secrets and mask them (default: `on`)                                      |
+| `--allow-gitignore <'on'|'off'>`                  | `-a`            | Enable `.gitignore` filter                                                        |
+| `--additionally-ignorerule <filepath>`            | `-p`            | Additional `.gitignore`-like rules                                                |
+| `--with-line-number <'on'|'off'>`                 | `-n`            | Show line numbers (default: `on`)                                                 |
+| `--ignore-dotfile <'on'|'off'>`                   | `-d`            | Ignore dotfiles (default: `on`)                                                   |
+| `--pattern-regex <regexp>`                        | `-x`            | File match pattern                                                                |
+| `--include-ext <ext>`                             | `-i`            | Include file extensions (comma separated)                                         |
+| `--exclude-dir-regex <regexp>`                    | `-g`            | Exclude directories matching regex                                                |
+| `--exclude-file-regex <regexp>`                   | `-G`            | Exclude files matching regex                                                      |
+| `--exclude-ext <ext>`                             | `-e`            | Exclude file extensions (comma separated)                                         |
+| `--exclude-dir <dir>`                             | `-E`            | Exclude specific directory names                                                  |
+| `--skip-non-utf8`                                 | `-s`            | Skip non-UTF-8 files                                                               |
+| `--silent`                                        | `-S`            | Suppress logs                                                                     |
+| `--delete-comments`                               | `-D`            | Strip comments based on language detection                                        |
 
 ---
 
@@ -96,16 +95,18 @@ example_project
 hello world
 ```
 
+---
+
 ### Markdown (`--output-format md`)
 
-```````
+````markdown
 # Project Tree
 
 ```
-example\_project
+example_project
 ├── main.go
 └── sub
-└── sub.txt
+    └── sub.txt
 ```
 
 ---
@@ -114,14 +115,96 @@ example\_project
 ```txt
 hello world
 ```
+````
 
-```````
 ---
 
-## 🗂 Example `.arkignore`
+### XML (`--output-format xml`)
 
-* ignore rule file.
-The syntax of .arkignore is a compatible syntax of [.gitignore](https://git-scm.com/docs/gitignore).
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<ProjectDump>
+  <Description>
+    <ProjectName>example_project</ProjectName>
+    <ProjectPath>/absolute/path/to/example_project</ProjectPath>
+  </Description>
+  <Tree>
+    <![CDATA[
+example_project
+├── main.go
+└── sub
+    └── sub.txt
+    ]]>
+  </Tree>
+  <Files>
+    <File path="main.go">
+      <![CDATA[
+package main
+func main() {
+  println("hello")
+}
+      ]]>
+    </File>
+    <File path="sub/sub.txt">
+      <![CDATA[
+hello world
+      ]]>
+    </File>
+  </Files>
+</ProjectDump>
+```
+
+---
+
+### Arklite (`--output-format arklite`)
+
+```
+# ArkLite Format: example_project (/absolute/path/to/example_project)
+
+## Directory Tree (JSON)
+{"name":"example_project","type":"directory","children":[{"name":"main.go","type":"file"},{"name":"sub","type":"directory","children":[{"name":"sub.txt","type":"file"}]}]}
+
+## File Dump
+@main.go
+package main␤func main() {␤  println("hello")␤}
+
+@sub/sub.txt
+hello world
+```
+
+---
+
+
+### Arklite (`--output-format arklite`)
+
+Arklite format is a highly compact format tailored for LLM input efficiency. It consists of:
+
+1. 📝 A natural language description (project name and absolute path)
+2. 🗂 A JSON-based directory structure
+3. 📄 A one-line-per-file representation of all text content (with comments stripped)
+
+Each file is prefixed with `@<relative path>` followed by a newline-delimited (`␤`) single-line content.
+
+#### Example
+
+```
+## Project: example_project
+## Path: /absolute/path/to/example_project
+
+## Directory Tree (JSON)
+{"name":"example_project","type":"directory","children":[{"name":"main.go","type":"file"},{"name":"sub","type":"directory","children":[{"name":"sub.txt","type":"file"}]}]}
+
+## File Dump
+@main.go
+package␤main␤func␤main(){␤fmt.Println("hello")}
+@sub/sub.txt
+hello␤world
+```
+
+This format is designed to be minimal and structured for high compression in LLM token space.
+
+
+## 🗂 Example `.arkignore`
 
 ```
 # =============================
@@ -145,27 +228,19 @@ The syntax of .arkignore is a compatible syntax of [.gitignore](https://git-scm.
 
 ## 🧩 Integrations
 
-- 🐚 Shell completions for **bash** and **zsh** included!
-- 🔧 Easily embeddable in scripts, CI pipelines, or documentation generators
-
 ```sh
-source completions/ark-completion.sh  # bash or zsh
-````
+source completions/ark-completion.sh
+```
 
 ---
 
 ## 📎 See Also
 
-* Project URL: [https://github.com/magicdrive/ark](https://github.com/magicdrive/ark)
-* `ark` documentation: [README.md](https://github.com/magicdrive/ark/README.md)
-
----
+- Project: https://github.com/magicdrive/ark
 
 ## Author
 
-Copyright (c) 2025 Hiroshi IKEGAMI
-
----
+(c) 2025 Hiroshi IKEGAMI
 
 ## License
 

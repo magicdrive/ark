@@ -25,6 +25,8 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		"-e", "exe,bin",
 		"-E", "tmp,cache",
 		"-s",
+		"-S",
+		"-D",
 		"./example",
 	}
 
@@ -50,6 +52,15 @@ func TestOptParse_ValidInputs(t *testing.T) {
 	}
 	if opt.TargetDirname != "./example" {
 		t.Errorf("Expected TargetDirname = ./example, got %s", opt.TargetDirname)
+	}
+	if opt.SkipNonUTF8Flag != true {
+		t.Errorf("Expected SkipNonUTF8Flag = true, got %t", opt.SkipNonUTF8Flag)
+	}
+	if opt.SilentFlag != true {
+		t.Errorf("Expected SilentFlag = true, got %t", opt.SilentFlag)
+	}
+	if opt.DeleteCommentsFlag != true {
+		t.Errorf("Expected DeleteCommentsFlag = true, got %t", opt.DeleteCommentsFlag)
 	}
 	expectList := []string{"go", "md"}
 	if !reflect.DeepEqual(opt.IncludeExtList, expectList) {
@@ -85,6 +96,15 @@ func TestOptParse_Defaults(t *testing.T) {
 	}
 	if opt.OutputFormat.String() != "plaintext" {
 		t.Errorf("Expected default output format = plaintext, got %s", opt.OutputFormat.String())
+	}
+	if opt.SkipNonUTF8Flag != false {
+		t.Errorf("Expected SkipNonUTF8Flag = false, got %t", opt.SkipNonUTF8Flag)
+	}
+	if opt.SilentFlag != false {
+		t.Errorf("Expected SilentFlag = false, got %t", opt.SilentFlag)
+	}
+	if opt.DeleteCommentsFlag != false {
+		t.Errorf("Expected DeleteCommentsFlag = false, got %t", opt.DeleteCommentsFlag)
 	}
 }
 

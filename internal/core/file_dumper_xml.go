@@ -101,7 +101,14 @@ func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[
 				}
 				return fmt.Errorf("failed to convert %s: %w", fpath, err)
 			}
+
 			decodedBytes, err := io.ReadAll(decoded)
+			if opt.DeleteCommentsFlag {
+				lang := detectLanguageTag(fpath)
+				pattern := getCommentDelimiters(lang)
+				decodedBytes = stripComments(decodedBytes, pattern)
+			}
+
 			if err != nil {
 				return fmt.Errorf("failed to read %s: %w", fpath, err)
 			}

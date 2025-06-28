@@ -11,6 +11,9 @@ var DescriptionTemplateText string
 //go:embed description_template/description.xml
 var DescriptionTemplateXML string
 
+//go:embed description_template/description.arklite
+var DescriptionTemplateArklite string
+
 const (
 	EmojiSuccess     = "✅"
 	EmojiInterrupted = "🛑"
