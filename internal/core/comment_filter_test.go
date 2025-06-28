@@ -60,4 +60,3 @@ func TestStripComments(t *testing.T) {
 		})
 	}
 }
-

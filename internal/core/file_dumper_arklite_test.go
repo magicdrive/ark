@@ -32,7 +32,7 @@ func main() {
 
 	opt := &commandline.Option{
 		IgnoreDotFileFlag: model.OnOffSwitch("off"),
-		MaskSecretsFlag: model.OnOffSwitch("on"),
+		MaskSecretsFlag:   model.OnOffSwitch("on"),
 	}
 
 	err := core.WriteAllFilesAsArkLite(treeStr, root, outputFile, allowed, opt)

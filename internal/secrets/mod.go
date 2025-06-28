@@ -259,7 +259,6 @@ func MaskLine(line string) string {
 	return out
 }
 
-
 // MaskAll applies secret key block masking (multiline) then per-line masking (password, tokens, etc).
 func MaskAll(content string) string {
 	// Mask all PEM/OPENSSH private key blocks (multiline)
