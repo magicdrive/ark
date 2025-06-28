@@ -49,7 +49,7 @@ ark [OPTIONS] <dirname>
 | Argument        | Description                             |
 | --------------- | --------------------------------------- |
 | `<dirname>`     | The target directory to scan            |
-| `<byte_string>` | Byte size string (e.g. 1G, 10M, 100k)   |
+| `<byte_string>` | Byte size string (e.g. 10M, 100k)   |
 | `<extension>`   | File extension name (e.g. go, ts, html) |
 | `<regexp>`      | Regular expression string (Go syntax)   |
 
@@ -63,19 +63,19 @@ ark [OPTIONS] <dirname>
 | `--version`                                       | `-v`            | Show version                                                                      |
 | `--output-filename <filename>`                    | `-o`            | Output file name (default: `ark_output.txt`)                                      |
 | `--scan-buffer <byte>`                            | `-b`            | Line scan buffer size (default: `10M`)                                            |
-| `--output-format <'txt'|'md'|'xml'|'arklite'>`    | `-f`            | Output file format (default: `txt`)                                               |
-| `--mask-secrets <'on'|'off'>`                     | `-m`            | Detect secrets and mask them (default: `on`)                                      |
-| `--allow-gitignore <'on'|'off'>`                  | `-a`            | Enable `.gitignore` filter                                                        |
+| `--output-format <'txt'\|'md'\|'xml'\|'arklite'>` | `-f`            | Output file format (default: `txt`)                                               |
+| `--mask-secrets <'on'\|'off'>`                    | `-m`            | Detect secrets and mask them (default: `on`)                                      |
+| `--allow-gitignore <'on'\|'off'>`                 | `-a`            | Enable `.gitignore` filter                                                        |
 | `--additionally-ignorerule <filepath>`            | `-p`            | Additional `.gitignore`-like rules                                                |
-| `--with-line-number <'on'|'off'>`                 | `-n`            | Show line numbers (default: `on`)                                                 |
-| `--ignore-dotfile <'on'|'off'>`                   | `-d`            | Ignore dotfiles (default: `on`)                                                   |
+| `--with-line-number <'on'\|'off'>`                | `-n`            | Show line numbers (default: `on`)                                                 |
+| `--ignore-dotfile <'on'\|'off'>`                  | `-d`            | Ignore dotfiles (default: `on`)                                                   |
 | `--pattern-regex <regexp>`                        | `-x`            | File match pattern                                                                |
 | `--include-ext <ext>`                             | `-i`            | Include file extensions (comma separated)                                         |
 | `--exclude-dir-regex <regexp>`                    | `-g`            | Exclude directories matching regex                                                |
 | `--exclude-file-regex <regexp>`                   | `-G`            | Exclude files matching regex                                                      |
 | `--exclude-ext <ext>`                             | `-e`            | Exclude file extensions (comma separated)                                         |
 | `--exclude-dir <dir>`                             | `-E`            | Exclude specific directory names                                                  |
-| `--skip-non-utf8`                                 | `-s`            | Skip non-UTF-8 files                                                               |
+| `--skip-non-utf8`                                 | `-s`            | Skip non-UTF-8 files                                                              |
 | `--silent`                                        | `-S`            | Suppress logs                                                                     |
 | `--delete-comments`                               | `-D`            | Strip comments based on language detection                                        |
 
@@ -167,7 +167,6 @@ hello world
 ## File Dump
 @main.go
 package main␤func main() {␤  println("hello")␤}
-
 @sub/sub.txt
 hello world
 ```
