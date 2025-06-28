@@ -265,15 +265,15 @@ func (cr *Option) Normalize() error {
 	if cr.OutputFilename == "" {
 		switch cr.OutputFormat.String() {
 		case model.Markdown:
-			cr.OutputFilename = "ark_output.md"
+			cr.OutputFilename = "ark-output.md"
 		case model.PlainText:
-			cr.OutputFilename = "ark_output.txt"
+			cr.OutputFilename = "ark-output.txt"
 		case model.XML:
-			cr.OutputFilename = "ark_output.xml"
+			cr.OutputFilename = "ark-output.xml"
 		case model.Arklite:
-			cr.OutputFilename = "ark_output.arklite"
+			cr.OutputFilename = "ark-output.arklite"
 		default:
-			cr.OutputFilename = "ark_output.txt"
+			cr.OutputFilename = "ark-output.txt"
 		}
 	}
 

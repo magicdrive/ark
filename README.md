@@ -49,7 +49,7 @@ ark [OPTIONS] <dirname>
 | Argument        | Description                             |
 | --------------- | --------------------------------------- |
 | `<dirname>`     | The target directory to scan            |
-| `<byte_string>` | Byte size string (e.g. 10M, 100k)   |
+| `<byte-string>` | Byte size string (e.g. 10M, 100k)   |
 | `<extension>`   | File extension name (e.g. go, ts, html) |
 | `<regexp>`      | Regular expression string (Go syntax)   |
 
@@ -62,7 +62,7 @@ ark [OPTIONS] <dirname>
 | `--help`                                          | `-h`            | Show help message and exit                                                        |
 | `--version`                                       | `-v`            | Show version                                                                      |
 | `--output-filename <filename>`                    | `-o`            | Output file name (default: `ark_output.txt`)                                      |
-| `--scan-buffer <byte>`                            | `-b`            | Line scan buffer size (default: `10M`)                                            |
+| `--scan-buffer <byte-string>`                     | `-b`            | Line scan buffer size (default: `10M`)                                            |
 | `--output-format <'txt'\|'md'\|'xml'\|'arklite'>` | `-f`            | Output file format (default: `txt`)                                               |
 | `--mask-secrets <'on'\|'off'>`                    | `-m`            | Detect secrets and mask them (default: `on`)                                      |
 | `--allow-gitignore <'on'\|'off'>`                 | `-a`            | Enable `.gitignore` filter                                                        |

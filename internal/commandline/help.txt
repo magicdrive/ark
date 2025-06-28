@@ -7,7 +7,7 @@ Options:
   -h, --help                                       Show this help message and exit.
   -v, --version                                    Show version.
   -o, --output-filename <filename>                 Specify ark output txt filename. (optional. default: 'ark_output.txt')
-  -b, --scan-buffer <number|byte_string>           Specify the line scan buffer size. (optional. default: '10M')
+  -b, --scan-buffer <number|byte-string>           Specify the line scan buffer size. (optional. default: '10M')
   -f, --output-format <'txt'|'md'|'xml'|'arklite'> Specify the format of the output file. (optional. default: 'txt').
   -m, --mask-secrets <'on'|'off'>                  Specify Detect the secrets and convert it to masked output. (optional. default: 'on').
   -a, --allow-gitignore <'on'|'off'>               Specify enable .gitignore filter rule. (optional. default: 'on')
@@ -22,10 +22,10 @@ Options:
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
-  -D, --delete-comments                            Specify flag delete code comments. (optional.)
+  -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
 
 Arguments:
-  <byte_string>                                    byte size string. (ex) 1G, 10M, 100k
+  <byte-string>                                    byte size string. (ex) 10M, 100k
   <dirname>                                        The directory name.
   <extention>                                      file extention name.(example: go,ts,html)
   <regexp>                                         regular expresion string. Interpreted with golang `regexp` package.
