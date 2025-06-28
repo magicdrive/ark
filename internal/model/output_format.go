@@ -8,6 +8,7 @@ const (
 	Markdown  = "markdown"
 	PlainText = "plaintext"
 	XML       = "xml"
+	Arklite   = "arklite"
 	Auto      = "auto"
 )
 
@@ -30,6 +31,10 @@ var OutputFormatUnitMap = map[string]string{
 	"xml":        XML,
 	"Xml":        XML,
 	"XML":        XML,
+	"arklite":    Arklite,
+	"arkl":       Arklite,
+	"al":         Arklite,
+	"compact":    Arklite,
 	"auto":       Auto,
 }
 

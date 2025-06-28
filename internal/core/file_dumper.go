@@ -82,6 +82,13 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 		if err != nil {
 			return fmt.Errorf("failed to read %s: %w", fpath, err)
 		}
+
+		if opt.DeleteCommentsFlag {
+			lang := detectLanguageTag(fpath)
+			pattern := getCommentDelimiters(lang)
+			decodedBytes = stripComments(decodedBytes, pattern)
+		}
+
 		var content = string(decodedBytes)
 
 		if opt.MaskSecretsFlag.Bool() {
