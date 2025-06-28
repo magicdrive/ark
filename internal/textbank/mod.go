@@ -10,3 +10,15 @@ var DescriptionTemplateText string
 
 //go:embed description_template/description.xml
 var DescriptionTemplateXML string
+
+const (
+	EmojiSuccess     = "✅"
+	EmojiInterrupted = "🛑"
+	EmojiAlmost      = "🔒"
+	EmojiDone        = "🎉"
+	EmojiArchive     = "📜"
+	EmojiArk         = "🪨"
+	EmojiBoard       = "🪧"
+	EmojiStar        = "🌟"
+	EmojiHourglass   = "⏳"
+)

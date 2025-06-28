@@ -78,6 +78,7 @@ Yet another alternate \[directory|repository] represent text generator tool.
 | `--exclude-ext <ext>`                  | `-e`            | Exclude file extensions (comma separated)                            |
 | `--exclude-dir <dir>`                  | `-E`            | Exclude specific directory names                                     |
 | `--skip-non-utf8`                      | `-s`            | Skip files that are not UTF-8 encoded                                |
+| `--silent`                             | `-S`            | Process without displaying messages during processing.               |
 
 ---
 
