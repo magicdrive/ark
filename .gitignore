@@ -1,8 +1,8 @@
 ### Ark
-ark_output.txt
-ark_output.md
-ark_output.xml
-ark_output.arklite
+ark-output.txt
+ark-output.md
+ark-output.xml
+ark-output.arklite
 /build
 /tmp
 
