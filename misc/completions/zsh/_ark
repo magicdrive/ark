@@ -9,8 +9,8 @@ _ark() {
     '--help[Show this help message and exit]' \
     '--version[Show version]' \
     '(-o --output-filename)'{-o,--output-filename}'[Specify ark output txt filename]:output file:_files' \
-    '(-b --scan-buffer)'{-b,--scan-buffer}'[Specify the line scan buffer size]:buffer (e.g. 10M, 1G)' \
-    '(-f --output-format)'{-o,--output-format}'[Specify the format of the output file]:(txt md)' \
+    '(-b --scan-buffer)'{-b,--scan-buffer}'[Specify the line scan buffer size]:buffer (e.g. 100K, 10M)' \
+    '(-f --output-format)'{-o,--output-format}'[Specify the format of the output file]:(txt md xml arklite)' \
     '(-m --mask-secrets)'{-m,--mask-secrets}'[Specify Detect the secrets string and convert it to masked. (on/off)]:(on off)' \
     '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore file filter (on/off)]:(on off)' \
     '(-p --additionally-ignorerule)'{-p,--additionally-ignorerule}'[Specify a file containing additional ignore rules]:ignore file:_files' \
@@ -23,6 +23,8 @@ _ark() {
     '(-e --exclude-ext)'{-e,--exclude-ext}'[Exclude file extensions (comma-separated)]:extensions:' \
     '(-E --exclude-dir)'{-E,--exclude-dir}'[Exclude directory names (comma-separated)]:directory names:' \
     '(-s --skip-non-utf8)'{-s,--skip-non-utf8}'[Ignore non-UTF8 files]' \
+    '(-S --silinet)'{-s,--silent}'[Without displaying messages]' \
+    '(-D --delete-comments)'{-D,--delete-comments}'[Delete code comments]' \
     '*::dirname:->directory' && return 0
 
   if [[ $state == directory ]]; then
