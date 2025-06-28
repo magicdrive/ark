@@ -33,6 +33,8 @@ archives:
        dst: completions/zsh/_ark
      - src: misc/completions/bash/ark-completion.bash
        dst: completions//bash/ark-completion.bash
+     - src: misc/completions/fish/ark.fish
+       dst: completions//bash/ark.fish
 
 checksum:
   name_template: "{{ .ProjectName }}_checksums.txt"
@@ -52,6 +54,7 @@ brews:
     extra_install: |
       bash_completion.install "completions/bash/ark-completion.bash" => "ark"
       zsh_completion.install "completions/zsh/_ark" => "_ark"
+      fish_completion.install "completions/fish/ark.fish" => "ark.fish"
     test: |
       system "#{bin}/ark", "--version"
     commit_author:
