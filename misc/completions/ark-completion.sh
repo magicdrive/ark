@@ -11,12 +11,12 @@ if [[ -n ${ZSH_VERSION-} ]]; then
       '--version[Show version]' \
       '(-o --output-filename)'{-o,--output-filename}'[Specify output filename]:output file:_files' \
       '(-b --scan-buffer)'{-b,--scan-buffer}'[Line scan buffer size]:buffer (e.g. 100K, 10M)' \
-      '(-f --output-format)'{-o,--output-format}'[Output file format]:(txt md xml arklite)' \
-      '(-m --mask-secrets)'{-m,--mask-secrets}'[mask secret string (on/off)]:(on off)' \
-      '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore(on/off)]:(on off)' \
+      '(-f --output-format)'{-o,--output-format}'[Output file format]:fmt:(txt md xml arklite)' \
+      '(-m --mask-secrets)'{-m,--mask-secrets}'[mask secret string (on/off)]:bool:(on off)' \
+      '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore(on/off)]:bool:(on off)' \
       '(-p --additionally-ignorerule)'{-p,--additionally-ignorerule}'[Additional ignore rule file]:file:_files' \
-      '(-n --with-line-number)'{-n,--with-line-number}'[Line number output (on/off)]:(on off)' \
-      '(-d --ignore-dotfile)'{-d,--ignore-dotfile}'[Ignore dotfiles (on/off)]:(on off)' \
+      '(-n --with-line-number)'{-n,--with-line-number}'[Line number output (on/off)]:bool:(on off)' \
+      '(-d --ignore-dotfile)'{-d,--ignore-dotfile}'[Ignore dotfiles (on/off)]:bool:(on off)' \
       '(-x --pattern-regex)'{-x,--pattern-regex}'[File match pattern]:regexp:' \
       '(-i --include-ext)'{-i,--include-ext}'[Include file extensions]:extensions:' \
       '(-g --exclude-dir-regex)'{-g,--exclude-dir-regex}'[Exclude dir regexp]:regexp:' \
