@@ -30,7 +30,7 @@ Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark
 
 ---
 
-### 2. Generate ark_output.txt
+### 2. Generate ark-output.txt
 
 ```bash
 ark <dirname>
@@ -61,7 +61,7 @@ ark [OPTIONS] <dirname>
 | ------------------------------------------------- | --------------- | ----------------------------------------------------------------------------------|
 | `--help`                                          | `-h`            | Show help message and exit                                                        |
 | `--version`                                       | `-v`            | Show version                                                                      |
-| `--output-filename <filename>`                    | `-o`            | Output file name (default: `ark_output.txt`)                                      |
+| `--output-filename <filename>`                    | `-o`            | Output file name (default: `ark-output.txt`)                                      |
 | `--scan-buffer <byte-string>`                     | `-b`            | Line scan buffer size (default: `10M`)                                            |
 | `--output-format <'txt'\|'md'\|'xml'\|'arklite'>` | `-f`            | Output file format (default: `txt`)                                               |
 | `--mask-secrets <'on'\|'off'>`                    | `-m`            | Detect secrets and mask them (default: `on`)                                      |
