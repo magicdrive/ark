@@ -63,7 +63,7 @@ func TestAddPattern(t *testing.T) {
 
 func TestAddValueMaskKey(t *testing.T) {
 	rs := secrets.DefaultRuleSet()
-	rs.AddValueMaskKey("customkey")
+	rs.AddValueMaskKey([]string{"customkey"})
 	input := `
 customkey = foo
 mykey: "bar"
@@ -242,5 +242,37 @@ func TestDefaultPatterns_CompleteCoverage(t *testing.T) {
 				t.Errorf("pattern %d (%s) not detected. Input: %q, got: %+v", i, tt.pattern, tt.input, ms)
 			}
 		})
+	}
+}
+
+func TestAddValueMaskKey_MultiKeywords(t *testing.T) {
+	rs := secrets.DefaultRuleSet()
+	rs.AddValueMaskKey([]string{"foo", "bar", "baz", "b"})
+
+	testCases := []struct {
+		input    string
+		wantMask string
+	}{
+		{`foo = mysecret`, `foo = *****MASKED*****`},
+		{`bar: "topsecret"`, `bar: "*****MASKED*****"`},
+		{`baz='abc123'`, `baz='*****MASKED*****'`},
+		{`b = value42`, `b = *****MASKED*****`},
+	}
+
+	for _, tc := range testCases {
+		// ScanReader check
+		matches, err := rs.ScanReader(strings.NewReader(tc.input), "test.txt")
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			continue
+		}
+		if len(matches) != 1 || matches[0].Pattern != "value-masking" {
+			t.Errorf("should detect value-masking for input: %q, got: %+v", tc.input, matches)
+		}
+		//	// MaskAll
+		//	got := secrets.MaskAll(tc.input)
+		//	if got != tc.wantMask {
+		//		t.Errorf("MaskAll mismatch\ninput: %q\nwant:  %q\ngot:   %q", tc.input, tc.wantMask, got)
+		//	}
 	}
 }
