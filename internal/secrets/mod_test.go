@@ -247,7 +247,7 @@ func TestDefaultPatterns_CompleteCoverage(t *testing.T) {
 
 func TestAddValueMaskKey_MultiKeywords(t *testing.T) {
 	rs := secrets.DefaultRuleSet()
-	rs.AddValueMaskKey([]string{"foo", "bar", "baz", "b"})
+	rs.AddValueMaskKey([]string{"foo", "bar", "ba_z", "b", "$hoge", "my-word"})
 
 	testCases := []struct {
 		input    string
@@ -255,8 +255,10 @@ func TestAddValueMaskKey_MultiKeywords(t *testing.T) {
 	}{
 		{`foo = mysecret`, `foo = *****MASKED*****`},
 		{`bar: "topsecret"`, `bar: "*****MASKED*****"`},
-		{`baz='abc123'`, `baz='*****MASKED*****'`},
+		{`ba_z='abc123'`, `ba_z='*****MASKED*****'`},
 		{`b = value42`, `b = *****MASKED*****`},
+		{`$hoge = "value3333"`, `$hoge = "*****MASKED*****"`},
+		{`my-word = 'valuennn'`, `my-word = '*****MASKED*****'`},
 	}
 
 	for _, tc := range testCases {
