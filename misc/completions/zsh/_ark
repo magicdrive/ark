@@ -22,6 +22,7 @@ _ark() {
     '(-G --exclude-file-regex)'{-G,--exclude-file-regex}'[Ignore files by regexp]:regexp:' \
     '(-e --exclude-ext)'{-e,--exclude-ext}'[Exclude file extensions (comma-separated)]:extensions:' \
     '(-E --exclude-dir)'{-E,--exclude-dir}'[Exclude directory names (comma-separated)]:directory names:' \
+    '(-c --compless)'{-c,--compless}'[Compless output with arklite]' \
     '(-s --skip-non-utf8)'{-s,--skip-non-utf8}'[Ignore non-UTF8 files]' \
     '(-S --silinet)'{-s,--silent}'[Without displaying messages]' \
     '(-D --delete-comments)'{-D,--delete-comments}'[Delete code comments]' \

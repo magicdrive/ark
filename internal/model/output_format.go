@@ -38,6 +38,14 @@ var OutputFormatUnitMap = map[string]string{
 	"auto":       Auto,
 }
 
+var OutputFormatAllowComplessMap = map[string]bool{
+	Markdown:  true,
+	PlainText: true,
+	XML:       true,
+	Arklite:   false,
+	Auto:      false,
+}
+
 type OutputFormat string
 
 func Ext2OutputFormat(extension string) string {
@@ -56,6 +64,10 @@ func (m *OutputFormat) Set(value string) error {
 		return fmt.Errorf("invalid value: %q. Allowed values are 'markdown', 'plaintext', 'xml', 'auto'", value)
 
 	}
+}
+
+func (m *OutputFormat) CanCompless() bool {
+	return OutputFormatAllowComplessMap[m.String()]
 }
 
 func (m *OutputFormat) String() string {

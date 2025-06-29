@@ -20,6 +20,7 @@ Options:
   -G, --exclude-file-regex <regexp>                Specify watch file ignore pattern regexp. (optional.)
   -e, --exclude-ext <extention>                    Specify watch exclude file extention. Allows comma separated list. (optional.)
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
+  -c, --compless                                   Specify flag compress the output result with arklite. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
   -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)

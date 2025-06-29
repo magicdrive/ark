@@ -47,6 +47,7 @@ type Option struct {
 	WithLineNumberFlag                 model.OnOffSwitch
 	OutputFormatValue                  string
 	OutputFormat                       model.OutputFormat
+	ComplessFlag                       bool
 	SkipNonUTF8Flag                    bool
 	DeleteCommentsFlag                 bool
 	SilentFlag                         bool
@@ -120,6 +121,10 @@ func OptParse(args []string) (int, *Option, error) {
 	excludeDirOpt := fs.String("exclude-dir", "", "Specify watch exclude directory (optional)")
 	fs.StringVar(excludeDirOpt, "E", "", "Specify watch exclude directory (optional)")
 
+	// --compless
+	complessFlagOpt := fs.Bool("compless", false, "Specify flag compress the output result with arklite.")
+	fs.BoolVar(complessFlagOpt, "c", false, "Specify flag compress the output result with arklite.")
+
 	// --skik-non-utf8
 	skipNonUTF8FlagOpt := fs.Bool("skip-non-utf8", false, "Specify ignore files that do not have utf8 charset.")
 	fs.BoolVar(skipNonUTF8FlagOpt, "s", false, "Specify ignore files that do not have utf8 charset.")
@@ -178,6 +183,7 @@ func OptParse(args []string) (int, *Option, error) {
 		ExcludeDir:                      *excludeDirOpt,
 		WithLineNumberFlagValue:         *withLineNumberFlagOpt,
 		OutputFormatValue:               *outputFormatOpt,
+		ComplessFlag:                    *complessFlagOpt,
 		SkipNonUTF8Flag:                 *skipNonUTF8FlagOpt,
 		SilentFlag:                      *silentFlagOpt,
 		DeleteCommentsFlag:              *deleteCommentsFlagOpt,
@@ -275,6 +281,11 @@ func (cr *Option) Normalize() error {
 		default:
 			cr.OutputFilename = "ark-output.txt"
 		}
+	}
+
+	// compless
+	if cr.OutputFormat.CanCompless() && cr.ComplessFlag {
+		cr.OutputFilename = fmt.Sprintf("%s%s", cr.OutputFilename, ".arklite")
 	}
 
 	// gitignorerule
