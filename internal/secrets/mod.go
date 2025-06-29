@@ -259,13 +259,30 @@ func MaskLine(line string) string {
 	return out
 }
 
-// MaskAll applies secret key block masking (multiline) then per-line masking (password, tokens, etc).
-func MaskAll(content string) string {
+// MaskAllFast applies secret key block masking (multiline) then per-line masking (password, tokens, etc).
+func MaskAllFast(content string) string {
 	// Mask all PEM/OPENSSH private key blocks (multiline)
 	content = MaskSecretKeyBlocks(content)
 	// Apply MaskLine to each line (password=, jwt, etc)
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
+		lines[i] = MaskLine(line)
+	}
+	return strings.Join(lines, "\n")
+}
+
+// MaskAll applies secret key block masking (multiline) then per-line masking using patterns.
+func MaskAll(content string) string {
+	// 1. Mask all PEM/OPENSSH private key blocks (multiline)
+	content = MaskSecretKeyBlocks(content)
+	rules := DefaultRuleSet()
+
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		// 2. Mask any patterns from rules (priority order)
+		for _, pat := range rules.Patterns {
+			line = pat.ReplaceAllString(line, "*****MASKED*****")
+		}
 		lines[i] = MaskLine(line)
 	}
 	return strings.Join(lines, "\n")
