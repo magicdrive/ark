@@ -24,6 +24,7 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		"-G", "vendor",
 		"-e", "exe,bin",
 		"-E", "tmp,cache",
+		"-c",
 		"-s",
 		"-S",
 		"-D",
@@ -35,8 +36,8 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if opt.OutputFilename != "out.txt" {
-		t.Errorf("Expected OutputFilename = out.txt, got %s", opt.OutputFilename)
+	if opt.OutputFilename != "out.txt.arklite" {
+		t.Errorf("Expected OutputFilename = out.txt.arklite, got %s", opt.OutputFilename)
 	}
 	if opt.ScanBuffer.String() != "20K" {
 		t.Errorf("Expected ScanBuffer = 20K, got %s", opt.ScanBuffer.String())
@@ -52,6 +53,9 @@ func TestOptParse_ValidInputs(t *testing.T) {
 	}
 	if opt.TargetDirname != "./example" {
 		t.Errorf("Expected TargetDirname = ./example, got %s", opt.TargetDirname)
+	}
+	if opt.ComplessFlag != true {
+		t.Errorf("Expected ComplessFlag = true, got %t", opt.ComplessFlag)
 	}
 	if opt.SkipNonUTF8Flag != true {
 		t.Errorf("Expected SkipNonUTF8Flag = true, got %t", opt.SkipNonUTF8Flag)
@@ -96,6 +100,9 @@ func TestOptParse_Defaults(t *testing.T) {
 	}
 	if opt.OutputFormat.String() != "plaintext" {
 		t.Errorf("Expected default output format = plaintext, got %s", opt.OutputFormat.String())
+	}
+	if opt.ComplessFlag != false {
+		t.Errorf("Expected ComplessFlag = false, got %t", opt.ComplessFlag)
 	}
 	if opt.SkipNonUTF8Flag != false {
 		t.Errorf("Expected SkipNonUTF8Flag = false, got %t", opt.SkipNonUTF8Flag)

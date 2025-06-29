@@ -20,6 +20,7 @@ _ark_completion() {
     --exclude-file-regex -G \
     --exclude-ext -e \
     --exclude-dir -E \
+    --compless -c \
     --silent -S \
     --delete-comments -D \
     --skip-non-utf8 -s"

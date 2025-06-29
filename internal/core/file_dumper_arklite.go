@@ -16,7 +16,7 @@ import (
 
 const newlineToken = "␤"
 
-func WriteAllFilesAsArkLite(treeStr, root, outputPath string, allowedFileListMap map[string]bool, opt *commandline.Option) error {
+func WriteAllFilesAsArklite(treeStr, root, outputPath string, allowedFileListMap map[string]bool, opt *commandline.Option) error {
 	outFile, err := os.Create(outputPath)
 	if err != nil {
 		return err
