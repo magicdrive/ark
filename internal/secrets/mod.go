@@ -122,12 +122,14 @@ func (r *RuleSet) AddAllowed(pattern string) error {
 }
 
 func (r *RuleSet) AddValueMaskKey(keywordList []string) {
+	var quoted []string
 	for _, k := range keywordList {
-		if !regexp.MustCompile(`^[A-Za-z0-9_]+$`).MatchString(k) {
+		if !regexp.MustCompile(`^[A-Za-z0-9_\-\$]+$`).MatchString(k) {
 			continue
 		}
+		quoted = append(quoted, regexp.QuoteMeta(k))
 	}
-	keyword := strings.Join(keywordList, "|")
+	keyword := strings.Join(quoted, "|")
 	// e.g.  (?i)(secret|password|api_key)\s*([=:\-])\s*(['"]?)([^\s'"]+)(['"]?)
 	pat := fmt.Sprintf(`(?i)(%s)\s*([=:\-])\s*(['"]?)([^\s'"]+)(['"]?)`, keyword)
 	r.ValueMaskRules = append(r.ValueMaskRules, &ValueMaskRule{
