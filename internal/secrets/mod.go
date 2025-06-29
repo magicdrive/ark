@@ -280,10 +280,10 @@ func MaskAll(content string) string {
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {
 		// 2. Mask any patterns from rules (priority order)
+		lines[i] = MaskLine(line)
 		for _, pat := range rules.Patterns {
 			line = pat.ReplaceAllString(line, "*****MASKED*****")
 		}
-		lines[i] = MaskLine(line)
 	}
 	return strings.Join(lines, "\n")
 }
