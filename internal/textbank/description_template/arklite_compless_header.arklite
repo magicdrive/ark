@@ -1,0 +1,30 @@
+Arklite Format Overview
+
+Project: %s
+Path: %s
+
+This file is written in Arklite format — a compact, LLM-optimized representation of an entire project directory.
+
+It consists of three sections:
+  1. Description — An explanation of the project and this format.
+  2. Directory Structure (JSON) — A hierarchical representation of the directory layout as a JSON tree.
+  3. File Dump (Arklite format) — The actual content of each file, represented compactly on one line each.
+
+Arklite File Dump Format:
+  - Each file is introduced by a line starting with @<relative-path>
+  - The next line contains the file’s full contents compressed into a single line.
+  - Newlines within files are replaced with the ␤ symbol (U+2424) to preserve their position.
+  - All comments (//, #, /* */, <!-- -->, etc.) have been removed to reduce token cost.
+  - File order and relative paths implicitly preserve directory structure.
+
+IMPORTANT:
+  This file is *compressed using the Arklite format*. Before using or interpreting its contents,
+  you MUST first expand (decode) this file using an appropriate Arklite-compatible tool.
+
+  After decoding, you will obtain a single file in %s formats
+
+  Do NOT attempt to directly read or process the compressed contents.
+  Always decode first, then interpret as the extracted file type.
+
+This format enables large-scale codebases to be efficiently consumed by language models and other automation tools.
+

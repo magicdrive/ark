@@ -75,6 +75,7 @@ ark [OPTIONS] <dirname>
 | `--exclude-file-regex <regexp>`                   | `-G`            | Exclude files matching regex                                                      |
 | `--exclude-ext <ext>`                             | `-e`            | Exclude file extensions (comma separated)                                         |
 | `--exclude-dir <dir>`                             | `-E`            | Exclude specific directory names                                                  |
+| `--compless`                                      | `-c`            | Compless output with arklite (for txt,md,xml)                                     |
 | `--skip-non-utf8`                                 | `-s`            | Skip non-UTF-8 files                                                              |
 | `--silent`                                        | `-S`            | Suppress logs                                                                     |
 | `--delete-comments`                               | `-D`            | Strip comments based on language detection                                        |
@@ -159,7 +160,7 @@ hello world
 ### Arklite (`--output-format arklite`)
 
 ```
-# ArkLite Format: example_project (/absolute/path/to/example_project)
+# Arklite Format: example_project (/absolute/path/to/example_project)
 
 ## Directory Tree (JSON)
 {"name":"example_project","type":"directory","children":[{"name":"main.go","type":"file"},{"name":"sub","type":"directory","children":[{"name":"sub.txt","type":"file"}]}]}

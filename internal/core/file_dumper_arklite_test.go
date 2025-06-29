@@ -11,7 +11,7 @@ import (
 	"github.com/magicdrive/ark/internal/model"
 )
 
-func TestWriteAllFilesAsArkLite(t *testing.T) {
+func TestWriteAllFilesAsArklite(t *testing.T) {
 	// Set up temp directory
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "main.go"), `
@@ -35,9 +35,9 @@ func main() {
 		MaskSecretsFlag:   model.OnOffSwitch("on"),
 	}
 
-	err := core.WriteAllFilesAsArkLite(treeStr, root, outputFile, allowed, opt)
+	err := core.WriteAllFilesAsArklite(treeStr, root, outputFile, allowed, opt)
 	if err != nil {
-		t.Fatalf("WriteAllFilesAsArkLite failed: %v", err)
+		t.Fatalf("WriteAllFilesAsArklite failed: %v", err)
 	}
 
 	data, err := os.ReadFile(outputFile)
@@ -46,10 +46,10 @@ func main() {
 	}
 	text := string(data)
 
-	//t.Logf("ArkLite output:\n%s", text)
+	//t.Logf("Arklite output:\n%s", text)
 
-	if !strings.Contains(text, "# ArkLite Format Overview") {
-		t.Error("Missing ArkLite header")
+	if !strings.Contains(text, "# Arklite Format Overview") {
+		t.Error("Missing Arklite header")
 	}
 	if !strings.Contains(text, "## Directory Tree (JSON)") {
 		t.Error("Missing Directory Tree section")

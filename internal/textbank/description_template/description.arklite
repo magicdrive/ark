@@ -1,17 +1,17 @@
-# ArkLite Format Overview
+# Arklite Format Overview
 
 Project: %s
 Path: %s
 
-This file is written in ArkLite format — a compact, LLM-optimized representation of an entire project directory.
+This file is written in Arklite format — a compact, LLM-optimized representation of an entire project directory.
 
 It consists of three sections:
 
 1. **Description** — An explanation of the project and this format.
 2. **Directory Structure (JSON)** — A hierarchical representation of the directory layout as a JSON tree.
-3. **File Dump (ArkLite format)** — The actual content of each file, represented compactly on one line each.
+3. **File Dump (Arklite format)** — The actual content of each file, represented compactly on one line each.
 
-### ArkLite File Dump Format
+### Arklite File Dump Format
 
 - Each file is introduced by a line starting with `@<relative-path>`.
 - The next line contains the file’s full contents compressed into a single line.

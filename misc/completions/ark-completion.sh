@@ -23,6 +23,7 @@ if [[ -n ${ZSH_VERSION-} ]]; then
       '(-G --exclude-file-regex)'{-G,--exclude-file-regex}'[Exclude file regexp]:regexp:' \
       '(-e --exclude-ext)'{-e,--exclude-ext}'[Exclude extensions]:extensions:' \
       '(-E --exclude-dir)'{-E,--exclude-dir}'[Exclude directories]:dirnames:' \
+      '(-c --compless)'{-c,--compless}'[Compless output with arklite]' \
       '(-s --skip-non-utf8)'{-s,--skip-non-utf8}'[Ignore non-UTF8 files]' \
       '(-S --silinet)'{-s,--silent}'[Without displaying messages]' \
       '(-D --delete-comments)'{-D,--delete-comments}'[Delete code comments]' \
@@ -60,6 +61,7 @@ elif [[ -n ${BASH_VERSION-} ]]; then
     --exclude-file-regex -G \
     --exclude-ext -e \
     --exclude-dir -E \
+    --compless -c \
     --silent -S \
     --delete-comments -D \
     --skip-non-utf8 -s"

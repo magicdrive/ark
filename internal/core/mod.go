@@ -37,7 +37,12 @@ func withSpinner(opt *commandline.Option) error {
 	createDumpFile(opt)
 
 	s.SetMessage(fmt.Sprintf("%s  Finalizing record...", textbank.EmojiAlmost))
-	time.Sleep(1 * time.Second)
+	if opt.ComplessFlag && opt.OutputFormat.CanCompless() {
+		Compless(opt.OutputFilename, opt.OutputFormat)
+
+	} else {
+		time.Sleep(1 * time.Second)
+	}
 
 	s.Stop(fmt.Sprintf("%s  Archive completed: %s", textbank.EmojiDone, opt.OutputFilename))
 	return nil
@@ -53,7 +58,7 @@ func createDumpFile(opt *commandline.Option) error {
 		if treeStr, allowdFileList, err := GenerateTreeJSONString(opt.TargetDirname, firstAllowdFileListMap, opt); err != nil {
 			return err
 		} else {
-			if err := WriteAllFilesAsArkLite(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
+			if err := WriteAllFilesAsArklite(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
 				return err
 			}
 		}
