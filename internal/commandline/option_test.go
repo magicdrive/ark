@@ -36,8 +36,8 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if opt.OutputFilename != "out.txt.arklite" {
-		t.Errorf("Expected OutputFilename = out.txt.arklite, got %s", opt.OutputFilename)
+	if opt.OutputFilename != "out.txt.arklite.txt" {
+		t.Errorf("Expected OutputFilename = out.txt.arklite.txt, got %s", opt.OutputFilename)
 	}
 	if opt.ScanBuffer.String() != "20K" {
 		t.Errorf("Expected ScanBuffer = 20K, got %s", opt.ScanBuffer.String())

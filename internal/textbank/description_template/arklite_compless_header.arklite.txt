@@ -1,0 +1,72 @@
+# Arklite Format Overview
+
+**Project:** %s
+**Path:** %s
+
+This file is a **full project export** written in the Arklite format — a compact, LLM-optimized representation of a codebase.
+It is designed to make large-scale projects easy for LLMs and automation tools to consume and analyze.
+
+---
+
+## Quick Format Summary
+
+- The Arklite dump consists of **three sections**:
+  1. **Description** — This explanation and project info.
+  2. **Directory Structure (JSON)** — Hierarchical JSON tree of the project layout.
+  3. **File Dump (Arklite format)** — Compact, one-line-per-file contents.
+
+- **File Dump Rules:**
+  - Each file starts with a line like `@relative/path/to/file.ext`
+  - The **next line** contains the file’s entire contents, as a single line.
+  - All newlines (`\n`) are replaced with `␤` (Unicode U+2424).
+  - **All comments** (e.g. `//`, `#`, `/* */`, `<!-- -->`, etc.) are removed.
+  - File order and relative paths reflect the directory structure.
+
+---
+
+## How to Reconstruct Files (Step-by-Step)
+
+1. **Find file sections**: Look for lines starting with `@` (at-sign).
+   Each such line indicates the start of a new file and gives its relative path.
+2. **Get file content**: The line *immediately after* each `@` line is the entire content of that file, with all line breaks replaced by `␤`.
+3. **Restore line breaks**: In each file’s content, replace all `␤` with real newlines (`\n`) to reconstruct the original file.
+4. **Save files**: Use the given relative paths to rebuild the directory and file structure.
+
+**Sample:**
+
+```
+@main.go
+package main␤func main() {␤ println("hello, world")␤}
+@README.md
+Arklite project dump␤See main.go for code.␤
+```
+
+---
+
+## IMPORTANT — For LLMs and Automation Tools
+
+- **Always** reconstruct the full project files using the above steps *before* attempting any code analysis, summarization, or refactoring.
+- Do **not** process or interpret the file dump lines directly.
+  Always decode (expand) the contents first.
+- After decoding, you will obtain the original project in `%s` formats.
+
+---
+
+## Use Cases
+
+- Efficient LLM-based code analysis, summarization, and refactoring.
+- Fast, lossless sharing of large codebases for machine processing.
+- Compact project archival.
+
+---
+
+## Technical Notes
+
+- The Arklite format removes comments to reduce token count and focus on core code logic.
+- The directory tree in JSON format at the top of this file reflects the entire layout for context.
+- If you are an LLM or tool, **always decode before analysis** — never analyze the dump lines as-is.
+
+---
+
+*This format is designed for high-efficiency AI workflows and large-scale automation.*
+
