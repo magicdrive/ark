@@ -1,0 +1,61 @@
+# Arklite Format Overview
+
+**Project:** %s
+**Path:** %s
+
+This file is written in **Arklite format** — a compact, LLM-optimized snapshot of an entire project directory.
+
+---
+
+## Sections
+
+1. **Description**
+   Explanation of the project and the Arklite format.
+
+2. **Directory Structure (JSON)**
+   Hierarchical representation of the directory layout as a JSON tree.
+
+3. **File Dump (Arklite format)**
+   The full content of each file, stored compactly — one file per line.
+
+---
+
+## Arklite File Dump Format
+
+- Each file starts with a line like: `@<relative/path/to/file.ext>`
+- The **next line** is the entire file content, all on a single line.
+- **Newlines** inside files are replaced with `␤` (U+2424).
+- **All comments** (`//`, `#`, `/* */`, `<!-- -->`, etc.) are stripped out.
+- File order and relative paths match the original directory tree.
+
+---
+
+### How to Restore Original Files
+
+1. For each line that starts with `@`, treat it as a new file path.
+2. The line *immediately after* is the compressed file contents (with `␤` as newlines).
+3. Reconstruct each file by:
+    - Creating the path as given after `@`
+    - Replacing all `␤` with newline (`\n`) characters
+
+**Example:**
+
+```
+@main.go
+package main␤func main() {␤ println("hello, world")␤}
+@README.md
+Arklite project dump␤See main.go for code.␤
+```
+
+---
+
+## Note for LLMs & Automation Tools
+
+- **Always reconstruct** the files using the rules above *before* analysis or code search.
+- Do **not** analyze, search, or refactor on the compressed file dump lines directly — always decode (expand) first.
+- After decoding, you will have all original files as plain text, ready for any further processing.
+
+---
+
+This format enables *large projects* to be shared, analyzed, or archived in a highly efficient, LLM-friendly way.
+

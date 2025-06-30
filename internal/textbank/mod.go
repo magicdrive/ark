@@ -11,10 +11,10 @@ var DescriptionTemplateText string
 //go:embed description_template/description.xml
 var DescriptionTemplateXML string
 
-//go:embed description_template/description.arklite
+//go:embed description_template/description.arklite.txt
 var DescriptionTemplateArklite string
 
-//go:embed description_template/arklite_compless_header.arklite
+//go:embed description_template/arklite_compless_header.arklite.txt
 var ArkliteComplessHeaderTemplate string
 
 const (

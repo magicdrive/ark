@@ -277,7 +277,7 @@ func (cr *Option) Normalize() error {
 		case model.XML:
 			cr.OutputFilename = "ark-output.xml"
 		case model.Arklite:
-			cr.OutputFilename = "ark-output.arklite"
+			cr.OutputFilename = "ark-output.arklite.txt"
 		default:
 			cr.OutputFilename = "ark-output.txt"
 		}
@@ -285,7 +285,8 @@ func (cr *Option) Normalize() error {
 
 	// compless
 	if cr.OutputFormat.CanCompless() && cr.ComplessFlag {
-		cr.OutputFilename = fmt.Sprintf("%s%s", cr.OutputFilename, ".arklite")
+		cr.DeleteCommentsFlag = true
+		cr.OutputFilename = fmt.Sprintf("%s%s", cr.OutputFilename, ".arklite.txt")
 	}
 
 	// gitignorerule
