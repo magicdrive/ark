@@ -2,9 +2,9 @@
 ark-output.txt
 ark-output.md
 ark-output.xml
-ark-output.arklite
-*.arklite
-!/internal/**/*.arklite
+ark-output.arklite.txt
+*.arklite.txt
+!/internal/**/*.arklite.txt
 /build
 /tmp
 
