@@ -72,21 +72,84 @@ type ValueMaskRule struct {
 }
 
 func defaultValueMaskRule() *ValueMaskRule {
-	pat := `(?i)(\b(?:secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\b)(\s*)([=:\-])(\s*)(['"]?)([^\s'"]+)(['"]?)`
+	pat := `(?i)(\b[A-Za-z0-9_\-\$]*(?:secret|password|passwd|pass|pw|token|api[_\-]?key|access[_\-]?key|private[_\-]?key)\b)\s*(:=|==|\|\||&&|=|:|\-)\s*(['"]?)`
 	return &ValueMaskRule{
 		KeyPattern: regexp.MustCompile(pat),
 	}
 }
 
 func (r *ValueMaskRule) MaskLine(line string) string {
-	return r.KeyPattern.ReplaceAllStringFunc(line, func(s string) string {
-		sub := r.KeyPattern.FindStringSubmatch(s)
-		if len(sub) >= 8 {
-			// [1]=key, [2]=space_before, [3]=delim, [4]=space_after, [5]=quote, [6]=value, [7]=quote
-			return fmt.Sprintf("%s%s%s%s%s*****MASKED*****%s", sub[1], sub[2], sub[3], sub[4], sub[5], sub[7])
+	result := ""
+	rest := line
+	for {
+		m := r.KeyPattern.FindStringSubmatchIndex(rest)
+		if m == nil {
+			result += rest
+			break
 		}
-		return s
-	})
+		// m[0] = full match start, m[1] = full match end,
+		// m[2]=key start, m[3]=key end, m[4]=delimiter start,
+		// m[5]=delimiter end, m[6]=quote start, m[7]=quote end
+
+		// 1. llways output the part after the previous match up to the key (commas, spaces, etc. can be entered here)
+		result += rest[:m[2]]
+
+		// 2. print key, separator, leading space, and opening quote
+		result += rest[m[2]:m[6]]
+		quote := ""
+		if m[6] != -1 && m[7] != -1 {
+			quote = rest[m[6]:m[7]]
+			result += quote
+		}
+
+		maskedValue := "*****MASKED*****"
+		valStart := m[7] // starting index of the value body (immediately after the quote)
+		val := rest[valStart:]
+
+		if quote == `"` || quote == `'` {
+			//With quotes: up to closing quote
+			runes := []rune(val)
+			escaped := false
+			closingIdx := -1
+			for i := range len(runes) {
+				c := runes[i]
+				if escaped {
+					escaped = false
+					continue
+				}
+				if c == '\\' {
+					escaped = true
+					continue
+				}
+				if string(c) == quote {
+					closingIdx = i
+					break
+				}
+			}
+			result += maskedValue
+			if closingIdx != -1 {
+				result += quote
+				valStart += len(string(runes[:closingIdx+1]))
+			} else {
+				valStart += len(val)
+			}
+		} else {
+			// no quoted
+			end := len(val)
+			for i, c := range val {
+				if c == ',' || c == ';' || c == ' ' {
+					end = i
+					break
+				}
+			}
+			result += maskedValue
+			valStart += end
+		}
+
+		// remainder is rest.
+		rest = rest[valStart:]
+	}
+	return result
 }
 
 type RuleSet struct {
@@ -131,7 +194,7 @@ func (r *RuleSet) AddValueMaskKey(keywordList []string) {
 	}
 	keyword := strings.Join(quoted, "|")
 	// e.g.  (?i)(secret|password|api_key)\s*([=:\-])\s*(['"]?)([^\s'"]+)(['"]?)
-	pat := fmt.Sprintf(`(?i)(%s)\s*([=:\-])\s*(['"]?)([^\s'"]+)(['"]?)`, keyword)
+	pat := fmt.Sprintf(`(?i)(%s)\s*([=:\-])\s*(['"]?)([^'"]+)(['"]?)`, keyword)
 	r.ValueMaskRules = append(r.ValueMaskRules, &ValueMaskRule{
 		KeyPattern: regexp.MustCompile(pat),
 	})

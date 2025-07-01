@@ -96,7 +96,13 @@ func TestMaskAll(t *testing.T) {
 hogehoge
 -----END ENCRYPTED PRIVATE KEY-----
 secret = "hogehoge"
+1secret := "hogehoge"
+2secret = "hoge\'\"hoge"
+3secret = num[0], secret = pass
 token: abcdefg
+token == abcdefg
+token || abcdefg
+token && abcdefg
 AWS_ACCESS_KEY_ID=AKIA1234567890ABCDEF
 normal = value
 normal_hoge = "ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd"
@@ -104,7 +110,13 @@ normal_hoge = "ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd"
 	want := `
 *****MASKED*****
 secret = "*****MASKED*****"
+1secret := "*****MASKED*****"
+2secret = "*****MASKED*****"
+3secret = *****MASKED*****, secret = *****MASKED*****
 token: *****MASKED*****
+token == *****MASKED*****
+token || *****MASKED*****
+token && *****MASKED*****
 AWS_ACCESS_KEY_ID=*****MASKED*****
 normal = value
 normal_hoge = "*****MASKED*****"
