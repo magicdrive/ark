@@ -9,8 +9,6 @@ import (
 	"regexp"
 	"strings"
 
-	_ "embed"
-
 	"github.com/magicdrive/ark/internal/common"
 	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/model"
@@ -56,10 +54,7 @@ type Option struct {
 	FlagSet                            *flag.FlagSet
 }
 
-//go:embed help.txt
-var helpMessage string
-
-func OptParse(args []string) (int, *Option, error) {
+func GeneralOptParse(args []string) (int, *Option, error) {
 
 	optLength := len(args)
 
@@ -83,7 +78,7 @@ func OptParse(args []string) (int, *Option, error) {
 
 	// --additionally-ignorerule
 	additionallyIgnoreRuleFilenamesOpt := fs.String("additionally-ignorerule", "", "Specify a file containing additional ignore rules.")
-	fs.StringVar(additionallyIgnoreRuleFilenamesOpt, "p", "", "Specify a file containing additional ignore rules.")
+	fs.StringVar(additionallyIgnoreRuleFilenamesOpt, "A", "", "Specify a file containing additional ignore rules.")
 
 	// --with-line-number
 	withLineNumberFlagOpt := fs.String("with-line-number", "off", "Specify Whether to include file line numbers when outputting.")
@@ -199,13 +194,6 @@ func OptParse(args []string) (int, *Option, error) {
 	}
 
 	return optLength, result, nil
-}
-
-func OverRideHelp(fs *flag.FlagSet) *flag.FlagSet {
-	fs.Usage = func() {
-		fmt.Print(helpMessage)
-	}
-	return fs
 }
 
 func (cr *Option) Normalize() error {
