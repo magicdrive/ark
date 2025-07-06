@@ -33,6 +33,7 @@ func GenerateDirectoryStructure(path string, allowedFileList []string, opt *comm
 		if file.IsDir() {
 			fl, _ := GenerateDirectoryStructure(fullPath, allowedFileList, opt)
 			allowedFileList = append(allowedFileList, fl...)
+			allowedFileList = append(allowedFileList, fullPath)
 		} else {
 			allowedFileList = append(allowedFileList, fullPath)
 		}
