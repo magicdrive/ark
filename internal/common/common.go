@@ -52,3 +52,4 @@ func GetCurrentDir() string {
 func TrimDotSlash(path string) string {
 	return strings.TrimPrefix(path, "./")
 }
+

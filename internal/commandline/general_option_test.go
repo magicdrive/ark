@@ -14,7 +14,7 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		"-b", "20K",
 		"-a", "on",
 		"-m", "on",
-		"-p", "ignore1,.ignore2",
+		"-A", "ignore1,.ignore2",
 		"-n", "on",
 		"-f", "md",
 		"-d", "off",
@@ -31,7 +31,7 @@ func TestOptParse_ValidInputs(t *testing.T) {
 		"./example",
 	}
 
-	_, opt, err := commandline.OptParse(args)
+	_, opt, err := commandline.GeneralOptParse(args)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -75,7 +75,7 @@ func TestOptParse_ValidInputs(t *testing.T) {
 func TestOptParse_InvalidRegex(t *testing.T) {
 	args := []string{"-x", "[invalid"}
 
-	_, _, err := commandline.OptParse(args)
+	_, _, err := commandline.GeneralOptParse(args)
 	if err == nil {
 		t.Fatal("Expected error due to invalid regexp, got nil")
 	}
@@ -87,7 +87,7 @@ func TestOptParse_InvalidRegex(t *testing.T) {
 func TestOptParse_Defaults(t *testing.T) {
 	args := []string{}
 
-	_, opt, err := commandline.OptParse(args)
+	_, opt, err := commandline.GeneralOptParse(args)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -118,7 +118,7 @@ func TestOptParse_Defaults(t *testing.T) {
 func TestOptParse_HelpAndVersion(t *testing.T) {
 	args := []string{"--help"}
 
-	_, opt, err := commandline.OptParse(args)
+	_, opt, err := commandline.GeneralOptParse(args)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -127,7 +127,7 @@ func TestOptParse_HelpAndVersion(t *testing.T) {
 	}
 
 	args = []string{"--version"}
-	_, opt, err = commandline.OptParse(args)
+	_, opt, err = commandline.GeneralOptParse(args)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestOptParse_CommaSeparatedListParsing(t *testing.T) {
 		"-E", "tmp,cache",
 	}
 
-	_, opt, err := commandline.OptParse(args)
+	_, opt, err := commandline.GeneralOptParse(args)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
