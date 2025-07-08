@@ -17,11 +17,21 @@ It supports **plaintext**, **markdown**, **XML**, and **arklite** outputs, full 
 
 ### 1 · Install
 
+### 1. Installation
+
 ```bash
-go install github.com/magicdrive/ark@latest      # Go ≥ 1.22
-brew install magicdrive/tap/ark                  # Homebrew
-# – or – download a binary from the Releases page
+go install github.com/magicdrive/ark@latest
 ```
+
+Using Homebrew:
+
+```bash
+brew install magicdrive/tap/ark
+```
+
+Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark/releases).
+
+---
 
 ### 2 · Generate an output file
 
