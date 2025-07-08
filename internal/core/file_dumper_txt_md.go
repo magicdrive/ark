@@ -62,11 +62,11 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 		if err != nil {
 			return err
 		}
-		if isBinary(data) || isImage(fpath) {
+		if IsBinary(data) || IsImage(fpath) {
 			return nil
 		}
 
-		decoded, err := convertToUTF8(bytes.NewReader(data))
+		decoded, err := ConvertToUTF8(bytes.NewReader(data))
 		if err != nil {
 			if opt.SkipNonUTF8Flag {
 				return nil
@@ -80,9 +80,7 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 		}
 
 		if opt.DeleteCommentsFlag {
-			lang := detectLanguageTag(fpath)
-			pattern := getCommentDelimiters(lang)
-			decodedBytes = stripComments(decodedBytes, pattern)
+			decodedBytes = DeleteComments(decodedBytes, fpath)
 		}
 
 		var content = string(decodedBytes)
