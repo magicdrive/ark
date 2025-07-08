@@ -22,7 +22,7 @@ func RunMCPServe(root string, serverOpt *commandline.ServeOption) {
 	opt := serverOpt.GeneralOption
 
 	allowed, _ := GenerateDirectoryStructure(root, []string{}, opt)
-	pw := NewProjectWatcher(root, allowed, func(root string) []string {
+	pw := NewProjectWatcher(root, serverOpt, allowed, func(root string) []string {
 		xallowed, _ := GenerateDirectoryStructure(root, []string{}, opt)
 		return xallowed
 	})
@@ -52,7 +52,7 @@ func RunMCPServe(root string, serverOpt *commandline.ServeOption) {
 		close(idleConnsClosed)
 	}()
 
-	log.Printf("[mcp] MCP server running at http://localhost%s", serverOpt.Port)
+	log.Printf("[mcp] MCP server running at http://localhost:%s", serverOpt.Port)
 	if err := server.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatalf("[mcp] server error: %v", err)
 	}
