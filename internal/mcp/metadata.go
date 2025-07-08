@@ -12,17 +12,19 @@ type EndpointMeta struct {
 }
 
 type Metadata struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	Endpoints   []EndpointMeta `json:"endpoints"`
+	Name          string         `json:"name"`
+	InterfaceType string         `json:"interfaceType"`
+	Description   string         `json:"description"`
+	Endpoints     []EndpointMeta `json:"endpoints"`
 }
 
 // HandleMetadata returns static info about available endpoints
 func HandleMetadata() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		meta := Metadata{
-			Name:        "ark",
-			Description: "Project file dumper + MCP server",
+			Name:          "ark",
+			InterfaceType: "rest",
+			Description:   "Project file dumper + MCP server",
 			Endpoints: []EndpointMeta{
 				{Path: "/mcp/metadata", Method: "GET", Description: "Show this metadata"},
 				{Path: "/mcp/chunks", Method: "GET", Description: "List file chunks based on token estimate"},
