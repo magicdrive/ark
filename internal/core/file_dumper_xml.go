@@ -91,10 +91,10 @@ func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[
 			if err != nil {
 				return err
 			}
-			if isBinary(data) || isImage(fpath) {
+			if IsBinary(data) || IsImage(fpath) {
 				continue
 			}
-			decoded, err := convertToUTF8(bytes.NewReader(data))
+			decoded, err := ConvertToUTF8(bytes.NewReader(data))
 			if err != nil {
 				if opt.SkipNonUTF8Flag {
 					continue
@@ -104,9 +104,7 @@ func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[
 
 			decodedBytes, err := io.ReadAll(decoded)
 			if opt.DeleteCommentsFlag {
-				lang := detectLanguageTag(fpath)
-				pattern := getCommentDelimiters(lang)
-				decodedBytes = stripComments(decodedBytes, pattern)
+				decodedBytes = DeleteComments(decodedBytes, fpath)
 			}
 
 			if err != nil {

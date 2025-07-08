@@ -29,7 +29,7 @@ func RunMCPServe(root string, serverOpt *commandline.ServeOption) {
 
 	server := &http.Server{
 		Addr:    ":" + serverOpt.Port,
-		Handler: SetupRoutes(root, pw),
+		Handler: SetupRoutes(root, pw, serverOpt),
 	}
 
 	// Graceful shutdown setup
@@ -61,7 +61,7 @@ func RunMCPServe(root string, serverOpt *commandline.ServeOption) {
 }
 
 // SetupRoutes initializes all MCP endpoints using the ProjectWatcher.
-func SetupRoutes(root string, pw *ProjectWatcher) http.Handler {
+func SetupRoutes(root string, pw *ProjectWatcher, serverOpt *commandline.ServeOption) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/mcp/metadata", HandleMetadata())
@@ -75,7 +75,7 @@ func SetupRoutes(root string, pw *ProjectWatcher) http.Handler {
 	})
 	mux.HandleFunc("/mcp/file", func(w http.ResponseWriter, r *http.Request) {
 		pw.RefreshIfDirty()
-		HandleFile(root, pw.GetAllowed())(w, r)
+		HandleFile(root, pw.GetAllowed(), serverOpt)(w, r)
 	})
 	mux.HandleFunc("/mcp/structure", func(w http.ResponseWriter, r *http.Request) {
 		pw.RefreshIfDirty()

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/mcp"
 )
 
@@ -16,7 +17,8 @@ func TestHandleFile(t *testing.T) {
 	writeTestFile(t, tmp, "deny.go", "package main\nfunc deny() {}")
 
 	allowed := []string{"main.go"}
-	h := mcp.HandleFile(tmp, allowed)
+	_, serverOpt, _ := commandline.ServerOptParse([]string{})
+	h := mcp.HandleFile(tmp, allowed, serverOpt)
 
 	t.Run("allowed file", func(t *testing.T) {
 		r := httptest.NewRequest(http.MethodGet, "/mcp/file?path=main.go", nil)
@@ -70,4 +72,3 @@ func TestHandleFile(t *testing.T) {
 		}
 	})
 }
-
