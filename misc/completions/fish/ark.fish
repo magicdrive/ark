@@ -1,35 +1,71 @@
-# Fish completion script for ark
+# ark.fish -- Fish shell completion for `ark`
+# Place in ~/.config/fish/completions/
 
-function __fish_ark_onoff
-  echo on off
+function __fish_ark_is_first_arg
+    # True if we are completing the first non-option argument
+    set cmd (commandline -opc)
+    test (count $cmd) -eq 1
 end
 
-function __fish_ark_formats
-  echo txt md xml arklite
+# ----- sub-command ----------------------------------------------------------
+complete -c ark -n '__fish_ark_is_first_arg'    \
+        -a 'mcp-server'                         \
+        -d 'Start MCP server'
+
+# ----- general flags (no argument) ------------------------------------------
+for opt in help h version v compless c silent S skip-non-utf8 s delete-comments D
+    complete -c ark -s (string split " " $opt)[2] -l (string split " " $opt)[1] \
+            -d 'see ark --help'
 end
 
-complete -c ark -s h -l help -d "Show this help message and exit"
-complete -c ark -s v -l version -d "Show version"
+# ----- general options with arguments ---------------------------------------
+complete -c ark -l output-filename -s o -d 'Output file'      -r -f
+complete -c ark -l scan-buffer     -s b -d 'Buffer size'      -a '1M 5M 10M 100K'
+complete -c ark -l output-format   -s f -d 'Output format'    -a 'txt md xml arklite'
+complete -c ark -l mask-secrets    -s m -d 'Mask secrets'     -a 'on off'
+complete -c ark -l allow-gitignore -s a -d 'Use .gitignore'   -a 'on off'
+complete -c ark -l additionally-ignorerule -s A -d 'Extra ignore file' -r -f
+complete -c ark -l with-line-number -s n -d 'Line numbers'    -a 'on off'
+complete -c ark -l ignore-dotfile   -s d -d 'Ignore dotfiles' -a 'on off'
+complete -c ark -l pattern-regex    -s x -d 'Pattern regexp'  -r
+complete -c ark -l include-ext      -s i -d 'Include ext'     -r
+complete -c ark -l exclude-dir-regex -s g -d 'Exclude dir regex' -r
+complete -c ark -l exclude-file-regex -s G -d 'Exclude file regex' -r
+complete -c ark -l exclude-ext      -s e -d 'Exclude ext'     -r
+complete -c ark -l exclude-dir      -s E -d 'Exclude dir'     -r
 
-complete -c ark -s o -l output-filename -r -d "Specify ark output txt filename"
-complete -c ark -s b -l scan-buffer -r -d "Specify the line scan buffer size (e.g. 100K, 10M)"
-complete -c ark -s f -l output-format -r -a "(__fish_ark_formats)" -d "Specify the format of the output file"
-complete -c ark -s m -l mask-secrets -r -a "(__fish_ark_onoff)" -d "Detect secrets and mask output (on/off)"
-complete -c ark -s a -l allow-gitignore -r -a "(__fish_ark_onoff)" -d "Enable .gitignore file filter"
-complete -c ark -s p -l additionally-ignorerule -r -d "File with additional ignore rules"
-complete -c ark -s n -l with-line-number -r -a "(__fish_ark_onoff)" -d "Include line numbers in output"
-complete -c ark -s d -l ignore-dotfile -r -a "(__fish_ark_onoff)" -d "Ignore dotfiles"
-complete -c ark -s x -l pattern-regex -r -d "Pattern to match files"
-complete -c ark -s i -l include-ext -r -d "Include file extensions (comma-separated)"
-complete -c ark -s g -l exclude-dir-regex -r -d "Exclude directories by regexp"
-complete -c ark -s G -l exclude-file-regex -r -d "Exclude files by regexp"
-complete -c ark -s e -l exclude-ext -r -d "Exclude file extensions (comma-separated)"
-complete -c ark -s E -l exclude-dir -r -d "Exclude directory names (comma-separated)"
-complete -c ark -s c -l compless -d "Compless output with arklite"
-complete -c ark -s s -l skip-non-utf8 -d "Skip non-UTF8 files"
-complete -c ark -s S -l silent -d "Suppress output messages"
-complete -c ark -s D -l delete-comments -d "Delete code comments"
+# ----- mcp-server flags ------------------------------------------------------
+for opt in skip-non-utf8 s delete-comments D
+    complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+            -s (string split " " $opt)[2] -l (string split " " $opt)[1] \
+            -d 'see ark mcp-server --help'
+end
 
-# Positional argument: target directory
-complete -c ark -f -a "(__fish_complete_directories)"
+# ----- mcp-server options with arguments ------------------------------------
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l root -s r   -d 'Root directory'  -r -f
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l port -s p   -d 'Port'            -a '8008 8522 8080 9000'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l scan-buffer -s b -d 'Buffer size' -a '1M 5M 10M 100K'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l mask-secrets -s m -d 'Mask secrets' -a 'on off'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l allow-gitignore -s a -d 'Use .gitignore' -a 'on off'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l additionally-ignorerule -s A -d 'Extra ignore file' -r -f
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l ignore-dotfile -s d -d 'Ignore dotfiles' -a 'on off'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l pattern-regex -s x -d 'Pattern regexp' -r
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l include-ext -s i -d 'Include ext' -r
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l exclude-dir-regex -s g -d 'Exclude dir regex' -r
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l exclude-file-regex -s G -d 'Exclude file regex' -r
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l exclude-ext -s e -d 'Exclude ext' -r
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l exclude-dir -s E -d 'Exclude dir' -r
 

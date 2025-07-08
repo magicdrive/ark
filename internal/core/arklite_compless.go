@@ -13,9 +13,11 @@ import (
 )
 
 func Compless(path string, format model.OutputFormat) error {
+
 	/*-----------*/
 	/* Read file */
 	/*-----------*/
+
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return err

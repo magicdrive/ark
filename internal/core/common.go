@@ -28,7 +28,7 @@ func IsUnderGitDir(path string) bool {
 	return false
 }
 
-func isBinary(data []byte) bool {
+func IsBinary(data []byte) bool {
 	if len(data) == 0 {
 		return false
 	}
@@ -48,13 +48,13 @@ func isBinary(data []byte) bool {
 	return controlRatio > 0.1
 }
 
-func isImage(filename string) bool {
+func IsImage(filename string) bool {
 	ext := strings.ToLower(path.Ext(filename))
 	mimeType := mime.TypeByExtension(ext)
 	return strings.HasPrefix(mimeType, "image/")
 }
 
-func convertToUTF8(r io.Reader) (io.Reader, error) {
+func ConvertToUTF8(r io.Reader) (io.Reader, error) {
 	buf := bufio.NewReader(r)
 	peek, err := buf.Peek(1024)
 	if err != nil && err != io.EOF {
@@ -62,4 +62,12 @@ func convertToUTF8(r io.Reader) (io.Reader, error) {
 	}
 	encoding, _, _ := charset.DetermineEncoding(peek, "")
 	return transform.NewReader(buf, encoding.NewDecoder()), nil
+}
+
+func DeleteComments(data []byte, fpath string) []byte {
+	lang := detectLanguageTag(fpath)
+	pattern := getCommentDelimiters(lang)
+	result := stripComments(data, pattern)
+	return result
+
 }
