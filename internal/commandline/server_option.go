@@ -29,8 +29,8 @@ func ServerOptParse(args []string) (int, *ServeOption, error) {
 	fs.StringVar(rootDirOpt, "r", currentDir, "Specify ark mcp server serv directory.")
 
 	// --port
-	portOpt := fs.Int("port", 8008, "Specify ark mcp server port.")
-	fs.IntVar(portOpt, "p", 8008, "Specify ark mcp server port.")
+	portOpt := fs.Int("port", 8522, "Specify ark mcp server port.")
+	fs.IntVar(portOpt, "p", 8522, "Specify ark mcp server port.")
 
 	// --scan-buffer
 	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Specify the line scan buffer size.")
