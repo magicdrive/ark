@@ -1,37 +1,57 @@
 #compdef ark
+# _ark -- Z sh completion for `ark`
 
-# Rich Zsh completion for ark CLI
+local -a general_opts mcp_opts subcommands
+general_opts=(
+  '--help[-h]' '--version[-v]' '--compless[-c]' '--silent[-S]' '--skip-non-utf8[-s]'
+  '--delete-comments[-D]'
+  '--output-filename[-o]:output file:_files'
+  '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
+  '--output-format[-f]:format:(txt md xml arklite)'
+  '--mask-secrets[-m]:on/off:(on off)'
+  '--allow-gitignore[-a]:on/off:(on off)'
+  '--additionally-ignorerule[-A]:ignore rule file:_files'
+  '--with-line-number[-n]:on/off:(on off)'
+  '--ignore-dotfile[-d]:on/off:(on off)'
+  '--pattern-regex[-x]:regexp:'
+  '--include-ext[-i]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
+  '--exclude-dir-regex[-g]:regexp:' '--exclude-file-regex[-G]:regexp:'
+  '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
+  '--exclude-dir[-E]:dirname:'
+)
 
-_ark() {
-  local state
+mcp_opts=(
+  '--root[-r]:root directory:_files -/'
+  '--port[-p]:port number:(8008 8522 8080 9000)'
+  '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
+  '--mask-secrets[-m]:on/off:(on off)'
+  '--allow-gitignore[-a]:on/off:(on off)'
+  '--additionally-ignorerule[-A]:ignore rule file:_files'
+  '--ignore-dotfile[-d]:on/off:(on off)'
+  '--pattern-regex[-x]:regexp:'
+  '--include-ext[-i]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
+  '--exclude-dir-regex[-g]:regexp:' '--exclude-file-regex[-G]:regexp:'
+  '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
+  '--exclude-dir[-E]:dirname:'
+  '--skip-non-utf8[-s]' '--delete-comments[-D]'
+)
 
-  _arguments -C \
-    '--help[Show this help message and exit]' \
-    '--version[Show version]' \
-    '(-o --output-filename)'{-o,--output-filename}'[Specify ark output txt filename]:output file:_files' \
-    '(-b --scan-buffer)'{-b,--scan-buffer}'[Specify the line scan buffer size]:buffer (e.g. 100K, 10M)' \
-    '(-f --output-format)'{-o,--output-format}'[Specify the format of the output file]:fmt:(txt md xml arklite)' \
-    '(-m --mask-secrets)'{-m,--mask-secrets}'[Specify Detect the secrets string and convert it to masked. (on/off)]:bool:(on off)' \
-    '(-a --allow-gitignore)'{-a,--allow-gitignore}'[Enable .gitignore file filter (on/off)]:bool:(on off)' \
-    '(-p --additionally-ignorerule)'{-p,--additionally-ignorerule}'[Specify a file containing additional ignore rules]:ignore file:_files' \
-    '(-n --with-line-number)'{-n,--with-line-number}'[Include file line numbers (on/off)]:bool:(on off)' \
-    '(-d --ignore-dotfile)'{-d,--ignore-dotfile}'[Ignore dot files (on/off)]:bool:(on off)' \
-    '(-x --pattern-regex)'{-x,--pattern-regex}'[Pattern to match files]:regexp:' \
-    '(-i --include-ext)'{-i,--include-ext}'[Include file extensions (comma-separated)]:extensions:' \
-    '(-g --exclude-dir-regex)'{-g,--exclude-dir-regex}'[Ignore directories by regexp]:regexp:' \
-    '(-G --exclude-file-regex)'{-G,--exclude-file-regex}'[Ignore files by regexp]:regexp:' \
-    '(-e --exclude-ext)'{-e,--exclude-ext}'[Exclude file extensions (comma-separated)]:extensions:' \
-    '(-E --exclude-dir)'{-E,--exclude-dir}'[Exclude directory names (comma-separated)]:directory names:' \
-    '(-c --compless)'{-c,--compless}'[Compless output with arklite]' \
-    '(-s --skip-non-utf8)'{-s,--skip-non-utf8}'[Ignore non-UTF8 files]' \
-    '(-S --silinet)'{-s,--silent}'[Without displaying messages]' \
-    '(-D --delete-comments)'{-D,--delete-comments}'[Delete code comments]' \
-    '*::dirname:->directory' && return 0
+subcommands=('mcp-server:Start MCP server')
 
-  if [[ $state == directory ]]; then
-    _directories
-  fi
-}
+_arguments -C \
+  "${general_opts[@]}" \
+  '1:command:->subcmd' \
+  '*::options:->args'
 
-_ark "$@"
+case $state in
+  subcmd)
+    _describe 'subcommand' subcommands
+    ;;
+  args)
+    case $words[1] in
+      mcp-server) _arguments -C "${mcp_opts[@]}" '*:files:_files' ;;
+      *)          _arguments -C "${general_opts[@]}" '*:dirname:_files -/' ;;
+    esac
+    ;;
+esac
 
