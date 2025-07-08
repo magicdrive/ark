@@ -31,7 +31,7 @@ general (text generator mode) options:
 
 mcp-server options:
   -r, --root <dirname>                             Specify the mcp-server serv root dirname(optional. default: $pwd)
-  -p, --port <number>							   Specify the mcp-server port. (optional. default: 8008)
+  -p, --port <number>							   Specify the mcp-server port. (optional. default: 8522)
   -b, --scan-buffer <number|byte-string>           Specify the line scan buffer size. (optional. default: '10M')
   -m, --mask-secrets <'on'|'off'>                  Specify Detect the secrets and convert it to masked output. (optional. default: 'on').
   -a, --allow-gitignore <'on'|'off'>               Specify enable .gitignore filter rule. (optional. default: 'on')
