@@ -11,7 +11,7 @@ import (
 )
 
 func Execute(version string) {
-	if os.Args[1] == "mcp-server" {
+	if len(os.Args) > 2 && os.Args[1] == "mcp-server" && false {
 		_, opt, err := commandline.ServerOptParse(os.Args[2:])
 		if err != nil {
 			log.Fatalf("Faital Error: %v\n", err)
@@ -37,10 +37,24 @@ func Execute(version string) {
 		if opt.TargetDirname == "" {
 			fmt.Println("Error: a directory name is required")
 			os.Exit(1)
+		} else if !DirExists(opt.TargetDirname) {
+			fmt.Printf("Error: a directory not found: %s\n", opt.TargetDirname)
+			os.Exit(1)
 		}
 
 		if err := core.Apply(opt); err != nil {
 			log.Fatal(err)
 		}
 	}
+}
+
+func DirExists(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false
+		}
+		return false
+	}
+	return info.IsDir()
 }

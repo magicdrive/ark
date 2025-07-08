@@ -49,14 +49,16 @@ ark mcp-server [OPTIONS]
 ```
 
 ---
-
+<!--
 ## 📂 Sub‑commands
 
 | Command      | Description                    |
 |--------------|--------------------------------|
 | `mcp-server` | Run Ark as an HTTP MCP server. |
 
+
 ---
+-->
 
 ## ⚙️ General Options
 
@@ -84,7 +86,7 @@ ark mcp-server [OPTIONS]
 | `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
 
 ---
-
+<!--
 ## 🛰  mcp‑server Options
 
 | Option | Alias | Description | Default |
@@ -106,7 +108,7 @@ ark mcp-server [OPTIONS]
 | `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
 
 ---
-
+-->
 ## 📝 Arguments
 
 | Argument | Description |
