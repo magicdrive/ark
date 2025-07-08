@@ -8,6 +8,9 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+
+	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/core"
 )
 
 type ProjectWatcher struct {
@@ -15,13 +18,15 @@ type ProjectWatcher struct {
 	AllowedFiles []string
 	dirty        atomic.Bool
 	rescanFunc   func(string) []string
+	Option       *commandline.ServeOption
 }
 
-func NewProjectWatcher(root string, initial []string, rescan func(string) []string) *ProjectWatcher {
+func NewProjectWatcher(root string, opt *commandline.ServeOption, initial []string, rescan func(string) []string) *ProjectWatcher {
 	pw := &ProjectWatcher{
 		Root:         root,
 		AllowedFiles: initial,
 		rescanFunc:   rescan,
+		Option:       opt,
 	}
 	pw.startWatcher()
 	return pw
@@ -35,8 +40,13 @@ func (pw *ProjectWatcher) startWatcher() {
 	}
 
 	// watch all existing directories recursively
+	log.Printf("[watcher] add watcher: %v", pw.Root)
+
 	filepath.WalkDir(pw.Root, func(path string, dEntry os.DirEntry, err error) error {
 		if err != nil {
+			return nil
+		}
+		if core.IsUnderGitDir(path) {
 			return nil
 		}
 		if dEntry.IsDir() {
@@ -55,6 +65,14 @@ func (pw *ProjectWatcher) startWatcher() {
 				if !ok {
 					return
 				}
+				if event.Op == fsnotify.Chmod {
+					return
+				}
+
+				if !core.CanBoaded(pw.Option.GeneralOption, event.Name) {
+					return
+				}
+
 				log.Printf("[watcher] event: %v", event)
 				pw.dirty.Store(true)
 
@@ -106,4 +124,3 @@ func (pw *ProjectWatcher) ShouldRefresh() bool {
 func (pw *ProjectWatcher) GetAllowed() []string {
 	return pw.AllowedFiles
 }
-
