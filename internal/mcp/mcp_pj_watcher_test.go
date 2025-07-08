@@ -1,4 +1,3 @@
-
 package mcp_test
 
 import (
@@ -7,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/mcp"
 )
 
@@ -35,7 +35,8 @@ func TestProjectWatcher_RefreshOnFileChange(t *testing.T) {
 	}
 
 	initialFiles := rescan(tmpDir)
-	pw := mcp.NewProjectWatcher(tmpDir, initialFiles, rescan)
+	_, opt, _ := commandline.ServerOptParse([]string{})
+	pw := mcp.NewProjectWatcher(tmpDir, opt, initialFiles, rescan)
 
 	// Wait for watcher goroutine to start and process file event
 	time.Sleep(1 * time.Second)
