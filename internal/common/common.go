@@ -1,6 +1,7 @@
 package common
 
 import (
+	"encoding/json"
 	"os"
 	"strings"
 )
@@ -53,3 +54,16 @@ func TrimDotSlash(path string) string {
 	return strings.TrimPrefix(path, "./")
 }
 
+func ToJSON[T any](v T) (string, error) {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func FromJSON[T any](s string) (T, error) {
+	var out T
+	err := json.Unmarshal([]byte(s), &out)
+	return out, err
+}

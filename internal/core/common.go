@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"io"
 	"mime"
+	"os"
 	"path"
 	"path/filepath"
 	"slices"
@@ -13,7 +14,23 @@ import (
 
 	"golang.org/x/net/html/charset"
 	"golang.org/x/text/transform"
+
+	"github.com/magicdrive/ark/internal/commandline"
 )
+
+func IsArkReadable(data []byte, path string, opt *commandline.Option) bool {
+	absPath, _ := ToAbs(path)
+	relPath, _ := ToRel(opt.TargetDirname, path)
+	basename := filepath.Base(relPath)
+
+	var result = true
+	result = result && opt.IgnoreDotFileFlag.Bool() && IsHiddenFile(basename)
+	result = result && IsUnderGitDir(absPath)
+	result = result && IsBinary(data)
+	result = result && IsImage(relPath)
+
+	return result
+}
 
 func IsHiddenFile(name string) bool {
 	return strings.HasPrefix(name, ".")
@@ -70,4 +87,47 @@ func DeleteComments(data []byte, fpath string) []byte {
 	result := stripComments(data, pattern)
 	return result
 
+}
+
+func ToAbs(p string) (string, error) {
+	p = expandHome(p)
+	p = os.ExpandEnv(p)    // $HOME, ${VAR}, etc.
+	p = filepath.Clean(p)  // remove ./, ../, duplicate slashes
+	return filepath.Abs(p) // make absolute & resolve symlinks where possible
+}
+
+func ToRel(baseDir, targetPath string) (string, error) {
+	var err error
+
+	if baseDir == "" {
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return "", err
+		}
+	}
+
+	baseDir, err = ToAbs(baseDir)
+	if err != nil {
+		return "", err
+	}
+
+	targetPath, err = ToAbs(targetPath)
+	if err != nil {
+		return "", err
+	}
+
+	rel, err := filepath.Rel(baseDir, targetPath)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Clean(rel), nil
+}
+
+func expandHome(p string) string {
+	if strings.HasPrefix(p, "~") {
+		if home, err := os.UserHomeDir(); err == nil {
+			return filepath.Join(home, strings.TrimPrefix(p, "~"))
+		}
+	}
+	return p
 }

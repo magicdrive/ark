@@ -32,7 +32,7 @@ func TestGenerateTreeJSONString(t *testing.T) {
 	}
 	allowed := make(map[string]bool)
 
-	jsonStr, fileMap, err := core.GenerateTreeJSONString(root, allowed, opt)
+	jsonStr, fileMap, _, err := core.GenerateTreeJSONString(root, allowed, opt)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

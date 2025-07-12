@@ -55,7 +55,7 @@ func createDumpFile(opt *commandline.Option) error {
 
 	// arklite
 	if opt.OutputFormat.String() == model.Arklite {
-		if treeStr, allowdFileList, err := GenerateTreeJSONString(opt.TargetDirname, firstAllowdFileListMap, opt); err != nil {
+		if treeStr, allowdFileList, _, err := GenerateTreeJSONString(opt.TargetDirname, firstAllowdFileListMap, opt); err != nil {
 			return err
 		} else {
 			if err := WriteAllFilesAsArklite(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {

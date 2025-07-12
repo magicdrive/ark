@@ -15,13 +15,13 @@ type TreeEntry struct {
 	Children []*TreeEntry `json:"children,omitempty"`
 }
 
-func GenerateTreeJSONString(rootPath string, allowedFileMap map[string]bool, opt *commandline.Option) (string, map[string]bool, error) {
+func GenerateTreeJSONString(rootPath string, allowedFileMap map[string]bool, opt *commandline.Option) (string, map[string]bool, *TreeEntry, error) {
 	tree, allowedFileMap, err := generateTreeJSON(rootPath, allowedFileMap, opt)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 	jsonBytes, _ := json.Marshal(tree)
-	return string(jsonBytes), allowedFileMap, nil
+	return string(jsonBytes), allowedFileMap, tree, nil
 
 }
 

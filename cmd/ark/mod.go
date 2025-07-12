@@ -7,44 +7,34 @@ import (
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
-	"github.com/magicdrive/ark/internal/mcp"
 )
 
 func Execute(version string) {
-	if len(os.Args) > 2 && os.Args[1] == "mcp-server" && false {
-		_, opt, err := commandline.ServerOptParse(os.Args[2:])
-		if err != nil {
-			log.Fatalf("Faital Error: %v\n", err)
-		}
-		mcp.RunMCPServe(opt.RootDir, opt)
+	_, opt, err := commandline.GeneralOptParse(os.Args[1:])
+	if err != nil {
+		log.Fatalf("Faital Error: %v\n", err)
+	}
 
-	} else {
-		_, opt, err := commandline.GeneralOptParse(os.Args[1:])
-		if err != nil {
-			log.Fatalf("Faital Error: %v\n", err)
-		}
+	if opt.VersionFlag {
+		fmt.Printf("ark version %s\n", version)
+		os.Exit(0)
+	}
 
-		if opt.VersionFlag {
-			fmt.Printf("ark version %s\n", version)
-			os.Exit(0)
-		}
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
 
-		if opt.HelpFlag {
-			opt.FlagSet.Usage()
-			os.Exit(0)
-		}
+	if opt.TargetDirname == "" {
+		fmt.Println("Error: a directory name is required")
+		os.Exit(1)
+	} else if !DirExists(opt.TargetDirname) {
+		fmt.Printf("Error: a directory not found: %s\n", opt.TargetDirname)
+		os.Exit(1)
+	}
 
-		if opt.TargetDirname == "" {
-			fmt.Println("Error: a directory name is required")
-			os.Exit(1)
-		} else if !DirExists(opt.TargetDirname) {
-			fmt.Printf("Error: a directory not found: %s\n", opt.TargetDirname)
-			os.Exit(1)
-		}
-
-		if err := core.Apply(opt); err != nil {
-			log.Fatal(err)
-		}
+	if err := core.Apply(opt); err != nil {
+		log.Fatal(err)
 	}
 }
 

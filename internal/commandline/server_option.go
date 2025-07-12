@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/magicdrive/ark/internal/common"
 )
@@ -13,6 +14,7 @@ import (
 type ServeOption struct {
 	RootDir       string
 	Port          string
+	Timeout       time.Duration
 	GeneralOption *Option
 }
 
@@ -31,6 +33,10 @@ func ServerOptParse(args []string) (int, *ServeOption, error) {
 	// --port
 	portOpt := fs.Int("port", 8522, "Specify ark mcp server port.")
 	fs.IntVar(portOpt, "p", 8522, "Specify ark mcp server port.")
+
+	// --timeout
+	timeoutOpt := fs.Int("timeout", 0, "Specify ark mcp server serv directory.")
+	fs.IntVar(timeoutOpt, "t", 0, "Specify ark mcp server serv directory.")
 
 	// --scan-buffer
 	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Specify the line scan buffer size.")
@@ -124,9 +130,13 @@ func ServerOptParse(args []string) (int, *ServeOption, error) {
 		return optLength, nil, err
 	}
 
+	// timeout
+	timeout := time.Duration(*timeoutOpt)
+
 	result := &ServeOption{
 		RootDir:       *rootDirOpt,
 		Port:          strconv.Itoa(*portOpt),
+		Timeout:       timeout,
 		GeneralOption: generalOpt,
 	}
 
