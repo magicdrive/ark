@@ -22,7 +22,8 @@ general_opts=(
 
 mcp_opts=(
   '--root[-r]:root directory:_files -/'
-  '--port[-p]:port number:(8008 8522 8080 9000)'
+  '--type[-xtp]:mcp type:(stdio httpp)'
+  '--http-port[-p]:port number:(8008 8522 8080 9000)'
   '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
   '--mask-secrets[-m]:on/off:(on off)'
   '--allow-gitignore[-a]:on/off:(on off)'
