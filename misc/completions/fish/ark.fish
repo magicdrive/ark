@@ -45,7 +45,9 @@ end
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
         -l root -s r   -d 'Root directory'  -r -f
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
-        -l port -s p   -d 'Port'            -a '8008 8522 8080 9000'
+        -l type -s t   -d 'Mcp Type'        -a 'stdio http'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l http-port -s p   -d 'HttpPort'   -a '8008 8522 8080 9000'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
         -l scan-buffer -s b -d 'Buffer size' -a '1M 5M 10M 100K'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' \

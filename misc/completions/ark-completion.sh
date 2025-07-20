@@ -15,7 +15,7 @@ _ark_gen_opts_arg="--output-filename -o --scan-buffer -b --output-format -f --ma
     --pattern-regex -x --include-ext -i --exclude-dir-regex -g --exclude-file-regex -G \
     --exclude-ext -e --exclude-dir -E"
 _ark_mcp_flags="--skip-non-utf8 -s --delete-comments -D"
-_ark_mcp_opts_arg="--root -r --port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
+_ark_mcp_opts_arg="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
     --exclude-dir-regex -g --exclude-file-regex -G --exclude-ext -e --exclude-dir -E"
 _ark_subcommands="mcp-server"
@@ -78,7 +78,9 @@ _ark_bash() {
         COMPREPLY=( $(compgen -W "go js ts py java c cpp h txt md html css xml yml yaml json" -- "$cur") ); return 0 ;;
       --output-filename|-o|--additionally-ignorerule|-A|--root|-r)
         _filedir; return 0 ;;
-      --port|-p)
+      --type|-t)
+        COMPREPLY=( $(compgen -W "stdio http" -- "$cur") ); return 0 ;;
+      --http-port|-p)
         COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return 0 ;;
       --scan-buffer|-b)
         COMPREPLY=( $(compgen -W "1M 5M 10M 100K" -- "$cur") ); return 0 ;;
@@ -123,7 +125,8 @@ _ark_zsh() {
 
   local -a mcp_opts=(
     '--root[-r]:root directory:_files -/'
-    '--port[-p]:port number:(8008 8522 8080 9000)'
+    '--type[-t]:mcp type:(stdio http)'
+    '--http-port[-p]:port number:(8008 8522 8080 9000)'
     '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
     '--mask-secrets[-m]:on/off:(on off)'
     '--allow-gitignore[-a]:on/off:(on off)'
