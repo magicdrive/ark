@@ -1,22 +1,28 @@
 package commandline
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/common"
+	"github.com/magicdrive/ark/internal/model"
 )
 
 // ServeOption defines options for launching the MCP server
 type ServeOption struct {
-	RootDir       string
-	Port          string
-	GeneralOption *Option
+	ThisVersion        string
+	RootDir            string
+	McpServerType      model.McpSreverType
+	McpServerTypeValue string
+	HttpPort           string
+	GeneralOption      *Option
 }
 
-func ServerOptParse(args []string) (int, *ServeOption, error) {
+func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 
 	optLength := len(args)
 
@@ -28,9 +34,13 @@ func ServerOptParse(args []string) (int, *ServeOption, error) {
 	rootDirOpt := fs.String("root", currentDir, "Specify ark mcp server serv directory.")
 	fs.StringVar(rootDirOpt, "r", currentDir, "Specify ark mcp server serv directory.")
 
-	// --port
-	portOpt := fs.Int("port", 8522, "Specify ark mcp server port.")
-	fs.IntVar(portOpt, "p", 8522, "Specify ark mcp server port.")
+	// --type
+	mcpServerTypeOpt := fs.String("type", "stdio", "Specify ark mcp server serv type.")
+	fs.StringVar(mcpServerTypeOpt, "t", "stdio", "Specify ark mcp server serv type.")
+
+	// --http-port
+	httpPortOpt := fs.Int("http-port", 8522, "Specify ark mcp server port.")
+	fs.IntVar(httpPortOpt, "p", 8522, "Specify ark mcp server port.")
 
 	// --scan-buffer
 	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Specify the line scan buffer size.")
@@ -120,17 +130,35 @@ func ServerOptParse(args []string) (int, *ServeOption, error) {
 		FlagSet:                         fs,
 	}
 
-	if err := generalOpt.Normalize(); err != nil {
-		return optLength, nil, err
+	result := &ServeOption{
+		ThisVersion:        version,
+		RootDir:            *rootDirOpt,
+		McpServerTypeValue: *mcpServerTypeOpt,
+		HttpPort:           strconv.Itoa(*httpPortOpt),
+		GeneralOption:      generalOpt,
 	}
 
-	result := &ServeOption{
-		RootDir:       *rootDirOpt,
-		Port:          strconv.Itoa(*portOpt),
-		GeneralOption: generalOpt,
+	if err := common.JoinErrors(result.Normalize(), generalOpt.Normalize()); err != nil {
+		return optLength, nil, err
 	}
 
 	OverRideHelp(fs)
 
 	return optLength, result, nil
+}
+
+func (cr *ServeOption) Normalize() error {
+
+	var errorMessages = []string{}
+
+	// --type
+	if err := cr.McpServerType.Set(cr.McpServerTypeValue); err != nil {
+		errorMessages = append(errorMessages, fmt.Sprintf("--type %s", err.Error()))
+	}
+
+	if len(errorMessages) == 0 {
+		return nil
+	} else {
+		return errors.New(strings.Join(errorMessages, "\n"))
+	}
 }

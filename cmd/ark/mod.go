@@ -11,10 +11,14 @@ import (
 )
 
 func Execute(version string) {
-	if len(os.Args) > 2 && os.Args[1] == "mcp-server" && false {
-		_, opt, err := commandline.ServerOptParse(os.Args[2:])
+	if len(os.Args) >= 2 && os.Args[1] == "mcp-server" {
+		_, opt, err := commandline.ServerOptParse(version, os.Args[2:])
 		if err != nil {
 			log.Fatalf("Faital Error: %v\n", err)
+		}
+		if opt.GeneralOption.HelpFlag {
+			opt.GeneralOption.FlagSet.Usage()
+			os.Exit(0)
 		}
 		mcp.RunMCPServe(opt.RootDir, opt)
 
