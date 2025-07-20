@@ -9,7 +9,8 @@ import (
 func TestServerOptParse_Basic(t *testing.T) {
 	args := []string{
 		"--root", "/my/project",
-		"--port", "12345",
+		"--type", "http",
+		"--http-port", "12345",
 		"--scan-buffer", "20M",
 		"--mask-secrets", "off",
 		"--allow-gitignore", "off",
@@ -25,7 +26,7 @@ func TestServerOptParse_Basic(t *testing.T) {
 		"--delete-comment",
 	}
 
-	_, opt, err := commandline.ServerOptParse(args)
+	_, opt, err := commandline.ServerOptParse("v1.0.0", args)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
@@ -33,8 +34,11 @@ func TestServerOptParse_Basic(t *testing.T) {
 	if opt.RootDir != "/my/project" {
 		t.Errorf("RootDir mismatch. got=%s", opt.RootDir)
 	}
-	if opt.Port != "12345" {
-		t.Errorf("Port mismatch. got=%s", opt.Port)
+	if opt.McpServerTypeValue != "http" {
+		t.Errorf("McpServerTypeValue mismatch. got=%s", opt.McpServerTypeValue)
+	}
+	if opt.HttpPort != "12345" {
+		t.Errorf("HttpPort mismatch. got=%s", opt.HttpPort)
 	}
 	if opt.GeneralOption.MaskSecretsFlagValue != "off" {
 		t.Errorf("MaskSecretsFlagValue mismatch. got=%s", opt.GeneralOption.MaskSecretsFlagValue)

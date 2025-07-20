@@ -1,9 +1,23 @@
 package common
 
 import (
+	"errors"
 	"os"
 	"strings"
 )
+
+func JoinErrors(errs ...error) error {
+	var messages []string
+	for _, err := range errs {
+		if err != nil {
+			messages = append(messages, err.Error())
+		}
+	}
+	if len(messages) == 0 {
+		return nil
+	}
+	return errors.New(strings.Join(messages, "\n"))
+}
 
 func MergeAllowFileList(a, b map[string]bool) map[string]bool {
 	merged := make(map[string]bool)
@@ -52,4 +66,3 @@ func GetCurrentDir() string {
 func TrimDotSlash(path string) string {
 	return strings.TrimPrefix(path, "./")
 }
-
