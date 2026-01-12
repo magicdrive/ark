@@ -3,6 +3,6 @@ module github.com/magicdrive/ark
 go 1.24.2
 
 require (
-	golang.org/x/net v0.47.0
-	golang.org/x/text v0.31.0
+	golang.org/x/net v0.49.0
+	golang.org/x/text v0.33.0
 )
