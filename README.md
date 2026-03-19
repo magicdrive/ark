@@ -92,7 +92,7 @@ ark mcp-server [OPTIONS]
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
 | `--root <dir>` | `-r` | Serve directory root | `$PWD` |
-| `--type <stdio|http>` | `-t` | HTTP listen port | `stdio` |
+| `--type <stdio\|http>` | `-t` | HTTP listen port | `stdio` |
 | `--http-port <port>` | `-p` | HTTP listen port | `8522` |
 | `--scan-buffer <size>` | `-b` | Read buffer size (`10M`, `500K`, …) | `10M` |
 | `--mask-secrets <on/off>` | `-m` | Detect & mask secrets | `on` |
