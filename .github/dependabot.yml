@@ -11,7 +11,9 @@ updates:
     commit-message:
       prefix: "deps"
       include: "scope"
-    open-pull-requests-limit: 10
+    # Use only security updates
+    # see: https://docs.github.com/ja/code-security/dependabot/dependabot-security-updates/customizing-dependabot-security-prs#example-1-configuration-for-security-updates-only
+    open-pull-requests-limit: 0
     #ignore:
     #  - dependency-name: "github.com/some/dependency"
     #    versions:
