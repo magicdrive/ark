@@ -21,9 +21,19 @@
   "rebaseWhen": "behind-base-branch",
   "packageRules": [
     {
+      "matchCategories": [
+        "golang"
+      ],
+      "minimumReleaseAge": "3 days"
+    },
+    {
       "description": "Updating Go language dependencies",
-      "matchDatasources": ["go"],
-      "matchUpdateTypes": ["major"],
+      "matchDatasources": [
+        "go"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
       "groupName": "Go major dependencies",
       "schedule": [
         "before 10am on the first day of the month"
@@ -31,42 +41,60 @@
     },
     {
       "description": "golang.org/x Package grouping",
-      "matchDatasources": ["go"],
-      "matchPackagePrefixes": ["golang.org/x"],
+      "matchDatasources": [
+        "go"
+      ],
       "groupName": "golang.org/x packages",
-      "automerge": true
+      "automerge": true,
+      "matchPackageNames": [
+        "golang.org/x{/,}**"
+      ]
     },
     {
       "description": "Updating GitHub Actions",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "GitHub Actions",
       "pinDigests": true,
       "automerge": true
     },
     {
       "description": "Security updates are provided immediately.",
-      "matchUpdateTypes": ["patch"],
-      "matchPackagePatterns": [".*"],
-      "matchDatasources": ["go"],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "matchDatasources": [
+        "go"
+      ],
       "automerge": true,
-      "stabilityDays": 0
+      "minimumReleaseAge": null,
+      "matchPackageNames": [
+        "/.*/"
+      ]
     },
     {
       "description": "Vulnerable packages are given top priority.",
-      "matchDatasources": ["go"],
+      "matchDatasources": [
+        "go"
+      ],
       "vulnerabilityAlerts": {
         "enabled": true,
-        "labels": ["security"],
-        "stabilityDays": 0,
+        "labels": [
+          "security"
+        ],
+        "minimumReleaseAge": null,
         "prPriority": 10
       }
     }
   ],
   "vulnerabilityAlerts": {
     "enabled": true,
-    "labels": ["security"]
+    "labels": [
+      "security"
+    ]
   },
-  "stabilityDays": 3,
+  "minimumReleaseAge": "3 days",
   "prHourlyLimit": 2,
   "ignorePaths": [
     "**/testdata/**",
@@ -75,8 +103,5 @@
   "postUpdateOptions": [
     "gomodTidy",
     "gomodUpdateImportPaths"
-  ],
-  "golang": {
-    "minimumReleaseAge": "3 days"
-  }
+  ]
 }
