@@ -21,79 +21,42 @@
   "rebaseWhen": "behind-base-branch",
   "packageRules": [
     {
-      "matchCategories": [
-        "golang"
-      ],
-      "minimumReleaseAge": "3 days"
-    },
-    {
-      "description": "Updating Go language dependencies",
-      "matchDatasources": [
-        "go"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
+      "description": "Go language dependencies update",
+      "matchDatasources": ["go"],
+      "matchUpdateTypes": ["major"],
       "groupName": "Go major dependencies",
       "schedule": [
         "before 10am on the first day of the month"
       ]
     },
     {
-      "description": "golang.org/x Package grouping",
-      "matchDatasources": [
-        "go"
-      ],
+      "description": "golang.org/x packages grouping",
+      "matchDatasources": ["go"],
+      "matchPackageNames": ["golang.org/x{/,}**"],
       "groupName": "golang.org/x packages",
-      "automerge": true,
-      "matchPackageNames": [
-        "golang.org/x{/,}**"
-      ]
+      "automerge": true
     },
     {
-      "description": "Updating GitHub Actions",
-      "matchManagers": [
-        "github-actions"
-      ],
+      "description": "GitHub Actions update",
+      "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
       "pinDigests": true,
       "automerge": true
     },
     {
-      "description": "Security updates are provided immediately.",
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "matchDatasources": [
-        "go"
-      ],
+      "description": "Security patches are provided immediately",
+      "matchUpdateTypes": ["patch"],
+      "matchDatasources": ["go"],
       "automerge": true,
-      "minimumReleaseAge": null,
-      "matchPackageNames": [
-        "/.*/"
-      ]
+      "minimumReleaseAge": null
     },
     {
-      "description": "Vulnerable packages are given top priority.",
-      "matchDatasources": [
-        "go"
-      ],
-      "vulnerabilityAlerts": {
-        "enabled": true,
-        "labels": [
-          "security"
-        ],
-        "minimumReleaseAge": null,
-        "prPriority": 10
-      }
+      "description": "Vulnerable packages are given top priority",
+      "matchDatasources": ["go"],
+      "labels": ["security"],
+      "prPriority": 10
     }
   ],
-  "vulnerabilityAlerts": {
-    "enabled": true,
-    "labels": [
-      "security"
-    ]
-  },
   "minimumReleaseAge": "3 days",
   "prHourlyLimit": 2,
   "ignorePaths": [
@@ -103,5 +66,6 @@
   "postUpdateOptions": [
     "gomodTidy",
     "gomodUpdateImportPaths"
-  ]
+  ],
+  "osvVulnerabilityAlerts": true
 }
