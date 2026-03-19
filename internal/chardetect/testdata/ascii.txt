@@ -1,0 +1,3 @@
+This is a pure ASCII text file.
+It contains no Japanese characters.
+Only English letters, numbers, and symbols.
