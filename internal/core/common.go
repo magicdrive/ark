@@ -11,7 +11,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"golang.org/x/net/html/charset"
+	"github.com/magicdrive/ark/internal/chardetect"
+	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
 )
 
@@ -56,12 +57,42 @@ func IsImage(filename string) bool {
 
 func ConvertToUTF8(r io.Reader) (io.Reader, error) {
 	buf := bufio.NewReader(r)
-	peek, err := buf.Peek(1024)
+
+	// Peek at the first 8KB to detect encoding
+	peek, err := buf.Peek(8192)
 	if err != nil && err != io.EOF {
-		return nil, err
+		// If we can't peek 8KB, try smaller size
+		peek, err = buf.Peek(1024)
+		if err != nil && err != io.EOF {
+			return nil, err
+		}
 	}
-	encoding, _, _ := charset.DetermineEncoding(peek, "")
-	return transform.NewReader(buf, encoding.NewDecoder()), nil
+
+	// Detect character encoding using our chardetect package
+	result := chardetect.Detect(peek)
+
+	// If already UTF-8 or ASCII, return as-is
+	if result.Encoding == chardetect.UTF8 || result.Encoding == chardetect.ASCII {
+		return buf, nil
+	}
+
+	// Select appropriate decoder based on detected encoding
+	var decoder transform.Transformer
+
+	switch result.Encoding {
+	case chardetect.ShiftJIS, chardetect.CP932:
+		decoder = japanese.ShiftJIS.NewDecoder()
+	case chardetect.EUCJP:
+		decoder = japanese.EUCJP.NewDecoder()
+	case chardetect.ISO2022JP:
+		decoder = japanese.ISO2022JP.NewDecoder()
+	default:
+		// Unknown or unhandled encoding - return as-is
+		// This is safer than failing, as the caller can decide how to handle it
+		return buf, nil
+	}
+
+	return transform.NewReader(buf, decoder), nil
 }
 
 func DeleteComments(data []byte, fpath string) []byte {
