@@ -1,0 +1,82 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":automergePatch",
+    ":automergeMinor",
+    "group:allNonMajor"
+  ],
+  "timezone": "Asia/Tokyo",
+  "schedule": [
+    "before 10am on monday"
+  ],
+  "labels": [
+    "dependencies"
+  ],
+  "commitMessagePrefix": "chore(deps):",
+  "prConcurrentLimit": 5,
+  "prCreation": "immediate",
+  "rebaseWhen": "behind-base-branch",
+  "packageRules": [
+    {
+      "description": "Updating Go language dependencies",
+      "matchDatasources": ["go"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "Go major dependencies",
+      "schedule": [
+        "before 10am on the first day of the month"
+      ]
+    },
+    {
+      "description": "golang.org/x Package grouping",
+      "matchDatasources": ["go"],
+      "matchPackagePrefixes": ["golang.org/x"],
+      "groupName": "golang.org/x packages",
+      "automerge": true
+    },
+    {
+      "description": "Updating GitHub Actions",
+      "matchManagers": ["github-actions"],
+      "groupName": "GitHub Actions",
+      "pinDigests": true,
+      "automerge": true
+    },
+    {
+      "description": "Security updates are provided immediately.",
+      "matchUpdateTypes": ["patch"],
+      "matchPackagePatterns": [".*"],
+      "matchDatasources": ["go"],
+      "automerge": true,
+      "stabilityDays": 0
+    },
+    {
+      "description": "Vulnerable packages are given top priority.",
+      "matchDatasources": ["go"],
+      "vulnerabilityAlerts": {
+        "enabled": true,
+        "labels": ["security"],
+        "stabilityDays": 0,
+        "prPriority": 10
+      }
+    }
+  ],
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "labels": ["security"]
+  },
+  "stabilityDays": 3,
+  "prHourlyLimit": 2,
+  "ignorePaths": [
+    "**/testdata/**",
+    "**/*.golden"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths"
+  ],
+  "golang": {
+    "minimumReleaseAge": "3 days"
+  }
+}
