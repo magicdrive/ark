@@ -61,8 +61,8 @@ func GeneralOptParse(args []string) (int, *Option, error) {
 	fs := flag.NewFlagSet("ark", flag.ExitOnError)
 
 	// --output-filename
-	outputFilenameOpt := fs.String("output-filename", "", "Show help message.")
-	fs.StringVar(outputFilenameOpt, "o", "", "Show help message.")
+	outputFilenameOpt := fs.String("output-filename", "", "Specify the output file name.")
+	fs.StringVar(outputFilenameOpt, "o", "", "Specify the output file name.")
 
 	// --scan-buffer
 	scanBufferValueOpt := fs.String("scan-buffer", "10M", "Specify the line scan buffer size.")

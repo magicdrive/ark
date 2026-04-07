@@ -49,6 +49,12 @@ var OutputFormatAllowComplessMap = map[string]bool{
 type OutputFormat string
 
 func Ext2OutputFormat(extension string) string {
+	// filepath.Ext() returns extension with dot (e.g., ".md")
+	// Remove leading dot if present
+	if len(extension) > 0 && extension[0] == '.' {
+		extension = extension[1:]
+	}
+
 	if unit, ok := OutputFormatUnitMap[extension]; ok {
 		return unit
 	} else {

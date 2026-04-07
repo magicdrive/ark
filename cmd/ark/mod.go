@@ -21,7 +21,6 @@ func Execute(version string) {
 			os.Exit(0)
 		}
 		mcp.RunMCPServe(opt.RootDir, opt)
-
 	} else {
 		_, opt, err := commandline.GeneralOptParse(os.Args[1:])
 		if err != nil {

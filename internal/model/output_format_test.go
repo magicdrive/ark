@@ -68,6 +68,13 @@ func TestExt2OutputFormat(t *testing.T) {
 		{"Markdown", model.Markdown},
 		{"txt", model.PlainText},
 		{"unknown", model.PlainText}, // fallback
+		// Test with dot prefix (as returned by filepath.Ext)
+		{".md", model.Markdown},
+		{".txt", model.PlainText},
+		{".xml", model.XML},
+		{".mkd", model.Markdown},
+		{".arklite", model.Arklite},
+		{".unknown", model.PlainText}, // fallback for unknown extension
 	}
 	for _, c := range cases {
 		got := model.Ext2OutputFormat(c.ext)

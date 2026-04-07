@@ -36,7 +36,7 @@ Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark
 ### 2 · Generate an output file
 
 ```bash
-ark <dirname>                # creates ark_output.txt in the cwd
+ark <dirname>                # creates ark-output.txt in the cwd
 ```
 
 ---
@@ -66,7 +66,7 @@ ark mcp-server [OPTIONS]
 |--------|-------|-------------|---------|
 | `--help` | `-h` | Show help and exit | – |
 | `--version` | `-v` | Show version | – |
-| `--output-filename <file>` | `-o` | Name of the output file | `ark_output.txt` |
+| `--output-filename <file>` | `-o` | Name of the output file | `ark-output.txt` |
 | `--scan-buffer <size>` | `-b` | Read buffer size (`10M`, `500K`, …) | `10M` |
 | `--output-format <fmt>` | `-f` | `txt`, `md`, `xml`, `arklite` | `txt` |
 | `--mask-secrets <on/off>` | `-m` | Detect & mask secrets | `on` |
