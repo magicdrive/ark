@@ -3,6 +3,7 @@ package chardetect
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"golang.org/x/text/encoding/japanese"
@@ -137,11 +138,12 @@ func writeEncodedFile(path, content, encoding string, withBOM bool) error {
 // generateLongText creates a long text for testing large files.
 func generateLongText() string {
 	// Generate ~10KB of text
-	text := ""
-	for i := 0; i < 100; i++ {
-		text += longTextUnit
+	var builder strings.Builder
+
+	for range 100 {
+		builder.WriteString(longTextUnit)
 	}
-	return text
+	return builder.String()
 }
 
 // TestGenerateTestData is a helper test that can be run to regenerate test data.
