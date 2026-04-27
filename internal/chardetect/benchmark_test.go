@@ -13,7 +13,7 @@ func BenchmarkDetect_UTF8(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = Detect(data)
 	}
 }
@@ -25,7 +25,7 @@ func BenchmarkDetect_ShiftJIS(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = Detect(data)
 	}
 }
@@ -37,7 +37,7 @@ func BenchmarkDetect_EUCJP(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = Detect(data)
 	}
 }
@@ -49,7 +49,7 @@ func BenchmarkDetect_ISO2022JP(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = Detect(data)
 	}
 }
@@ -61,7 +61,7 @@ func BenchmarkDetect_LongText(b *testing.B) {
 	}
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = Detect(data)
 	}
 }
@@ -75,7 +75,7 @@ func BenchmarkDetector_WithSampleSize1KB(b *testing.B) {
 	detector := NewDetector().WithSampleSize(1024)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = detector.Detect(data)
 	}
 }
@@ -89,7 +89,7 @@ func BenchmarkDetector_WithSampleSize4KB(b *testing.B) {
 	detector := NewDetector().WithSampleSize(4096)
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_ = detector.Detect(data)
 	}
 }
@@ -98,7 +98,7 @@ func BenchmarkDetectFile(b *testing.B) {
 	path := filepath.Join("testdata", "utf8.txt")
 
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	for i := 0; b.Loop(); i++ {
 		_, _ = DetectFile(path)
 	}
 }
