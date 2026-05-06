@@ -4,8 +4,6 @@
     "config:recommended",
     ":dependencyDashboard",
     ":semanticCommits",
-    ":automergePatch",
-    ":automergeMinor",
     "group:allNonMajor"
   ],
   "timezone": "Asia/Tokyo",
@@ -34,20 +32,20 @@
       "matchDatasources": ["go"],
       "matchPackageNames": ["golang.org/x{/,}**"],
       "groupName": "golang.org/x packages",
-      "automerge": true
+      "automerge": false
     },
     {
       "description": "GitHub Actions update",
       "matchManagers": ["github-actions"],
       "groupName": "GitHub Actions",
       "pinDigests": true,
-      "automerge": true
+      "automerge": false
     },
     {
       "description": "Security patches are provided immediately",
       "matchUpdateTypes": ["patch"],
       "matchDatasources": ["go"],
-      "automerge": true,
+      "automerge": false,
       "minimumReleaseAge": null
     },
     {
