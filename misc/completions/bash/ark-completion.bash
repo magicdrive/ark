@@ -11,7 +11,10 @@ _mcp_flags="--skip-non-utf8 -s --delete-comments -D"
 _mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
 --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
 --exclude-dir-regex -g --exclude-file-regex -G --exclude-ext -e --exclude-dir -E"
-_subcmds="mcp-server"
+_subcmds="mcp-server syntax symbol skill"
+_syntax_opts="--lang --format -h --help"
+_symbol_opts="--lang --format -h --help"
+_skill_opts="--name --output --archive -h --help"
 
 # -------- Fallback helpers (if bash-completion is missing) -------------------
 if ! declare -F _get_comp_words_by_ref >/dev/null 2>&1; then

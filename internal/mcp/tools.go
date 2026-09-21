@@ -27,7 +27,7 @@ func NewToolsHandler(rootDir string, opt *commandline.Option) *ToolsHandler {
 
 // ListTools returns all available tools
 func (h *ToolsHandler) ListTools() []Tool {
-	return []Tool{
+	tools := []Tool{
 		{
 			Name:        "get_directory_tree",
 			Description: "Get directory tree structure as JSON",
@@ -245,6 +245,9 @@ func (h *ToolsHandler) ListTools() []Tool {
 			},
 		},
 	}
+	// Add syntax tools
+	tools = append(tools, SyntaxToolDefinitions()...)
+	return tools
 }
 
 // CallTool executes a specific tool
@@ -264,6 +267,12 @@ func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (
 		return h.getProjectStats(arguments)
 	case "get_files_arklite":
 		return h.getFilesArklite(arguments)
+	case "get_symbols":
+		return h.getSymbols(arguments)
+	case "find_symbol":
+		return h.findSymbol(arguments)
+	case "get_symbol":
+		return h.getSymbol(arguments)
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}

@@ -11,6 +11,15 @@ end
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'mcp-server'                         \
         -d 'Start MCP server'
+complete -c ark -n '__fish_ark_is_first_arg'    \
+        -a 'syntax'                             \
+        -d 'Parse file and output AST'
+complete -c ark -n '__fish_ark_is_first_arg'    \
+        -a 'symbol'                             \
+        -d 'Extract symbols from file'
+complete -c ark -n '__fish_ark_is_first_arg'    \
+        -a 'skill'                              \
+        -d 'Generate Cline/ChatGPT Skill'
 
 # ----- general flags (no argument) ------------------------------------------
 for opt in help h version v compless c silent S skip-non-utf8 s delete-comments D
@@ -70,4 +79,30 @@ complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
         -l exclude-ext -s e -d 'Exclude ext' -r
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
         -l exclude-dir -s E -d 'Exclude dir' -r
+
+# ----- syntax options --------------------------------------------------------
+complete -c ark -n '__fish_seen_subcommand_from syntax' \
+        -l lang -d 'Language' -a 'go typescript tsx javascript python'
+complete -c ark -n '__fish_seen_subcommand_from syntax' \
+        -l format -d 'Output format' -a 'text json'
+complete -c ark -n '__fish_seen_subcommand_from syntax' \
+        -s h -l help -d 'Show help'
+
+# ----- symbol options --------------------------------------------------------
+complete -c ark -n '__fish_seen_subcommand_from symbol' \
+        -l lang -d 'Language' -a 'go typescript tsx javascript python'
+complete -c ark -n '__fish_seen_subcommand_from symbol' \
+        -l format -d 'Output format' -a 'text json'
+complete -c ark -n '__fish_seen_subcommand_from symbol' \
+        -s h -l help -d 'Show help'
+
+# ----- skill options ---------------------------------------------------------
+complete -c ark -n '__fish_seen_subcommand_from skill' \
+        -l name -d 'Skill name' -r
+complete -c ark -n '__fish_seen_subcommand_from skill' \
+        -l output -d 'Output directory' -r -f
+complete -c ark -n '__fish_seen_subcommand_from skill' \
+        -l archive -d 'Create ZIP archive'
+complete -c ark -n '__fish_seen_subcommand_from skill' \
+        -s h -l help -d 'Show help'
 
