@@ -18,7 +18,7 @@ _ark_mcp_flags="--skip-non-utf8 -s --delete-comments -D"
 _ark_mcp_opts_arg="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
     --exclude-dir-regex -g --exclude-file-regex -G --exclude-ext -e --exclude-dir -E"
-_ark_subcommands="mcp-server"
+_ark_subcommands="mcp-server syntax symbol skill"
 
 ###############################
 # Bash part
@@ -143,7 +143,12 @@ _ark_zsh() {
   )
 
   local -a subcommands
-  subcommands=('mcp-server:Start MCP server')
+  subcommands=(
+    'mcp-server:Start MCP server'
+    'syntax:Parse file and output AST'
+    'symbol:Extract symbols from file'
+    'skill:Generate Cline/ChatGPT Skill'
+  )
 
   _arguments -C \
     "${general_opts[@]}" \
