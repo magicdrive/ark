@@ -48,6 +48,7 @@ ark <dirname>                # creates ark-output.txt in the cwd
 ```text
 ark [OPTIONS] <dirname>
 ark mcp-server [OPTIONS]
+ark mcp-init [OPTIONS]
 ark syntax <file> [OPTIONS]
 ark symbol <file> [OPTIONS]
 ark skill [OPTIONS]
@@ -60,6 +61,7 @@ ark skill [OPTIONS]
 | Command      | Description                                      |
 |--------------|--------------------------------------------------|
 | `mcp-server` | Run Ark as an MCP server (stdio or HTTP).        |
+| `mcp-init`   | Add ark MCP config to `.claude/settings.json`.  |
 | `syntax`     | Parse file and output AST using Tree-sitter.     |
 | `symbol`     | Extract symbols (functions, types, etc.) from file. |
 | `skill`      | Generate Cline/ChatGPT Skill for Ark MCP.        |
@@ -90,6 +92,34 @@ ark skill [OPTIONS]
 | `--skip-non-utf8` | `-s` | Ignore non‑UTF‑8 files | – |
 | `--silent` | `-S` | Suppress logs / progress | – |
 | `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
+
+---
+
+## 🔧 mcp‑init Options
+
+`ark mcp-init` adds (or updates) the ark MCP server entry in `.claude/settings.json` for the current project, so you can use ark tools in Claude Code without manual configuration.
+
+```bash
+# Add ark MCP to the current project
+ark mcp-init
+
+# Add to global Claude Code settings (~/.claude/settings.json)
+ark mcp-init --global
+
+# Specify a custom root directory
+ark mcp-init --root /path/to/project
+
+# Overwrite an existing entry
+ark mcp-init --force
+```
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
+| `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
+| `--name <name>` | `-n` | MCP server name in settings.json | `ark` |
+| `--global` | `-g` | Write to `~/.claude/settings.json` | project-local |
+| `--force` | `-f` | Overwrite existing entry | – |
 
 ---
 

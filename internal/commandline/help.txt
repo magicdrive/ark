@@ -5,6 +5,7 @@ Description:
 
 Sub commands:
   mcp-server                                       Start MCP server.
+  mcp-init                                         Add ark MCP server config to .claude/settings.json.
   syntax <file>                                    Parse file and output AST using Tree-sitter.
   symbol <file>                                    Extract symbols (functions, types, etc.) from file.
   skill                                            Generate Cline/ChatGPT Skill for Ark MCP.
@@ -31,6 +32,14 @@ general (text generator mode) options:
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
   -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
+
+mcp-init options:
+  -h, --help                                       Show help message.
+  -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
+  -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
+  -n, --name <name>                                MCP server name in settings.json. (optional. default: 'ark')
+  -g, --global                                     Write to ~/.claude/settings.json. (optional. default: ./.claude/settings.json)
+  -f, --force                                      Overwrite existing MCP server entry. (optional.)
 
 mcp-server options:
   -r, --root <dirname>                             Specify the mcp-server serve root dirname(optional. default: $pwd)
