@@ -104,5 +104,7 @@ complete -c ark -n '__fish_seen_subcommand_from skill' \
 complete -c ark -n '__fish_seen_subcommand_from skill' \
         -l archive -d 'Create ZIP archive'
 complete -c ark -n '__fish_seen_subcommand_from skill' \
+        -l force -d 'Overwrite existing skill'
+complete -c ark -n '__fish_seen_subcommand_from skill' \
         -s h -l help -d 'Show help'
 

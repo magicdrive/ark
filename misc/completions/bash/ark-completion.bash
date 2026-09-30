@@ -14,7 +14,7 @@ _mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m
 _subcmds="mcp-server syntax symbol skill"
 _syntax_opts="--lang --format -h --help"
 _symbol_opts="--lang --format -h --help"
-_skill_opts="--name --output --archive -h --help"
+_skill_opts="--name --output --archive --force -h --help"
 
 # -------- Fallback helpers (if bash-completion is missing) -------------------
 if ! declare -F _get_comp_words_by_ref >/dev/null 2>&1; then
@@ -55,9 +55,17 @@ _ark() {
     return
   fi
 
-  # Decide mode
+  # Decide mode from subcommand token
   local mode="general"
-  [[ ${COMP_WORDS[*]} =~ \ bmcp-server\b ]] && mode="mcp"
+  local w
+  for w in "${COMP_WORDS[@]}"; do
+    case $w in
+      mcp-server) mode="mcp";    break ;;
+      syntax)     mode="syntax"; break ;;
+      symbol)     mode="symbol"; break ;;
+      skill)      mode="skill";  break ;;
+    esac
+  done
 
   # Value suggestions
   case "$prev" in
@@ -68,16 +76,20 @@ _ark() {
                             COMPREPLY=( $(compgen -W "go js ts py java c cpp h txt md html css xml yml yaml json" -- "$cur") ); return ;;
     --output-filename|-o|--additionally-ignorerule|-A|--root|-r) _filedir; return ;;
     --type|-t)              COMPREPLY=( $(compgen -W "stdio http" -- "$cur") ); return ;;
-    --http-port|-p)              COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return ;;
+    --http-port|-p)         COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return ;;
     --scan-buffer|-b)       COMPREPLY=( $(compgen -W "1M 5M 10M 100K" -- "$cur") ); return ;;
+    --lang)                 COMPREPLY=( $(compgen -W "go typescript tsx javascript python" -- "$cur") ); return ;;
+    --format)               COMPREPLY=( $(compgen -W "text json" -- "$cur") ); return ;;
   esac
 
   # Option suggestions
-  if [[ $mode == mcp ]]; then
-    COMPREPLY=( $(compgen -W "${_mcp_flags} ${_mcp_opts}" -- "$cur") )
-  else
-    COMPREPLY=( $(compgen -W "${_gen_flags} ${_gen_opts} ${_subcmds}" -- "$cur") )
-  fi
+  case $mode in
+    mcp)    COMPREPLY=( $(compgen -W "${_mcp_flags} ${_mcp_opts}" -- "$cur") ) ;;
+    syntax) COMPREPLY=( $(compgen -W "${_syntax_opts}" -- "$cur") ) ;;
+    symbol) COMPREPLY=( $(compgen -W "${_symbol_opts}" -- "$cur") ) ;;
+    skill)  COMPREPLY=( $(compgen -W "${_skill_opts}" -- "$cur") ) ;;
+    *)      COMPREPLY=( $(compgen -W "${_gen_flags} ${_gen_opts} ${_subcmds}" -- "$cur") ) ;;
+  esac
 }
 
 complete -F _ark ark
