@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
@@ -18,6 +19,9 @@ func Execute(version string) {
 		case "mcp-server":
 			runMCPServer(version)
 			return
+		case "mcp-init":
+			runMCPInitCommand()
+			return
 		case "syntax":
 			runSyntaxCommand()
 			return
@@ -30,6 +34,41 @@ func Execute(version string) {
 		}
 	}
 	runDefaultCommand(version)
+}
+
+func runMCPInitCommand() {
+	_, opt, err := commandline.MCPInitOptParse(os.Args[2:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
+
+	arkPath := opt.ArkPath
+	if arkPath == "" {
+		self, err := os.Executable()
+		if err != nil {
+			log.Fatalf("Fatal Error: cannot determine ark binary path: %v\n", err)
+		}
+		arkPath = self
+	}
+
+	rootDir := opt.RootDir
+	if abs, err := filepath.Abs(rootDir); err == nil {
+		rootDir = abs
+	}
+
+	if err := mcp.RunMCPInit(&mcp.MCPInitOptions{
+		ArkPath:    arkPath,
+		RootDir:    rootDir,
+		ServerName: opt.ServerName,
+		Global:     opt.GlobalFlag,
+		Force:      opt.ForceFlag,
+	}); err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
 }
 
 func runMCPServer(version string) {
