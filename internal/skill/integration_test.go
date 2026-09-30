@@ -23,7 +23,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 	// Step 2: Generate Repository Skill
 	analysis, _ := NewAnalyzer(tmpDir).Analyze()
 	skillPath := filepath.Join(tmpDir, "skills", "repo-dev")
-	GenerateRepository(RepositoryOptions{Name: "repo-dev", Output: skillPath, Analysis: analysis})
+	GenerateRepository(RepositoryOptions{Name: "repo-dev", Output: skillPath, Analysis: analysis, NoInstall: true})
 
 	skillMd, _ := os.ReadFile(filepath.Join(skillPath, "SKILL.md"))
 	if !strings.Contains(string(skillMd), "ark-managed: true") {
@@ -44,7 +44,7 @@ func TestIntegration_FullWorkflow(t *testing.T) {
 
 	// Step 5: Generate Explorer, Update, Conflict
 	explorerPath := filepath.Join(tmpDir, "skills", "ark-explorer")
-	GenerateExplorer(ExplorerOptions{Name: "ark-explorer", Output: explorerPath})
+	GenerateExplorer(ExplorerOptions{Name: "ark-explorer", Output: explorerPath, NoInstall: true})
 
 	updater := NewUpdater(tmpDir)
 	results, _ := updater.Update(false)
@@ -82,7 +82,7 @@ func TestIntegration_UserSkillsPreserved(t *testing.T) {
 		t.Errorf("expected ModeExplorer, got %s", result.Mode)
 	}
 
-	GenerateExplorer(ExplorerOptions{Name: "ark-explorer", Output: filepath.Join(tmpDir, "skills", "ark-explorer")})
+	GenerateExplorer(ExplorerOptions{Name: "ark-explorer", Output: filepath.Join(tmpDir, "skills", "ark-explorer"), NoInstall: true})
 	content, _ := os.ReadFile(filepath.Join(userSkillDir, "SKILL.md"))
 	if string(content) != original {
 		t.Error("user skill modified")

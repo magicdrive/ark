@@ -37,8 +37,10 @@ func RunMCPInit(opts *MCPInitOptions) error {
 	}
 
 	mcpServers[opts.ServerName] = map[string]any{
+		"type":    "stdio",
 		"command": opts.ArkPath,
 		"args":    []string{"mcp-server", "--root", opts.RootDir},
+		"env":     map[string]any{},
 	}
 	settings["mcpServers"] = mcpServers
 
@@ -57,6 +59,9 @@ func RunMCPInit(opts *MCPInitOptions) error {
 	return nil
 }
 
+// resolveSettingsPath returns the path to the MCP settings file.
+// Project scope uses .mcp.json (Claude Code's project-level MCP config).
+// Global scope uses ~/.claude/settings.json.
 func resolveSettingsPath(global bool) (string, error) {
 	if global {
 		home, err := os.UserHomeDir()
@@ -69,7 +74,7 @@ func resolveSettingsPath(global bool) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot determine current directory: %w", err)
 	}
-	return filepath.Join(cwd, ".claude", "settings.json"), nil
+	return filepath.Join(cwd, ".mcp.json"), nil
 }
 
 func readSettings(path string) (map[string]any, error) {

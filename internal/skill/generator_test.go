@@ -11,7 +11,7 @@ func TestGenerateExplorer(t *testing.T) {
 	tmpDir := t.TempDir()
 	output := filepath.Join(tmpDir, "ark-explorer")
 
-	err := GenerateExplorer(ExplorerOptions{Name: "ark-explorer", Output: output})
+	err := GenerateExplorer(ExplorerOptions{Name: "ark-explorer", Output: output, NoInstall: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -52,7 +52,7 @@ func TestGenerateRepository(t *testing.T) {
 	}
 
 	err := GenerateRepository(RepositoryOptions{
-		Name: "repo-dev", Output: output, Analysis: analysis,
+		Name: "repo-dev", Output: output, Analysis: analysis, NoInstall: true,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -84,7 +84,7 @@ func TestGenerateRepository_WithArchive(t *testing.T) {
 	output := filepath.Join(tmpDir, "repo-dev")
 
 	err := GenerateRepository(RepositoryOptions{
-		Name: "repo-dev", Output: output, Archive: true,
+		Name: "repo-dev", Output: output, Archive: true, NoInstall: true,
 	})
 	if err != nil {
 		t.Fatal(err)

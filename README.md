@@ -17,9 +17,7 @@ It supports **plaintext**, **markdown**, **XML**, and **arklite** outputs, full 
 
 ## 🚀 Quick Start
 
-### 1 · Install
-
-### 1. Installation
+### 1. Install
 
 ```bash
 go install github.com/magicdrive/ark@latest
@@ -35,10 +33,35 @@ Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark
 
 ---
 
-### 2 · Generate an output file
+### 2. Generate a codebase dump
 
 ```bash
 ark <dirname>                # creates ark-output.txt in the cwd
+```
+
+---
+
+### 3. Set up Ark MCP for Claude Code
+
+Run once in your project root:
+
+```bash
+cd /your/project
+ark setup --name my-project
+```
+
+This single command:
+- Writes `.mcp.json` — registers the Ark MCP server
+- Installs `.claude/commands/my-project.md` — activates `/my-project` as a slash command
+
+Then **restart Claude Code** and approve the MCP server when prompted.
+
+After that, you can use:
+- **`/my-project`** — slash command that explores your codebase using Ark MCP tools
+- **MCP tools directly** — `mcp__ark__find_symbol`, `mcp__ark__get_symbols`, etc.
+
+```
+/my-project         ← loads exploration assistant with all 10 Ark MCP tools
 ```
 
 ---
@@ -47,6 +70,7 @@ ark <dirname>                # creates ark-output.txt in the cwd
 
 ```text
 ark [OPTIONS] <dirname>
+ark setup [OPTIONS]
 ark mcp-server [OPTIONS]
 ark mcp-init [OPTIONS]
 ark syntax <file> [OPTIONS]
@@ -60,11 +84,12 @@ ark skill [OPTIONS]
 
 | Command      | Description                                      |
 |--------------|--------------------------------------------------|
+| `setup`      | One-step setup: MCP config + Claude Code slash command. |
 | `mcp-server` | Run Ark as an MCP server (stdio or HTTP).        |
-| `mcp-init`   | Add ark MCP config to `.claude/settings.json`.  |
+| `mcp-init`   | Add ark MCP config to `.mcp.json`.              |
 | `syntax`     | Parse file and output AST using Tree-sitter.     |
 | `symbol`     | Extract symbols (functions, types, etc.) from file. |
-| `skill`      | Generate Cline/ChatGPT Skill for Ark MCP.        |
+| `skill`      | Generate Ark MCP skill for Claude Code / OpenAI. |
 
 ---
 
@@ -95,9 +120,35 @@ ark skill [OPTIONS]
 
 ---
 
+## ⚡ setup — One-step Claude Code Setup
+
+`ark setup` is the fastest way to integrate Ark into any project. It combines `mcp-init` and `skill` in a single command:
+
+```bash
+cd /your/project
+ark setup --name my-project
+```
+
+This does three things at once:
+1. Writes `.mcp.json` — registers the Ark MCP server for this project
+2. Generates `skills/my-project/` — full skill documentation
+3. Installs `.claude/commands/my-project.md` — activates `/my-project` as a Claude Code slash command
+
+Then restart Claude Code to approve the MCP server, and you're ready.
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--name <name>` | `-n` | Project name (used for skill and slash command) | directory name |
+| `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
+| `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
+| `--global` | `-g` | Write MCP config to `~/.claude/settings.json` | `.mcp.json` |
+| `--force` | `-f` | Overwrite existing entries | – |
+
+---
+
 ## 🔧 mcp‑init Options
 
-`ark mcp-init` adds (or updates) the ark MCP server entry in `.claude/settings.json` for the current project, so you can use ark tools in Claude Code without manual configuration.
+`ark mcp-init` adds (or updates) the ark MCP server entry in `.mcp.json` for the current project, so you can use ark tools in Claude Code without manual configuration.
 
 ```bash
 # Add ark MCP to the current project
@@ -117,8 +168,8 @@ ark mcp-init --force
 |--------|-------|-------------|---------|
 | `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
 | `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
-| `--name <name>` | `-n` | MCP server name in settings.json | `ark` |
-| `--global` | `-g` | Write to `~/.claude/settings.json` | project-local |
+| `--name <name>` | `-n` | MCP server name | `ark` |
+| `--global` | `-g` | Write to `~/.claude/settings.json` | `.mcp.json` (project-local) |
 | `--force` | `-f` | Overwrite existing entry | – |
 
 ---
@@ -232,7 +283,10 @@ ark skill inspect                      # Show detected skills
 Skills include YAML frontmatter for safe updates:
 - `SKILL.md` - Skill documentation with `ark-managed: true` metadata
 - `agents/openai.yaml` - OpenAI/Cline agent configuration
+- `agents/claude-code.md` - Claude Code custom agent (uses `mcp__ark__*` tool names)
 - `references/conventions.md` - Project conventions (Repository Skill only)
+
+The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 10 Ark MCP tools.
 
 ---
 
