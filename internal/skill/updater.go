@@ -40,13 +40,16 @@ func (u *Updater) Update(force bool) ([]UpdateResult, error) {
 
 	var results []UpdateResult
 	for _, s := range arkSkills {
-		result := u.updateSkill(s, force)
+		result, err := u.updateSkill(s, force)
+		if err != nil {
+			return results, err
+		}
 		results = append(results, result)
 	}
 	return results, nil
 }
 
-func (u *Updater) updateSkill(s DetectedSkill, force bool) UpdateResult {
+func (u *Updater) updateSkill(s DetectedSkill, force bool) (UpdateResult, error) {
 	result := UpdateResult{SkillName: s.Name, SkillType: s.SkillType}
 
 	// Check for user modifications
@@ -56,22 +59,26 @@ func (u *Updater) updateSkill(s DetectedSkill, force bool) UpdateResult {
 		result.HasConflicts = true
 		result.Conflicts = append(result.Conflicts, "SKILL.md")
 		result.Skipped = append(result.Skipped, "SKILL.md")
-		return result
+		return result, nil
 	}
 
 	// Preserve user files in references/
 	result.Preserved = u.listUserFiles(s.Path)
 
 	// Regenerate
+	var regenErr error
 	switch s.SkillType {
 	case SkillTypeExplorer:
-		u.regenExplorer(s)
+		regenErr = u.regenExplorer(s)
 	case SkillTypeRepository:
 		analysis, _ := NewAnalyzer(u.rootDir).Analyze()
-		u.regenRepository(s, analysis)
+		regenErr = u.regenRepository(s, analysis)
+	}
+	if regenErr != nil {
+		return result, regenErr
 	}
 	result.Updated = []string{"SKILL.md", "agents/openai.yaml"}
-	return result
+	return result, nil
 }
 
 func (u *Updater) listUserFiles(skillPath string) []string {
@@ -93,18 +100,26 @@ func (u *Updater) listUserFiles(skillPath string) []string {
 	return files
 }
 
-func (u *Updater) regenExplorer(s DetectedSkill) {
+func (u *Updater) regenExplorer(s DetectedSkill) error {
 	content := WrapWithFrontmatter(generateExplorerSkillMd(s.Name), SkillTypeExplorer)
-	os.WriteFile(filepath.Join(s.Path, "SKILL.md"), []byte(content), 0644)
-	os.MkdirAll(filepath.Join(s.Path, "agents"), 0755)
-	os.WriteFile(filepath.Join(s.Path, "agents/openai.yaml"), []byte(generateExplorerOpenAIYaml(s.Name)), 0644)
+	if err := os.WriteFile(filepath.Join(s.Path, "SKILL.md"), []byte(content), 0644); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(s.Path, "agents"), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.Path, "agents/openai.yaml"), []byte(generateExplorerOpenAIYaml(s.Name)), 0644)
 }
 
-func (u *Updater) regenRepository(s DetectedSkill, analysis *RepoAnalysis) {
+func (u *Updater) regenRepository(s DetectedSkill, analysis *RepoAnalysis) error {
 	content := WrapWithFrontmatter(generateRepositorySkillMd(s.Name, analysis), SkillTypeRepository)
-	os.WriteFile(filepath.Join(s.Path, "SKILL.md"), []byte(content), 0644)
-	os.MkdirAll(filepath.Join(s.Path, "agents"), 0755)
-	os.WriteFile(filepath.Join(s.Path, "agents/openai.yaml"), []byte(generateRepoYaml(s.Name, analysis)), 0644)
+	if err := os.WriteFile(filepath.Join(s.Path, "SKILL.md"), []byte(content), 0644); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Join(s.Path, "agents"), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(s.Path, "agents/openai.yaml"), []byte(generateRepoYaml(s.Name, analysis)), 0644)
 }
 
 // CheckConflicts checks for user modifications
