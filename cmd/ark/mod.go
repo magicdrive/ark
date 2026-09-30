@@ -1,7 +1,6 @@
 package ark
 
 import (
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -14,29 +13,23 @@ import (
 )
 
 func Execute(version string) {
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: ark <command> [options]")
-		fmt.Println("\nCommands:")
-		fmt.Println("  mcp-server  Start MCP server")
-		fmt.Println("  syntax      Parse file and output AST")
-		fmt.Println("  symbol      Extract symbols from file")
-		fmt.Println("  skill       Generate Cline/ChatGPT Skill")
-		fmt.Println("  <dir>       Dump directory tree (default)")
-		os.Exit(1)
+	if len(os.Args) >= 2 {
+		switch os.Args[1] {
+		case "mcp-server":
+			runMCPServer(version)
+			return
+		case "syntax":
+			runSyntaxCommand()
+			return
+		case "symbol":
+			runSymbolCommand()
+			return
+		case "skill":
+			runSkillCommand()
+			return
+		}
 	}
-
-	switch os.Args[1] {
-	case "mcp-server":
-		runMCPServer(version)
-	case "syntax":
-		runSyntaxCommand()
-	case "symbol":
-		runSymbolCommand()
-	case "skill":
-		runSkillCommand()
-	default:
-		runDefaultCommand(version)
-	}
+	runDefaultCommand(version)
 }
 
 func runMCPServer(version string) {
@@ -52,42 +45,26 @@ func runMCPServer(version string) {
 }
 
 func runSyntaxCommand() {
-	fs := flag.NewFlagSet("syntax", flag.ExitOnError)
-	lang := fs.String("lang", "", "Language (go, typescript, tsx, javascript, python)")
-	format := fs.String("format", "text", "Output format (text, json)")
-	help := fs.Bool("help", false, "Show help")
-	fs.BoolVar(help, "h", false, "Show help")
-
-	fs.Usage = func() {
-		fmt.Println("Usage: ark syntax <file> [options]")
-		fmt.Println("\nParse a file and output the AST using Tree-sitter.")
-		fmt.Println("\nOptions:")
-		fs.PrintDefaults()
-		fmt.Println("\nExamples:")
-		fmt.Println("  ark syntax main.go")
-		fmt.Println("  ark syntax app.ts --format json")
-		fmt.Println("  ark syntax script.py --lang python")
+	_, opt, err := commandline.SyntaxOptParse(os.Args[2:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
 	}
 
-	if err := fs.Parse(os.Args[2:]); err != nil {
-		log.Fatal(err)
-	}
-
-	if *help {
-		fs.Usage()
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
 		os.Exit(0)
 	}
 
-	if fs.NArg() < 1 {
+	if opt.FilePath == "" {
 		fmt.Println("Error: file path is required")
-		fs.Usage()
+		opt.FlagSet.Usage()
 		os.Exit(1)
 	}
 
 	opts := syntax.SyntaxOptions{
-		FilePath: fs.Arg(0),
-		Lang:     *lang,
-		Format:   *format,
+		FilePath: opt.FilePath,
+		Lang:     opt.Lang,
+		Format:   opt.Format,
 	}
 
 	if err := syntax.RunSyntaxCommand(opts); err != nil {
@@ -96,42 +73,26 @@ func runSyntaxCommand() {
 }
 
 func runSymbolCommand() {
-	fs := flag.NewFlagSet("symbol", flag.ExitOnError)
-	lang := fs.String("lang", "", "Language (go, typescript, tsx, javascript, python)")
-	format := fs.String("format", "text", "Output format (text, json)")
-	help := fs.Bool("help", false, "Show help")
-	fs.BoolVar(help, "h", false, "Show help")
-
-	fs.Usage = func() {
-		fmt.Println("Usage: ark symbol <file> [options]")
-		fmt.Println("\nExtract symbols (functions, types, classes, etc.) from a file.")
-		fmt.Println("\nOptions:")
-		fs.PrintDefaults()
-		fmt.Println("\nExamples:")
-		fmt.Println("  ark symbol main.go")
-		fmt.Println("  ark symbol app.ts --format json")
-		fmt.Println("  ark symbol script.py --lang python")
+	_, opt, err := commandline.SymbolOptParse(os.Args[2:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
 	}
 
-	if err := fs.Parse(os.Args[2:]); err != nil {
-		log.Fatal(err)
-	}
-
-	if *help {
-		fs.Usage()
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
 		os.Exit(0)
 	}
 
-	if fs.NArg() < 1 {
+	if opt.FilePath == "" {
 		fmt.Println("Error: file path is required")
-		fs.Usage()
+		opt.FlagSet.Usage()
 		os.Exit(1)
 	}
 
 	opts := syntax.SymbolOptions{
-		FilePath: fs.Arg(0),
-		Lang:     *lang,
-		Format:   *format,
+		FilePath: opt.FilePath,
+		Lang:     opt.Lang,
+		Format:   opt.Format,
 	}
 
 	if err := syntax.RunSymbolCommand(opts); err != nil {
@@ -140,7 +101,6 @@ func runSymbolCommand() {
 }
 
 func runSkillCommand() {
-	// Check for subcommands
 	if len(os.Args) > 2 {
 		switch os.Args[2] {
 		case "init":
@@ -157,30 +117,7 @@ func runSkillCommand() {
 			return
 		}
 	}
-
-	// Auto mode
-	fs := flag.NewFlagSet("skill", flag.ExitOnError)
-	name := fs.String("name", "", "Skill name")
-	output := fs.String("output", "", "Output directory")
-	archive := fs.Bool("archive", false, "Create ZIP archive")
-	force := fs.Bool("force", false, "Overwrite existing")
-	help := fs.Bool("help", false, "Show help")
-	fs.BoolVar(help, "h", false, "Show help")
-
-	fs.Usage = func() {
-		fmt.Println("Usage: ark skill [subcommand] [options]")
-		fmt.Println("\nSubcommands: init, add-explorer, update, inspect")
-		fmt.Println("\nOptions:")
-		fs.PrintDefaults()
-	}
-
-	fs.Parse(os.Args[2:])
-	if *help {
-		fs.Usage()
-		os.Exit(0)
-	}
-
-	runSkillAuto(*name, *output, *archive, *force)
+	runSkillAuto()
 }
 
 func runDefaultCommand(version string) {
@@ -223,7 +160,17 @@ func DirExists(path string) bool {
 	return info.IsDir()
 }
 
-func runSkillAuto(name, output string, archive, force bool) {
+func runSkillAuto() {
+	_, opt, err := commandline.SkillAutoOptParse(os.Args[2:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
+
 	cwd, _ := os.Getwd()
 	result, err := skill.NewResolver(cwd).Resolve()
 	if err != nil {
@@ -231,10 +178,13 @@ func runSkillAuto(name, output string, archive, force bool) {
 	}
 	fmt.Println(skill.PrintDetectionSummary(result.Detection))
 
+	name := opt.Name
+	output := opt.Output
+
 	switch result.Mode {
 	case skill.ModeAlreadyExists:
 		fmt.Printf("\nArk skill exists: %s\nUse: ark skill update\n", result.ExistingArk.Name)
-		if !force {
+		if !opt.ForceFlag {
 			return
 		}
 	case skill.ModeRepository:
@@ -246,7 +196,9 @@ func runSkillAuto(name, output string, archive, force bool) {
 			output = result.SuggestedPath
 		}
 		analysis, _ := skill.NewAnalyzer(cwd).Analyze()
-		skill.GenerateRepository(skill.RepositoryOptions{Name: name, Output: output, Archive: archive, Analysis: analysis})
+		if err := skill.GenerateRepository(skill.RepositoryOptions{Name: name, Output: output, Archive: opt.ArchiveFlag, Analysis: analysis}); err != nil {
+			log.Fatalf("Error: %v\n", err)
+		}
 		fmt.Printf("Created: %s\n", output)
 	case skill.ModeExplorer:
 		fmt.Println("\nGenerating Explorer Skill...")
@@ -256,62 +208,89 @@ func runSkillAuto(name, output string, archive, force bool) {
 		if output == "" {
 			output = result.SuggestedPath
 		}
-		skill.GenerateExplorer(skill.ExplorerOptions{Name: name, Output: output, Archive: archive})
+		if err := skill.GenerateExplorer(skill.ExplorerOptions{Name: name, Output: output, Archive: opt.ArchiveFlag}); err != nil {
+			log.Fatalf("Error: %v\n", err)
+		}
 		fmt.Printf("Created: %s\nExisting skills unchanged.\n", output)
 	}
 }
 
 func runSkillInit() {
-	fs := flag.NewFlagSet("init", flag.ExitOnError)
-	name := fs.String("name", "repository-development", "Skill name")
-	output := fs.String("output", "", "Output directory")
-	archive := fs.Bool("archive", false, "Create ZIP archive")
-	fs.Parse(os.Args[3:])
+	_, opt, err := commandline.SkillInitOptParse(os.Args[3:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
 
 	cwd, _ := os.Getwd()
-	result, _ := skill.NewResolver(cwd).ResolveForCommand("init")
+	result, err := skill.NewResolver(cwd).ResolveForCommand("init")
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
 	if result.Mode == skill.ModeAlreadyExists {
 		fmt.Printf("Repository Skill exists: %s\n", result.ExistingArk.Name)
 		return
 	}
-	if *output == "" {
-		*output = result.SuggestedPath
+	output := opt.Output
+	if output == "" {
+		output = result.SuggestedPath
 	}
 	analysis, _ := skill.NewAnalyzer(cwd).Analyze()
-	skill.GenerateRepository(skill.RepositoryOptions{Name: *name, Output: *output, Archive: *archive, Analysis: analysis})
-	fmt.Printf("Created: %s\n", *output)
+	if err := skill.GenerateRepository(skill.RepositoryOptions{Name: opt.Name, Output: output, Archive: opt.ArchiveFlag, Analysis: analysis}); err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
+	fmt.Printf("Created: %s\n", output)
 }
 
 func runSkillAddExplorer() {
-	fs := flag.NewFlagSet("add-explorer", flag.ExitOnError)
-	name := fs.String("name", "ark-code-explorer", "Skill name")
-	output := fs.String("output", "", "Output directory")
-	archive := fs.Bool("archive", false, "Create ZIP archive")
-	fs.Parse(os.Args[3:])
+	_, opt, err := commandline.SkillAddExplorerOptParse(os.Args[3:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
 
 	cwd, _ := os.Getwd()
-	result, _ := skill.NewResolver(cwd).ResolveForCommand("add-explorer")
+	result, err := skill.NewResolver(cwd).ResolveForCommand("add-explorer")
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
 	if result.Mode == skill.ModeAlreadyExists {
 		fmt.Printf("Explorer Skill exists: %s\n", result.ExistingArk.Name)
 		return
 	}
-	if *output == "" {
-		*output = result.SuggestedPath
+	output := opt.Output
+	if output == "" {
+		output = result.SuggestedPath
 	}
-	skill.GenerateExplorer(skill.ExplorerOptions{Name: *name, Output: *output, Archive: *archive})
-	fmt.Printf("Created: %s\n", *output)
+	if err := skill.GenerateExplorer(skill.ExplorerOptions{Name: opt.Name, Output: output, Archive: opt.ArchiveFlag}); err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
+	fmt.Printf("Created: %s\n", output)
 }
 
 func runSkillUpdate() {
-	fs := flag.NewFlagSet("update", flag.ExitOnError)
-	force := fs.Bool("force", false, "Force update even with conflicts")
-	dryRun := fs.Bool("dry-run", false, "Show what would be updated")
-	fs.Parse(os.Args[3:])
+	_, opt, err := commandline.SkillUpdateOptParse(os.Args[3:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
 
 	cwd, _ := os.Getwd()
 	updater := skill.NewUpdater(cwd)
 
-	if *dryRun {
+	if opt.DryRunFlag {
 		conflicts := updater.CheckConflicts()
 		arkSkills, _ := skill.NewDetector(cwd).FindArkSkills()
 		fmt.Println("Skills to update:")
@@ -327,7 +306,7 @@ func runSkillUpdate() {
 		return
 	}
 
-	results, err := updater.Update(*force)
+	results, err := updater.Update(opt.ForceFlag)
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
 		return
@@ -336,8 +315,21 @@ func runSkillUpdate() {
 }
 
 func runSkillInspect() {
+	_, opt, err := commandline.SkillInspectOptParse(os.Args[3:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
+
 	cwd, _ := os.Getwd()
-	result, _ := skill.NewResolver(cwd).Resolve()
+	result, err := skill.NewResolver(cwd).Resolve()
+	if err != nil {
+		log.Fatalf("Error: %v\n", err)
+	}
 	fmt.Println("=== Skills ===")
 	fmt.Println(skill.PrintDetectionSummary(result.Detection))
 	fmt.Printf("Mode: %s\n", result.Mode)

@@ -58,7 +58,8 @@ func isCommentNodeType(nodeType string) bool {
 		// Python
 		"expression_statement": // Skip, need deeper check
 		return nodeType == "comment" || nodeType == "line_comment" ||
-			nodeType == "block_comment" || nodeType == "multiline_comment"
+			nodeType == "block_comment" || nodeType == "multiline_comment" ||
+			nodeType == "hash_bang_line"
 	}
 	return false
 }
