@@ -182,6 +182,74 @@ func codeBlock(content string) string {
 	return "```\n" + content + "\n```"
 }
 
+func installClaudeCodeAgent(name, content string) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return
+	}
+	commandsDir := filepath.Join(cwd, ".claude", "commands")
+	if err := os.MkdirAll(commandsDir, 0755); err != nil {
+		fmt.Printf("Warning: could not create .claude/commands/: %v\n", err)
+		return
+	}
+	dest := filepath.Join(commandsDir, name+".md")
+	if err := os.WriteFile(dest, []byte(content), 0644); err != nil {
+		fmt.Printf("Warning: could not install Claude Code command: %v\n", err)
+		return
+	}
+	fmt.Printf("Installed Claude Code command: %s\n", dest)
+	fmt.Printf("  Use as: /%s\n", name)
+}
+
+func generateClaudeCodeAgentMd(name string, a *RepoAnalysis) string {
+	description := "Efficiently explore and understand this codebase using Ark MCP tools"
+	langNote := ""
+	if a != nil && a.PrimaryLang != "" {
+		langNote = fmt.Sprintf("\nPrimary language: %s\n", a.PrimaryLang)
+	}
+
+	return fmt.Sprintf(`---
+description: %s
+tools:
+  - mcp__ark__get_directory_tree
+  - mcp__ark__get_symbols
+  - mcp__ark__find_symbol
+  - mcp__ark__get_symbol
+  - mcp__ark__search_in_files
+  - mcp__ark__list_files
+  - mcp__ark__get_file_content
+  - mcp__ark__get_file_info
+  - mcp__ark__get_project_stats
+  - mcp__ark__get_files_arklite
+---
+
+# %s%s
+You are a code exploration assistant. Use Ark MCP tools efficiently.
+
+## Rules
+
+1. NEVER read entire files immediately — use `+"`mcp__ark__get_symbols`"+` first
+2. Use `+"`mcp__ark__find_symbol`"+` to locate definitions before browsing
+3. Use `+"`mcp__ark__get_symbol`"+` to retrieve exact source of a specific function/type
+4. Use `+"`mcp__ark__get_file_content`"+` only when surrounding context is needed
+5. Start exploration with `+"`mcp__ark__get_directory_tree`"+` to understand structure
+
+## Tool Selection
+
+| Goal | Tool |
+|------|------|
+| Understand project structure | `+"`mcp__ark__get_directory_tree`"+` |
+| List a file's functions/types | `+"`mcp__ark__get_symbols`"+` |
+| Find "where is Foo?" | `+"`mcp__ark__find_symbol`"+` |
+| Get Foo's source code | `+"`mcp__ark__get_symbol`"+` |
+| Search for a string | `+"`mcp__ark__search_in_files`"+` |
+| Read a whole file | `+"`mcp__ark__get_file_content`"+` *(last resort)* |
+| File metadata | `+"`mcp__ark__get_file_info`"+` |
+| Language/file breakdown | `+"`mcp__ark__get_project_stats`"+` |
+| Multiple files at once | `+"`mcp__ark__get_files_arklite`"+` |
+`, description, name, langNote)
+}
+
 func createArchive(sourceDir, destPath string) error {
 	zipFile, err := os.Create(destPath)
 	if err != nil {

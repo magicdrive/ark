@@ -8,9 +8,10 @@ import (
 
 // ExplorerOptions holds configuration for Explorer Skill generation
 type ExplorerOptions struct {
-	Name    string
-	Output  string
-	Archive bool
+	Name      string
+	Output    string
+	Archive   bool
+	NoInstall bool
 }
 
 // GenerateExplorer creates an Explorer Skill (for repos with existing skills)
@@ -30,7 +31,6 @@ func GenerateExplorer(opts ExplorerOptions) error {
 		return fmt.Errorf("failed to create agents directory: %w", err)
 	}
 
-	// Generate SKILL.md with frontmatter
 	skillContent := generateExplorerSkillMd(opts.Name)
 	wrappedContent := WrapWithFrontmatter(skillContent, SkillTypeExplorer)
 	skillMd := filepath.Join(opts.Output, "SKILL.md")
@@ -38,10 +38,18 @@ func GenerateExplorer(opts ExplorerOptions) error {
 		return fmt.Errorf("failed to write SKILL.md: %w", err)
 	}
 
-	// Generate agents/openai.yaml
 	openaiYaml := filepath.Join(agentsDir, "openai.yaml")
 	if err := os.WriteFile(openaiYaml, []byte(generateExplorerOpenAIYaml(opts.Name)), 0644); err != nil {
 		return fmt.Errorf("failed to write agents/openai.yaml: %w", err)
+	}
+
+	claudeAgentContent := generateClaudeCodeAgentMd(opts.Name, nil)
+	claudeCodeMd := filepath.Join(agentsDir, "claude-code.md")
+	if err := os.WriteFile(claudeCodeMd, []byte(claudeAgentContent), 0644); err != nil {
+		return fmt.Errorf("failed to write agents/claude-code.md: %w", err)
+	}
+	if !opts.NoInstall {
+		installClaudeCodeAgent(opts.Name, claudeAgentContent)
 	}
 
 	if opts.Archive {
@@ -57,6 +65,14 @@ func generateExplorerSkillMd(name string) string {
 
 A companion skill for efficient code exploration using Ark MCP.
 
+## Setup
+
+Run once in your project root to register the MCP server:
+
+%s
+
+Then restart Claude Code / your AI client to activate the tools.
+
 ## Purpose
 
 This skill provides code navigation capabilities to complement existing repository skills.
@@ -68,34 +84,38 @@ Use it to efficiently explore and understand code structure without reading enti
 
 ## MCP Tools
 
-### get_symbols
-List all symbols (functions, types, classes) in a file.
-**Use instead of reading entire files.**
-
-### find_symbol
-Search for symbol definitions by name across the repository.
-
-### get_symbol
-Get the exact source code of a specific symbol.
-
-### get_directory_tree
-View the directory structure.
+| Tool | When to use |
+|------|-------------|
+| `+"`get_directory_tree`"+` | First step — understand layout |
+| `+"`get_symbols`"+` | List functions/types in a file **instead of reading it** |
+| `+"`find_symbol`"+` | Search for a symbol by name across the repo |
+| `+"`get_symbol`"+` | Get source code of one specific function/type |
+| `+"`search_in_files`"+` | Full-text or regex search across files |
+| `+"`list_files`"+` | Filter-aware file listing |
+| `+"`get_file_content`"+` | Read whole file *(last resort)* |
+| `+"`get_file_info`"+` | File metadata (size, lines, language) |
+| `+"`get_project_stats`"+` | Language breakdown, file counts |
+| `+"`get_files_arklite`"+` | Multiple files in compressed format |
 
 ## Usage Patterns
 
 | Task | Tools |
 |------|-------|
-| Find a function | find_symbol → get_symbol |
-| Understand a file | get_symbols → get_symbol (as needed) |
-| Explore a package | get_directory_tree → get_symbols |
+| Find a function | `+"`find_symbol`"+` → `+"`get_symbol`"+` |
+| Understand a file | `+"`get_symbols`"+` → `+"`get_symbol`"+` (as needed) |
+| Explore a package | `+"`get_directory_tree`"+` → `+"`get_symbols`"+` |
+| Search for string | `+"`search_in_files`"+` |
+| Review architecture | `+"`get_directory_tree`"+` → `+"`get_project_stats`"+` |
 
 ## Best Practices
 
-1. **Never read entire files first** - Use get_symbols
-2. **Search before browsing** - Use find_symbol
-3. **Be specific** - Use get_symbol for single definitions
-4. **Explore hierarchically** - Start with directory tree
-`, name, codeBlock("get_directory_tree\n    ↓\nget_symbols / find_symbol\n    ↓\nget_symbol"))
+1. **Never read entire files first** — use `+"`get_symbols`"+`
+2. **Search before browsing** — use `+"`find_symbol`"+`
+3. **Be specific** — use `+"`get_symbol`"+` for single definitions
+4. **Explore hierarchically** — start with directory tree
+`, name,
+		codeBlock("ark mcp-init"),
+		codeBlock("get_directory_tree\n    ↓\nget_symbols / find_symbol\n    ↓\nget_symbol"))
 }
 
 func generateExplorerOpenAIYaml(name string) string {
@@ -104,19 +124,25 @@ description: Code exploration companion using Ark MCP
 
 instructions: |
   You are a code exploration assistant. Use Ark MCP tools efficiently:
-  
+
+  Rules:
   1. NEVER read entire files immediately
   2. Use get_symbols to understand file structure
   3. Use find_symbol to search for definitions
   4. Use get_symbol to retrieve specific code
   5. Only use get_file_content when context is needed
+  6. Start with get_directory_tree to understand structure
 
 tools:
   - get_directory_tree
   - get_symbols
   - find_symbol
   - get_symbol
-  - get_file_content
   - search_in_files
+  - list_files
+  - get_file_content
+  - get_file_info
+  - get_project_stats
+  - get_files_arklite
 `, name)
 }

@@ -4,11 +4,12 @@ Description:
    Yet another alternate [directory|repository] represent text generator tool.
 
 Sub commands:
+  setup                                            One-step setup: MCP config + Claude Code slash command.
   mcp-server                                       Start MCP server.
-  mcp-init                                         Add ark MCP server config to .claude/settings.json.
+  mcp-init                                         Add ark MCP server config to .mcp.json.
   syntax <file>                                    Parse file and output AST using Tree-sitter.
   symbol <file>                                    Extract symbols (functions, types, etc.) from file.
-  skill                                            Generate Cline/ChatGPT Skill for Ark MCP.
+  skill                                            Generate Ark MCP skill for Claude Code / OpenAI.
 
 
 general (text generator mode) options:
@@ -32,6 +33,14 @@ general (text generator mode) options:
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
   -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
+
+setup options:
+  -h, --help                                       Show help message.
+  -n, --name <name>                                Project name (default: current directory name).
+  -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
+  -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
+  -g, --global                                     Write MCP config to ~/.claude/settings.json.
+  -f, --force                                      Overwrite existing entries.
 
 mcp-init options:
   -h, --help                                       Show help message.

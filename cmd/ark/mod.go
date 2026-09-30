@@ -22,6 +22,9 @@ func Execute(version string) {
 		case "mcp-init":
 			runMCPInitCommand()
 			return
+		case "setup":
+			runSetupCommand()
+			return
 		case "syntax":
 			runSyntaxCommand()
 			return
@@ -34,6 +37,70 @@ func Execute(version string) {
 		}
 	}
 	runDefaultCommand(version)
+}
+
+func runSetupCommand() {
+	_, opt, err := commandline.SetupOptParse(os.Args[2:])
+	if err != nil {
+		log.Fatalf("Fatal Error: %v\n", err)
+	}
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
+
+	arkPath := opt.ArkPath
+	if arkPath == "" {
+		self, err := os.Executable()
+		if err != nil {
+			log.Fatalf("Fatal Error: cannot determine ark binary path: %v\n", err)
+		}
+		arkPath = self
+	}
+
+	rootDir := opt.RootDir
+	if abs, err := filepath.Abs(rootDir); err == nil {
+		rootDir = abs
+	}
+
+	name := opt.Name
+	if name == "" {
+		name = filepath.Base(rootDir)
+	}
+
+	fmt.Println("Setting up Ark MCP for Claude Code...")
+	fmt.Println()
+
+	// Step 1: mcp-init
+	if err := mcp.RunMCPInit(&mcp.MCPInitOptions{
+		ArkPath:    arkPath,
+		RootDir:    rootDir,
+		ServerName: "ark",
+		Global:     opt.GlobalFlag,
+		Force:      opt.ForceFlag,
+	}); err != nil {
+		log.Fatalf("Error (mcp-init): %v\n", err)
+	}
+
+	fmt.Println()
+
+	// Step 2: skill (generates .claude/commands/<name>.md)
+	cwd, _ := os.Getwd()
+	analysis, _ := skill.NewAnalyzer(cwd).Analyze()
+	if err := skill.GenerateRepository(skill.RepositoryOptions{
+		Name:     name,
+		Output:   filepath.Join("skills", name),
+		Analysis: analysis,
+		Archive:  false,
+	}); err != nil {
+		log.Fatalf("Error (skill): %v\n", err)
+	}
+
+	fmt.Println()
+	fmt.Println("✓ Setup complete!")
+	fmt.Println()
+	fmt.Println("Next step: restart Claude Code to approve the MCP server.")
+	fmt.Printf("Then use: /%s\n", name)
 }
 
 func runMCPInitCommand() {
