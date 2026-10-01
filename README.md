@@ -64,6 +64,8 @@ After that, you can use:
 /my-project         ← loads exploration assistant with all 10 Ark MCP tools
 ```
 
+> **Tip:** Add a `CLAUDE.md` to your project root to instruct Claude Code to use Ark MCP tools automatically. A ready-to-use template is available at [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
+
 ---
 
 ## 🧰 Basic Usage
@@ -487,7 +489,7 @@ One command generates everything needed to teach ChatGPT or Cline how to efficie
 
 ## Author
 
-© 2025 Hiroshi IKEGAMI
+© 2025 - 2026Hiroshi IKEGAMI
 
 ## License
 
