@@ -37,7 +37,35 @@ mcp_opts=(
   '--skip-non-utf8[-s]' '--delete-comments[-D]'
 )
 
-subcommands=('mcp-server:Start MCP server')
+subcommands=(
+  'mcp-server:Start MCP server'
+  'syntax:Parse file and output AST'
+  'symbol:Extract symbols from file'
+  'skill:Generate Cline/ChatGPT Skill'
+)
+
+syntax_opts=(
+  '--lang:Language:(go typescript tsx javascript python)'
+  '--format:Output format:(text json)'
+  '-h[Show help]'
+  '--help[Show help]'
+)
+
+symbol_opts=(
+  '--lang:Language:(go typescript tsx javascript python)'
+  '--format:Output format:(text json)'
+  '-h[Show help]'
+  '--help[Show help]'
+)
+
+skill_opts=(
+  '--name:Skill name:'
+  '--output:Output directory:_files -/'
+  '--archive[Create ZIP archive]'
+  '--force[Overwrite existing skill]'
+  '-h[Show help]'
+  '--help[Show help]'
+)
 
 _arguments -C \
   "${general_opts[@]}" \
@@ -51,6 +79,9 @@ case $state in
   args)
     case $words[1] in
       mcp-server) _arguments -C "${mcp_opts[@]}" '*:files:_files' ;;
+      syntax)     _arguments -C "${syntax_opts[@]}" '*:file:_files' ;;
+      symbol)     _arguments -C "${symbol_opts[@]}" '*:file:_files' ;;
+      skill)      _arguments -C "${skill_opts[@]}" ;;
       *)          _arguments -C "${general_opts[@]}" '*:dirname:_files -/' ;;
     esac
     ;;

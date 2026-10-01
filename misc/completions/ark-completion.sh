@@ -18,7 +18,7 @@ _ark_mcp_flags="--skip-non-utf8 -s --delete-comments -D"
 _ark_mcp_opts_arg="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
     --exclude-dir-regex -g --exclude-file-regex -G --exclude-ext -e --exclude-dir -E"
-_ark_subcommands="mcp-server"
+_ark_subcommands="mcp-server syntax symbol skill"
 
 ###############################
 # Bash part
@@ -63,9 +63,16 @@ _ark_bash() {
     return
   fi
 
-  # detect mode (mcp-server subcommand or general)
+  # detect mode from subcommand token
   local mode="general"
-  for w in "${words[@]}"; do [[ $w == mcp-server ]] && { mode="mcp"; break; }; done
+  for w in "${words[@]}"; do
+    case $w in
+      mcp-server) mode="mcp";    break ;;
+      syntax)     mode="syntax"; break ;;
+      symbol)     mode="symbol"; break ;;
+      skill)      mode="skill";  break ;;
+    esac
+  done
 
   # value completion helper
   _ark_values() {
@@ -84,17 +91,23 @@ _ark_bash() {
         COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return 0 ;;
       --scan-buffer|-b)
         COMPREPLY=( $(compgen -W "1M 5M 10M 100K" -- "$cur") ); return 0 ;;
+      --lang)
+        COMPREPLY=( $(compgen -W "go typescript tsx javascript python" -- "$cur") ); return 0 ;;
+      --format)
+        COMPREPLY=( $(compgen -W "text json" -- "$cur") ); return 0 ;;
     esac
     return 1
   }
   _ark_values && return
 
   # option completion
-  if [[ $mode == mcp ]]; then
-    COMPREPLY=( $(compgen -W "${_ark_mcp_flags} ${_ark_mcp_opts_arg}" -- "$cur") )
-  else
-    COMPREPLY=( $(compgen -W "${_ark_gen_flags} ${_ark_gen_opts_arg} ${_ark_subcommands}" -- "$cur") )
-  fi
+  case $mode in
+    mcp)    COMPREPLY=( $(compgen -W "${_ark_mcp_flags} ${_ark_mcp_opts_arg}" -- "$cur") ) ;;
+    syntax) COMPREPLY=( $(compgen -W "--lang --format -h --help" -- "$cur") ) ;;
+    symbol) COMPREPLY=( $(compgen -W "--lang --format -h --help" -- "$cur") ) ;;
+    skill)  COMPREPLY=( $(compgen -W "--name --output --archive --force -h --help" -- "$cur") ) ;;
+    *)      COMPREPLY=( $(compgen -W "${_ark_gen_flags} ${_ark_gen_opts_arg} ${_ark_subcommands}" -- "$cur") ) ;;
+  esac
 }
 
 ###############################
@@ -142,8 +155,36 @@ _ark_zsh() {
     '--delete-comments[-D]'
   )
 
+  local -a syntax_opts=(
+    '--lang:Language:(go typescript tsx javascript python)'
+    '--format:Output format:(text json)'
+    '-h[Show help]'
+    '--help[Show help]'
+  )
+
+  local -a symbol_opts=(
+    '--lang:Language:(go typescript tsx javascript python)'
+    '--format:Output format:(text json)'
+    '-h[Show help]'
+    '--help[Show help]'
+  )
+
+  local -a skill_opts=(
+    '--name:Skill name:'
+    '--output:Output directory:_files -/'
+    '--archive[Create ZIP archive]'
+    '--force[Overwrite existing skill]'
+    '-h[Show help]'
+    '--help[Show help]'
+  )
+
   local -a subcommands
-  subcommands=('mcp-server:Start MCP server')
+  subcommands=(
+    'mcp-server:Start MCP server'
+    'syntax:Parse file and output AST'
+    'symbol:Extract symbols from file'
+    'skill:Generate Cline/ChatGPT Skill'
+  )
 
   _arguments -C \
     "${general_opts[@]}" \
@@ -158,6 +199,15 @@ _ark_zsh() {
       case $words[1] in
         mcp-server)
           _arguments -C "${mcp_opts[@]}" '*:files:_files'
+          ;;
+        syntax)
+          _arguments -C "${syntax_opts[@]}" '*:file:_files'
+          ;;
+        symbol)
+          _arguments -C "${symbol_opts[@]}" '*:file:_files'
+          ;;
+        skill)
+          _arguments -C "${skill_opts[@]}"
           ;;
         *)
           _arguments -C "${general_opts[@]}" '*:dirname:_files -/'

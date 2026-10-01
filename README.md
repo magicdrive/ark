@@ -1,23 +1,23 @@
 
 # Ark
 
-> Yet another alternate \[directory | repository\] text generator tool
+> Yet another alternate \[directory | repository\] text generator tool — with code intelligence MCP tools
 
-**ark** recursively scans a directory and produces a clean, human‑readable dump of the tree and file contents. Perfect for
+**ark** recursively scans a directory and produces a clean, human‑readable dump of the tree and file contents. It also provides **code intelligence** features via Tree-sitter for symbol extraction and MCP (Model Context Protocol) server support. Perfect for
 
 * 📚 sharing codebases with LLMs
 * 🧪 static‑analysis pipelines
 * 🗂️ snapshotting source trees
+* 🔍 **code intelligence** — extract symbols, navigate definitions
+* 🛰️ **MCP server** — serve codebase context to AI agents
 
-It supports **plaintext**, **markdown**, **XML**, and **arklite** outputs, full UTF‑8 handling (with optional skip), and extensive filtering.
+It supports **plaintext**, **markdown**, **XML**, and **arklite** outputs, full UTF‑8 handling (with optional skip), extensive filtering, and **Tree-sitter powered** code analysis.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1 · Install
-
-### 1. Installation
+### 1. Install
 
 ```bash
 go install github.com/magicdrive/ark@latest
@@ -33,10 +33,35 @@ Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark
 
 ---
 
-### 2 · Generate an output file
+### 2. Generate a codebase dump
 
 ```bash
 ark <dirname>                # creates ark-output.txt in the cwd
+```
+
+---
+
+### 3. Set up Ark MCP for Claude Code
+
+Run once in your project root:
+
+```bash
+cd /your/project
+ark setup --name my-project
+```
+
+This single command:
+- Writes `.mcp.json` — registers the Ark MCP server
+- Installs `.claude/commands/my-project.md` — activates `/my-project` as a slash command
+
+Then **restart Claude Code** and approve the MCP server when prompted.
+
+After that, you can use:
+- **`/my-project`** — slash command that explores your codebase using Ark MCP tools
+- **MCP tools directly** — `mcp__ark__find_symbol`, `mcp__ark__get_symbols`, etc.
+
+```
+/my-project         ← loads exploration assistant with all 10 Ark MCP tools
 ```
 
 ---
@@ -45,20 +70,28 @@ ark <dirname>                # creates ark-output.txt in the cwd
 
 ```text
 ark [OPTIONS] <dirname>
+ark setup [OPTIONS]
 ark mcp-server [OPTIONS]
+ark mcp-init [OPTIONS]
+ark syntax <file> [OPTIONS]
+ark symbol <file> [OPTIONS]
+ark skill [OPTIONS]
 ```
 
 ---
-<!--
+
 ## 📂 Sub‑commands
 
-| Command      | Description                    |
-|--------------|--------------------------------|
-| `mcp-server` | Run Ark as an HTTP MCP server. |
-
+| Command      | Description                                      |
+|--------------|--------------------------------------------------|
+| `setup`      | One-step setup: MCP config + Claude Code slash command. |
+| `mcp-server` | Run Ark as an MCP server (stdio or HTTP).        |
+| `mcp-init`   | Add ark MCP config to `.mcp.json`.              |
+| `syntax`     | Parse file and output AST using Tree-sitter.     |
+| `symbol`     | Extract symbols (functions, types, etc.) from file. |
+| `skill`      | Generate Ark MCP skill for Claude Code / OpenAI. |
 
 ---
--->
 
 ## ⚙️ General Options
 
@@ -87,6 +120,60 @@ ark mcp-server [OPTIONS]
 
 ---
 
+## ⚡ setup — One-step Claude Code Setup
+
+`ark setup` is the fastest way to integrate Ark into any project. It combines `mcp-init` and `skill` in a single command:
+
+```bash
+cd /your/project
+ark setup --name my-project
+```
+
+This does three things at once:
+1. Writes `.mcp.json` — registers the Ark MCP server for this project
+2. Generates `skills/my-project/` — full skill documentation
+3. Installs `.claude/commands/my-project.md` — activates `/my-project` as a Claude Code slash command
+
+Then restart Claude Code to approve the MCP server, and you're ready.
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--name <name>` | `-n` | Project name (used for skill and slash command) | directory name |
+| `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
+| `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
+| `--global` | `-g` | Write MCP config to `~/.claude/settings.json` | `.mcp.json` |
+| `--force` | `-f` | Overwrite existing entries | – |
+
+---
+
+## 🔧 mcp‑init Options
+
+`ark mcp-init` adds (or updates) the ark MCP server entry in `.mcp.json` for the current project, so you can use ark tools in Claude Code without manual configuration.
+
+```bash
+# Add ark MCP to the current project
+ark mcp-init
+
+# Add to global Claude Code settings (~/.claude/settings.json)
+ark mcp-init --global
+
+# Specify a custom root directory
+ark mcp-init --root /path/to/project
+
+# Overwrite an existing entry
+ark mcp-init --force
+```
+
+| Option | Alias | Description | Default |
+|--------|-------|-------------|---------|
+| `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
+| `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
+| `--name <name>` | `-n` | MCP server name | `ark` |
+| `--global` | `-g` | Write to `~/.claude/settings.json` | `.mcp.json` (project-local) |
+| `--force` | `-f` | Overwrite existing entry | – |
+
+---
+
 ## 🛰  mcp‑server Options
 
 | Option | Alias | Description | Default |
@@ -107,6 +194,99 @@ ark mcp-server [OPTIONS]
 | `--exclude-dir <names>` | `-E` | Exclude dirs by name | – |
 | `--skip-non-utf8` | `-s` | Ignore non‑UTF‑8 files | – |
 | `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
+
+---
+
+## 🔍 syntax Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--lang <language>` | Language (go, typescript, tsx, javascript, python) | auto-detect |
+| `--format <text\|json>` | Output format | `text` |
+| `-h, --help` | Show help | – |
+
+```bash
+ark syntax main.go                # Parse Go file
+ark syntax app.ts --format json   # Parse TypeScript, JSON output
+ark syntax script.py --lang python
+```
+
+---
+
+## 🏷️ symbol Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--lang <language>` | Language (go, typescript, tsx, javascript, python) | auto-detect |
+| `--format <text\|json>` | Output format | `text` |
+| `-h, --help` | Show help | – |
+
+```bash
+ark symbol main.go                # Extract symbols from Go file
+ark symbol app.ts --format json   # Extract symbols, JSON output
+ark symbol script.py --lang python
+```
+
+---
+
+## 🎯 skill Command
+
+### Subcommands
+
+| Subcommand | Description |
+|------------|-------------|
+| `skill` | Auto mode - detect existing skills and generate appropriate type |
+| `skill init` | Generate Repository Skill (full repo-specific skill) |
+| `skill add-explorer` | Add Explorer Skill as companion to existing skills |
+| `skill update` | Update Ark-managed skills (preserves user files) |
+| `skill inspect` | Show detected skills and repository analysis |
+
+### Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--name <name>` | Skill name | auto-determined |
+| `--output <dirname>` | Output directory | `skills/<name>` |
+| `--archive` | Create ZIP archive | – |
+| `--force` | Overwrite existing skill | – |
+| `-h, --help` | Show help | – |
+
+### Update Options
+
+| Option | Description |
+|--------|-------------|
+| `--force` | Force update even if user modifications detected |
+| `--dry-run` | Show what would be updated without making changes |
+
+```bash
+ark skill                              # Auto mode
+ark skill init                         # Generate Repository Skill
+ark skill add-explorer                 # Add Explorer Skill
+ark skill update                       # Update Ark-managed skills
+ark skill update --dry-run             # Preview update
+ark skill inspect                      # Show detected skills
+```
+
+### Skill Types
+
+**Repository Skill** (`skill init`): Full project-specific skill including:
+- Build/test commands detected from go.mod, package.json, Makefile, etc.
+- Project language analysis
+- Conventions reference file
+
+**Explorer Skill** (`skill add-explorer`): Lightweight companion skill for code navigation:
+- Ark MCP tool usage guide
+- Works alongside existing project skills
+
+### Generated Files
+
+Skills include YAML frontmatter for safe updates:
+- `SKILL.md` - Skill documentation with `ark-managed: true` metadata
+- `agents/openai.yaml` - OpenAI/Cline agent configuration
+- `agents/claude-code.md` - Claude Code custom agent (uses `mcp__ark__*` tool names)
+- `references/conventions.md` - Project conventions (Repository Skill only)
+
+The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 10 Ark MCP tools.
 
 ---
 
@@ -241,6 +421,63 @@ source completions/ark-completion.sh
 # Fish
 funcsave ark
 ```
+
+---
+
+## ✨ Why Ark?
+
+### 🎯 Symbol-First Code Exploration
+
+Instead of dumping entire files, **extract only what you need**:
+
+```bash
+$ ark symbol internal/mcp/tools.go
+File: internal/mcp/tools.go (go)
+Symbols: 11
+
+  struct ToolsHandler [exported] (line 15-18)
+  function NewToolsHandler [exported] (line 21-26)
+  method ListTools (ToolsHandler) [exported] (line 29-251)
+  method CallTool (ToolsHandler) [exported] (line 254-279)
+  ...
+```
+
+**Benefits:**
+- 📉 **Token-efficient** — No need to read entire files
+- 🎯 **Precise** — Jump directly to the definition you need
+- 🔍 **Discoverable** — `[exported]` markers show API surface at a glance
+
+### 🚀 Pure Go + Tree-sitter = Best of Both Worlds
+
+- **No CGO required** — Cross-compile anywhere, single static binary
+- **Real parsing** — Not regex hacks, actual AST-based symbol extraction
+- **Multi-language** — Go, TypeScript, JavaScript, Python (and growing!)
+
+### 🤖 LLM-Optimized Workflow
+
+The MCP tools (`get_symbols`, `find_symbol`, `get_symbol`) enable a **hierarchical exploration pattern**:
+
+```
+get_directory_tree   →   Understand project structure
+        ↓
+    find_symbol      →   Locate "where is Foo?"
+        ↓
+    get_symbols      →   List what's in a file
+        ↓
+    get_symbol       →   Extract exact source code
+```
+
+This approach **dramatically reduces token usage** compared to reading entire files, while maintaining full context awareness.
+
+### 📦 Instant Skill Generation
+
+```bash
+$ ark skill --name my-project-explorer
+✅ Created my-project-explorer/SKILL.md
+✅ Created my-project-explorer/agents/openai.yaml
+```
+
+One command generates everything needed to teach ChatGPT or Cline how to efficiently explore your codebase.
 
 ---
 
