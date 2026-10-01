@@ -11,6 +11,23 @@ import (
 	"github.com/magicdrive/ark/internal/syntax"
 )
 
+// resolveToolPath normalises a path argument from an MCP tool call.
+// Relative paths are joined with rootDir.
+// Absolute paths inside rootDir are accepted and converted to relative.
+// Absolute paths outside rootDir return an error.
+func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, err error) {
+	if !filepath.IsAbs(path) {
+		// relative — normal case
+		return filepath.Join(h.rootDir, path), path, nil
+	}
+	// absolute — strip rootDir prefix if possible
+	rel, relErr := filepath.Rel(h.rootDir, path)
+	if relErr != nil || strings.HasPrefix(rel, "..") {
+		return "", "", fmt.Errorf("path %q is outside the server root %q; use a relative path instead", path, h.rootDir)
+	}
+	return path, rel, nil
+}
+
 // SyntaxToolDefinitions returns tool definitions for syntax-related tools
 func SyntaxToolDefinitions() []Tool {
 	return []Tool{
@@ -96,7 +113,13 @@ func (h *ToolsHandler) getSymbols(args map[string]interface{}) (*CallToolResult,
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, path, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	// Read file
 	source, err := os.ReadFile(fullPath)
@@ -170,7 +193,13 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		searchPath = p
 	}
 
-	fullPath := filepath.Join(h.rootDir, searchPath)
+	fullPath, _, err := h.resolveToolPath(searchPath)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	kindFilter := ""
 	if k, ok := args["kind"].(string); ok {
@@ -318,7 +347,13 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 		includeSource = val
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, path, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	// Read file
 	source, err := os.ReadFile(fullPath)
