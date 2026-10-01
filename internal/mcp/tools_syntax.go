@@ -242,6 +242,8 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 	resultCount := 0
 	errDone := fmt.Errorf("done")
 
+	var statsScanned, statsSkipped, statsParseErr int
+
 	err = filepath.Walk(fullPath, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -257,27 +259,32 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 
 		// Extension filter
 		if extFilter != nil && !extFilter[ext] {
+			statsSkipped++
 			return nil
 		}
 
 		// Check if file is supported
 		lang := syntax.DetectLanguage(filePath)
 		if lang == syntax.LangUnknown {
+			statsSkipped++
 			return nil
 		}
 
 		// Read and parse file
 		source, err := os.ReadFile(filePath)
 		if err != nil {
+			statsParseErr++
 			return nil
 		}
 
 		parseResult, err := syntax.Parse(lang, source)
 		if err != nil {
+			statsParseErr++
 			return nil
 		}
 		defer parseResult.Release()
 
+		statsScanned++
 		symbols := syntax.ExtractSymbols(parseResult)
 
 		relPath, _ := filepath.Rel(h.rootDir, filePath)
@@ -312,9 +319,42 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		}, nil
 	}
 
-	result := syntax.SymbolSearchResult{
+	type searchStats struct {
+		FilesScanned  int `json:"filesScanned"`
+		FilesSkipped  int `json:"filesSkipped"`
+		ParseErrors   int `json:"parseErrors"`
+	}
+	type searchResult struct {
+		Query   string             `json:"query"`
+		Matches []syntax.SymbolMatch `json:"matches"`
+		Stats   searchStats        `json:"stats"`
+		Message string             `json:"message,omitempty"`
+	}
+
+	result := searchResult{
 		Query:   pattern,
 		Matches: matches,
+		Stats: searchStats{
+			FilesScanned: statsScanned,
+			FilesSkipped: statsSkipped,
+			ParseErrors:  statsParseErr,
+		},
+	}
+	if len(matches) == 0 {
+		msg := fmt.Sprintf("No symbols matching %q found", pattern)
+		if statsScanned > 0 {
+			msg += fmt.Sprintf(" in %d scanned file(s)", statsScanned)
+		}
+		if statsSkipped > 0 {
+			msg += fmt.Sprintf(" (%d skipped: unsupported language or extension)", statsSkipped)
+		}
+		if statsParseErr > 0 {
+			msg += fmt.Sprintf(", %d file(s) had parse errors", statsParseErr)
+		}
+		if statsScanned == 0 && statsParseErr == 0 {
+			msg += fmt.Sprintf("; no supported files found under %q", searchPath)
+		}
+		result.Message = msg
 	}
 
 	output, err := json.MarshalIndent(result, "", "  ")
