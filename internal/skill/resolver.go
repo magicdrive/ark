@@ -1,6 +1,9 @@
 package skill
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // ResolvedMode represents the determined action mode for skill generation
 type ResolvedMode int
@@ -189,16 +192,5 @@ func (b *detectionSummaryBuilder) String() string {
 		lines = append(lines, fmt.Sprintf("  %s%s", marker, skill.Name))
 	}
 
-	return fmt.Sprintf("%s\n", joinLines(lines))
-}
-
-func joinLines(lines []string) string {
-	result := ""
-	for i, line := range lines {
-		if i > 0 {
-			result += "\n"
-		}
-		result += line
-	}
-	return result
+	return fmt.Sprintf("%s\n", strings.Join(lines, "\n"))
 }

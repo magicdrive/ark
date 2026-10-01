@@ -29,22 +29,34 @@ func GenerateRepository(opts RepositoryOptions) error {
 		return fmt.Errorf("failed to create output directory: %w", err)
 	}
 	agentsDir := filepath.Join(opts.Output, "agents")
-	os.MkdirAll(agentsDir, 0755)
+	if err := os.MkdirAll(agentsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create agents directory: %w", err)
+	}
 	refsDir := filepath.Join(opts.Output, "references")
-	os.MkdirAll(refsDir, 0755)
+	if err := os.MkdirAll(refsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create references directory: %w", err)
+	}
 
 	skillContent := generateRepositorySkillMd(opts.Name, opts.Analysis)
 	wrappedContent := WrapWithFrontmatter(skillContent, SkillTypeRepository)
-	os.WriteFile(filepath.Join(opts.Output, "SKILL.md"), []byte(wrappedContent), 0644)
-	os.WriteFile(filepath.Join(agentsDir, "openai.yaml"), []byte(generateRepoYaml(opts.Name, opts.Analysis)), 0644)
+	if err := os.WriteFile(filepath.Join(opts.Output, "SKILL.md"), []byte(wrappedContent), 0644); err != nil {
+		return fmt.Errorf("failed to write SKILL.md: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(agentsDir, "openai.yaml"), []byte(generateRepoYaml(opts.Name, opts.Analysis)), 0644); err != nil {
+		return fmt.Errorf("failed to write openai.yaml: %w", err)
+	}
 
 	claudeAgentContent := generateClaudeCodeAgentMd(opts.Name, opts.Analysis)
-	os.WriteFile(filepath.Join(agentsDir, "claude-code.md"), []byte(claudeAgentContent), 0644)
+	if err := os.WriteFile(filepath.Join(agentsDir, "claude-code.md"), []byte(claudeAgentContent), 0644); err != nil {
+		return fmt.Errorf("failed to write claude-code.md: %w", err)
+	}
 	if !opts.NoInstall {
 		installClaudeCodeAgent(opts.Name, claudeAgentContent)
 	}
 
-	os.WriteFile(filepath.Join(refsDir, "conventions.md"), []byte(generateConventionsMd(opts.Analysis)), 0644)
+	if err := os.WriteFile(filepath.Join(refsDir, "conventions.md"), []byte(generateConventionsMd(opts.Analysis)), 0644); err != nil {
+		return fmt.Errorf("failed to write conventions.md: %w", err)
+	}
 
 	if opts.Archive {
 		createArchive(opts.Output, opts.Output+".zip")

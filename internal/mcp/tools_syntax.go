@@ -211,9 +211,16 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 
 	var matches []syntax.SymbolMatch
 	resultCount := 0
+	errDone := fmt.Errorf("done")
 
 	err = filepath.Walk(fullPath, func(filePath string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() || resultCount >= maxResults {
+		if err != nil {
+			return nil
+		}
+		if resultCount >= maxResults {
+			return errDone
+		}
+		if info.IsDir() {
 			return nil
 		}
 
@@ -269,7 +276,7 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		return nil
 	})
 
-	if err != nil {
+	if err != nil && err != errDone {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Search error: %v", err)}},
 			IsError: true,

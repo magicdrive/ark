@@ -200,7 +200,10 @@ func TestReadSettings_InvalidJSON(t *testing.T) {
 
 func TestExtractMCPServers_Missing(t *testing.T) {
 	settings := map[string]any{"theme": "dark"}
-	servers := extractMCPServers(settings)
+	servers, err := extractMCPServers(settings)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if len(servers) != 0 {
 		t.Errorf("Expected empty servers, got %v", servers)
 	}
@@ -212,9 +215,20 @@ func TestExtractMCPServers_Present(t *testing.T) {
 			"foo": map[string]any{"command": "foo"},
 		},
 	}
-	servers := extractMCPServers(settings)
+	servers, err := extractMCPServers(settings)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
 	if _, ok := servers["foo"]; !ok {
 		t.Error("Expected 'foo' server")
+	}
+}
+
+func TestExtractMCPServers_UnexpectedType(t *testing.T) {
+	settings := map[string]any{"mcpServers": nil}
+	_, err := extractMCPServers(settings)
+	if err == nil {
+		t.Error("Expected error for unexpected mcpServers type")
 	}
 }
 

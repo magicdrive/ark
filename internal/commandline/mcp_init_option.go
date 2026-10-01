@@ -38,8 +38,8 @@ func MCPInitOptParse(args []string) (int, *MCPInitOption, error) {
 	fs.StringVar(nameOpt, "n", "ark", "MCP server name in settings.json.")
 
 	// --global
-	globalFlagOpt := fs.Bool("global", false, "Write to ~/.claude/settings.json instead of ./.claude/settings.json.")
-	fs.BoolVar(globalFlagOpt, "g", false, "Write to ~/.claude/settings.json instead of ./.claude/settings.json.")
+	globalFlagOpt := fs.Bool("global", false, "Write to ~/.claude/settings.json instead of .mcp.json.")
+	fs.BoolVar(globalFlagOpt, "g", false, "Write to ~/.claude/settings.json instead of .mcp.json.")
 
 	// --force
 	forceFlagOpt := fs.Bool("force", false, "Overwrite existing MCP server entry.")

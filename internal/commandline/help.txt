@@ -47,7 +47,7 @@ mcp-init options:
   -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
   -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
   -n, --name <name>                                MCP server name in settings.json. (optional. default: 'ark')
-  -g, --global                                     Write to ~/.claude/settings.json. (optional. default: ./.claude/settings.json)
+  -g, --global                                     Write to ~/.claude/settings.json. (optional. default: .mcp.json)
   -f, --force                                      Overwrite existing MCP server entry. (optional.)
 
 mcp-server options:

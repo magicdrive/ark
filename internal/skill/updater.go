@@ -53,8 +53,14 @@ func (u *Updater) updateSkill(s DetectedSkill, force bool) (UpdateResult, error)
 	result := UpdateResult{SkillName: s.Name, SkillType: s.SkillType}
 
 	// Check for user modifications
-	content, _ := os.ReadFile(filepath.Join(s.Path, "SKILL.md"))
-	modified, _ := HasUserModifications(string(content))
+	content, err := os.ReadFile(filepath.Join(s.Path, "SKILL.md"))
+	if err != nil {
+		return result, fmt.Errorf("failed to read SKILL.md: %w", err)
+	}
+	modified, err := HasUserModifications(string(content))
+	if err != nil {
+		return result, fmt.Errorf("failed to check modifications: %w", err)
+	}
 	if modified && !force {
 		result.HasConflicts = true
 		result.Conflicts = append(result.Conflicts, "SKILL.md")

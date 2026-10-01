@@ -26,7 +26,10 @@ func RunMCPInit(opts *MCPInitOptions) error {
 		return err
 	}
 
-	mcpServers := extractMCPServers(settings)
+	mcpServers, err := extractMCPServers(settings)
+	if err != nil {
+		return fmt.Errorf("cannot read existing MCP servers: %w", err)
+	}
 
 	alreadyExists := false
 	if _, exists := mcpServers[opts.ServerName]; exists {
@@ -92,11 +95,15 @@ func readSettings(path string) (map[string]any, error) {
 	return settings, nil
 }
 
-func extractMCPServers(settings map[string]any) map[string]any {
-	if v, ok := settings["mcpServers"].(map[string]any); ok {
-		return v
+func extractMCPServers(settings map[string]any) (map[string]any, error) {
+	v, exists := settings["mcpServers"]
+	if !exists {
+		return make(map[string]any), nil
 	}
-	return make(map[string]any)
+	if m, ok := v.(map[string]any); ok {
+		return m, nil
+	}
+	return nil, fmt.Errorf("mcpServers has unexpected type %T; cannot safely merge", v)
 }
 
 func writeSettings(path string, settings map[string]any) error {
