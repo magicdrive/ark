@@ -387,3 +387,63 @@ func TestGetProjectStatsViaTool(t *testing.T) {
 		}
 	}
 }
+
+func TestFindSymbol_StatsOnNoMatch(t *testing.T) {
+	h := createTestToolsHandler(t)
+
+	result, err := h.CallTool("find_symbol", map[string]interface{}{
+		"pattern": "ThisSymbolDefinitelyDoesNotExist_XYZ123",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected tool error: %s", result.Content[0].Text)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	stats, ok := resp["stats"].(map[string]interface{})
+	if !ok {
+		t.Fatal("expected 'stats' field in response")
+	}
+	for _, field := range []string{"filesScanned", "filesSkipped", "parseErrors"} {
+		if _, ok := stats[field]; !ok {
+			t.Errorf("expected %q in stats", field)
+		}
+	}
+	if _, ok := resp["message"].(string); !ok {
+		t.Error("expected non-empty 'message' field when no matches found")
+	}
+}
+
+func TestFindSymbol_StatsOnMatch(t *testing.T) {
+	tmpDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmpDir, "main.go"), []byte("package main\nfunc Hello() {}\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h := &ToolsHandler{rootDir: tmpDir}
+
+	result, err := h.CallTool("find_symbol", map[string]interface{}{
+		"pattern": "Hello",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal([]byte(result.Content[0].Text), &resp); err != nil {
+		t.Fatalf("failed to parse response: %v", err)
+	}
+
+	matches, ok := resp["matches"].([]interface{})
+	if !ok || len(matches) == 0 {
+		t.Fatal("expected at least one match for 'Hello'")
+	}
+	if msg, ok := resp["message"].(string); ok && msg != "" {
+		t.Errorf("expected no message when matches found, got %q", msg)
+	}
+}
