@@ -10,6 +10,45 @@ import (
 	"github.com/magicdrive/ark/internal/commandline"
 )
 
+func TestResolveToolPath(t *testing.T) {
+	rootDir, _ := filepath.Abs(".")
+	h := &ToolsHandler{rootDir: rootDir}
+
+	t.Run("relative path", func(t *testing.T) {
+		full, rel, err := h.resolveToolPath("cmd/main.go")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if rel != "cmd/main.go" {
+			t.Errorf("rel = %q, want %q", rel, "cmd/main.go")
+		}
+		if full != filepath.Join(rootDir, "cmd/main.go") {
+			t.Errorf("full = %q", full)
+		}
+	})
+
+	t.Run("absolute path inside root", func(t *testing.T) {
+		absPath := filepath.Join(rootDir, "cmd/main.go")
+		full, rel, err := h.resolveToolPath(absPath)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if rel != "cmd/main.go" {
+			t.Errorf("rel = %q, want %q", rel, "cmd/main.go")
+		}
+		if full != absPath {
+			t.Errorf("full = %q", full)
+		}
+	})
+
+	t.Run("absolute path outside root", func(t *testing.T) {
+		_, _, err := h.resolveToolPath("/etc/passwd")
+		if err == nil {
+			t.Fatal("expected error for path outside root")
+		}
+	})
+}
+
 func createTestToolsHandler(t *testing.T) *ToolsHandler {
 	// Use the same approach as in the working server
 	_, opt, err := commandline.GeneralOptParse([]string{"."})
