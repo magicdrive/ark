@@ -4,7 +4,12 @@ Description:
    Yet another alternate [directory|repository] represent text generator tool.
 
 Sub commands:
+  setup                                            One-step setup: MCP config + Claude Code slash command.
   mcp-server                                       Start MCP server.
+  mcp-init                                         Add ark MCP server config to .mcp.json.
+  syntax <file>                                    Parse file and output AST using Tree-sitter.
+  symbol <file>                                    Extract symbols (functions, types, etc.) from file.
+  skill                                            Generate Ark MCP skill for Claude Code / OpenAI.
 
 
 general (text generator mode) options:
@@ -29,6 +34,22 @@ general (text generator mode) options:
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
   -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
 
+setup options:
+  -h, --help                                       Show help message.
+  -n, --name <name>                                Project name (default: current directory name).
+  -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
+  -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
+  -g, --global                                     Write MCP config to ~/.claude/settings.json.
+  -f, --force                                      Overwrite existing entries.
+
+mcp-init options:
+  -h, --help                                       Show help message.
+  -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
+  -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
+  -n, --name <name>                                MCP server name in settings.json. (optional. default: 'ark')
+  -g, --global                                     Write to ~/.claude/settings.json. (optional. default: .mcp.json)
+  -f, --force                                      Overwrite existing MCP server entry. (optional.)
+
 mcp-server options:
   -r, --root <dirname>                             Specify the mcp-server serve root dirname(optional. default: $pwd)
   -t, --type <http|stdio>                          Specify the mcp-server serve type. (optional. default: 'stdio')
@@ -46,6 +67,34 @@ mcp-server options:
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
+
+syntax options:
+  -h, --help                                       Show help message.
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python).
+  --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
+
+symbol options:
+  -h, --help                                       Show help message.
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python).
+  --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
+
+skill subcommands:
+  skill                                            Auto mode - detect and generate appropriate skill.
+  skill init                                       Generate Repository Skill (full repo-specific skill).
+  skill add-explorer                               Add Explorer Skill (companion to existing skills).
+  skill update                                     Update Ark-managed skills (preserves user files).
+  skill inspect                                    Show detected skills and repository analysis.
+
+skill options:
+  -h, --help                                       Show help message.
+  --name <name>                                    Specify skill name. (optional. auto-determined if not set)
+  --output <dirname>                               Specify output directory. (optional. default: skills/<name>)
+  --archive                                        Create ZIP archive. (optional.)
+  --force                                          Overwrite existing skill. (optional.)
+
+skill update options:
+  --force                                          Force update even if user modifications detected.
+  --dry-run                                        Show what would be updated without making changes.
 
 
 Arguments:

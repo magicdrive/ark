@@ -53,6 +53,9 @@ func TestListTools(t *testing.T) {
 		"get_file_info",
 		"get_project_stats",
 		"get_files_arklite",
+		"get_symbols",
+		"find_symbol",
+		"get_symbol",
 	}
 
 	if len(tools) != len(expectedTools) {
