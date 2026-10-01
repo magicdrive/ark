@@ -39,6 +39,17 @@ func Execute(version string) {
 	runDefaultCommand(version)
 }
 
+func resolveArkPath(optPath string) string {
+	if optPath != "" {
+		return optPath
+	}
+	self, err := os.Executable()
+	if err != nil {
+		log.Fatalf("Fatal Error: cannot determine ark binary path: %v\n", err)
+	}
+	return self
+}
+
 func runSetupCommand() {
 	_, opt, err := commandline.SetupOptParse(os.Args[2:])
 	if err != nil {
@@ -49,14 +60,7 @@ func runSetupCommand() {
 		os.Exit(0)
 	}
 
-	arkPath := opt.ArkPath
-	if arkPath == "" {
-		self, err := os.Executable()
-		if err != nil {
-			log.Fatalf("Fatal Error: cannot determine ark binary path: %v\n", err)
-		}
-		arkPath = self
-	}
+	arkPath := resolveArkPath(opt.ArkPath)
 
 	rootDir := opt.RootDir
 	if abs, err := filepath.Abs(rootDir); err == nil {
@@ -85,7 +89,10 @@ func runSetupCommand() {
 	fmt.Println()
 
 	// Step 2: skill (generates .claude/commands/<name>.md)
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Fatal Error: cannot determine current directory: %v\n", err)
+	}
 	analysis, _ := skill.NewAnalyzer(cwd).Analyze()
 	if err := skill.GenerateRepository(skill.RepositoryOptions{
 		Name:     name,
@@ -101,6 +108,8 @@ func runSetupCommand() {
 	fmt.Println()
 	fmt.Println("Next step: restart Claude Code to approve the MCP server.")
 	fmt.Printf("Then use: /%s\n", name)
+
+	mcp.SuggestCLAUDEMd(cwd)
 }
 
 func runMCPInitCommand() {
@@ -113,14 +122,7 @@ func runMCPInitCommand() {
 		os.Exit(0)
 	}
 
-	arkPath := opt.ArkPath
-	if arkPath == "" {
-		self, err := os.Executable()
-		if err != nil {
-			log.Fatalf("Fatal Error: cannot determine ark binary path: %v\n", err)
-		}
-		arkPath = self
-	}
+	arkPath := resolveArkPath(opt.ArkPath)
 
 	rootDir := opt.RootDir
 	if abs, err := filepath.Abs(rootDir); err == nil {
@@ -135,6 +137,10 @@ func runMCPInitCommand() {
 		Force:      opt.ForceFlag,
 	}); err != nil {
 		log.Fatalf("Error: %v\n", err)
+	}
+
+	if cwd, err := os.Getwd(); err == nil {
+		mcp.SuggestCLAUDEMd(cwd)
 	}
 }
 
@@ -277,7 +283,10 @@ func runSkillAuto() {
 		os.Exit(0)
 	}
 
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Fatal Error: cannot determine current directory: %v\n", err)
+	}
 	result, err := skill.NewResolver(cwd).Resolve()
 	if err != nil {
 		log.Fatalf("Error: %v\n", err)
@@ -293,6 +302,29 @@ func runSkillAuto() {
 		if !opt.ForceFlag {
 			return
 		}
+		fmt.Println("\nForce regenerating skill...")
+		existing := result.ExistingArk
+		forceName := name
+		if forceName == "" {
+			forceName = existing.Name
+		}
+		forceOutput := output
+		if forceOutput == "" {
+			forceOutput = existing.Path
+		}
+		switch existing.SkillType {
+		case skill.SkillTypeRepository:
+			analysis, _ := skill.NewAnalyzer(cwd).Analyze()
+			if err := skill.GenerateRepository(skill.RepositoryOptions{Name: forceName, Output: forceOutput, Archive: opt.ArchiveFlag, Analysis: analysis}); err != nil {
+				log.Fatalf("Error: %v\n", err)
+			}
+		case skill.SkillTypeExplorer:
+			if err := skill.GenerateExplorer(skill.ExplorerOptions{Name: forceName, Output: forceOutput, Archive: opt.ArchiveFlag}); err != nil {
+				log.Fatalf("Error: %v\n", err)
+			}
+		}
+		fmt.Printf("Overwritten: %s\n", forceOutput)
+		return
 	case skill.ModeRepository:
 		fmt.Println("\nGenerating Repository Skill...")
 		if name == "" {
