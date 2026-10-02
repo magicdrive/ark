@@ -43,11 +43,7 @@ func resolveArkPath(optPath string) string {
 	if optPath != "" {
 		return optPath
 	}
-	self, err := os.Executable()
-	if err != nil {
-		log.Fatalf("Fatal Error: cannot determine ark binary path: %v\n", err)
-	}
-	return self
+	return "ark"
 }
 
 func runSetupCommand() {
