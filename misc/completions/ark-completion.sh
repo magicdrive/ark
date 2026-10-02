@@ -14,7 +14,7 @@ _ark_gen_opts_arg="--output-filename -o --scan-buffer -b --output-format -f --ma
     --allow-gitignore -a --additionally-ignorerule -A --with-line-number -n --ignore-dotfile -d \
     --pattern-regex -x --include-ext -i --exclude-file-regex -g --exclude-dir-regex -G \
     --exclude-ext -e --exclude-dir -E"
-_ark_mcp_flags="--skip-non-utf8 -s --delete-comment -D --help -h --version -v"
+_ark_mcp_flags="--skip-non-utf8 -s --delete-comment -D --no-cache --help -h --version -v"
 _ark_mcp_opts_arg="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
     --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E"
@@ -183,6 +183,7 @@ _ark_zsh() {
     '--exclude-dir[-E]:dirname:'
     '--skip-non-utf8[-s]'
     '--delete-comment[-D]'
+    '--no-cache[Disable persistent index cache]'
     '--help[-h]' '--version[-v]'
   )
 

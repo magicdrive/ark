@@ -78,8 +78,13 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 		maxResults = int(v)
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
-
+	fullPath, _, pathErr := h.resolveToolPath(path)
+	if pathErr != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: pathErr.Error()}},
+			IsError: true,
+		}, nil
+	}
 	providers := []language.Provider{
 		golang.NewProvider(),
 		typescript.NewProvider(),

@@ -61,7 +61,7 @@ After that, you can use:
 - **MCP tools directly** — `mcp__ark__find_symbol`, `mcp__ark__get_symbols`, etc.
 
 ```
-/my-project         ← loads exploration assistant with all 10 Ark MCP tools
+/my-project         ← loads exploration assistant with all 19 Ark MCP tools
 ```
 
 > **Tip:** Add a `CLAUDE.md` to your project root to instruct Claude Code to use Ark MCP tools automatically. A ready-to-use template is available at [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
@@ -196,6 +196,7 @@ ark mcp-init --force
 | `--exclude-dir <names>` | `-E` | Exclude dirs by name | – |
 | `--skip-non-utf8` | `-s` | Ignore non‑UTF‑8 files | – |
 | `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
+| `--no-cache` | – | Disable persistent index cache | – |
 
 ---
 
@@ -288,7 +289,7 @@ Skills include YAML frontmatter for safe updates:
 - `agents/claude-code.md` - Claude Code custom agent (uses `mcp__ark__*` tool names)
 - `references/conventions.md` - Project conventions (Repository Skill only)
 
-The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 10 Ark MCP tools.
+The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 19 Ark MCP tools.
 
 ---
 
@@ -457,7 +458,31 @@ Symbols: 11
 
 ### 🤖 LLM-Optimized Workflow
 
-The MCP tools (`get_symbols`, `find_symbol`, `get_symbol`) enable a **hierarchical exploration pattern**:
+Ark provides **19 MCP tools** covering the full code-intelligence stack:
+
+| Tool | Description |
+|------|-------------|
+| `get_directory_tree` | Understand project layout |
+| `get_symbols` | List functions/types in a file |
+| `find_symbol` | Search for a symbol by name across the repo |
+| `get_symbol` | Get source code of one specific function/type |
+| `search_in_files` | Full-text or regex search across files |
+| `list_files` | Filter-aware file listing |
+| `get_file_content` | Read a whole file |
+| `get_file_info` | File metadata (size, lines, language) |
+| `get_project_stats` | Language breakdown, file counts |
+| `get_files_arklite` | Multiple files in compressed format |
+| `get_context` | Token-budgeted, relevance-ranked context for a symbol |
+| `find_references` | Find all usages of a symbol across the repo |
+| `get_relations` | Explore import/dependency relations between files |
+| `get_callers` | Find symbols that call a given symbol |
+| `get_callees` | Find symbols called by a given symbol |
+| `get_repository_map` | Compact logical map of the repo for LLM orientation |
+| `analyze_change_impact` | Estimate impact of changing a symbol |
+| `search_code` | Structural search by kind, name, type usage, etc. |
+| `get_language_support` | List supported languages and their feature levels |
+
+The core navigation pattern:
 
 ```
 get_directory_tree   →   Understand project structure
@@ -467,6 +492,8 @@ get_directory_tree   →   Understand project structure
     get_symbols      →   List what's in a file
         ↓
     get_symbol       →   Extract exact source code
+        ↓
+    get_context      →   Token-budgeted context for safe modification
 ```
 
 This approach **dramatically reduces token usage** compared to reading entire files, while maintaining full context awareness.
