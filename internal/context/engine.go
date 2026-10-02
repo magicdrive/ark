@@ -131,12 +131,13 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 			conf = resolver.ConfidenceExact
 		}
 		items = append(items, Item{
-			Symbol:     sc.c.sym,
-			Source:     src,
-			Reason:     sc.c.reason,
-			Score:      sc.score,
-			Confidence: conf,
-			Tokens:     tokens,
+			Symbol:         sc.c.sym,
+			Source:         src,
+			Reason:         sc.c.reason,
+			Score:          sc.score,
+			ScoreBreakdown: sc.bdMap,
+			Confidence:     conf,
+			Tokens:         tokens,
 		})
 	}
 

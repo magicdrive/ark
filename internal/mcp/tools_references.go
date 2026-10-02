@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
@@ -178,6 +179,17 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 	} else {
 		collect(fullPath)
 	}
+
+	// Sort for stable, deterministic output regardless of filesystem traversal order.
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].File != results[j].File {
+			return results[i].File < results[j].File
+		}
+		if results[i].StartLine != results[j].StartLine {
+			return results[i].StartLine < results[j].StartLine
+		}
+		return results[i].StartColumn < results[j].StartColumn
+	})
 
 	type findRefsOutput struct {
 		Path    string            `json:"path"`

@@ -41,16 +41,17 @@ func Format(result *Result) string {
 
 // jsonItem is the JSON representation of an Item.
 type jsonItem struct {
-	Symbol     string  `json:"symbol"`
-	File       string  `json:"file"`
-	StartLine  uint32  `json:"startLine"`
-	EndLine    uint32  `json:"endLine"`
-	Kind       string  `json:"kind"`
-	Reason     string  `json:"reason"`
-	Confidence string  `json:"confidence"`
-	Score      float64 `json:"score"`
-	Tokens     int     `json:"tokens"`
-	Source     string  `json:"source"`
+	Symbol         string             `json:"symbol"`
+	File           string             `json:"file"`
+	StartLine      uint32             `json:"startLine"`
+	EndLine        uint32             `json:"endLine"`
+	Kind           string             `json:"kind"`
+	Reason         string             `json:"reason"`
+	Confidence     string             `json:"confidence"`
+	Score          float64            `json:"score"`
+	ScoreBreakdown map[string]float64 `json:"scoreBreakdown,omitempty"`
+	Tokens         int                `json:"tokens"`
+	Source         string             `json:"source"`
 }
 
 type jsonResult struct {
@@ -70,16 +71,17 @@ func FormatJSON(result *Result) ([]byte, error) {
 	}
 	for i, item := range result.Items {
 		out.Items[i] = jsonItem{
-			Symbol:     item.Symbol.Qualified,
-			File:       string(item.Symbol.Location.File),
-			StartLine:  item.Symbol.Location.Range.Start.Line,
-			EndLine:    item.Symbol.Location.Range.End.Line,
-			Kind:       string(item.Symbol.Kind),
-			Reason:     item.Reason,
-			Confidence: item.Confidence.String(),
-			Score:      item.Score,
-			Tokens:     item.Tokens,
-			Source:     item.Source,
+			Symbol:         item.Symbol.Qualified,
+			File:           string(item.Symbol.Location.File),
+			StartLine:      item.Symbol.Location.Range.Start.Line,
+			EndLine:        item.Symbol.Location.Range.End.Line,
+			Kind:           string(item.Symbol.Kind),
+			Reason:         item.Reason,
+			Confidence:     item.Confidence.String(),
+			Score:          item.Score,
+			ScoreBreakdown: item.ScoreBreakdown,
+			Tokens:         item.Tokens,
+			Source:         item.Source,
 		}
 	}
 	return json.MarshalIndent(out, "", "  ")

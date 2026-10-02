@@ -18,12 +18,13 @@ type Request struct {
 
 // Item is one piece of context: a symbol and its source text.
 type Item struct {
-	Symbol     symbol.Symbol
-	Source     string // source text for the symbol's range
-	Reason     string // why this was included ("target", "direct callee", …)
-	Score      float64
-	Confidence resolver.Confidence
-	Tokens     int // estimated tokens for Source
+	Symbol         symbol.Symbol
+	Source         string // source text for the symbol's range
+	Reason         string // why this was included ("target", "direct callee", …)
+	Score          float64
+	ScoreBreakdown map[string]float64 // per-factor breakdown from the ranker
+	Confidence     resolver.Confidence
+	Tokens         int // estimated tokens for Source
 }
 
 // Stats describes budget usage for a context build.

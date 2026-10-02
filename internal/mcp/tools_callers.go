@@ -241,7 +241,10 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		if edges[i].From != edges[j].From {
 			return edges[i].From < edges[j].From
 		}
-		return edges[i].To < edges[j].To
+		if edges[i].To != edges[j].To {
+			return edges[i].To < edges[j].To
+		}
+		return edges[i].Kind < edges[j].Kind
 	})
 	if len(edges) > maxResults {
 		edges = edges[:maxResults]
