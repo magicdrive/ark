@@ -251,6 +251,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 	tools = append(tools, RelationsToolDefinitions()...)
 	tools = append(tools, CallersToolDefinitions()...)
 	tools = append(tools, RepomapToolDefinitions()...)
+	tools = append(tools, ContextToolDefinitions()...)
 	return tools
 }
 
@@ -287,6 +288,8 @@ func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (
 		return h.getCallees(arguments)
 	case "get_repository_map":
 		return h.getRepositoryMap(arguments)
+	case "get_context":
+		return h.getContext(arguments)
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
