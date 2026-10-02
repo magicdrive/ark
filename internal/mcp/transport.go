@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 )
 
 // Transport represents the communication layer for MCP
@@ -85,6 +86,7 @@ func (t *StdioTransport) sendResponse(response *MCPResponse) {
 type HttpTransport struct {
 	host   string
 	port   string
+	mu     sync.Mutex
 	server *http.Server
 }
 
@@ -122,19 +124,25 @@ func (t *HttpTransport) Start(handler RequestHandler) error {
 	})
 
 	addr := fmt.Sprintf("%s:%s", t.host, t.port)
-	t.server = &http.Server{
+	srv := &http.Server{
 		Addr:    addr,
 		Handler: mux,
 	}
+	t.mu.Lock()
+	t.server = srv
+	t.mu.Unlock()
 
 	log.Printf("Starting MCP Server on HTTP %s", addr)
-	return t.server.ListenAndServe()
+	return srv.ListenAndServe()
 }
 
 // Stop stops the HTTP server
 func (t *HttpTransport) Stop() error {
-	if t.server != nil {
-		return t.server.Close()
+	t.mu.Lock()
+	srv := t.server
+	t.mu.Unlock()
+	if srv != nil {
+		return srv.Close()
 	}
 	return nil
 }
