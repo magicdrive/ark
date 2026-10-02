@@ -161,6 +161,7 @@ func TestHandleListTools(t *testing.T) {
 		"get_callers",
 		"get_callees",
 		"get_repository_map",
+		"get_context",
 	}
 
 	if len(result.Tools) != len(expectedTools) {

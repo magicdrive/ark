@@ -1,0 +1,21 @@
+{
+  "scenarios": [
+    {
+      "name": "understand-user-creation",
+      "target_name": "Create",
+      "target_file": "service.go",
+      "budget": 8000,
+      "must_include": ["Create", "Save"],
+      "should_include": ["User"],
+      "must_not_prioritize": ["UnrelatedService"]
+    },
+    {
+      "name": "understand-save",
+      "target_name": "Save",
+      "target_file": "repository.go",
+      "budget": 4000,
+      "must_include": ["Save"],
+      "should_include": ["User"]
+    }
+  ]
+}
