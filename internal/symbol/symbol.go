@@ -44,8 +44,9 @@ type Symbol struct {
 	Kind      SymbolKind
 	Language  string
 
-	Location source.Location
-	Parent   SymbolID
+	Location        source.Location
+	Parent          SymbolID
+	ParentQualified string // qualified name of the parent container, preserved for resolver matching
 
 	Receiver  string // method receiver type name
 	Signature string // optional human-readable signature

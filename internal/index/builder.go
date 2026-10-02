@@ -83,6 +83,7 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 		}
 		if sd.Parent != "" {
 			sym.Parent = symbol.NewSymbolID(lang, string(fileID), symbol.KindUnknown, sd.Parent)
+			sym.ParentQualified = sd.Parent
 		}
 
 		b.symbolsByID[sym.ID] = sym
@@ -158,7 +159,8 @@ func (b *builder) resolve() {
 	}
 
 	for _, res := range resolutions {
-		if res.Confidence < resolver.ConfidenceStrong || len(res.Candidates) == 0 {
+		// Only create a graph edge when resolution is unambiguous.
+		if !res.HasUniqueTarget() {
 			continue
 		}
 		best := res.Candidates[0]
@@ -275,15 +277,61 @@ func (b *builder) freeze() *RepositoryIndex {
 	}
 }
 
+// edgeKey uniquely identifies a directed relationship including its semantic kind.
+// Two edges sharing the same (From, To, Kind) are considered duplicates and merged.
+type edgeKey struct {
+	From symbol.SymbolID
+	To   symbol.SymbolID
+	Kind EdgeKind
+}
+
 func dedupeEdges(edges []GraphEdge) []GraphEdge {
-	seen := make(map[[2]symbol.SymbolID]bool)
-	out := make([]GraphEdge, 0, len(edges))
+	type merged struct {
+		edge  GraphEdge
+		evSeen map[string]bool
+	}
+	seen := make(map[edgeKey]*merged, len(edges))
+	// order preserves first-occurrence ordering before the final sort.
+	order := make([]edgeKey, 0, len(edges))
+
 	for _, e := range edges {
-		key := [2]symbol.SymbolID{e.From, e.To}
-		if !seen[key] {
-			seen[key] = true
-			out = append(out, e)
+		key := edgeKey{e.From, e.To, e.Kind}
+		if m, ok := seen[key]; ok {
+			// Merge: keep the highest confidence.
+			if e.Confidence > m.edge.Confidence {
+				m.edge.Confidence = e.Confidence
+			}
+			// Merge unique evidence entries.
+			for _, ev := range e.Evidence {
+				ek := string(ev.Kind) + "\x00" + ev.Detail
+				if !m.evSeen[ek] {
+					m.evSeen[ek] = true
+					m.edge.Evidence = append(m.edge.Evidence, ev)
+				}
+			}
+		} else {
+			evSeen := make(map[string]bool, len(e.Evidence))
+			for _, ev := range e.Evidence {
+				evSeen[string(ev.Kind)+"\x00"+ev.Detail] = true
+			}
+			m := &merged{edge: e, evSeen: evSeen}
+			seen[key] = m
+			order = append(order, key)
 		}
+	}
+
+	out := make([]GraphEdge, 0, len(order))
+	for _, key := range order {
+		m := seen[key]
+		// Sort evidence deterministically so output is stable.
+		sort.Slice(m.edge.Evidence, func(i, j int) bool {
+			ki, kj := string(m.edge.Evidence[i].Kind), string(m.edge.Evidence[j].Kind)
+			if ki != kj {
+				return ki < kj
+			}
+			return m.edge.Evidence[i].Detail < m.edge.Evidence[j].Detail
+		})
+		out = append(out, m.edge)
 	}
 	sortEdges(out)
 	return out

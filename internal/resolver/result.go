@@ -26,3 +26,10 @@ type Resolution struct {
 	Confidence    Confidence
 	Evidence      []ResolutionEvidence
 }
+
+// HasUniqueTarget reports whether this resolution has exactly one candidate at
+// Strong or higher confidence.  Index builders MUST NOT create a canonical
+// graph edge for a resolution that returns false.
+func (res Resolution) HasUniqueTarget() bool {
+	return len(res.Candidates) == 1 && res.Confidence >= ConfidenceStrong
+}

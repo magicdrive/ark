@@ -147,14 +147,16 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 	return res
 }
 
-// sameFileContainerMatch finds symbols in the same file whose container matches.
+// sameFileContainerMatch finds symbols in the same file whose ParentQualified
+// exactly matches ref.Container.  Top-level symbols (no parent) are never
+// considered a lexical match for a non-empty container.
 func (r *Resolver) sameFileContainerMatch(ref reference.Reference, fi FileIndex) []symbol.Symbol {
 	if ref.Container == "" {
 		return nil
 	}
 	var out []symbol.Symbol
 	for _, sym := range fi.Symbols {
-		if sym.Name == ref.Name && (sym.Parent == "" || strings.HasSuffix(string(sym.Parent), ref.Container)) {
+		if sym.Name == ref.Name && sym.ParentQualified == ref.Container {
 			out = append(out, sym)
 		}
 	}
@@ -293,13 +295,18 @@ func (r *Resolver) byNameSuffix(name string) []symbol.Symbol {
 
 func (r *Resolver) pickBest(res Resolution, syms []symbol.Symbol, conf Confidence, ek EvidenceKind, detail string) Resolution {
 	ev := []ResolutionEvidence{{Kind: ek, Detail: detail}}
+	// Multiple viable candidates must be downgraded to Candidate — never Exact or Strong.
+	effectiveConf := conf
+	if len(syms) > 1 {
+		effectiveConf = ConfidenceCandidate
+	}
 	candidates := make([]Candidate, len(syms))
 	for i, sym := range syms {
-		candidates[i] = symbolToCandidate(sym, conf, ev)
+		candidates[i] = symbolToCandidate(sym, effectiveConf, ev)
 	}
 	sortCandidates(candidates)
 	res.Candidates = candidates
-	res.Confidence = conf
+	res.Confidence = effectiveConf
 	res.Evidence = ev
 	return res
 }
