@@ -28,6 +28,10 @@ func CallersToolDefinitions() []Tool {
 						"type":        "string",
 						"description": "Symbol name or qualified name to look up (e.g. greet or UserService.Create)",
 					},
+					"filePattern": map[string]interface{}{
+						"type":        "string",
+						"description": "File path substring to disambiguate when multiple packages define the same symbol (e.g. internal/resolver)",
+					},
 					"maxDepth": map[string]interface{}{
 						"type":        "integer",
 						"description": "Maximum transitive depth (1 = direct callers only, 0 = unlimited)",
@@ -55,6 +59,10 @@ func CallersToolDefinitions() []Tool {
 					"symbol": map[string]interface{}{
 						"type":        "string",
 						"description": "Symbol name or qualified name to look up",
+					},
+					"filePattern": map[string]interface{}{
+						"type":        "string",
+						"description": "File path substring to disambiguate when multiple packages define the same symbol (e.g. internal/resolver)",
 					},
 					"maxDepth": map[string]interface{}{
 						"type":        "integer",
@@ -103,6 +111,10 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 	if !ok {
 		return nil, fmt.Errorf("symbol parameter is required")
 	}
+	filePattern := ""
+	if v, ok := args["filePattern"].(string); ok {
+		filePattern = v
+	}
 	maxDepth := 1
 	if v, ok := args["maxDepth"].(float64); ok {
 		maxDepth = int(v)
@@ -140,14 +152,25 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 			syms = idx.FindSymbolsByQualified(symName)
 		}
 	}
+	// Apply filePattern filter when provided — narrows same-qualified-name symbols
+	// that exist in multiple packages (e.g. Resolver.Resolve in resolver vs skill).
+	if filePattern != "" {
+		filtered := syms[:0]
+		for _, s := range syms {
+			if strings.Contains(string(s.Location.File), filePattern) {
+				filtered = append(filtered, s)
+			}
+		}
+		syms = filtered
+	}
 	if len(syms) == 0 {
 		out := callersResult{Symbol: symName, Edges: []edgeEntry{}}
 		b, _ := json.MarshalIndent(out, "", "  ")
 		return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
 	}
-	// When multiple symbols share the same short name, merging their edges produces
-	// misleading results. Return an error with candidates so the caller can retry
-	// with a qualified name.
+	// When multiple symbols share the same name, merging their edges produces
+	// misleading results. Return an error listing candidates with file paths so
+	// the caller can retry with filePattern to narrow the match.
 	if len(syms) > 1 {
 		candidates := make([]string, 0, len(syms))
 		for _, s := range syms {
@@ -155,7 +178,7 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		}
 		sort.Strings(candidates)
 		msg := fmt.Sprintf(
-			"Ambiguous symbol %q — %d matches found. Retry with a qualified name:\n%s",
+			"Ambiguous symbol %q — %d matches found. Add filePattern to narrow by file path:\n%s",
 			symName, len(syms), strings.Join(candidates, "\n"),
 		)
 		return &CallToolResult{
