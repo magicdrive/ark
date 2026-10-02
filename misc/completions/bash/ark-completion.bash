@@ -2,19 +2,24 @@
 # Place in /etc/bash_completion.d/ or source manually.
 
 # -------- Common option lists ------------------------------------------------
-_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comments -D"
+_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"
 _gen_opts="--output-filename -o --scan-buffer -b --output-format -f --mask-secrets -m \
 --allow-gitignore -a --additionally-ignorerule -A --with-line-number -n --ignore-dotfile -d \
---pattern-regex -x --include-ext -i --exclude-dir-regex -g --exclude-file-regex -G \
+--pattern-regex -x --include-ext -i --exclude-file-regex -g --exclude-dir-regex -G \
 --exclude-ext -e --exclude-dir -E"
-_mcp_flags="--skip-non-utf8 -s --delete-comments -D"
+_mcp_flags="--skip-non-utf8 -s --delete-comment -D --help -h --version -v"
 _mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
 --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
---exclude-dir-regex -g --exclude-file-regex -G --exclude-ext -e --exclude-dir -E"
-_subcmds="mcp-server syntax symbol skill"
+--exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E"
+_subcmds="mcp-server mcp-init setup syntax symbol skill"
 _syntax_opts="--lang --format -h --help"
 _symbol_opts="--lang --format -h --help"
-_skill_opts="--name --output --archive --force -h --help"
+_skill_opts="init add-explorer update inspect --name --output --archive --force -h --help"
+_skill_init_opts="--name --output --archive -h --help"
+_skill_update_opts="--force --dry-run -h --help"
+_skill_inspect_opts="-h --help"
+_setup_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
+_mcp_init_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 
 # -------- Fallback helpers (if bash-completion is missing) -------------------
 if ! declare -F _get_comp_words_by_ref >/dev/null 2>&1; then
@@ -60,23 +65,42 @@ _ark() {
   local w
   for w in "${COMP_WORDS[@]}"; do
     case $w in
-      mcp-server) mode="mcp";    break ;;
-      syntax)     mode="syntax"; break ;;
-      symbol)     mode="symbol"; break ;;
-      skill)      mode="skill";  break ;;
+      mcp-server) mode="mcp";      break ;;
+      mcp-init)   mode="mcp-init"; break ;;
+      setup)      mode="setup";    break ;;
+      syntax)     mode="syntax";   break ;;
+      symbol)     mode="symbol";   break ;;
+      skill)      mode="skill";    break ;;
     esac
   done
+  if [[ $mode == skill ]]; then
+    for w in "${COMP_WORDS[@]}"; do
+      case $w in
+        init)         mode="skill-init";         break ;;
+        add-explorer) mode="skill-add-explorer"; break ;;
+        update)       mode="skill-update";       break ;;
+        inspect)      mode="skill-inspect";      break ;;
+      esac
+    done
+  fi
 
   # Value suggestions
   case "$prev" in
     --output-format|-f)     COMPREPLY=( $(compgen -W "txt md xml arklite" -- "$cur") ); return ;;
-    --mask-secrets|-m|--allow-gitignore|-a|--with-line-number|-n|--ignore-dotfile|-d|--skip-non-utf8|-s)
+    --mask-secrets|-m|--allow-gitignore|-a|--with-line-number|-n|--ignore-dotfile|-d)
                             COMPREPLY=( $(compgen -W "on off" -- "$cur") ); return ;;
     --include-ext|-i|--exclude-ext|-e)
                             COMPREPLY=( $(compgen -W "go js ts py java c cpp h txt md html css xml yml yaml json" -- "$cur") ); return ;;
-    --output-filename|-o|--additionally-ignorerule|-A|--root|-r) _filedir; return ;;
+    --output-filename|-o|--additionally-ignorerule|-A|--root|-r|--ark-path) _filedir; return ;;
     --type|-t)              COMPREPLY=( $(compgen -W "stdio http" -- "$cur") ); return ;;
-    --http-port|-p)         COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return ;;
+    --http-port)            COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return ;;
+    -p)
+      if [[ $mode == setup || $mode == mcp-init ]]; then
+        _filedir
+      else
+        COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") )
+      fi
+      return ;;
     --scan-buffer|-b)       COMPREPLY=( $(compgen -W "1M 5M 10M 100K" -- "$cur") ); return ;;
     --lang)                 COMPREPLY=( $(compgen -W "go typescript tsx javascript python" -- "$cur") ); return ;;
     --format)               COMPREPLY=( $(compgen -W "text json" -- "$cur") ); return ;;
@@ -84,11 +108,16 @@ _ark() {
 
   # Option suggestions
   case $mode in
-    mcp)    COMPREPLY=( $(compgen -W "${_mcp_flags} ${_mcp_opts}" -- "$cur") ) ;;
-    syntax) COMPREPLY=( $(compgen -W "${_syntax_opts}" -- "$cur") ) ;;
-    symbol) COMPREPLY=( $(compgen -W "${_symbol_opts}" -- "$cur") ) ;;
-    skill)  COMPREPLY=( $(compgen -W "${_skill_opts}" -- "$cur") ) ;;
-    *)      COMPREPLY=( $(compgen -W "${_gen_flags} ${_gen_opts} ${_subcmds}" -- "$cur") ) ;;
+    mcp)                   COMPREPLY=( $(compgen -W "${_mcp_flags} ${_mcp_opts}" -- "$cur") ) ;;
+    mcp-init)              COMPREPLY=( $(compgen -W "${_mcp_init_opts}" -- "$cur") ) ;;
+    setup)                 COMPREPLY=( $(compgen -W "${_setup_opts}" -- "$cur") ) ;;
+    syntax)                COMPREPLY=( $(compgen -W "${_syntax_opts}" -- "$cur") ) ;;
+    symbol)                COMPREPLY=( $(compgen -W "${_symbol_opts}" -- "$cur") ) ;;
+    skill)                 COMPREPLY=( $(compgen -W "${_skill_opts}" -- "$cur") ) ;;
+    skill-init|skill-add-explorer) COMPREPLY=( $(compgen -W "${_skill_init_opts}" -- "$cur") ) ;;
+    skill-update)          COMPREPLY=( $(compgen -W "${_skill_update_opts}" -- "$cur") ) ;;
+    skill-inspect)         COMPREPLY=( $(compgen -W "${_skill_inspect_opts}" -- "$cur") ) ;;
+    *)                     COMPREPLY=( $(compgen -W "${_gen_flags} ${_gen_opts} ${_subcmds}" -- "$cur") ) ;;
   esac
 }
 

@@ -4,7 +4,7 @@
 local -a general_opts mcp_opts subcommands
 general_opts=(
   '--help[-h]' '--version[-v]' '--compless[-c]' '--silent[-S]' '--skip-non-utf8[-s]'
-  '--delete-comments[-D]'
+  '--delete-comment[-D]'
   '--output-filename[-o]:output file:_files'
   '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
   '--output-format[-f]:format:(txt md xml arklite)'
@@ -15,14 +15,14 @@ general_opts=(
   '--ignore-dotfile[-d]:on/off:(on off)'
   '--pattern-regex[-x]:regexp:'
   '--include-ext[-i]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
-  '--exclude-dir-regex[-g]:regexp:' '--exclude-file-regex[-G]:regexp:'
+  '--exclude-file-regex[-g]:regexp:' '--exclude-dir-regex[-G]:regexp:'
   '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
   '--exclude-dir[-E]:dirname:'
 )
 
 mcp_opts=(
   '--root[-r]:root directory:_files -/'
-  '--type[-xtp]:mcp type:(stdio httpp)'
+  '--type[-t]:mcp type:(stdio http)'
   '--http-port[-p]:port number:(8008 8522 8080 9000)'
   '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
   '--mask-secrets[-m]:on/off:(on off)'
@@ -31,14 +31,17 @@ mcp_opts=(
   '--ignore-dotfile[-d]:on/off:(on off)'
   '--pattern-regex[-x]:regexp:'
   '--include-ext[-i]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
-  '--exclude-dir-regex[-g]:regexp:' '--exclude-file-regex[-G]:regexp:'
+  '--exclude-file-regex[-g]:regexp:' '--exclude-dir-regex[-G]:regexp:'
   '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
   '--exclude-dir[-E]:dirname:'
-  '--skip-non-utf8[-s]' '--delete-comments[-D]'
+  '--skip-non-utf8[-s]' '--delete-comment[-D]'
+  '--help[-h]' '--version[-v]'
 )
 
 subcommands=(
   'mcp-server:Start MCP server'
+  'mcp-init:Register MCP server entry in settings.json'
+  'setup:Setup MCP server and Claude Code skill'
   'syntax:Parse file and output AST'
   'symbol:Extract symbols from file'
   'skill:Generate Cline/ChatGPT Skill'
@@ -59,10 +62,31 @@ symbol_opts=(
 )
 
 skill_opts=(
+  '1:subcommand:(init add-explorer update inspect)'
   '--name:Skill name:'
   '--output:Output directory:_files -/'
   '--archive[Create ZIP archive]'
   '--force[Overwrite existing skill]'
+  '-h[Show help]'
+  '--help[Show help]'
+)
+
+setup_opts=(
+  '--name[-n]:Project name:'
+  '--ark-path[-p]:Path to ark binary:_files'
+  '--root[-r]:Root directory:_files -/'
+  '--global[-g]'
+  '--force[-f]'
+  '-h[Show help]'
+  '--help[Show help]'
+)
+
+mcp_init_opts=(
+  '--name[-n]:MCP server name:'
+  '--ark-path[-p]:Path to ark binary:_files'
+  '--root[-r]:Root directory:_files -/'
+  '--global[-g]'
+  '--force[-f]'
   '-h[Show help]'
   '--help[Show help]'
 )
@@ -79,9 +103,31 @@ case $state in
   args)
     case $words[1] in
       mcp-server) _arguments -C "${mcp_opts[@]}" '*:files:_files' ;;
+      mcp-init)   _arguments -C "${mcp_init_opts[@]}" ;;
+      setup)      _arguments -C "${setup_opts[@]}" ;;
       syntax)     _arguments -C "${syntax_opts[@]}" '*:file:_files' ;;
       symbol)     _arguments -C "${symbol_opts[@]}" '*:file:_files' ;;
-      skill)      _arguments -C "${skill_opts[@]}" ;;
+      skill)
+        case $words[2] in
+          init|add-explorer)
+            _arguments -C \
+              '--name:Skill name:' '--output:Output dir:_files -/' \
+              '--archive[Create ZIP archive]' '-h[Show help]' '--help[Show help]'
+            ;;
+          update)
+            _arguments -C \
+              '--force[Force update]' '--dry-run[Dry run]' \
+              '-h[Show help]' '--help[Show help]'
+            ;;
+          inspect)
+            _arguments -C '-h[Show help]' '--help[Show help]'
+            ;;
+          *)
+            _arguments -C "${skill_opts[@]}" \
+              '1:subcommand:(init add-explorer update inspect)'
+            ;;
+        esac
+        ;;
       *)          _arguments -C "${general_opts[@]}" '*:dirname:_files -/' ;;
     esac
     ;;

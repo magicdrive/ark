@@ -9,16 +9,22 @@
 ###############################
 # Common option lists
 ###############################
-_ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comments -D"
+_ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"
 _ark_gen_opts_arg="--output-filename -o --scan-buffer -b --output-format -f --mask-secrets -m \
     --allow-gitignore -a --additionally-ignorerule -A --with-line-number -n --ignore-dotfile -d \
-    --pattern-regex -x --include-ext -i --exclude-dir-regex -g --exclude-file-regex -G \
+    --pattern-regex -x --include-ext -i --exclude-file-regex -g --exclude-dir-regex -G \
     --exclude-ext -e --exclude-dir -E"
-_ark_mcp_flags="--skip-non-utf8 -s --delete-comments -D"
+_ark_mcp_flags="--skip-non-utf8 -s --delete-comment -D --help -h --version -v"
 _ark_mcp_opts_arg="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
-    --exclude-dir-regex -g --exclude-file-regex -G --exclude-ext -e --exclude-dir -E"
-_ark_subcommands="mcp-server syntax symbol skill"
+    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E"
+_ark_subcommands="mcp-server mcp-init setup syntax symbol skill"
+_ark_setup_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
+_ark_mcp_init_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
+_ark_skill_opts="init add-explorer update inspect --name --output --archive --force -h --help"
+_ark_skill_init_opts="--name --output --archive -h --help"
+_ark_skill_update_opts="--force --dry-run -h --help"
+_ark_skill_inspect_opts="-h --help"
 
 ###############################
 # Bash part
@@ -67,28 +73,47 @@ _ark_bash() {
   local mode="general"
   for w in "${words[@]}"; do
     case $w in
-      mcp-server) mode="mcp";    break ;;
-      syntax)     mode="syntax"; break ;;
-      symbol)     mode="symbol"; break ;;
-      skill)      mode="skill";  break ;;
+      mcp-server) mode="mcp";      break ;;
+      mcp-init)   mode="mcp-init"; break ;;
+      setup)      mode="setup";    break ;;
+      syntax)     mode="syntax";   break ;;
+      symbol)     mode="symbol";   break ;;
+      skill)      mode="skill";    break ;;
     esac
   done
+  if [[ $mode == skill ]]; then
+    for w in "${words[@]}"; do
+      case $w in
+        init)         mode="skill-init";         break ;;
+        add-explorer) mode="skill-add-explorer"; break ;;
+        update)       mode="skill-update";       break ;;
+        inspect)      mode="skill-inspect";      break ;;
+      esac
+    done
+  fi
 
   # value completion helper
   _ark_values() {
     case "$prev" in
       --output-format|-f)
         COMPREPLY=( $(compgen -W "txt md xml arklite" -- "$cur") ); return 0 ;;
-      --mask-secrets|-m|--allow-gitignore|-a|--with-line-number|-n|--ignore-dotfile|-d|--skip-non-utf8|-s)
+      --mask-secrets|-m|--allow-gitignore|-a|--with-line-number|-n|--ignore-dotfile|-d)
         COMPREPLY=( $(compgen -W "on off" -- "$cur") ); return 0 ;;
       --include-ext|-i|--exclude-ext|-e)
         COMPREPLY=( $(compgen -W "go js ts py java c cpp h txt md html css xml yml yaml json" -- "$cur") ); return 0 ;;
-      --output-filename|-o|--additionally-ignorerule|-A|--root|-r)
+      --output-filename|-o|--additionally-ignorerule|-A|--root|-r|--ark-path)
         _filedir; return 0 ;;
       --type|-t)
         COMPREPLY=( $(compgen -W "stdio http" -- "$cur") ); return 0 ;;
-      --http-port|-p)
+      --http-port)
         COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") ); return 0 ;;
+      -p)
+        if [[ $mode == setup || $mode == mcp-init ]]; then
+          _filedir
+        else
+          COMPREPLY=( $(compgen -W "8008 8522 8080 9000" -- "$cur") )
+        fi
+        return 0 ;;
       --scan-buffer|-b)
         COMPREPLY=( $(compgen -W "1M 5M 10M 100K" -- "$cur") ); return 0 ;;
       --lang)
@@ -102,11 +127,16 @@ _ark_bash() {
 
   # option completion
   case $mode in
-    mcp)    COMPREPLY=( $(compgen -W "${_ark_mcp_flags} ${_ark_mcp_opts_arg}" -- "$cur") ) ;;
-    syntax) COMPREPLY=( $(compgen -W "--lang --format -h --help" -- "$cur") ) ;;
-    symbol) COMPREPLY=( $(compgen -W "--lang --format -h --help" -- "$cur") ) ;;
-    skill)  COMPREPLY=( $(compgen -W "--name --output --archive --force -h --help" -- "$cur") ) ;;
-    *)      COMPREPLY=( $(compgen -W "${_ark_gen_flags} ${_ark_gen_opts_arg} ${_ark_subcommands}" -- "$cur") ) ;;
+    mcp)                   COMPREPLY=( $(compgen -W "${_ark_mcp_flags} ${_ark_mcp_opts_arg}" -- "$cur") ) ;;
+    mcp-init)              COMPREPLY=( $(compgen -W "${_ark_mcp_init_opts}" -- "$cur") ) ;;
+    setup)                 COMPREPLY=( $(compgen -W "${_ark_setup_opts}" -- "$cur") ) ;;
+    syntax)                COMPREPLY=( $(compgen -W "--lang --format -h --help" -- "$cur") ) ;;
+    symbol)                COMPREPLY=( $(compgen -W "--lang --format -h --help" -- "$cur") ) ;;
+    skill)                 COMPREPLY=( $(compgen -W "${_ark_skill_opts}" -- "$cur") ) ;;
+    skill-init|skill-add-explorer) COMPREPLY=( $(compgen -W "${_ark_skill_init_opts}" -- "$cur") ) ;;
+    skill-update)          COMPREPLY=( $(compgen -W "${_ark_skill_update_opts}" -- "$cur") ) ;;
+    skill-inspect)         COMPREPLY=( $(compgen -W "${_ark_skill_inspect_opts}" -- "$cur") ) ;;
+    *)                     COMPREPLY=( $(compgen -W "${_ark_gen_flags} ${_ark_gen_opts_arg} ${_ark_subcommands}" -- "$cur") ) ;;
   esac
 }
 
@@ -119,7 +149,7 @@ _ark_zsh() {
 
   local -a general_opts=(
     '--help[-h]' '--version[-v]' '--compless[-c]' '--silent[-S]'
-    '--skip-non-utf8[-s]' '--delete-comments[-D]'
+    '--skip-non-utf8[-s]' '--delete-comment[-D]'
     '--output-filename[-o]:output file:_files'
     '--scan-buffer[-b]:buffer size:(1M 5M 10M 100K)'
     '--output-format[-f]:format:(txt md xml arklite)'
@@ -130,8 +160,8 @@ _ark_zsh() {
     '--ignore-dotfile[-d]:on/off:(on off)'
     '--pattern-regex[-x]:regexp:'
     '--include-ext[-i]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
-    '--exclude-dir-regex[-g]:regexp:'
-    '--exclude-file-regex[-G]:regexp:'
+    '--exclude-file-regex[-g]:regexp:'
+    '--exclude-dir-regex[-G]:regexp:'
     '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
     '--exclude-dir[-E]:dirname:'
   )
@@ -147,12 +177,13 @@ _ark_zsh() {
     '--ignore-dotfile[-d]:on/off:(on off)'
     '--pattern-regex[-x]:regexp:'
     '--include-ext[-i]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
-    '--exclude-dir-regex[-g]:regexp:'
-    '--exclude-file-regex[-G]:regexp:'
+    '--exclude-file-regex[-g]:regexp:'
+    '--exclude-dir-regex[-G]:regexp:'
     '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
     '--exclude-dir[-E]:dirname:'
     '--skip-non-utf8[-s]'
-    '--delete-comments[-D]'
+    '--delete-comment[-D]'
+    '--help[-h]' '--version[-v]'
   )
 
   local -a syntax_opts=(
@@ -170,6 +201,7 @@ _ark_zsh() {
   )
 
   local -a skill_opts=(
+    '1:subcommand:(init add-explorer update inspect)'
     '--name:Skill name:'
     '--output:Output directory:_files -/'
     '--archive[Create ZIP archive]'
@@ -178,9 +210,31 @@ _ark_zsh() {
     '--help[Show help]'
   )
 
+  local -a setup_opts=(
+    '--name[-n]:Project name:'
+    '--ark-path[-p]:Path to ark binary:_files'
+    '--root[-r]:Root directory:_files -/'
+    '--global[-g]'
+    '--force[-f]'
+    '-h[Show help]'
+    '--help[Show help]'
+  )
+
+  local -a mcp_init_opts=(
+    '--name[-n]:MCP server name:'
+    '--ark-path[-p]:Path to ark binary:_files'
+    '--root[-r]:Root directory:_files -/'
+    '--global[-g]'
+    '--force[-f]'
+    '-h[Show help]'
+    '--help[Show help]'
+  )
+
   local -a subcommands
   subcommands=(
     'mcp-server:Start MCP server'
+    'mcp-init:Register MCP server entry in settings.json'
+    'setup:Setup MCP server and Claude Code skill'
     'syntax:Parse file and output AST'
     'symbol:Extract symbols from file'
     'skill:Generate Cline/ChatGPT Skill'
@@ -200,6 +254,12 @@ _ark_zsh() {
         mcp-server)
           _arguments -C "${mcp_opts[@]}" '*:files:_files'
           ;;
+        mcp-init)
+          _arguments -C "${mcp_init_opts[@]}"
+          ;;
+        setup)
+          _arguments -C "${setup_opts[@]}"
+          ;;
         syntax)
           _arguments -C "${syntax_opts[@]}" '*:file:_files'
           ;;
@@ -207,7 +267,25 @@ _ark_zsh() {
           _arguments -C "${symbol_opts[@]}" '*:file:_files'
           ;;
         skill)
-          _arguments -C "${skill_opts[@]}"
+          case $words[2] in
+            init|add-explorer)
+              _arguments -C \
+                '--name:Skill name:' '--output:Output dir:_files -/' \
+                '--archive[Create ZIP archive]' '-h[Show help]' '--help[Show help]'
+              ;;
+            update)
+              _arguments -C \
+                '--force[Force update]' '--dry-run[Dry run]' \
+                '-h[Show help]' '--help[Show help]'
+              ;;
+            inspect)
+              _arguments -C '-h[Show help]' '--help[Show help]'
+              ;;
+            *)
+              _arguments -C "${skill_opts[@]}" \
+                '1:subcommand:(init add-explorer update inspect)'
+              ;;
+          esac
           ;;
         *)
           _arguments -C "${general_opts[@]}" '*:dirname:_files -/'
