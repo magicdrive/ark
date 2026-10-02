@@ -110,9 +110,7 @@ func exportedStatements(node *ts.Node, lang *ts.Language, src []byte, file sourc
 				drafts = append(drafts, *d)
 			}
 		case "lexical_declaration":
-			for _, d := range tsLexical(inner, lang, src, file, true) {
-				drafts = append(drafts, d)
-			}
+			drafts = append(drafts, tsLexical(inner, lang, src, file, true)...)
 		}
 	}
 	return drafts

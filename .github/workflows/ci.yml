@@ -21,6 +21,48 @@ jobs:
       - name: Install dependencies
         run: go mod download
 
-      - name: Run tests
-        run: make test
+      - name: Check formatting
+        run: |
+          files=$(gofmt -l .)
+          if [ -n "$files" ]; then
+            echo "gofmt found unformatted files:"
+            echo "$files"
+            exit 1
+          fi
 
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run tests with race detector
+        run: go test -race ./...
+
+      - name: Install staticcheck
+        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+
+      - name: Run staticcheck (intelligence core)
+        run: |
+          staticcheck \
+            ./internal/cache/... \
+            ./internal/context/... \
+            ./internal/index/... \
+            ./internal/resolver/... \
+            ./internal/language/... \
+            ./internal/languages/... \
+            ./internal/mcp/... \
+            ./internal/symbol/... \
+            ./internal/reference/... \
+            ./internal/repomap/... \
+            ./internal/impact/... \
+            ./internal/search/...
+
+      - name: Run fuzz smoke (path containment)
+        run: go test -fuzz=FuzzResolveToolPath -fuzztime=10s ./internal/mcp/
+
+      - name: Run fuzz smoke (cache decode)
+        run: go test -fuzz=FuzzCacheDecoding -fuzztime=10s ./internal/cache/
+
+      - name: Run fuzz smoke (extraction)
+        run: go test -fuzz=FuzzExtract -fuzztime=10s ./internal/languages/golang/

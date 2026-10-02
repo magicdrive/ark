@@ -47,7 +47,6 @@ type Result struct {
 type candidate struct {
 	sym        symbol.Symbol
 	reason     string
-	score      float64
 	confidence resolver.Confidence
 	hopDepth   int
 }

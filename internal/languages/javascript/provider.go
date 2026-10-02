@@ -80,9 +80,7 @@ func jsExported(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 				drafts = append(drafts, *d)
 			}
 		case "lexical_declaration":
-			for _, d := range jsLexical(inner, lang, src, file, true) {
-				drafts = append(drafts, d)
-			}
+			drafts = append(drafts, jsLexical(inner, lang, src, file, true)...)
 		}
 	}
 	return drafts
