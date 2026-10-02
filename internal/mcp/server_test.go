@@ -158,6 +158,8 @@ func TestHandleListTools(t *testing.T) {
 		"get_symbol",
 		"find_references",
 		"get_relations",
+		"get_callers",
+		"get_callees",
 	}
 
 	if len(result.Tools) != len(expectedTools) {
