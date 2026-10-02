@@ -7,7 +7,7 @@ _gen_opts="--output-filename -o --scan-buffer -b --output-format -f --mask-secre
 --allow-gitignore -a --additionally-ignorerule -A --with-line-number -n --ignore-dotfile -d \
 --pattern-regex -x --include-ext -i --exclude-file-regex -g --exclude-dir-regex -G \
 --exclude-ext -e --exclude-dir -E"
-_mcp_flags="--skip-non-utf8 -s --delete-comment -D --help -h --version -v"
+_mcp_flags="--skip-non-utf8 -s --delete-comment -D --no-cache --help -h --version -v"
 _mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
 --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
 --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E"

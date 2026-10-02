@@ -60,7 +60,7 @@ ark setup --name my-project
 - **MCP ツール直接呼び出し** — `mcp__ark__find_symbol`、`mcp__ark__get_symbols` など
 
 ```
-/my-project         ← 10 種類の Ark MCP ツールを持つ探索アシスタントを起動
+/my-project         ← 19 種類の Ark MCP ツールを持つ探索アシスタントを起動
 ```
 
 > **Tip:** プロジェクトルートに `CLAUDE.md` を置くと、Claude Code が自動的に Ark MCP ツールを使うよう誘導できます。すぐ使えるテンプレートを [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example) に用意しています。
@@ -195,6 +195,7 @@ ark mcp-init --force
 | `--exclude-dir <names>` | `-E` | ディレクトリ名で除外 | – |
 | `--skip-non-utf8` | `-s` | 非 UTF-8 ファイルを無視 | – |
 | `--delete-comments` | `-D` | コメントを除去 | – |
+| `--no-cache` | – | 永続インデックスキャッシュを無効化 | – |
 
 ---
 
@@ -287,7 +288,7 @@ ark skill inspect                       # 検出されたスキルを表示
 - `agents/claude-code.md` — Claude Code カスタムエージェント（`mcp__ark__*` ツール名を使用）
 - `references/conventions.md` — プロジェクト規約（Repository Skill のみ）
 
-`agents/claude-code.md` は 10 種類の Ark MCP ツールを使用する Claude Code スラッシュコマンドとして `.claude/commands/` にも自動インストールされます。
+`agents/claude-code.md` は 19 種類の Ark MCP ツールを使用する Claude Code スラッシュコマンドとして `.claude/commands/` にも自動インストールされます。
 
 ---
 
@@ -456,7 +457,31 @@ Symbols: 11
 
 ### 🤖 LLM-Optimized Workflow
 
-MCP ツール（`get_symbols`、`find_symbol`、`get_symbol`）は**階層的な探索パターン**を実現します:
+Ark は **19 種類の MCP ツール**でコードインテリジェンススタック全体をカバーします:
+
+| ツール | 説明 |
+|--------|------|
+| `get_directory_tree` | プロジェクトレイアウトを把握 |
+| `get_symbols` | ファイル内の関数・型を一覧表示 |
+| `find_symbol` | リポジトリ全体からシンボルを検索 |
+| `get_symbol` | 特定の関数・型のソースコードを取得 |
+| `search_in_files` | 全文検索・正規表現検索 |
+| `list_files` | フィルタ対応のファイル一覧 |
+| `get_file_content` | ファイル全体を読み込む |
+| `get_file_info` | ファイルのメタデータ（サイズ・行数・言語） |
+| `get_project_stats` | 言語別ファイル数などの統計 |
+| `get_files_arklite` | 複数ファイルを圧縮形式で取得 |
+| `get_context` | シンボルに対してトークン予算付きのコンテキストを取得 |
+| `find_references` | シンボルの全参照箇所を検索 |
+| `get_relations` | ファイル間のインポート・依存関係を探索 |
+| `get_callers` | あるシンボルを呼び出しているシンボルを検索 |
+| `get_callees` | あるシンボルが呼び出しているシンボルを検索 |
+| `get_repository_map` | LLM 向けのコンパクトなリポジトリマップ |
+| `analyze_change_impact` | シンボル変更の影響範囲を推定 |
+| `search_code` | 種別・名前・型使用などによる構造検索 |
+| `get_language_support` | 対応言語とサポートレベルの一覧 |
+
+コアとなる階層的探索パターン:
 
 ```
 get_directory_tree   →   プロジェクト構造を把握
@@ -466,6 +491,8 @@ get_directory_tree   →   プロジェクト構造を把握
     get_symbols      →   ファイルの内容を一覧表示
         ↓
     get_symbol       →   ソースコードを正確に抽出
+        ↓
+    get_context      →   安全な修正のためのトークン予算付きコンテキスト
 ```
 
 このアプローチにより、ファイル全体を読む場合と比べて**トークン使用量を大幅に削減**しながら、完全なコンテキスト認識を維持できます。

@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/search"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -123,7 +122,13 @@ func (h *ToolsHandler) searchCode(args map[string]interface{}) (*CallToolResult,
 		format = v
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, pathErr := h.resolveToolPath(path)
+	if pathErr != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: pathErr.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	idx, err := h.buildIndex(context.Background(), fullPath)
 	if err != nil {

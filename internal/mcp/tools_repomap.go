@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/repomap"
 )
@@ -57,7 +56,13 @@ func (h *ToolsHandler) getRepositoryMap(args map[string]interface{}) (*CallToolR
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, pathErr := h.resolveToolPath(path)
+	if pathErr != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: pathErr.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	detail := repomap.DetailNormal
 	if v, ok := args["detail"].(string); ok {

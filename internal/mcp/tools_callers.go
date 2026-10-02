@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"sort"
 
 	"github.com/magicdrive/ark/internal/index"
@@ -112,7 +111,13 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		maxResults = int(v)
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, pathErr := h.resolveToolPath(path)
+	if pathErr != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: pathErr.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	idx, err := h.buildIndex(context.Background(), fullPath)
 	if err != nil {

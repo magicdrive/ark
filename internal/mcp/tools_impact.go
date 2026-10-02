@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/graph"
 	"github.com/magicdrive/ark/internal/impact"
@@ -62,7 +61,13 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 		format = v
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, pathErr := h.resolveToolPath(path)
+	if pathErr != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: pathErr.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	idx, err := h.buildIndex(context.Background(), fullPath)
 	if err != nil {

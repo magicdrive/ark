@@ -3,7 +3,6 @@ package mcp
 import (
 	"context"
 	"fmt"
-	"path/filepath"
 
 	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -81,7 +80,13 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 		format = v
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	idx, err := h.buildIndex(context.Background(), fullPath)
 	if err != nil {
