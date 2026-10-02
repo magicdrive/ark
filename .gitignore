@@ -7,6 +7,9 @@ ark-output.arklite.txt
 !/internal/**/*.arklite.txt
 /build
 /tmp
+
+### CLAUDE code
+CLAUDE.md
 /skills
 /.mcp.json
 /.claude/*

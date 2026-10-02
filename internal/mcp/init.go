@@ -39,10 +39,17 @@ func RunMCPInit(opts *MCPInitOptions) error {
 		alreadyExists = true
 	}
 
+	rootArg := opts.RootDir
+	if !opts.Global {
+		if cwd, err := os.Getwd(); err == nil && opts.RootDir == cwd {
+			rootArg = "${CLAUDE_PROJECT_DIR:-.}/"
+		}
+	}
+
 	mcpServers[opts.ServerName] = map[string]any{
 		"type":    "stdio",
 		"command": opts.ArkPath,
-		"args":    []string{"mcp-server", "--root", opts.RootDir},
+		"args":    []string{"mcp-server", "--root", rootArg},
 		"env":     map[string]any{},
 	}
 	settings["mcpServers"] = mcpServers
