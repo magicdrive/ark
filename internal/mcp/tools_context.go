@@ -27,7 +27,7 @@ func ContextToolDefinitions() []Tool {
 					},
 					"maxTokens": map[string]interface{}{
 						"type":        "integer",
-						"description": "Token budget (hard limit)",
+						"description": "Estimated token budget (len(text)/4 approximation); target is always included",
 						"default":     8000,
 					},
 					"maxDepth": map[string]interface{}{

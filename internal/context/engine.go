@@ -84,6 +84,7 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 	usedTokens := 0
 	var items []Item
 	truncated := 0
+	targetTruncated := false
 
 	// Track which source ranges are already covered to avoid duplication.
 	type rangeKey struct {
@@ -112,15 +113,21 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 		}
 
 		tokens := EstimateTokens(src)
+		isTarget := sc.c.reason == "target"
 		if usedTokens+tokens > req.MaxTokens {
-			truncated++
-			continue // keep trying smaller items below
+			if isTarget {
+				// Target is always included even when it exceeds the budget.
+				targetTruncated = true
+			} else {
+				truncated++
+				continue // keep trying smaller items below
+			}
 		}
 
 		covered[rk] = true
 		usedTokens += tokens
 		conf := sc.c.confidence
-		if sc.c.reason == "target" {
+		if isTarget {
 			conf = resolver.ConfidenceExact
 		}
 		items = append(items, Item{
@@ -141,6 +148,7 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 			EstimatedTokens: usedTokens,
 			BudgetTokens:    req.MaxTokens,
 			TruncatedItems:  truncated,
+			TargetTruncated: targetTruncated,
 		},
 	}, nil
 }
@@ -152,6 +160,11 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 
 	add := func(sym symbol.Symbol, reason string, conf resolver.Confidence, depth int) {
 		if seen[sym.ID] {
+			return
+		}
+		// Filter test files unless IncludeTests is set. The target is always added
+		// regardless (reason == "target" check happens at the call site below).
+		if !req.IncludeTests && reason != "target" && isTestFile(string(sym.Location.File)) {
 			return
 		}
 		seen[sym.ID] = true
@@ -209,6 +222,25 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 	}
 
 	return result
+}
+
+// isTestFile reports whether the given repo-relative path is a test file.
+func isTestFile(path string) bool {
+	if strings.HasSuffix(path, "_test.go") {
+		return true
+	}
+	for _, suf := range []string{".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx", ".test.js", ".spec.js"} {
+		if strings.HasSuffix(path, suf) {
+			return true
+		}
+	}
+	if strings.HasSuffix(path, ".py") {
+		base := path[strings.LastIndex(path, "/")+1:]
+		if strings.HasPrefix(base, "test_") || strings.HasSuffix(strings.TrimSuffix(base, ".py"), "_test") {
+			return true
+		}
+	}
+	return false
 }
 
 // readSourceLines reads lines [startLine, endLine] (1-based, inclusive) from a file.

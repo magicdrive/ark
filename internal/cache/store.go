@@ -67,8 +67,10 @@ func (s *FileStore) Get(key CacheKey) (*CachedExtraction, bool, error) {
 		return nil, false, nil
 	}
 
-	// Key mismatch (e.g. content changed).
-	if entry.Key.ContentHash != key.ContentHash || entry.Key.ArkVersion != key.ArkVersion {
+	// Key mismatch (content, ark version, or provider extraction semantics changed).
+	if entry.Key.ContentHash != key.ContentHash ||
+		entry.Key.ArkVersion != key.ArkVersion ||
+		entry.Key.ProviderVersion != key.ProviderVersion {
 		return nil, false, nil
 	}
 

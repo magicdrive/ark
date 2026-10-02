@@ -20,6 +20,7 @@ func (p *Provider) Language() language.Language { return "javascript" }
 func (p *Provider) Extensions() []string {
 	return []string{".js", ".mjs", ".cjs", ".jsx"}
 }
+func (p *Provider) CacheVersion() string { return "1" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.JavascriptLanguage()

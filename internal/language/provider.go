@@ -76,4 +76,8 @@ type Provider interface {
 	Language() Language
 	Extensions() []string
 	Extract(ctx context.Context, file source.FileID, src []byte) (Extraction, error)
+	// CacheVersion returns a version string that must change whenever the
+	// provider's extraction semantics change (grammar upgrade, query change, etc.).
+	// It is embedded in cache keys to invalidate stale extraction results.
+	CacheVersion() string
 }

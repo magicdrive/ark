@@ -11,7 +11,7 @@ import (
 // Request specifies what context to build and how much to spend.
 type Request struct {
 	Target       symbol.SymbolID
-	MaxTokens    int  // hard token budget
+	MaxTokens    int  // estimated token budget (len(text)/4 approximation); target is always included
 	MaxDepth     int  // graph traversal depth (default 2)
 	IncludeTests bool
 }
@@ -32,7 +32,8 @@ type Stats struct {
 	SelectedItems   int
 	EstimatedTokens int
 	BudgetTokens    int
-	TruncatedItems  int // candidates dropped due to budget
+	TruncatedItems  int  // candidates dropped due to budget
+	TargetTruncated bool // true when the target's source exceeded the budget
 }
 
 // Result holds the items selected within budget plus metadata.

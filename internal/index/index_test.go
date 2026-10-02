@@ -106,14 +106,11 @@ func TestIndex_GetSymbol_RoundTrip(t *testing.T) {
 }
 
 func TestIndex_PartialFailure(t *testing.T) {
-	// A directory that doesn't exist should return an index with 0 files, not an error.
+	// A missing root must produce a hard error (not a silent empty index).
 	providers := []language.Provider{golang.NewProvider()}
-	idx, err := index.New(context.Background(), "/nonexistent/path/xyz", providers)
-	if err != nil {
-		t.Fatalf("unexpected error for missing directory: %v", err)
-	}
-	if len(idx.Files()) != 0 {
-		t.Errorf("expected 0 files for missing dir, got %d", len(idx.Files()))
+	_, err := index.New(context.Background(), "/nonexistent/path/xyz", providers)
+	if err == nil {
+		t.Fatal("expected error for missing root, got nil")
 	}
 }
 

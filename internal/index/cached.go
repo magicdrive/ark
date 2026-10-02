@@ -2,6 +2,7 @@ package index
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -22,6 +23,12 @@ var ArkVersion = "0.1.0"
 // On any cache read error the file is re-extracted (cache-miss semantics).
 // Panic is never used for cache failures.
 func NewWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*RepositoryIndex, error) {
+	if info, err := os.Stat(root); err != nil {
+		return nil, fmt.Errorf("index: root %q: %w", root, err)
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("index: root %q is not a directory", root)
+	}
+
 	extMap := make(map[string]language.Provider)
 	for _, p := range providers {
 		for _, ext := range p.Extensions() {
@@ -64,7 +71,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 
 		relPath, _ := filepath.Rel(root, path)
 		fileID := source.FileID(relPath)
-		cacheKey := cache.NewCacheKey(relPath, src, ArkVersion)
+		cacheKey := cache.NewCacheKey(relPath, src, ArkVersion, prov.CacheVersion())
 
 		// Try cache hit first.
 		if cached, hit, _ := store.Get(cacheKey); hit {

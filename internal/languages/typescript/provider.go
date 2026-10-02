@@ -35,6 +35,7 @@ func (p *Provider) Extensions() []string {
 	}
 	return []string{".ts"}
 }
+func (p *Provider) CacheVersion() string { return "1" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()
