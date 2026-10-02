@@ -1,11 +1,12 @@
 package mcp
 
 import (
-	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+
+	_ "embed"
 )
 
 //go:embed claudemd_snippet.md

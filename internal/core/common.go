@@ -11,9 +11,10 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/magicdrive/ark/internal/chardetect"
 	"golang.org/x/text/encoding/japanese"
 	"golang.org/x/text/transform"
+
+	"github.com/magicdrive/ark/internal/chardetect"
 )
 
 func IsHiddenFile(name string) bool {

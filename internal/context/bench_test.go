@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
+
+	arkctx "github.com/magicdrive/ark/internal/context"
 )
 
 func buildBenchIndex(b *testing.B) (*index.RepositoryIndex, string) {

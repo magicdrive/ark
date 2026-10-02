@@ -8,13 +8,13 @@ import (
 
 // Candidate is a single resolved symbol hypothesis.
 type Candidate struct {
-	SymbolID  symbol.SymbolID
-	Name      string
-	Qualified string
-	File      source.FileID
-	Kind      symbol.SymbolKind
+	SymbolID   symbol.SymbolID
+	Name       string
+	Qualified  string
+	File       source.FileID
+	Kind       symbol.SymbolKind
 	Confidence Confidence
-	Evidence  []ResolutionEvidence
+	Evidence   []ResolutionEvidence
 }
 
 // Resolution is the outcome for one Reference.

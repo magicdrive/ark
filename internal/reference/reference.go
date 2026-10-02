@@ -30,7 +30,7 @@ const (
 // Target resolution (Phase 3) is intentionally absent here.
 type Reference struct {
 	ID           ReferenceID
-	Name         string        // raw identifier text, e.g. "Save"
+	Name         string // raw identifier text, e.g. "Save"
 	Kind         ReferenceKind
 	Language     string
 	Location     source.Location

@@ -77,18 +77,18 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 		Distance   int    `json:"distance"`
 	}
 	type out struct {
-		Target        string   `json:"target"`
-		TargetFile    string   `json:"target_file"`
-		TargetLine    uint32   `json:"target_line"`
-		Entries       []entry  `json:"entries"`
-		AffectedFiles []string `json:"affected_files"`
-		UnresolvedCount int    `json:"unresolved_count"`
+		Target          string   `json:"target"`
+		TargetFile      string   `json:"target_file"`
+		TargetLine      uint32   `json:"target_line"`
+		Entries         []entry  `json:"entries"`
+		AffectedFiles   []string `json:"affected_files"`
+		UnresolvedCount int      `json:"unresolved_count"`
 	}
 
 	o := out{
-		Target:        r.Target.Qualified,
-		TargetFile:    string(r.Target.Location.File),
-		TargetLine:    r.Target.Location.Range.Start.Line,
+		Target:          r.Target.Qualified,
+		TargetFile:      string(r.Target.Location.File),
+		TargetLine:      r.Target.Location.Range.Start.Line,
 		UnresolvedCount: len(r.Unresolved),
 	}
 	for _, e := range r.Entries {

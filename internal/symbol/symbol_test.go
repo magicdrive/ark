@@ -11,12 +11,16 @@ func TestNewSymbolID_Deterministic(t *testing.T) {
 }
 
 func TestNewSymbolID_Distinct(t *testing.T) {
-	cases := []struct{ lang, path string; kind SymbolKind; qualified string }{
+	cases := []struct {
+		lang, path string
+		kind       SymbolKind
+		qualified  string
+	}{
 		{"go", "a.go", KindFunction, "Foo"},
-		{"go", "a.go", KindMethod, "Foo"},    // different kind
-		{"go", "b.go", KindFunction, "Foo"},   // different path
-		{"ts", "a.go", KindFunction, "Foo"},   // different lang
-		{"go", "a.go", KindFunction, "Bar"},   // different qualified
+		{"go", "a.go", KindMethod, "Foo"},   // different kind
+		{"go", "b.go", KindFunction, "Foo"}, // different path
+		{"ts", "a.go", KindFunction, "Foo"}, // different lang
+		{"go", "a.go", KindFunction, "Bar"}, // different qualified
 	}
 	seen := make(map[SymbolID]struct{})
 	for _, c := range cases {

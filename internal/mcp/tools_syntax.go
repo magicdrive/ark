@@ -326,15 +326,15 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 	}
 
 	type searchStats struct {
-		FilesScanned  int `json:"filesScanned"`
-		FilesSkipped  int `json:"filesSkipped"`
-		ParseErrors   int `json:"parseErrors"`
+		FilesScanned int `json:"filesScanned"`
+		FilesSkipped int `json:"filesSkipped"`
+		ParseErrors  int `json:"parseErrors"`
 	}
 	type searchResult struct {
-		Query   string             `json:"query"`
+		Query   string               `json:"query"`
 		Matches []syntax.SymbolMatch `json:"matches"`
-		Stats   searchStats        `json:"stats"`
-		Message string             `json:"message,omitempty"`
+		Stats   searchStats          `json:"stats"`
+		Message string               `json:"message,omitempty"`
 	}
 
 	result := searchResult{

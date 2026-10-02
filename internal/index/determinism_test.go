@@ -17,8 +17,8 @@ func TestIndex_DeterministicRepeated(t *testing.T) {
 	providers := benchmarkProviders()
 
 	type snapshot struct {
-		files   []string
-		symbols []string
+		files    []string
+		symbols  []string
 		statsStr string
 	}
 

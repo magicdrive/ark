@@ -4,10 +4,11 @@ import (
 	"context"
 	"testing"
 
-	ctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
+
+	ctx "github.com/magicdrive/ark/internal/context"
 )
 
 const fixtureDir = "testdata/fixtures/user_service"

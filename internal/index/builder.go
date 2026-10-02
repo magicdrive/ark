@@ -287,7 +287,7 @@ type edgeKey struct {
 
 func dedupeEdges(edges []GraphEdge) []GraphEdge {
 	type merged struct {
-		edge  GraphEdge
+		edge   GraphEdge
 		evSeen map[string]bool
 	}
 	seen := make(map[edgeKey]*merged, len(edges))

@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/symbol"
+
+	arkctx "github.com/magicdrive/ark/internal/context"
 )
 
 // ContextToolDefinitions returns the get_context tool definition.

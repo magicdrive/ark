@@ -87,7 +87,7 @@ func TestSameFileMatch(t *testing.T) {
 // Test 2: same-package call (different file, same directory) → ConfidenceStrong
 func TestSamePackageMatch(t *testing.T) {
 	save := makeSymbol("Save", "Save", symbol.KindFunction, 2) // pkg/b.go
-	ref := makeRef("Save", "", reference.KindCall, 1, "")       // pkg/a.go
+	ref := makeRef("Save", "", reference.KindCall, 1, "")      // pkg/a.go
 
 	r := resolver.New([]resolver.FileIndex{
 		{FileID: "pkg/a.go", Language: "go", References: []reference.Reference{ref}},

@@ -34,9 +34,9 @@ func TestArkMetadata_GenerateFrontmatter(t *testing.T) {
 
 func TestParseFrontmatter(t *testing.T) {
 	tests := []struct {
-		name    string
-		content string
-		wantNil bool
+		name     string
+		content  string
+		wantNil  bool
 		wantType string
 	}{
 		{"no frontmatter", "# Just content", true, ""},

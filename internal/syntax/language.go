@@ -4,8 +4,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
+
+	ts "github.com/odvcencio/gotreesitter"
 )
 
 // SupportedLanguage represents a language supported by syntax analysis

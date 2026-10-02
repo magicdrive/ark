@@ -56,8 +56,8 @@ type ReferenceDraft struct {
 
 // ImportDraft is a raw import extracted from a source file.
 type ImportDraft struct {
-	Path     string         // import path, e.g. "fmt" or "github.com/foo/bar"
-	Alias    string         // "" = use base name, "." = dot-import, "_" = blank
+	Path     string // import path, e.g. "fmt" or "github.com/foo/bar"
+	Alias    string // "" = use base name, "." = dot-import, "_" = blank
 	Location source.Location
 }
 

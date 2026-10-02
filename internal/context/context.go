@@ -11,8 +11,8 @@ import (
 // Request specifies what context to build and how much to spend.
 type Request struct {
 	Target       symbol.SymbolID
-	MaxTokens    int  // estimated token budget (len(text)/4 approximation); target is always included
-	MaxDepth     int  // graph traversal depth (default 2)
+	MaxTokens    int // estimated token budget (len(text)/4 approximation); target is always included
+	MaxDepth     int // graph traversal depth (default 2)
 	IncludeTests bool
 }
 

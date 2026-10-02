@@ -8,11 +8,12 @@ import (
 	"strings"
 	"testing"
 
-	ctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/symbol"
+
+	ctx "github.com/magicdrive/ark/internal/context"
 )
 
 type scenario struct {

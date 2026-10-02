@@ -5,10 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
+
+	arkctx "github.com/magicdrive/ark/internal/context"
 )
 
 func buildCtxIndex(t *testing.T) (*index.RepositoryIndex, string) {

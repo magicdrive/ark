@@ -15,12 +15,12 @@ import (
 // Same-file duplicate names must yield Candidate, never Exact.
 func TestAmbiguity_SameFileDuplicateNames(t *testing.T) {
 	sym1 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "pkg/a.go"},
 	}
 	sym2 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "pkg/a.go", symbol.KindMethod, "Bar.Foo"),
+		ID:   symbol.NewSymbolID("go", "pkg/a.go", symbol.KindMethod, "Bar.Foo"),
 		Name: "Foo", Qualified: "Bar.Foo", Kind: symbol.KindMethod, Language: "go",
 		Location: source.Location{File: "pkg/a.go"},
 	}
@@ -29,7 +29,7 @@ func TestAmbiguity_SameFileDuplicateNames(t *testing.T) {
 		Range: source.Range{Start: source.Position{Line: 20}},
 	}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 	}
 	r := resolver.New([]resolver.FileIndex{
@@ -55,12 +55,12 @@ func TestAmbiguity_SameFileDuplicateNames(t *testing.T) {
 // Same-package duplicate names must yield Candidate, never Strong.
 func TestAmbiguity_SamePackageDuplicateNames(t *testing.T) {
 	sym1 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "pkg/a.go"},
 	}
 	sym2 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "pkg/b.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "pkg/b.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "pkg/b.go"},
 	}
@@ -69,7 +69,7 @@ func TestAmbiguity_SamePackageDuplicateNames(t *testing.T) {
 		Range: source.Range{Start: source.Position{Line: 5}},
 	}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "pkg/c.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "pkg/c.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 	}
 	r := resolver.New([]resolver.FileIndex{
@@ -94,12 +94,12 @@ func TestAmbiguity_SamePackageDuplicateNames(t *testing.T) {
 // Multiple import candidates must yield Candidate.
 func TestAmbiguity_MultipleImportedCandidates(t *testing.T) {
 	sym1 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "fmt/print.go", symbol.KindFunction, "Println"),
+		ID:   symbol.NewSymbolID("go", "fmt/print.go", symbol.KindFunction, "Println"),
 		Name: "Println", Qualified: "Println", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "fmt/print.go"},
 	}
 	sym2 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "fmt/format.go", symbol.KindFunction, "Println"),
+		ID:   symbol.NewSymbolID("go", "fmt/format.go", symbol.KindFunction, "Println"),
 		Name: "Println", Qualified: "Println", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "fmt/format.go"},
 	}
@@ -108,7 +108,7 @@ func TestAmbiguity_MultipleImportedCandidates(t *testing.T) {
 		Range: source.Range{Start: source.Position{Line: 10}},
 	}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "pkg/main.go", reference.KindCall, "fmt.Println", refLoc),
+		ID:   reference.NewReferenceID("go", "pkg/main.go", reference.KindCall, "fmt.Println", refLoc),
 		Name: "fmt.Println", Kind: reference.KindCall, Language: "go",
 		Location: refLoc, ReceiverExpr: "fmt",
 	}
@@ -134,13 +134,13 @@ func TestAmbiguity_MultipleImportedCandidates(t *testing.T) {
 // Method names shared by unrelated types must yield Candidate.
 func TestAmbiguity_MethodNameSharedByUnrelatedTypes(t *testing.T) {
 	sym1 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "svc/service.go", symbol.KindMethod, "UserService.Save"),
+		ID:   symbol.NewSymbolID("go", "svc/service.go", symbol.KindMethod, "UserService.Save"),
 		Name: "Save", Qualified: "UserService.Save", Kind: symbol.KindMethod, Language: "go",
 		Location: source.Location{File: "svc/service.go"},
 		Receiver: "UserService",
 	}
 	sym2 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "repo/repository.go", symbol.KindMethod, "UserRepository.Save"),
+		ID:   symbol.NewSymbolID("go", "repo/repository.go", symbol.KindMethod, "UserRepository.Save"),
 		Name: "Save", Qualified: "UserRepository.Save", Kind: symbol.KindMethod, Language: "go",
 		Location: source.Location{File: "repo/repository.go"},
 		Receiver: "UserRepository",
@@ -150,7 +150,7 @@ func TestAmbiguity_MethodNameSharedByUnrelatedTypes(t *testing.T) {
 		Range: source.Range{Start: source.Position{Line: 5}},
 	}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "main/main.go", reference.KindCall, "Save", refLoc),
+		ID:   reference.NewReferenceID("go", "main/main.go", reference.KindCall, "Save", refLoc),
 		Name: "Save", Kind: reference.KindCall, Language: "go", Location: refLoc,
 	}
 	r := resolver.New([]resolver.FileIndex{
@@ -171,12 +171,12 @@ func TestAmbiguity_MethodNameSharedByUnrelatedTypes(t *testing.T) {
 // Candidate ordering must be stable across repeated calls.
 func TestAmbiguity_CandidateOrderingIsStable(t *testing.T) {
 	sym1 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "a/a.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "a/a.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "a/a.go"},
 	}
 	sym2 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "b/b.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "b/b.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "b/b.go"},
 	}
@@ -185,7 +185,7 @@ func TestAmbiguity_CandidateOrderingIsStable(t *testing.T) {
 		Range: source.Range{Start: source.Position{Line: 5}},
 	}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "c/c.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "c/c.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 	}
 	files := []resolver.FileIndex{
@@ -218,18 +218,18 @@ func TestAmbiguity_CandidateOrderingIsStable(t *testing.T) {
 // HasUniqueTarget must return false for multiple candidates.
 func TestHasUniqueTarget_Multiple(t *testing.T) {
 	sym1 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "a/a.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "a/a.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "a/a.go"},
 	}
 	sym2 := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "b/b.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "b/b.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "b/b.go"},
 	}
 	refLoc := source.Location{File: "c/c.go", Range: source.Range{Start: source.Position{Line: 5}}}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "c/c.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "c/c.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 	}
 	r := resolver.New([]resolver.FileIndex{
@@ -249,13 +249,13 @@ func TestHasUniqueTarget_Multiple(t *testing.T) {
 // HasUniqueTarget must return true for a single strong match.
 func TestHasUniqueTarget_Single(t *testing.T) {
 	sym := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "pkg/a.go"},
 	}
 	refLoc := source.Location{File: "pkg/a.go", Range: source.Range{Start: source.Position{Line: 10}}}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 	}
 	r := resolver.New([]resolver.FileIndex{
@@ -276,7 +276,7 @@ func TestHasUniqueTarget_Single(t *testing.T) {
 func TestContainer_TopLevelNotLexical(t *testing.T) {
 	// topFoo is top-level (no parent); ref.Container is "SomeMethod"
 	topFoo := symbol.Symbol{
-		ID: symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
+		ID:   symbol.NewSymbolID("go", "pkg/a.go", symbol.KindFunction, "Foo"),
 		Name: "Foo", Qualified: "Foo", Kind: symbol.KindFunction, Language: "go",
 		Location: source.Location{File: "pkg/a.go"},
 		// ParentQualified deliberately empty — top-level symbol
@@ -287,7 +287,7 @@ func TestContainer_TopLevelNotLexical(t *testing.T) {
 	}
 	// Reference inside "SomeMethod" to "Foo"
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 		Container: "SomeMethod", // The reference is inside SomeMethod
 	}
@@ -327,7 +327,7 @@ func TestContainer_NestedSymbolMatchesContainer(t *testing.T) {
 		Range: source.Range{Start: source.Position{Line: 20}},
 	}
 	ref := reference.Reference{
-		ID: reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
+		ID:   reference.NewReferenceID("go", "pkg/a.go", reference.KindCall, "Foo", refLoc),
 		Name: "Foo", Kind: reference.KindCall, Language: "go", Location: refLoc,
 		Container: "SomeMethod",
 	}

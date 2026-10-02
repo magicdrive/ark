@@ -45,8 +45,8 @@ type ImpactEntry struct {
 // ImpactResult is the full output of Analyze.
 type ImpactResult struct {
 	Target        symbol.Symbol
-	Entries       []ImpactEntry      // sorted: category priority then SymbolID
-	AffectedFiles []source.FileID    // deduplicated, sorted
+	Entries       []ImpactEntry   // sorted: category priority then SymbolID
+	AffectedFiles []source.FileID // deduplicated, sorted
 	Unresolved    []reference.Reference
 	Diagnostics   []language.Diagnostic
 }
