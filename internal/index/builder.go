@@ -113,6 +113,19 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 		fileRefs = append(fileRefs, ref)
 		b.stats.References++
 	}
+	// Also index imports as KindImport references so package-dependency queries
+	// (e.g. repomap) can use ReferencesByFile without a separate import API.
+	for _, imp := range ex.Imports {
+		ref := reference.Reference{
+			ID:       reference.NewReferenceID(lang, fileID, reference.KindImport, imp.Path, imp.Location),
+			Name:     imp.Path,
+			Kind:     reference.KindImport,
+			Language: lang,
+			Location: imp.Location,
+		}
+		fileRefs = append(fileRefs, ref)
+		b.stats.References++
+	}
 	b.referencesByFile[fileID] = fileRefs
 
 	b.resolverFiles = append(b.resolverFiles, resolver.FileIndex{

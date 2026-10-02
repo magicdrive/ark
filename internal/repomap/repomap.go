@@ -63,6 +63,7 @@ type PackageEntry struct {
 	IsGenerated        bool
 	IsVendor           bool
 	InboundPackageRefs int // number of other packages that import this one
+	rawSymbolCount     int // total exported symbols before MaxSymbols trim
 	fileCount          int
 }
 
@@ -181,6 +182,7 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 			}
 			return symEntries[i].Name < symEntries[j].Name
 		})
+		entry.rawSymbolCount = len(symEntries)
 		if len(symEntries) > opts.MaxSymbols {
 			symEntries = symEntries[:opts.MaxSymbols]
 		}
@@ -340,7 +342,9 @@ func packageScore(p PackageEntry) int {
 			score -= 1000
 		}
 	}
-	score += len(p.Symbols) * 2
+	// Use the raw (pre-trim) count so packages with many symbols aren't
+	// artificially capped at MaxSymbols (typically 10) before scoring.
+	score += p.rawSymbolCount * 2
 	// Packages that are imported by many others are semantically central.
 	// Weight this more heavily than raw symbol count so core packages
 	// (e.g. internal/index, internal/symbol) rank above utility packages
