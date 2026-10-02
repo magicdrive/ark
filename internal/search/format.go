@@ -38,10 +38,10 @@ func Format(r *Result, q Query) string {
 // FormatJSON returns a JSON encoding of the result.
 func FormatJSON(r *Result) ([]byte, error) {
 	type jsonMatch struct {
-		Kind      string      `json:"kind"`
-		Symbol    interface{} `json:"symbol,omitempty"`
-		File      string      `json:"file"`
-		Line      uint32      `json:"line"`
+		Kind   string      `json:"kind"`
+		Symbol interface{} `json:"symbol,omitempty"`
+		File   string      `json:"file"`
+		Line   uint32      `json:"line"`
 	}
 	out := make([]jsonMatch, 0, len(r.Matches))
 	for _, m := range r.Matches {

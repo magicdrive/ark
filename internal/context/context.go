@@ -11,19 +11,20 @@ import (
 // Request specifies what context to build and how much to spend.
 type Request struct {
 	Target       symbol.SymbolID
-	MaxTokens    int  // hard token budget
-	MaxDepth     int  // graph traversal depth (default 2)
+	MaxTokens    int // estimated token budget (len(text)/4 approximation); target is always included
+	MaxDepth     int // graph traversal depth (default 2)
 	IncludeTests bool
 }
 
 // Item is one piece of context: a symbol and its source text.
 type Item struct {
-	Symbol     symbol.Symbol
-	Source     string // source text for the symbol's range
-	Reason     string // why this was included ("target", "direct callee", …)
-	Score      float64
-	Confidence resolver.Confidence
-	Tokens     int // estimated tokens for Source
+	Symbol         symbol.Symbol
+	Source         string // source text for the symbol's range
+	Reason         string // why this was included ("target", "direct callee", …)
+	Score          float64
+	ScoreBreakdown map[string]float64 // per-factor breakdown from the ranker
+	Confidence     resolver.Confidence
+	Tokens         int // estimated tokens for Source
 }
 
 // Stats describes budget usage for a context build.
@@ -32,7 +33,8 @@ type Stats struct {
 	SelectedItems   int
 	EstimatedTokens int
 	BudgetTokens    int
-	TruncatedItems  int // candidates dropped due to budget
+	TruncatedItems  int  // candidates dropped due to budget
+	TargetTruncated bool // true when the target's source exceeded the budget
 }
 
 // Result holds the items selected within budget plus metadata.
@@ -46,7 +48,6 @@ type Result struct {
 type candidate struct {
 	sym        symbol.Symbol
 	reason     string
-	score      float64
 	confidence resolver.Confidence
 	hopDepth   int
 }

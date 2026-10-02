@@ -15,7 +15,7 @@ func TestFileStore_PutGet(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	key := NewCacheKey("pkg/foo.go", []byte("package foo"), "0.1.0")
+	key := NewCacheKey("pkg/foo.go", []byte("package foo"), "0.1.0", "pv1")
 	entry := &CachedExtraction{
 		Key:      key,
 		Language: "go",
@@ -45,10 +45,10 @@ func TestFileStore_MissOnContentChange(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := NewFileStore(dir)
 
-	key1 := NewCacheKey("a.go", []byte("v1"), "0.1.0")
+	key1 := NewCacheKey("a.go", []byte("v1"), "0.1.0", "pv1")
 	_ = store.Put(&CachedExtraction{Key: key1, Language: "go"})
 
-	key2 := NewCacheKey("a.go", []byte("v2"), "0.1.0") // different content
+	key2 := NewCacheKey("a.go", []byte("v2"), "0.1.0", "pv1") // different content
 	_, hit, _ := store.Get(key2)
 	if hit {
 		t.Fatal("different content should be a cache miss")
@@ -59,7 +59,7 @@ func TestFileStore_SchemaIncompatible(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := NewFileStore(dir)
 
-	key := NewCacheKey("a.go", []byte("x"), "0.1.0")
+	key := NewCacheKey("a.go", []byte("x"), "0.1.0", "pv1")
 	entry := &CachedExtraction{Key: key, Language: "go"}
 	_ = store.Put(entry)
 
@@ -79,7 +79,7 @@ func TestFileStore_CorruptJSON(t *testing.T) {
 	dir := t.TempDir()
 	store, _ := NewFileStore(dir)
 
-	key := NewCacheKey("a.go", []byte("x"), "0.1.0")
+	key := NewCacheKey("a.go", []byte("x"), "0.1.0", "pv1")
 	p, _ := store.path(key)
 	_ = os.WriteFile(p, []byte(`not json`), 0o600)
 
@@ -94,7 +94,7 @@ func TestFileStore_CorruptJSON(t *testing.T) {
 
 func TestNopStore(t *testing.T) {
 	var s NopStore
-	key := NewCacheKey("a.go", []byte("x"), "0.1.0")
+	key := NewCacheKey("a.go", []byte("x"), "0.1.0", "pv1")
 	entry := &CachedExtraction{Key: key}
 	_ = s.Put(entry)
 	_, hit, _ := s.Get(key)
@@ -108,7 +108,7 @@ func TestFileStore_Clear(t *testing.T) {
 	store, _ := NewFileStore(dir)
 
 	for i := range 3 {
-		k := NewCacheKey("f.go", []byte{byte(i)}, "0.1.0")
+		k := NewCacheKey("f.go", []byte{byte(i)}, "0.1.0", "pv1")
 		_ = store.Put(&CachedExtraction{Key: k, Language: "go"})
 	}
 	if err := store.Clear(); err != nil {

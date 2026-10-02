@@ -16,24 +16,24 @@ type SymbolID string
 type SymbolKind string
 
 const (
-	KindPackage    SymbolKind = "package"
-	KindModule     SymbolKind = "module"
-	KindNamespace  SymbolKind = "namespace"
-	KindClass      SymbolKind = "class"
-	KindInterface  SymbolKind = "interface"
-	KindStruct     SymbolKind = "struct"
-	KindEnum       SymbolKind = "enum"
-	KindType       SymbolKind = "type"
-	KindTypeAlias  SymbolKind = "type_alias"
-	KindFunction   SymbolKind = "function"
-	KindMethod     SymbolKind = "method"
+	KindPackage     SymbolKind = "package"
+	KindModule      SymbolKind = "module"
+	KindNamespace   SymbolKind = "namespace"
+	KindClass       SymbolKind = "class"
+	KindInterface   SymbolKind = "interface"
+	KindStruct      SymbolKind = "struct"
+	KindEnum        SymbolKind = "enum"
+	KindType        SymbolKind = "type"
+	KindTypeAlias   SymbolKind = "type_alias"
+	KindFunction    SymbolKind = "function"
+	KindMethod      SymbolKind = "method"
 	KindConstructor SymbolKind = "constructor"
-	KindField      SymbolKind = "field"
-	KindProperty   SymbolKind = "property"
-	KindVariable   SymbolKind = "variable"
-	KindConstant   SymbolKind = "constant"
-	KindParameter  SymbolKind = "parameter"
-	KindUnknown    SymbolKind = "unknown"
+	KindField       SymbolKind = "field"
+	KindProperty    SymbolKind = "property"
+	KindVariable    SymbolKind = "variable"
+	KindConstant    SymbolKind = "constant"
+	KindParameter   SymbolKind = "parameter"
+	KindUnknown     SymbolKind = "unknown"
 )
 
 // Symbol is the canonical domain representation of a code symbol.
@@ -44,8 +44,9 @@ type Symbol struct {
 	Kind      SymbolKind
 	Language  string
 
-	Location source.Location
-	Parent   SymbolID
+	Location        source.Location
+	Parent          SymbolID
+	ParentQualified string // qualified name of the parent container, preserved for resolver matching
 
 	Receiver  string // method receiver type name
 	Signature string // optional human-readable signature

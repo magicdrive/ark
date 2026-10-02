@@ -29,9 +29,9 @@ func TestExtractPythonSymbols(t *testing.T) {
 	}
 
 	want := map[string]symbol.SymbolKind{
-		"UserService":  symbol.KindClass,
-		"User":         symbol.KindClass,
-		"format_user":  symbol.KindFunction,
+		"UserService": symbol.KindClass,
+		"User":        symbol.KindClass,
+		"format_user": symbol.KindFunction,
 	}
 
 	got := make(map[string]symbol.SymbolKind)

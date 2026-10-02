@@ -3,8 +3,9 @@ package javascript
 import (
 	"context"
 
-	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
+
+	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/source"
@@ -20,6 +21,7 @@ func (p *Provider) Language() language.Language { return "javascript" }
 func (p *Provider) Extensions() []string {
 	return []string{".js", ".mjs", ".cjs", ".jsx"}
 }
+func (p *Provider) CacheVersion() string { return "1" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.JavascriptLanguage()
@@ -79,9 +81,7 @@ func jsExported(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 				drafts = append(drafts, *d)
 			}
 		case "lexical_declaration":
-			for _, d := range jsLexical(inner, lang, src, file, true) {
-				drafts = append(drafts, d)
-			}
+			drafts = append(drafts, jsLexical(inner, lang, src, file, true)...)
 		}
 	}
 	return drafts

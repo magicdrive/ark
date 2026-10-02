@@ -29,11 +29,11 @@ func TestExtractTypeScriptSymbols(t *testing.T) {
 	}
 
 	want := map[string]symbol.SymbolKind{
-		"Repository":     symbol.KindInterface,
-		"UserID":         symbol.KindTypeAlias,
-		"UserService":    symbol.KindClass,
-		"User":           symbol.KindClass,
-		"formatUser":     symbol.KindFunction,
+		"Repository":      symbol.KindInterface,
+		"UserID":          symbol.KindTypeAlias,
+		"UserService":     symbol.KindClass,
+		"User":            symbol.KindClass,
+		"formatUser":      symbol.KindFunction,
 		"DEFAULT_TIMEOUT": symbol.KindConstant,
 	}
 

@@ -7,8 +7,8 @@ import (
 	"github.com/magicdrive/ark/internal/graph"
 	"github.com/magicdrive/ark/internal/impact"
 	"github.com/magicdrive/ark/internal/index"
-	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/symbol"
 )

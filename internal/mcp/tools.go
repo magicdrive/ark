@@ -350,7 +350,13 @@ func (h *ToolsHandler) getDirectoryTree(args map[string]interface{}) (*CallToolR
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 	tree, err := GenerateDirectoryTreeJSON(fullPath)
 	if err != nil {
 		return &CallToolResult{
@@ -370,7 +376,13 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	// Create option based on parameters
 	opt := *h.opt // Copy base options
@@ -411,7 +423,13 @@ func (h *ToolsHandler) listFiles(args map[string]interface{}) (*CallToolResult, 
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	// Create option based on parameters
 	opt := *h.opt // Copy base options
@@ -475,7 +493,13 @@ func (h *ToolsHandler) searchInFiles(args map[string]interface{}) (*CallToolResu
 		return nil, fmt.Errorf("query parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	isRegex := false
 	if val, ok := args["isRegex"].(bool); ok {
@@ -532,7 +556,13 @@ func (h *ToolsHandler) getFileInfo(args map[string]interface{}) (*CallToolResult
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	info, err := os.Stat(fullPath)
 	if err != nil {
@@ -573,7 +603,13 @@ func (h *ToolsHandler) getProjectStats(args map[string]interface{}) (*CallToolRe
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath := filepath.Join(h.rootDir, path)
+	fullPath, _, err := h.resolveToolPath(path)
+	if err != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: err.Error()}},
+			IsError: true,
+		}, nil
+	}
 
 	// Create option based on parameters
 	opt := *h.opt // Copy base options
@@ -655,10 +691,17 @@ func (h *ToolsHandler) getFilesArklite(args map[string]interface{}) (*CallToolRe
 		opt.DeleteCommentsFlag = deleteComments
 	}
 
-	// Convert relative paths to absolute
-	fullPaths := make([]string, len(paths))
-	for i, path := range paths {
-		fullPaths[i] = filepath.Join(h.rootDir, path)
+	// Resolve and validate each path against the repository root.
+	fullPaths := make([]string, 0, len(paths))
+	for _, path := range paths {
+		fullPath, _, pathErr := h.resolveToolPath(path)
+		if pathErr != nil {
+			return &CallToolResult{
+				Content: []Content{{Type: "text", Text: pathErr.Error()}},
+				IsError: true,
+			}, nil
+		}
+		fullPaths = append(fullPaths, fullPath)
 	}
 
 	content, err := GenerateArkliteForFiles(fullPaths, &opt)

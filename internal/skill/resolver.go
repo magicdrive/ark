@@ -37,12 +37,12 @@ func (m ResolvedMode) String() string {
 
 // ResolutionResult holds the resolved mode and related context
 type ResolutionResult struct {
-	Mode           ResolvedMode
-	Detection      *DetectionResult
-	ExistingArk    *DetectedSkill // Set when ModeAlreadyExists
-	Message        string         // Human-readable explanation
-	SuggestedName  string         // Suggested skill name
-	SuggestedPath  string         // Suggested output path
+	Mode          ResolvedMode
+	Detection     *DetectionResult
+	ExistingArk   *DetectedSkill // Set when ModeAlreadyExists
+	Message       string         // Human-readable explanation
+	SuggestedName string         // Suggested skill name
+	SuggestedPath string         // Suggested output path
 }
 
 // Resolver determines the appropriate skill generation mode

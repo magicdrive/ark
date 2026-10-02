@@ -48,6 +48,37 @@ test-verbose:
 	@$(GO) clean -testcache
 	@$(GO) test -v $(CURDIR)/...
 
+# Run go test with race detector
+.PHONY: race
+race:
+	@$(GO) test -race $(CURDIR)/...
+
+# Run go vet
+.PHONY: vet
+vet:
+	@$(GO) vet $(CURDIR)/...
+
+# Run staticcheck (install with: go install honnef.co/go/tools/cmd/staticcheck@latest)
+.PHONY: staticcheck
+staticcheck:
+	@staticcheck $(CURDIR)/...
+
+# Run all quality gates: vet + test + race + staticcheck
+.PHONY: lint
+lint: vet test race staticcheck
+
+# Run fuzz smoke tests (short, for local use)
+.PHONY: fuzz
+fuzz:
+	@$(GO) test -fuzz=FuzzResolveToolPath -fuzztime=10s $(CURDIR)/internal/mcp/
+	@$(GO) test -fuzz=FuzzCacheDecoding   -fuzztime=10s $(CURDIR)/internal/cache/
+	@$(GO) test -fuzz=FuzzExtract         -fuzztime=10s $(CURDIR)/internal/languages/golang/
+
+# Run intelligence benchmarks
+.PHONY: bench
+bench:
+	@$(GO) test -bench=. -benchmem $(CURDIR)/internal/index/ $(CURDIR)/internal/context/ $(CURDIR)/internal/resolver/
+
 # Install application. Use `go install`
 .PHONY: install
 install:
@@ -93,6 +124,12 @@ help:
 	@echo "  make install           - Install application. Use `go install`"
 	@echo "  make test              - Run go test"
 	@echo "  make test-verbose      - Run go test -v with go clean -testcache"
+	@echo "  make race              - Run go test -race"
+	@echo "  make vet               - Run go vet"
+	@echo "  make staticcheck       - Run staticcheck"
+	@echo "  make lint              - Run all quality gates (vet+test+race+staticcheck)"
+	@echo "  make fuzz              - Run fuzz smoke tests (10s each)"
+	@echo "  make bench             - Run intelligence benchmarks"
 	@echo "  make clean             - Remove build artifacts"
 	@echo "  make dev-tools         - Install dev tools"
 	@echo "  make goreg             - Execute goreg -w to entire gofile"

@@ -56,8 +56,8 @@ type ReferenceDraft struct {
 
 // ImportDraft is a raw import extracted from a source file.
 type ImportDraft struct {
-	Path     string         // import path, e.g. "fmt" or "github.com/foo/bar"
-	Alias    string         // "" = use base name, "." = dot-import, "_" = blank
+	Path     string // import path, e.g. "fmt" or "github.com/foo/bar"
+	Alias    string // "" = use base name, "." = dot-import, "_" = blank
 	Location source.Location
 }
 
@@ -76,4 +76,8 @@ type Provider interface {
 	Language() Language
 	Extensions() []string
 	Extract(ctx context.Context, file source.FileID, src []byte) (Extraction, error)
+	// CacheVersion returns a version string that must change whenever the
+	// provider's extraction semantics change (grammar upgrade, query change, etc.).
+	// It is embedded in cache keys to invalidate stale extraction results.
+	CacheVersion() string
 }

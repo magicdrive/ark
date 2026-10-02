@@ -5,17 +5,102 @@
       "target_name": "Create",
       "target_file": "service.go",
       "budget": 8000,
-      "must_include": ["Create", "Save"],
-      "should_include": ["User"],
+      "must_include": ["Create"],
+      "should_include": ["Save", "ValidateUser", "User"],
       "must_not_prioritize": ["UnrelatedService"]
     },
     {
-      "name": "understand-save",
+      "name": "understand-save-repository",
       "target_name": "Save",
       "target_file": "repository.go",
       "budget": 4000,
       "must_include": ["Save"],
       "should_include": ["User"]
+    },
+    {
+      "name": "trace-persistence",
+      "target_name": "Save",
+      "target_file": "store.go",
+      "budget": 6000,
+      "must_include": ["Save"],
+      "should_include": ["User", "InMemoryStore"],
+      "must_not_prioritize": ["UnrelatedService"]
+    },
+    {
+      "name": "understand-handler",
+      "target_name": "HandleCreate",
+      "target_file": "handler.go",
+      "budget": 8000,
+      "must_include": ["HandleCreate"],
+      "should_include": ["UserHandler"],
+      "must_not_prioritize": ["UnrelatedService"]
+    },
+    {
+      "name": "follow-constructor-path",
+      "target_name": "NewUserService",
+      "target_file": "service.go",
+      "budget": 4000,
+      "must_include": ["NewUserService"],
+      "should_include": ["UserService"],
+      "must_not_prioritize": ["UnrelatedService"]
+    },
+    {
+      "name": "understand-interface",
+      "target_name": "UserStore",
+      "target_file": "store.go",
+      "budget": 8000,
+      "must_include": ["UserStore"],
+      "should_include": ["InMemoryStore"]
+    },
+    {
+      "name": "small-token-budget",
+      "target_name": "Create",
+      "target_file": "service.go",
+      "budget": 500,
+      "must_include": ["Create"],
+      "should_include": []
+    },
+    {
+      "name": "unrelated-symbol",
+      "target_name": "Process",
+      "target_file": "service.go",
+      "budget": 4000,
+      "must_include": ["Process"],
+      "should_include": [],
+      "must_not_prioritize": ["Create", "Save"]
+    },
+    {
+      "name": "validate-user",
+      "target_name": "ValidateUser",
+      "target_file": "user.go",
+      "budget": 4000,
+      "must_include": ["ValidateUser"],
+      "should_include": ["User"]
+    },
+    {
+      "name": "in-memory-find",
+      "target_name": "Find",
+      "target_file": "store.go",
+      "budget": 5000,
+      "must_include": ["Find"],
+      "should_include": ["InMemoryStore"]
+    },
+    {
+      "name": "handler-constructor",
+      "target_name": "NewUserHandler",
+      "target_file": "handler.go",
+      "budget": 4000,
+      "must_include": ["NewUserHandler"],
+      "should_include": ["UserHandler"],
+      "must_not_prioritize": ["UnrelatedService"]
+    },
+    {
+      "name": "in-memory-store-constructor",
+      "target_name": "NewInMemoryStore",
+      "target_file": "store.go",
+      "budget": 4000,
+      "must_include": ["NewInMemoryStore"],
+      "should_include": ["InMemoryStore"]
     }
   ]
 }

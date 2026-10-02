@@ -4,8 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/symbol"
+
+	arkctx "github.com/magicdrive/ark/internal/context"
 )
 
 // ContextToolDefinitions returns the get_context tool definition.
@@ -27,7 +28,7 @@ func ContextToolDefinitions() []Tool {
 					},
 					"maxTokens": map[string]interface{}{
 						"type":        "integer",
-						"description": "Token budget (hard limit)",
+						"description": "Estimated token budget (len(text)/4 approximation); target is always included",
 						"default":     8000,
 					},
 					"maxDepth": map[string]interface{}{

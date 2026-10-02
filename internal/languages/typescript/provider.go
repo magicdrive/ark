@@ -3,8 +3,9 @@ package typescript
 import (
 	"context"
 
-	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
+
+	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/source"
@@ -35,6 +36,7 @@ func (p *Provider) Extensions() []string {
 	}
 	return []string{".ts"}
 }
+func (p *Provider) CacheVersion() string { return "1" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()
@@ -109,9 +111,7 @@ func exportedStatements(node *ts.Node, lang *ts.Language, src []byte, file sourc
 				drafts = append(drafts, *d)
 			}
 		case "lexical_declaration":
-			for _, d := range tsLexical(inner, lang, src, file, true) {
-				drafts = append(drafts, d)
-			}
+			drafts = append(drafts, tsLexical(inner, lang, src, file, true)...)
 		}
 	}
 	return drafts

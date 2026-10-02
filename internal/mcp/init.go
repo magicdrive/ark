@@ -34,7 +34,7 @@ func RunMCPInit(opts *MCPInitOptions) error {
 	alreadyExists := false
 	if _, exists := mcpServers[opts.ServerName]; exists {
 		if !opts.Force {
-			return fmt.Errorf("MCP server %q already configured in %s\nUse --force to overwrite.", opts.ServerName, settingsPath)
+			return fmt.Errorf("MCP server %q already configured in %s; use --force to overwrite", opts.ServerName, settingsPath)
 		}
 		alreadyExists = true
 	}

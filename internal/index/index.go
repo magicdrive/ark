@@ -2,6 +2,7 @@ package index
 
 import (
 	"context"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -73,6 +74,12 @@ type RepositoryIndex struct {
 // references, and builds an immutable index. Partial failures are recorded
 // in Diagnostics rather than aborting the build.
 func New(ctx context.Context, root string, providers []language.Provider) (*RepositoryIndex, error) {
+	if info, err := os.Stat(root); err != nil {
+		return nil, fmt.Errorf("index: root %q: %w", root, err)
+	} else if !info.IsDir() {
+		return nil, fmt.Errorf("index: root %q is not a directory", root)
+	}
+
 	// Build extension → provider map.
 	extMap := make(map[string]language.Provider)
 	for _, p := range providers {
@@ -221,19 +228,15 @@ func (idx *RepositoryIndex) ReferencesByTarget(id symbol.SymbolID) []reference.R
 // ---- Graph queries ----
 
 // GetCallees returns edges from id to symbols it calls.
+// The returned Evidence slices are copies; callers may modify them freely.
 func (idx *RepositoryIndex) GetCallees(id symbol.SymbolID) []GraphEdge {
-	edges := idx.callsFrom[id]
-	out := make([]GraphEdge, len(edges))
-	copy(out, edges)
-	return out
+	return copyEdges(idx.callsFrom[id])
 }
 
 // GetCallers returns edges from symbols that call id.
+// The returned Evidence slices are copies; callers may modify them freely.
 func (idx *RepositoryIndex) GetCallers(id symbol.SymbolID) []GraphEdge {
-	edges := idx.callsTo[id]
-	out := make([]GraphEdge, len(edges))
-	copy(out, edges)
-	return out
+	return copyEdges(idx.callsTo[id])
 }
 
 // GetRelatedSymbols returns all edges (callers + callees + type uses) touching id.
@@ -273,11 +276,36 @@ func (idx *RepositoryIndex) Diagnostics() []language.Diagnostic {
 }
 
 // Stats returns aggregate statistics for the index.
+// The returned Languages map is a copy; callers may modify it freely.
 func (idx *RepositoryIndex) Stats() IndexStats {
-	return idx.stats
+	s := idx.stats
+	if idx.stats.Languages != nil {
+		s.Languages = make(map[string]int, len(idx.stats.Languages))
+		for k, v := range idx.stats.Languages {
+			s.Languages[k] = v
+		}
+	}
+	return s
 }
 
 // ---- helpers ----
+
+// copyEdges returns a deep copy of edges, including each edge's Evidence slice.
+func copyEdges(edges []GraphEdge) []GraphEdge {
+	if len(edges) == 0 {
+		return nil
+	}
+	out := make([]GraphEdge, len(edges))
+	for i, e := range edges {
+		out[i] = e
+		if len(e.Evidence) > 0 {
+			ev := make([]resolver.ResolutionEvidence, len(e.Evidence))
+			copy(ev, e.Evidence)
+			out[i].Evidence = ev
+		}
+	}
+	return out
+}
 
 func sortSymbols(syms []symbol.Symbol) {
 	sort.Slice(syms, func(i, j int) bool {
@@ -293,6 +321,9 @@ func sortEdges(edges []GraphEdge) {
 		if edges[i].From != edges[j].From {
 			return edges[i].From < edges[j].From
 		}
-		return edges[i].To < edges[j].To
+		if edges[i].To != edges[j].To {
+			return edges[i].To < edges[j].To
+		}
+		return edges[i].Kind < edges[j].Kind
 	})
 }

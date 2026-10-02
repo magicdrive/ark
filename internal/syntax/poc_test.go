@@ -3,8 +3,9 @@ package syntax
 import (
 	"testing"
 
-	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
+
+	ts "github.com/odvcencio/gotreesitter"
 )
 
 // PoC: gotreesitter API の確認

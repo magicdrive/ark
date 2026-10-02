@@ -11,21 +11,27 @@ import (
 	"github.com/magicdrive/ark/internal/syntax"
 )
 
-// resolveToolPath normalises a path argument from an MCP tool call.
-// Relative paths are joined with rootDir.
-// Absolute paths inside rootDir are accepted and converted to relative.
-// Absolute paths outside rootDir return an error.
+// resolveToolPath normalises a path argument from an MCP tool call and enforces
+// repository root containment.  Both relative and absolute inputs are accepted;
+// both must resolve to a path that is contained within h.rootDir.
+//
+// The containment check uses filepath.Rel so that prefix collisions like
+// /repo vs /repo-other are handled correctly.  String-prefix checks are
+// intentionally not used.
 func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, err error) {
-	if !filepath.IsAbs(path) {
-		// relative — normal case
-		return filepath.Join(h.rootDir, path), path, nil
+	var candidate string
+	if filepath.IsAbs(path) {
+		candidate = path
+	} else {
+		candidate = filepath.Join(h.rootDir, path)
 	}
-	// absolute — strip rootDir prefix if possible
-	rel, relErr := filepath.Rel(h.rootDir, path)
-	if relErr != nil || strings.HasPrefix(rel, "..") {
-		return "", "", fmt.Errorf("path %q is outside the server root %q; use a relative path instead", path, h.rootDir)
+	candidate = filepath.Clean(candidate)
+
+	rel, relErr := filepath.Rel(h.rootDir, candidate)
+	if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", "", fmt.Errorf("path %q is outside the server root %q; use a path inside the repository", path, h.rootDir)
 	}
-	return path, rel, nil
+	return candidate, rel, nil
 }
 
 // SyntaxToolDefinitions returns tool definitions for syntax-related tools
@@ -320,15 +326,15 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 	}
 
 	type searchStats struct {
-		FilesScanned  int `json:"filesScanned"`
-		FilesSkipped  int `json:"filesSkipped"`
-		ParseErrors   int `json:"parseErrors"`
+		FilesScanned int `json:"filesScanned"`
+		FilesSkipped int `json:"filesSkipped"`
+		ParseErrors  int `json:"parseErrors"`
 	}
 	type searchResult struct {
-		Query   string             `json:"query"`
+		Query   string               `json:"query"`
 		Matches []syntax.SymbolMatch `json:"matches"`
-		Stats   searchStats        `json:"stats"`
-		Message string             `json:"message,omitempty"`
+		Stats   searchStats          `json:"stats"`
+		Message string               `json:"message,omitempty"`
 	}
 
 	result := searchResult{
