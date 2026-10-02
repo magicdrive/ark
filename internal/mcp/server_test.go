@@ -163,6 +163,7 @@ func TestHandleListTools(t *testing.T) {
 		"get_repository_map",
 		"get_context",
 		"analyze_change_impact",
+		"search_code",
 	}
 
 	if len(result.Tools) != len(expectedTools) {
