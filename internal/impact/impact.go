@@ -89,6 +89,10 @@ func Analyze(
 		if seen[edge.To] {
 			continue
 		}
+		// Skip testdata symbols — they are fixture artifacts, not real production dependencies.
+		if isTestFile(string(sym.Location.File)) {
+			continue
+		}
 		seen[edge.To] = true
 		result.Entries = append(result.Entries, ImpactEntry{
 			Symbol:     sym,
@@ -175,7 +179,9 @@ func Analyze(
 func isTestFile(path string) bool {
 	return strings.HasSuffix(path, "_test.go") ||
 		strings.Contains(path, "_test.") ||
-		strings.HasPrefix(path, "test_")
+		strings.HasPrefix(path, "test_") ||
+		strings.Contains(path, "/testdata/") ||
+		strings.Contains(path, "testdata/")
 }
 
 // categoryOrder defines display/sort priority.
