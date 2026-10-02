@@ -472,7 +472,7 @@ Ark provides **19 MCP tools** covering the full code-intelligence stack:
 | `get_file_info` | File metadata (size, lines, language) |
 | `get_project_stats` | Language breakdown, file counts |
 | `get_files_arklite` | Multiple files in compressed format |
-| `get_context` | Token-budgeted, relevance-ranked context for a symbol |
+| `get_context` | Token-budgeted, relevance-ranked context for a symbol (target always included) |
 | `find_references` | Find all usages of a symbol across the repo |
 | `get_relations` | Explore import/dependency relations between files |
 | `get_callers` | Find symbols that call a given symbol |
