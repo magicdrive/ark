@@ -97,6 +97,8 @@ func TestListTools(t *testing.T) {
 		"get_symbol",
 		"find_references",
 		"get_relations",
+		"get_callers",
+		"get_callees",
 	}
 
 	if len(tools) != len(expectedTools) {
