@@ -30,6 +30,26 @@ const DefaultName = "guest"
 var globalVar = 42
 `)
 
+var goRefSource = []byte(`package service
+
+import (
+	"fmt"
+	repo "github.com/example/repo"
+)
+
+type UserService struct{}
+
+func (s *UserService) Create(name string) error {
+	u := User{Name: name}
+	if err := repo.Save(u); err != nil {
+		fmt.Println(err)
+		return err
+	}
+	NewLogger().Log("created")
+	return nil
+}
+`)
+
 func TestGoProvider_Extract(t *testing.T) {
 	p := NewProvider()
 	if p.Language() != "go" {
@@ -142,4 +162,111 @@ func TestGoProvider_Deterministic(t *testing.T) {
 				i, ext1.Symbols[i].Name, ext2.Symbols[i].Name)
 		}
 	}
+}
+
+func TestGoProvider_References_Calls(t *testing.T) {
+	p := NewProvider()
+	ext, err := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+	if err != nil {
+		t.Fatalf("Extract error: %v", err)
+	}
+
+	callNames := map[string]bool{}
+	for _, r := range ext.References {
+		if r.Kind == "call" {
+			callNames[r.Name] = true
+		}
+	}
+	for _, want := range []string{"Save", "Println", "Log"} {
+		if !callNames[want] {
+			t.Errorf("expected call reference %q, got calls: %v", want, callNames)
+		}
+	}
+}
+
+func TestGoProvider_References_Receiver(t *testing.T) {
+	p := NewProvider()
+	ext, err := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+	if err != nil {
+		t.Fatalf("Extract error: %v", err)
+	}
+	for _, r := range ext.References {
+		if r.Name == "Save" && r.Kind == "call" {
+			if r.ReceiverExpr != "repo" {
+				t.Errorf("Save ReceiverExpr = %q, want %q", r.ReceiverExpr, "repo")
+			}
+			return
+		}
+	}
+	t.Error("reference to Save not found")
+}
+
+func TestGoProvider_References_Container(t *testing.T) {
+	p := NewProvider()
+	ext, err := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+	if err != nil {
+		t.Fatalf("Extract error: %v", err)
+	}
+	for _, r := range ext.References {
+		if r.Name == "Save" && r.Kind == "call" {
+			if r.Container != "UserService.Create" {
+				t.Errorf("Save container = %q, want %q", r.Container, "UserService.Create")
+			}
+			return
+		}
+	}
+	t.Error("reference to Save not found")
+}
+
+func TestGoProvider_Imports(t *testing.T) {
+	p := NewProvider()
+	ext, err := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+	if err != nil {
+		t.Fatalf("Extract error: %v", err)
+	}
+
+	importPaths := map[string]string{} // path → alias
+	for _, imp := range ext.Imports {
+		importPaths[imp.Path] = imp.Alias
+	}
+
+	if _, ok := importPaths["fmt"]; !ok {
+		t.Errorf("expected import fmt, got %v", importPaths)
+	}
+	if alias, ok := importPaths["github.com/example/repo"]; !ok {
+		t.Errorf("expected import github.com/example/repo, got %v", importPaths)
+	} else if alias != "repo" {
+		t.Errorf("import alias = %q, want %q", alias, "repo")
+	}
+}
+
+func TestGoProvider_References_Deterministic(t *testing.T) {
+	p := NewProvider()
+	ext1, _ := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+	ext2, _ := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+
+	if len(ext1.References) != len(ext2.References) {
+		t.Fatalf("non-deterministic reference count: %d vs %d",
+			len(ext1.References), len(ext2.References))
+	}
+	for i := range ext1.References {
+		r1, r2 := ext1.References[i], ext2.References[i]
+		if r1.Name != r2.Name || r1.Kind != r2.Kind {
+			t.Errorf("non-deterministic reference at index %d: %+v vs %+v", i, r1, r2)
+		}
+	}
+}
+
+func TestGoProvider_Construction(t *testing.T) {
+	p := NewProvider()
+	ext, err := p.Extract(context.Background(), source.FileID("service.go"), goRefSource)
+	if err != nil {
+		t.Fatalf("Extract error: %v", err)
+	}
+	for _, r := range ext.References {
+		if r.Name == "User" && r.Kind == "construction" {
+			return
+		}
+	}
+	t.Errorf("expected construction reference for User; refs: %+v", ext.References)
 }

@@ -38,7 +38,8 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 
 	root := tree.RootNode()
 	drafts := extractSymbols(root, lang, src, file)
-	return language.Extraction{Symbols: drafts}, nil
+	refs, imports := extractReferences(root, lang, src, file)
+	return language.Extraction{Symbols: drafts, References: refs, Imports: imports}, nil
 }
 
 // JavaScript shares its top-level declaration shapes with TypeScript.
@@ -157,6 +158,125 @@ func childText(node *ts.Node, lang *ts.Language, src []byte, nodeType string) st
 		}
 	}
 	return ""
+}
+
+// extractReferences walks the AST for call, construction, and import references.
+func extractReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
+	c := &jsRefCollector{lang: lang, src: src, file: file}
+	c.walk(root, "")
+	return c.refs, c.imports
+}
+
+type jsRefCollector struct {
+	lang    *ts.Language
+	src     []byte
+	file    source.FileID
+	refs    []language.ReferenceDraft
+	imports []language.ImportDraft
+}
+
+func (c *jsRefCollector) walk(node *ts.Node, container string) {
+	t := node.Type(c.lang)
+	switch t {
+	case "function_declaration":
+		name := childText(node, c.lang, c.src, "identifier")
+		for i := 0; i < node.ChildCount(); i++ {
+			c.walk(node.Child(i), name)
+		}
+		return
+	case "import_statement":
+		c.collectImport(node)
+		return
+	case "call_expression":
+		c.collectCall(node, container)
+	case "new_expression":
+		c.collectNew(node, container)
+	}
+	for i := 0; i < node.ChildCount(); i++ {
+		c.walk(node.Child(i), container)
+	}
+}
+
+func (c *jsRefCollector) collectImport(node *ts.Node) {
+	var path string
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child.Type(c.lang) == "string" {
+			raw := child.Text(c.src)
+			if len(raw) >= 2 {
+				path = raw[1 : len(raw)-1]
+			}
+		}
+	}
+	if path != "" {
+		c.imports = append(c.imports, language.ImportDraft{
+			Path:     path,
+			Location: nodeLocation(node, c.file),
+		})
+	}
+}
+
+func (c *jsRefCollector) collectCall(node *ts.Node, container string) {
+	if node.ChildCount() == 0 {
+		return
+	}
+	funcNode := node.Child(0)
+	name, recv := c.nameFromExpr(funcNode)
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:         name,
+		Kind:         "call",
+		Container:    container,
+		Location:     nodeLocation(funcNode, c.file),
+		ReceiverExpr: recv,
+		IsCall:       true,
+	})
+}
+
+func (c *jsRefCollector) collectNew(node *ts.Node, container string) {
+	var name string
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		t := child.Type(c.lang)
+		if t == "identifier" || t == "member_expression" {
+			name = child.Text(c.src)
+			break
+		}
+	}
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:      name,
+		Kind:      "construction",
+		Container: container,
+		Location:  nodeLocation(node, c.file),
+	})
+}
+
+func (c *jsRefCollector) nameFromExpr(node *ts.Node) (name, recv string) {
+	switch node.Type(c.lang) {
+	case "identifier":
+		return node.Text(c.src), ""
+	case "member_expression":
+		var obj, prop string
+		for i := 0; i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			switch child.Type(c.lang) {
+			case "property_identifier":
+				prop = child.Text(c.src)
+			case ".":
+			default:
+				if obj == "" {
+					obj = child.Text(c.src)
+				}
+			}
+		}
+		return prop, obj
+	}
+	return "", ""
 }
 
 func nodeLocation(node *ts.Node, file source.FileID) source.Location {
