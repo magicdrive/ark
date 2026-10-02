@@ -53,8 +53,37 @@ func TestRunMCPInit_CreateNew(t *testing.T) {
 	if !ok || len(args) != 3 {
 		t.Fatalf("args: expected 3 elements, got %v", entry["args"])
 	}
-	if args[0] != "mcp-server" || args[1] != "--root" || args[2] != tmpDir {
+	if args[0] != "mcp-server" || args[1] != "--root" || args[2] != "${CLAUDE_PROJECT_DIR:-.}/" {
 		t.Errorf("args: unexpected values %v", args)
+	}
+}
+
+func TestRunMCPInit_ExplicitRootPreserved(t *testing.T) {
+	tmpDir := t.TempDir()
+	otherDir := t.TempDir()
+
+	origDir, _ := os.Getwd()
+	os.Chdir(tmpDir)
+	defer os.Chdir(origDir)
+
+	opts := &MCPInitOptions{
+		ArkPath:    "/usr/bin/ark",
+		RootDir:    otherDir, // differs from cwd → must not be replaced
+		ServerName: "ark",
+		Global:     false,
+	}
+	if err := RunMCPInit(opts); err != nil {
+		t.Fatalf("RunMCPInit failed: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(tmpDir, ".mcp.json"))
+	var settings map[string]any
+	json.Unmarshal(data, &settings)
+	servers := settings["mcpServers"].(map[string]any)
+	entry := servers["ark"].(map[string]any)
+	args := entry["args"].([]any)
+	if args[2] != otherDir {
+		t.Errorf("explicit root should be preserved, got %v", args[2])
 	}
 }
 

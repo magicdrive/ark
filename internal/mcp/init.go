@@ -41,8 +41,12 @@ func RunMCPInit(opts *MCPInitOptions) error {
 
 	rootArg := opts.RootDir
 	if !opts.Global {
-		if cwd, err := os.Getwd(); err == nil && opts.RootDir == cwd {
-			rootArg = "${CLAUDE_PROJECT_DIR:-.}/"
+		if cwd, err := os.Getwd(); err == nil {
+			realRoot, err1 := filepath.EvalSymlinks(opts.RootDir)
+			realCwd, err2 := filepath.EvalSymlinks(cwd)
+			if err1 == nil && err2 == nil && realRoot == realCwd {
+				rootArg = "${CLAUDE_PROJECT_DIR:-.}/"
+			}
 		}
 	}
 
