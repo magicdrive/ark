@@ -19,6 +19,7 @@ type ServeOption struct {
 	McpServerType      model.McpSreverType
 	McpServerTypeValue string
 	HttpPort           string
+	NoCache            bool
 	GeneralOption      *Option
 }
 
@@ -94,6 +95,9 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 	deleteCommentsFlagOpt := fs.Bool("delete-comment", false, "Specify flag delete code comments.")
 	fs.BoolVar(deleteCommentsFlagOpt, "D", false, "Specify flag delete code comments.")
 
+	// --no-cache
+	noCacheFlagOpt := fs.Bool("no-cache", false, "Disable persistent index cache.")
+
 	// --help
 	helpFlagOpt := fs.Bool("help", false, "Show help message.")
 	fs.BoolVar(helpFlagOpt, "h", false, "Show help message.")
@@ -135,6 +139,7 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 		RootDir:            *rootDirOpt,
 		McpServerTypeValue: *mcpServerTypeOpt,
 		HttpPort:           strconv.Itoa(*httpPortOpt),
+		NoCache:            *noCacheFlagOpt,
 		GeneralOption:      generalOpt,
 	}
 

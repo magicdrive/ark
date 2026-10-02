@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -8,21 +9,60 @@ import (
 	"strings"
 	"time"
 
+	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/golang"
+	"github.com/magicdrive/ark/internal/languages/javascript"
+	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/typescript"
 )
 
 // ToolsHandler handles all MCP tools
 type ToolsHandler struct {
-	rootDir string
-	opt     *commandline.Option
+	rootDir    string
+	opt        *commandline.Option
+	cacheStore cache.Store // nil → NopStore
 }
 
-// NewToolsHandler creates a new tools handler
+// NewToolsHandler creates a new tools handler.
 func NewToolsHandler(rootDir string, opt *commandline.Option) *ToolsHandler {
 	return &ToolsHandler{
 		rootDir: rootDir,
 		opt:     opt,
 	}
+}
+
+// NewToolsHandlerWithCache creates a ToolsHandler that persists extraction
+// results in store. Pass cache.NopStore{} to disable caching.
+func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cache.Store) *ToolsHandler {
+	return &ToolsHandler{
+		rootDir:    rootDir,
+		opt:        opt,
+		cacheStore: store,
+	}
+}
+
+// defaultProviders returns the standard set of language providers.
+func defaultProviders() []language.Provider {
+	return []language.Provider{
+		golang.NewProvider(),
+		typescript.NewProvider(),
+		javascript.NewProvider(),
+		python.NewProvider(),
+	}
+}
+
+// buildIndex constructs a RepositoryIndex for fullPath, using the cache store
+// when available.
+func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.RepositoryIndex, error) {
+	providers := defaultProviders()
+	store := h.cacheStore
+	if store == nil {
+		store = cache.NopStore{}
+	}
+	return index.NewWithCache(ctx, fullPath, providers, store)
 }
 
 // ListTools returns all available tools

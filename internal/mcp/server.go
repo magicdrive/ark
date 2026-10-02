@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"path/filepath"
 
+	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/commandline"
 )
 
@@ -45,10 +47,22 @@ type MCPServer struct {
 
 // NewMCPServer creates a new MCP server instance
 func NewMCPServer(rootDir string, serverOpt *commandline.ServeOption) *MCPServer {
+	var store cache.Store
+	if serverOpt.NoCache {
+		store = cache.NopStore{}
+	} else {
+		cacheDir := filepath.Join(rootDir, ".ark", "index")
+		if fs, err := cache.NewFileStore(cacheDir); err == nil {
+			store = fs
+		} else {
+			log.Printf("ark: cache disabled (could not create store: %v)", err)
+			store = cache.NopStore{}
+		}
+	}
 	return &MCPServer{
 		rootDir:   rootDir,
 		serverOpt: serverOpt,
-		tools:     NewToolsHandler(rootDir, serverOpt.GeneralOption),
+		tools:     NewToolsHandlerWithCache(rootDir, serverOpt.GeneralOption, store),
 		resources: NewResourcesHandler(rootDir, serverOpt.GeneralOption),
 	}
 }
