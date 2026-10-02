@@ -142,7 +142,7 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 		}
 
 		entry.IsVendor = strings.Contains(pkg, "vendor/") || strings.HasPrefix(pkg, "vendor")
-		entry.IsTest = isTestPackage(files)
+		entry.IsTest = isTestPackage(pkg, files)
 		if !entry.IsVendor {
 			entry.IsGenerated = isGeneratedPackage(root, files)
 		}
@@ -151,8 +151,13 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 		// Collect symbols for this package.
 		var symEntries []SymbolEntry
 		for _, fid := range files {
+			isTestFile := isTestFileID(string(fid))
 			for _, sym := range idx.SymbolsByFile(fid) {
 				if opts.DetailLevel != DetailVerbose && !sym.Exported {
+					continue
+				}
+				// Skip test helper symbols from test files in non-test packages.
+				if isTestFile && !entry.IsTest && opts.DetailLevel != DetailVerbose {
 					continue
 				}
 				se := SymbolEntry{
@@ -318,6 +323,10 @@ func packageScore(p PackageEntry) int {
 	}
 	if p.IsTest {
 		score -= 30
+		// testdata directories are fixture-only; exclude from default map view.
+		if strings.Contains(p.Path, "testdata") {
+			score -= 1000
+		}
 	}
 	score += len(p.Symbols) * 2
 	return score
@@ -333,17 +342,34 @@ func fileLang(idx *index.RepositoryIndex, fid source.FileID) string {
 	return ""
 }
 
-func isTestPackage(files []source.FileID) bool {
+func isTestFileID(fid string) bool {
+	name := filepath.Base(fid)
+	return strings.HasSuffix(name, "_test.go") ||
+		strings.HasSuffix(name, "_test.ts") ||
+		strings.HasSuffix(name, "_test.js") ||
+		strings.HasPrefix(name, "test_")
+}
+
+func isTestPackage(pkgPath string, files []source.FileID) bool {
+	// testdata directories are fixture data only — treat as test.
+	if strings.Contains(pkgPath, "testdata") {
+		return true
+	}
+	// Only mark as a test package when every file is a test file.
+	// Regular packages that have test files alongside source are NOT test packages.
+	if len(files) == 0 {
+		return false
+	}
 	for _, f := range files {
 		name := filepath.Base(string(f))
-		if strings.HasSuffix(name, "_test.go") ||
-			strings.HasSuffix(name, "_test.ts") ||
-			strings.HasSuffix(name, "_test.js") ||
-			strings.HasPrefix(name, "test_") {
-			return true
+		if !strings.HasSuffix(name, "_test.go") &&
+			!strings.HasSuffix(name, "_test.ts") &&
+			!strings.HasSuffix(name, "_test.js") &&
+			!strings.HasPrefix(name, "test_") {
+			return false
 		}
 	}
-	return false
+	return true
 }
 
 func isGeneratedPackage(root string, files []source.FileID) bool {

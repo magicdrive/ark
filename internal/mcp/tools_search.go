@@ -51,8 +51,8 @@ func SearchToolDefinitions() []Tool {
 					},
 					"excludeTest": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Exclude test files",
-						"default":     false,
+						"description": "Exclude test files and testdata directories (default true)",
+						"default":     true,
 					},
 					"excludeGenerated": map[string]interface{}{
 						"type":        "boolean",
@@ -105,6 +105,8 @@ func (h *ToolsHandler) searchCode(args map[string]interface{}) (*CallToolResult,
 	if v, ok := args["filePattern"].(string); ok {
 		q.FilePattern = v
 	}
+	// Default true: LLMs exploring production code rarely want test/testdata results.
+	q.ExcludeTest = true
 	if v, ok := args["excludeTest"].(bool); ok {
 		q.ExcludeTest = v
 	}

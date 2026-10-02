@@ -138,7 +138,9 @@ func matchesFile(fileID, lang string, q Query, _ *index.RepositoryIndex) bool {
 	if q.ExcludeTest {
 		if strings.HasSuffix(fileID, "_test.go") ||
 			strings.Contains(fileID, "_test.") ||
-			strings.HasPrefix(fileID, "test_") {
+			strings.HasPrefix(fileID, "test_") ||
+			strings.Contains(lower, "/testdata/") ||
+			strings.HasPrefix(lower, "testdata/") {
 			return false
 		}
 	}

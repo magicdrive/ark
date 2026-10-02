@@ -159,8 +159,9 @@ func Analyze(
 	}
 
 	// Unresolved references targeting this symbol.
+	// Skip references with empty location — they are indexing artifacts, not real usages.
 	for _, ref := range idx.ReferencesByTarget(targetID) {
-		if ref.Name != "" {
+		if ref.Name != "" && ref.Location.File != "" {
 			result.Unresolved = append(result.Unresolved, ref)
 		}
 	}
