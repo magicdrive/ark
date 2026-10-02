@@ -32,7 +32,7 @@ general (text generator mode) options:
   -c, --compless                                   Specify flag compress the output result with arklite. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
-  -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
+  -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
 
 setup options:
   -h, --help                                       Show help message.
@@ -53,7 +53,7 @@ mcp-init options:
 mcp-server options:
   -r, --root <dirname>                             Specify the mcp-server serve root dirname(optional. default: $pwd)
   -t, --type <http|stdio>                          Specify the mcp-server serve type. (optional. default: 'stdio')
-  -p, --port <number>                              Specify the mcp-server port. (optional. default: 8522)
+  -p, --http-port <number>                         Specify the mcp-server port. (optional. default: 8522)
   -b, --scan-buffer <number|byte-string>           Specify the line scan buffer size. (optional. default: '10M')
   -m, --mask-secrets <'on'|'off'>                  Specify Detect the secrets and convert it to masked output. (optional. default: 'on').
   -a, --allow-gitignore <'on'|'off'>               Specify enable .gitignore filter rule. (optional. default: 'on')
@@ -66,7 +66,7 @@ mcp-server options:
   -e, --exclude-ext <extention>                    Specify watch exclude file extention. Allows comma separated list. (optional.)
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
-  -D, --delete-comments                            Specify flag strip comments based on language detection. (optional.)
+  -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
 
 syntax options:
   -h, --help                                       Show help message.
