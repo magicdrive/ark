@@ -65,3 +65,4 @@ get_callers / get_callees      →  graph neighbours
 3. Use `mcp__ark__find_symbol` to locate definitions before browsing
 4. Use `mcp__ark__get_symbol` to retrieve exact source of a specific function/type
 5. Use `mcp__ark__get_file_content` only when surrounding context is needed
+6. `mcp__ark__search_code` excludes test files by default — pass `excludeTest: false` when working with test code
