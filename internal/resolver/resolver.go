@@ -215,14 +215,23 @@ func (r *Resolver) importMatch(ref reference.Reference, fi FileIndex) []symbol.S
 		return nil
 	}
 
-	// Find symbols in files whose FileID contains the import path.
+	// Find symbols in files whose FileID matches the import path.
+	// importPath may be a full module path (e.g. "github.com/foo/bar/pkg") while
+	// FileIDs are root-relative (e.g. "pkg/file.go"). We try both the full path
+	// and the base component so both absolute and relative FileIDs are handled.
+	importBase := filepath.Base(importPath)
 	var out []symbol.Symbol
 	for _, f := range r.files {
-		if strings.Contains(string(f.FileID), importPath) {
-			for _, sym := range f.Symbols {
-				if sym.Name == lookupName {
-					out = append(out, sym)
-				}
+		fid := string(f.FileID)
+		matches := strings.Contains(fid, importPath) ||
+			strings.HasPrefix(fid, importBase+"/") ||
+			strings.HasPrefix(fid, importBase+string(filepath.Separator))
+		if !matches {
+			continue
+		}
+		for _, sym := range f.Symbols {
+			if sym.Name == lookupName {
+				out = append(out, sym)
 			}
 		}
 	}

@@ -1,0 +1,215 @@
+package impact
+
+import (
+	"context"
+	"sort"
+	"strings"
+
+	"github.com/magicdrive/ark/internal/graph"
+	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/reference"
+	"github.com/magicdrive/ark/internal/resolver"
+	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/symbol"
+)
+
+// Category classifies an impacted symbol's relationship to the target.
+type Category string
+
+const (
+	// CategoryTarget is the symbol being changed.
+	CategoryTarget Category = "target"
+	// CategoryDirectDependent is a symbol that directly calls the target.
+	CategoryDirectDependent Category = "direct_dependent"
+	// CategoryDirectDependency is a symbol that the target directly calls.
+	CategoryDirectDependency Category = "direct_dependency"
+	// CategoryTest is a test symbol that references the target or a direct dependent.
+	CategoryTest Category = "test"
+	// CategoryTransitiveDependent is a strong/exact transitive caller (beyond depth 1).
+	CategoryTransitiveDependent Category = "transitive_dependent"
+	// CategoryPossibleDependent is a candidate-confidence transitive caller.
+	// It may or may not actually depend on the target.
+	CategoryPossibleDependent Category = "possible_dependent"
+)
+
+// ImpactEntry is one symbol in the impact result with its category and evidence.
+type ImpactEntry struct {
+	Symbol     symbol.Symbol
+	Category   Category
+	Confidence resolver.Confidence
+	Evidence   []resolver.ResolutionEvidence
+	Distance   int // hop count (1 = direct)
+}
+
+// ImpactResult is the full output of Analyze.
+type ImpactResult struct {
+	Target        symbol.Symbol
+	Entries       []ImpactEntry      // sorted: category priority then SymbolID
+	AffectedFiles []source.FileID    // deduplicated, sorted
+	Unresolved    []reference.Reference
+	Diagnostics   []language.Diagnostic
+}
+
+// Analyze returns the likely impact of changing targetID.
+//
+// Categories are returned with explicit confidence levels.
+// Heuristic (candidate-confidence) results are labelled CategoryPossibleDependent,
+// not CategoryTransitiveDependent — callers must not treat them as guaranteed impacts.
+func Analyze(
+	ctx context.Context,
+	idx *index.RepositoryIndex,
+	g *graph.Graph,
+	targetID symbol.SymbolID,
+	maxDepth int,
+) (*ImpactResult, error) {
+	if maxDepth <= 0 {
+		maxDepth = 3
+	}
+
+	target, ok := idx.GetSymbol(targetID)
+	if !ok {
+		return nil, nil
+	}
+
+	result := &ImpactResult{
+		Target:      target,
+		Diagnostics: idx.Diagnostics(),
+	}
+
+	seen := make(map[symbol.SymbolID]bool)
+	seen[targetID] = true
+
+	// Direct callees (depth 1).
+	for _, edge := range idx.GetCallees(targetID) {
+		sym, ok := idx.GetSymbol(edge.To)
+		if !ok {
+			continue
+		}
+		if seen[edge.To] {
+			continue
+		}
+		seen[edge.To] = true
+		result.Entries = append(result.Entries, ImpactEntry{
+			Symbol:     sym,
+			Category:   CategoryDirectDependency,
+			Confidence: edge.Confidence,
+			Evidence:   edge.Evidence,
+			Distance:   1,
+		})
+	}
+
+	// Direct callers (depth 1), split into test vs non-test.
+	// GetCallers returns EdgeCalledBy edges: From=target, To=caller.
+	for _, edge := range idx.GetCallers(targetID) {
+		symID := edge.To
+		sym, ok := idx.GetSymbol(symID)
+		if !ok {
+			continue
+		}
+		if seen[symID] {
+			continue
+		}
+		seen[symID] = true
+
+		cat := CategoryDirectDependent
+		if isTestFile(string(sym.Location.File)) {
+			cat = CategoryTest
+		}
+		result.Entries = append(result.Entries, ImpactEntry{
+			Symbol:     sym,
+			Category:   cat,
+			Confidence: edge.Confidence,
+			Evidence:   edge.Evidence,
+			Distance:   1,
+		})
+	}
+
+	// Transitive callers (depth > 1).
+	// TransitiveCallers returns EdgeCalledBy edges: From=callee, To=caller.
+	if maxDepth > 1 {
+		allCallers := g.TransitiveCallers(targetID, maxDepth)
+		for _, edge := range allCallers {
+			symID := edge.To
+			if seen[symID] {
+				continue
+			}
+			sym, ok := idx.GetSymbol(symID)
+			if !ok {
+				continue
+			}
+			seen[symID] = true
+
+			cat := CategoryTransitiveDependent
+			if edge.Confidence == resolver.ConfidenceCandidate ||
+				edge.Confidence == resolver.ConfidenceUnresolved {
+				cat = CategoryPossibleDependent
+			}
+			if isTestFile(string(sym.Location.File)) {
+				cat = CategoryTest
+			}
+			result.Entries = append(result.Entries, ImpactEntry{
+				Symbol:     sym,
+				Category:   cat,
+				Confidence: edge.Confidence,
+				Evidence:   edge.Evidence,
+				Distance:   2, // approximate: TransitiveCallers doesn't expose hop count
+			})
+		}
+	}
+
+	// Unresolved references targeting this symbol.
+	for _, ref := range idx.ReferencesByTarget(targetID) {
+		if ref.Name != "" {
+			result.Unresolved = append(result.Unresolved, ref)
+		}
+	}
+
+	sortEntries(result.Entries)
+	result.AffectedFiles = affectedFiles(target, result.Entries)
+
+	return result, nil
+}
+
+func isTestFile(path string) bool {
+	return strings.HasSuffix(path, "_test.go") ||
+		strings.Contains(path, "_test.") ||
+		strings.HasPrefix(path, "test_")
+}
+
+// categoryOrder defines display/sort priority.
+var categoryOrder = map[Category]int{
+	CategoryTarget:              0,
+	CategoryDirectDependent:     1,
+	CategoryDirectDependency:    2,
+	CategoryTest:                3,
+	CategoryTransitiveDependent: 4,
+	CategoryPossibleDependent:   5,
+}
+
+func sortEntries(entries []ImpactEntry) {
+	sort.SliceStable(entries, func(i, j int) bool {
+		oi := categoryOrder[entries[i].Category]
+		oj := categoryOrder[entries[j].Category]
+		if oi != oj {
+			return oi < oj
+		}
+		if entries[i].Distance != entries[j].Distance {
+			return entries[i].Distance < entries[j].Distance
+		}
+		return entries[i].Symbol.ID < entries[j].Symbol.ID
+	})
+}
+
+func affectedFiles(target symbol.Symbol, entries []ImpactEntry) []source.FileID {
+	seen := map[source.FileID]bool{target.Location.File: true}
+	for _, e := range entries {
+		seen[e.Symbol.Location.File] = true
+	}
+	out := make([]source.FileID, 0, len(seen))
+	for f := range seen {
+		out = append(out, f)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
