@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -128,14 +129,39 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 	}
 
 	// Find all symbols matching the name.
-	syms := idx.FindSymbols(symName)
-	if len(syms) == 0 {
+	// If the input looks like a qualified name (contains "."), skip the short-name lookup
+	// to avoid accidental partial matches.
+	var syms []symbol.Symbol
+	if strings.Contains(symName, ".") {
 		syms = idx.FindSymbolsByQualified(symName)
+	} else {
+		syms = idx.FindSymbols(symName)
+		if len(syms) == 0 {
+			syms = idx.FindSymbolsByQualified(symName)
+		}
 	}
 	if len(syms) == 0 {
 		out := callersResult{Symbol: symName, Edges: []edgeEntry{}}
 		b, _ := json.MarshalIndent(out, "", "  ")
 		return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
+	}
+	// When multiple symbols share the same short name, merging their edges produces
+	// misleading results. Return an error with candidates so the caller can retry
+	// with a qualified name.
+	if len(syms) > 1 {
+		candidates := make([]string, 0, len(syms))
+		for _, s := range syms {
+			candidates = append(candidates, fmt.Sprintf("  %s  (%s)  %s", s.Qualified, s.Kind, s.Location.File))
+		}
+		sort.Strings(candidates)
+		msg := fmt.Sprintf(
+			"Ambiguous symbol %q — %d matches found. Retry with a qualified name:\n%s",
+			symName, len(syms), strings.Join(candidates, "\n"),
+		)
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: msg}},
+			IsError: true,
+		}, nil
 	}
 
 	var edges []edgeEntry

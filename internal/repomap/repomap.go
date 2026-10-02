@@ -55,14 +55,15 @@ type SymbolEntry struct {
 
 // PackageEntry represents one logical package/directory.
 type PackageEntry struct {
-	Path        string
-	Language    string
-	Symbols     []SymbolEntry
-	IsEntry     bool
-	IsTest      bool
-	IsGenerated bool
-	IsVendor    bool
-	fileCount   int
+	Path               string
+	Language           string
+	Symbols            []SymbolEntry
+	IsEntry            bool
+	IsTest             bool
+	IsGenerated        bool
+	IsVendor           bool
+	InboundPackageRefs int // number of other packages that import this one
+	fileCount          int
 }
 
 // DependencyEdge is an import relationship between packages.
@@ -203,6 +204,17 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 		rm.Packages = append(rm.Packages, entry)
 	}
 
+	// Count how many packages import each package (inbound package-level edges).
+	// This is computed from ALL edges before trimming so the score is not biased
+	// by which packages happen to survive the MaxPackages cut.
+	pkgInbound := make(map[string]int)
+	for key := range depSet {
+		pkgInbound[key[1]]++
+	}
+	for i := range rm.Packages {
+		rm.Packages[i].InboundPackageRefs = pkgInbound[rm.Packages[i].Path]
+	}
+
 	// Trim to MaxPackages by entry-point / non-generated first.
 	sort.SliceStable(rm.Packages, func(i, j int) bool {
 		pi, pj := rm.Packages[i], rm.Packages[j]
@@ -329,6 +341,11 @@ func packageScore(p PackageEntry) int {
 		}
 	}
 	score += len(p.Symbols) * 2
+	// Packages that are imported by many others are semantically central.
+	// Weight this more heavily than raw symbol count so core packages
+	// (e.g. internal/index, internal/symbol) rank above utility packages
+	// with many unexported symbols (e.g. internal/chardetect).
+	score += p.InboundPackageRefs * 15
 	return score
 }
 
