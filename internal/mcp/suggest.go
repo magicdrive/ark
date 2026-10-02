@@ -1,21 +1,15 @@
 package mcp
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 )
 
-const claudeMdSnippet = `## Code Exploration
-
-This project uses Ark MCP tools. Prefer these over Read/Bash for code navigation:
-
-- ` + "`mcp__ark__get_symbols`" + `      — list functions/types in a file (use before Read)
-- ` + "`mcp__ark__find_symbol`" + `      — locate a symbol by name across the repo
-- ` + "`mcp__ark__get_symbol`" + `       — get exact source of a specific function/type
-- ` + "`mcp__ark__search_in_files`" + `  — full-text/regex search across files
-- ` + "`mcp__ark__get_file_content`" + ` — read a whole file (last resort only)`
+//go:embed claudemd_snippet.md
+var claudeMdSnippet string
 
 // SuggestCLAUDEMd checks if CLAUDE.md already has Ark MCP instructions.
 // If not, it prints a suggestion to add them. No files are written.
