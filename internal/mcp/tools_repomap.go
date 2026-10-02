@@ -6,12 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/magicdrive/ark/internal/index"
-	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/languages/golang"
-	"github.com/magicdrive/ark/internal/languages/javascript"
-	"github.com/magicdrive/ark/internal/languages/python"
-	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/repomap"
 )
 
@@ -89,14 +83,7 @@ func (h *ToolsHandler) getRepositoryMap(args map[string]interface{}) (*CallToolR
 		outputJSON = true
 	}
 
-	providers := []language.Provider{
-		golang.NewProvider(),
-		typescript.NewProvider(),
-		javascript.NewProvider(),
-		python.NewProvider(),
-	}
-
-	idx, err := index.New(context.Background(), fullPath, providers)
+	idx, err := h.buildIndex(context.Background(), fullPath)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error building index: %v", err)}},
