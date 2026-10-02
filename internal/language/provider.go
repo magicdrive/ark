@@ -44,9 +44,28 @@ type SymbolDraft struct {
 	Exported  bool
 }
 
+// ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.
+type ReferenceDraft struct {
+	Name         string
+	Kind         string // use reference.ReferenceKind values
+	Container    string // qualified name of enclosing symbol, empty if unknown
+	Location     source.Location
+	ReceiverExpr string // e.g. "repo" in repo.Save()
+	IsCall       bool
+}
+
+// ImportDraft is a raw import extracted from a source file.
+type ImportDraft struct {
+	Path     string         // import path, e.g. "fmt" or "github.com/foo/bar"
+	Alias    string         // "" = use base name, "." = dot-import, "_" = blank
+	Location source.Location
+}
+
 // Extraction is the output of a single-file extraction pass.
 type Extraction struct {
 	Symbols     []SymbolDraft
+	References  []ReferenceDraft
+	Imports     []ImportDraft
 	Diagnostics []Diagnostic
 }
 

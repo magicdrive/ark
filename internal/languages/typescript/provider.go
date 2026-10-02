@@ -53,7 +53,8 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 
 	root := tree.RootNode()
 	drafts := extractSymbols(root, tsLang, src, file)
-	return language.Extraction{Symbols: drafts}, nil
+	refs, imports := extractReferences(root, tsLang, src, file)
+	return language.Extraction{Symbols: drafts, References: refs, Imports: imports}, nil
 }
 
 func extractSymbols(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
@@ -219,6 +220,158 @@ func childText(node *ts.Node, lang *ts.Language, src []byte, nodeType string) st
 		}
 	}
 	return ""
+}
+
+// extractReferences walks the AST for call, construction, type-use, and import references.
+func extractReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
+	c := &tsRefCollector{lang: lang, src: src, file: file}
+	c.walk(root, "")
+	return c.refs, c.imports
+}
+
+type tsRefCollector struct {
+	lang    *ts.Language
+	src     []byte
+	file    source.FileID
+	refs    []language.ReferenceDraft
+	imports []language.ImportDraft
+}
+
+func (c *tsRefCollector) walk(node *ts.Node, container string) {
+	t := node.Type(c.lang)
+	switch t {
+	case "function_declaration":
+		name := childText(node, c.lang, c.src, "identifier")
+		for i := 0; i < node.ChildCount(); i++ {
+			c.walk(node.Child(i), name)
+		}
+		return
+	case "method_definition":
+		name := childText(node, c.lang, c.src, "property_identifier")
+		if name == "" {
+			name = childText(node, c.lang, c.src, "identifier")
+		}
+		for i := 0; i < node.ChildCount(); i++ {
+			c.walk(node.Child(i), name)
+		}
+		return
+	case "import_statement":
+		c.collectImport(node)
+		return
+	case "call_expression":
+		c.collectCall(node, container)
+		// recurse for nested
+	case "new_expression":
+		c.collectNew(node, container)
+		// recurse
+	case "type_reference":
+		c.collectTypeRef(node, container)
+		return // leaf
+	}
+	for i := 0; i < node.ChildCount(); i++ {
+		c.walk(node.Child(i), container)
+	}
+}
+
+func (c *tsRefCollector) collectImport(node *ts.Node) {
+	// import_statement: "import" import_clause "from" string
+	// or: import "module" (side-effect)
+	var path string
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child.Type(c.lang) == "string" {
+			raw := child.Text(c.src)
+			if len(raw) >= 2 {
+				path = raw[1 : len(raw)-1]
+			}
+		}
+	}
+	if path != "" {
+		c.imports = append(c.imports, language.ImportDraft{
+			Path:     path,
+			Location: nodeLocation(node, c.file),
+		})
+	}
+}
+
+func (c *tsRefCollector) collectCall(node *ts.Node, container string) {
+	if node.ChildCount() == 0 {
+		return
+	}
+	funcNode := node.Child(0)
+	name, recv := c.nameFromExpr(funcNode)
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:         name,
+		Kind:         "call",
+		Container:    container,
+		Location:     nodeLocation(funcNode, c.file),
+		ReceiverExpr: recv,
+		IsCall:       true,
+	})
+}
+
+func (c *tsRefCollector) collectNew(node *ts.Node, container string) {
+	// new_expression: "new" constructor arguments
+	var name string
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		t := child.Type(c.lang)
+		if t == "identifier" || t == "member_expression" {
+			name = child.Text(c.src)
+			break
+		}
+	}
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:      name,
+		Kind:      "construction",
+		Container: container,
+		Location:  nodeLocation(node, c.file),
+	})
+}
+
+func (c *tsRefCollector) collectTypeRef(node *ts.Node, container string) {
+	// type_reference: a type name used in annotations
+	name := node.Text(c.src)
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:      name,
+		Kind:      "type_use",
+		Container: container,
+		Location:  nodeLocation(node, c.file),
+	})
+}
+
+func (c *tsRefCollector) nameFromExpr(node *ts.Node) (name, recv string) {
+	switch node.Type(c.lang) {
+	case "identifier":
+		return node.Text(c.src), ""
+	case "member_expression":
+		// object.property
+		var obj, prop string
+		for i := 0; i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			switch child.Type(c.lang) {
+			case "property_identifier":
+				prop = child.Text(c.src)
+			case ".":
+				// skip
+			default:
+				if obj == "" {
+					obj = child.Text(c.src)
+				}
+			}
+		}
+		return prop, obj
+	}
+	return "", ""
 }
 
 func nodeLocation(node *ts.Node, file source.FileID) source.Location {

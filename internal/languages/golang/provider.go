@@ -38,7 +38,8 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 
 	root := tree.RootNode()
 	drafts := extractGoSymbols(root, lang, src, file)
-	return language.Extraction{Symbols: drafts}, nil
+	refs, imports := extractGoReferences(root, lang, src, file)
+	return language.Extraction{Symbols: drafts, References: refs, Imports: imports}, nil
 }
 
 func extractGoSymbols(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
@@ -261,4 +262,198 @@ func isExported(name string) bool {
 		return false
 	}
 	return unicode.IsUpper([]rune(name)[0])
+}
+
+// extractGoReferences walks the AST and collects syntactic references and imports.
+func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
+	c := &goRefCollector{lang: lang, src: src, file: file}
+	c.walk(root, "")
+	return c.refs, c.imports
+}
+
+type goRefCollector struct {
+	lang    *ts.Language
+	src     []byte
+	file    source.FileID
+	refs    []language.ReferenceDraft
+	imports []language.ImportDraft
+}
+
+func (c *goRefCollector) walk(node *ts.Node, container string) {
+	t := node.Type(c.lang)
+	switch t {
+	case "function_declaration":
+		name := childText(node, c.lang, c.src, "identifier")
+		for i := 0; i < node.ChildCount(); i++ {
+			c.walk(node.Child(i), name)
+		}
+		return
+	case "method_declaration":
+		var name, recv string
+		for i := 0; i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			ct := child.Type(c.lang)
+			if ct == "parameter_list" && recv == "" {
+				recv = goReceiverType(child, c.lang, c.src)
+			} else if (ct == "field_identifier" || ct == "identifier") && name == "" {
+				name = child.Text(c.src)
+			}
+		}
+		qualified := name
+		if recv != "" {
+			qualified = recv + "." + name
+		}
+		for i := 0; i < node.ChildCount(); i++ {
+			c.walk(node.Child(i), qualified)
+		}
+		return
+	case "import_declaration":
+		c.collectImports(node)
+		return // don't recurse into imports
+	case "call_expression":
+		c.collectCall(node, container)
+		// fall through to recurse for nested calls
+	case "composite_literal":
+		c.collectComposite(node, container)
+		// fall through to recurse
+	}
+	for i := 0; i < node.ChildCount(); i++ {
+		c.walk(node.Child(i), container)
+	}
+}
+
+func (c *goRefCollector) collectImports(node *ts.Node) {
+	c.walkImportNode(node)
+}
+
+// walkImportNode recurses through import_declaration and import_spec_list to
+// find import_spec nodes and single interpreted_string_literal imports.
+func (c *goRefCollector) walkImportNode(node *ts.Node) {
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		switch child.Type(c.lang) {
+		case "import_spec_list":
+			c.walkImportNode(child)
+		case "import_spec":
+			var path, alias string
+			for j := 0; j < child.ChildCount(); j++ {
+				gc := child.Child(j)
+				switch gc.Type(c.lang) {
+				case "interpreted_string_literal":
+					path = goStringLiteralContent(gc, c.lang, c.src)
+				case "package_identifier":
+					alias = gc.Text(c.src)
+				case ".":
+					alias = "."
+				case "blank_identifier":
+					alias = "_"
+				}
+			}
+			if path != "" {
+				c.imports = append(c.imports, language.ImportDraft{
+					Path:     path,
+					Alias:    alias,
+					Location: nodeLocation(child, c.file),
+				})
+			}
+		case "interpreted_string_literal":
+			// single-line: import "fmt"
+			path := goStringLiteralContent(child, c.lang, c.src)
+			if path != "" {
+				c.imports = append(c.imports, language.ImportDraft{
+					Path:     path,
+					Location: nodeLocation(child, c.file),
+				})
+			}
+		}
+	}
+}
+
+// goStringLiteralContent extracts the unquoted content from an interpreted_string_literal node.
+// It prefers the interpreted_string_literal_content child if present, otherwise strips quotes.
+func goStringLiteralContent(node *ts.Node, lang *ts.Language, src []byte) string {
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child.Type(lang) == "interpreted_string_literal_content" {
+			return child.Text(src)
+		}
+	}
+	// fallback: strip surrounding quotes
+	raw := node.Text(src)
+	if len(raw) >= 2 && raw[0] == '"' && raw[len(raw)-1] == '"' {
+		return raw[1 : len(raw)-1]
+	}
+	return raw
+}
+
+func (c *goRefCollector) collectCall(node *ts.Node, container string) {
+	// call_expression: first child = function expr, last child = argument_list
+	if node.ChildCount() == 0 {
+		return
+	}
+	funcNode := node.Child(0)
+	name, recv := c.callNameFromExpr(funcNode)
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:         name,
+		Kind:         "call",
+		Container:    container,
+		Location:     nodeLocation(funcNode, c.file),
+		ReceiverExpr: recv,
+		IsCall:       true,
+	})
+}
+
+func (c *goRefCollector) callNameFromExpr(node *ts.Node) (name, recv string) {
+	switch node.Type(c.lang) {
+	case "identifier":
+		return node.Text(c.src), ""
+	case "selector_expression":
+		// children: operand, ".", field_identifier
+		var operand, field string
+		for i := 0; i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			switch child.Type(c.lang) {
+			case "field_identifier":
+				field = child.Text(c.src)
+			case ".":
+				// skip
+			default:
+				if operand == "" {
+					operand = child.Text(c.src)
+				}
+			}
+		}
+		return field, operand
+	default:
+		// complex expression (chained calls, etc.): skip
+		return "", ""
+	}
+}
+
+func (c *goRefCollector) collectComposite(node *ts.Node, container string) {
+	// composite_literal: first child is the type (type_identifier or qualified_type)
+	if node.ChildCount() == 0 {
+		return
+	}
+	typeNode := node.Child(0)
+	var name string
+	switch typeNode.Type(c.lang) {
+	case "type_identifier":
+		name = typeNode.Text(c.src)
+	case "qualified_type":
+		// pkg.Type → use full text
+		name = typeNode.Text(c.src)
+	}
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:      name,
+		Kind:      "construction",
+		Container: container,
+		Location:  nodeLocation(typeNode, c.file),
+	})
 }

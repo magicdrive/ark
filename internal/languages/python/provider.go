@@ -36,7 +36,8 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 
 	root := tree.RootNode()
 	drafts := extractSymbols(root, lang, src, file)
-	return language.Extraction{Symbols: drafts}, nil
+	refs, imports := extractReferences(root, lang, src, file)
+	return language.Extraction{Symbols: drafts, References: refs, Imports: imports}, nil
 }
 
 func extractSymbols(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
@@ -116,6 +117,145 @@ func childText(node *ts.Node, lang *ts.Language, src []byte, nodeType string) st
 		}
 	}
 	return ""
+}
+
+// extractReferences walks the AST for call and import references.
+func extractReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
+	c := &pyRefCollector{lang: lang, src: src, file: file}
+	c.walk(root, "")
+	return c.refs, c.imports
+}
+
+type pyRefCollector struct {
+	lang    *ts.Language
+	src     []byte
+	file    source.FileID
+	refs    []language.ReferenceDraft
+	imports []language.ImportDraft
+}
+
+func (c *pyRefCollector) walk(node *ts.Node, container string) {
+	t := node.Type(c.lang)
+	switch t {
+	case "function_definition":
+		name := childText(node, c.lang, c.src, "identifier")
+		for i := 0; i < node.ChildCount(); i++ {
+			c.walk(node.Child(i), name)
+		}
+		return
+	case "import_statement":
+		c.collectImport(node)
+		return
+	case "import_from_statement":
+		c.collectFromImport(node)
+		return
+	case "call":
+		c.collectCall(node, container)
+		// recurse for nested calls
+	}
+	for i := 0; i < node.ChildCount(); i++ {
+		c.walk(node.Child(i), container)
+	}
+}
+
+func (c *pyRefCollector) collectImport(node *ts.Node) {
+	// import foo, bar  or  import foo as bar
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		switch child.Type(c.lang) {
+		case "dotted_name":
+			c.imports = append(c.imports, language.ImportDraft{
+				Path:     child.Text(c.src),
+				Location: nodeLocation(child, c.file),
+			})
+		case "aliased_import":
+			// name as alias
+			var path, alias string
+			for j := 0; j < child.ChildCount(); j++ {
+				gc := child.Child(j)
+				switch gc.Type(c.lang) {
+				case "dotted_name":
+					if path == "" {
+						path = gc.Text(c.src)
+					}
+				case "identifier":
+					alias = gc.Text(c.src)
+				}
+			}
+			if path != "" {
+				c.imports = append(c.imports, language.ImportDraft{
+					Path:     path,
+					Alias:    alias,
+					Location: nodeLocation(child, c.file),
+				})
+			}
+		}
+	}
+}
+
+func (c *pyRefCollector) collectFromImport(node *ts.Node) {
+	// from foo import bar, baz
+	var module string
+	for i := 0; i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child.Type(c.lang) == "dotted_name" && module == "" {
+			module = child.Text(c.src)
+		}
+	}
+	if module != "" {
+		c.imports = append(c.imports, language.ImportDraft{
+			Path:     module,
+			Location: nodeLocation(node, c.file),
+		})
+	}
+}
+
+func (c *pyRefCollector) collectCall(node *ts.Node, container string) {
+	// call: function arguments
+	if node.ChildCount() == 0 {
+		return
+	}
+	funcNode := node.Child(0)
+	name, recv := c.nameFromExpr(funcNode)
+	if name == "" {
+		return
+	}
+	c.refs = append(c.refs, language.ReferenceDraft{
+		Name:         name,
+		Kind:         "call",
+		Container:    container,
+		Location:     nodeLocation(funcNode, c.file),
+		ReceiverExpr: recv,
+		IsCall:       true,
+	})
+}
+
+func (c *pyRefCollector) nameFromExpr(node *ts.Node) (name, recv string) {
+	switch node.Type(c.lang) {
+	case "identifier":
+		return node.Text(c.src), ""
+	case "attribute":
+		// object.attribute
+		var obj, attr string
+		for i := 0; i < node.ChildCount(); i++ {
+			child := node.Child(i)
+			switch child.Type(c.lang) {
+			case "identifier":
+				if attr == "" && i == node.ChildCount()-1 {
+					attr = child.Text(c.src)
+				} else if obj == "" {
+					obj = child.Text(c.src)
+				}
+			case ".":
+			}
+		}
+		if attr == "" && node.ChildCount() >= 3 {
+			attr = node.Child(2).Text(c.src)
+			obj = node.Child(0).Text(c.src)
+		}
+		return attr, obj
+	}
+	return "", ""
 }
 
 func nodeLocation(node *ts.Node, file source.FileID) source.Location {
