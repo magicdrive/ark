@@ -126,7 +126,7 @@ func matchesSymbol(sym symbol.Symbol, q Query) bool {
 
 // matchesFile applies file-level predicates.
 // isGenerated is approximated by checking for "generated" in file path.
-func matchesFile(fileID, lang string, q Query, idx *index.RepositoryIndex) bool {
+func matchesFile(fileID, lang string, q Query, _ *index.RepositoryIndex) bool {
 	lower := strings.ToLower(fileID)
 
 	if q.Language != "" && !strings.EqualFold(lang, q.Language) {

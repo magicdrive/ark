@@ -88,3 +88,20 @@ func SupportedExtensions() []string {
 	}
 	return result
 }
+
+// ExtensionsFor returns all file extensions mapped to the given language, sorted.
+func ExtensionsFor(lang SupportedLanguage) []string {
+	var result []string
+	for ext, l := range extensionToLanguage {
+		if l == lang {
+			result = append(result, ext)
+		}
+	}
+	// Sort for deterministic output.
+	for i := 1; i < len(result); i++ {
+		for j := i; j > 0 && result[j] < result[j-1]; j-- {
+			result[j], result[j-1] = result[j-1], result[j]
+		}
+	}
+	return result
+}
