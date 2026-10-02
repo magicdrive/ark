@@ -99,6 +99,7 @@ func TestListTools(t *testing.T) {
 		"get_relations",
 		"get_callers",
 		"get_callees",
+		"get_repository_map",
 	}
 
 	if len(tools) != len(expectedTools) {
