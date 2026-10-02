@@ -248,6 +248,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 	// Add syntax tools
 	tools = append(tools, SyntaxToolDefinitions()...)
 	tools = append(tools, ReferenceToolDefinitions()...)
+	tools = append(tools, RelationsToolDefinitions()...)
 	return tools
 }
 
@@ -276,6 +277,8 @@ func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (
 		return h.getSymbol(arguments)
 	case "find_references":
 		return h.findReferences(arguments)
+	case "get_relations":
+		return h.getRelations(arguments)
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}
