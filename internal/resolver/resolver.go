@@ -243,7 +243,7 @@ func (r *Resolver) importMatch(ref reference.Reference, fi FileIndex) []symbol.S
 // there is a local var/param named "repo" of type UserRepository.
 // As a heuristic without a type system, we search for symbols named "ReceiverType.Name"
 // where ReceiverType is any type containing the receiver expression as a suffix.
-func (r *Resolver) receiverMatch(ref reference.Reference, fi FileIndex) []symbol.Symbol {
+func (r *Resolver) receiverMatch(ref reference.Reference, _ FileIndex) []symbol.Symbol {
 	target := ref.Name
 	var out []symbol.Symbol
 	for _, sym := range r.byQualified {

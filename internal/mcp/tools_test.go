@@ -103,6 +103,7 @@ func TestListTools(t *testing.T) {
 		"get_context",
 		"analyze_change_impact",
 		"search_code",
+		"get_language_support",
 	}
 
 	if len(tools) != len(expectedTools) {
