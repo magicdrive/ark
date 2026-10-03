@@ -1,14 +1,20 @@
 // Package php provides a Tree-sitter-based extraction Provider for PHP source.
 //
-// PHP-2 scope: top-level symbol extraction with namespace context.
-// Extracted: namespace, class, interface, trait, enum, function, global
-// constant. NOT yet extracted (later PHP-n stages): class members (method,
-// property, class constant, enum case), containment/Parent, imports/use,
-// references, resolution, and graph relations.
+// PHP-3 scope: top-level symbols (PHP-2) PLUS class/interface/trait/enum member
+// symbols with semantic containment — method, constructor, property, class
+// constant, enum case, and constructor-promoted property. Members carry
+// SymbolDraft.Parent (the container's qualified name) and Receiver (the
+// container's bare name) so the existing index builder/resolver can construct
+// symbol.ParentQualified and perform receiver matching without any PHP-specific
+// logic. NOT yet: imports/use, references, resolution, graph relations.
 //
-// Qualified-name policy (D1): namespace segments keep PHP's "\" separator;
-// member separators (PHP-3+) will use ".". Qualified is an Ark-internal symbol
-// identity, not a reproduction of PHP source syntax.
+// Qualified-name policy (D1): namespace segments keep "\"; member segments use
+// ".". Qualified is an Ark-internal symbol identity, not PHP source syntax.
+//
+// Container safety: member extraction reads ONLY the direct children of a
+// container's body list (declaration_list / enum_declaration_list). It never
+// descends into method bodies, so closures, arrow functions, and anonymous
+// classes are not mis-attributed as members of the enclosing type.
 //
 // Invariants: Extract never panics, never returns a Tree-sitter node, and keeps
 // all byte ranges inside the source.
@@ -35,7 +41,7 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-2" }
+func (p *Provider) CacheVersion() string { return "php-3" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
@@ -69,26 +75,24 @@ func extractContainer(node *ts.Node, lang *ts.Language, src []byte, file source.
 		case "namespace_definition":
 			ns = phpNamespace(child, lang, src, file, ns, out)
 		case "class_declaration":
-			appendDecl(child, lang, src, file, ns, symbol.KindClass, out)
+			appendType(child, lang, src, file, ns, symbol.KindClass, out)
 		case "interface_declaration":
-			appendDecl(child, lang, src, file, ns, symbol.KindInterface, out)
+			appendType(child, lang, src, file, ns, symbol.KindInterface, out)
 		case "trait_declaration":
-			appendDecl(child, lang, src, file, ns, symbol.KindTrait, out)
+			appendType(child, lang, src, file, ns, symbol.KindTrait, out)
 		case "enum_declaration":
-			appendDecl(child, lang, src, file, ns, symbol.KindEnum, out)
+			appendType(child, lang, src, file, ns, symbol.KindEnum, out)
 		case "function_definition":
-			appendDecl(child, lang, src, file, ns, symbol.KindFunction, out)
+			appendNamed(child, lang, src, file, ns, symbol.KindFunction, out)
 		case "const_declaration":
-			appendConsts(child, lang, src, file, ns, out)
+			// Global constants: no container.
+			appendConstElements(child, lang, src, file, ns, "", "", out)
 		}
 	}
 }
 
-// phpNamespace handles a namespace_definition. It emits the namespace symbol and
-// returns the namespace path that applies to subsequent sibling declarations.
-// For the bracketed form (`namespace X { ... }`) it recurses into the body with
-// the namespace in scope and returns the *unchanged* outer namespace, because a
-// bracketed namespace does not leak to its siblings.
+// phpNamespace handles a namespace_definition. See PHP-2 for the statement vs
+// bracketed semantics.
 func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, outerNS string, out *[]language.SymbolDraft) string {
 	name := childText(node, lang, src, "namespace_name")
 	if name != "" {
@@ -103,17 +107,15 @@ func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.File
 		})
 	}
 	if body := childByType(node, lang, "compound_statement"); body != nil {
-		// Bracketed namespace: scope applies only within the body.
 		extractContainer(body, lang, src, file, name, out)
 		return outerNS
 	}
-	// Statement namespace: applies to following siblings.
 	return name
 }
 
-// appendDecl extracts a single named declaration (class/interface/trait/enum/
-// function) whose identifier is a direct `name` child.
-func appendDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns string, kind symbol.SymbolKind, out *[]language.SymbolDraft) {
+// appendNamed extracts a single named declaration (function; also used for the
+// container symbol itself) whose identifier is a direct `name` child.
+func appendNamed(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns string, kind symbol.SymbolKind, out *[]language.SymbolDraft) {
 	name := childText(node, lang, src, "name")
 	if name == "" {
 		return
@@ -129,10 +131,137 @@ func appendDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 	})
 }
 
-// appendConsts extracts top-level `const A = ..., B = ...;` declarations. Each
-// const_element becomes its own constant symbol. Dynamic define() calls are not
-// treated as constant declarations.
-func appendConsts(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns string, out *[]language.SymbolDraft) {
+// appendType extracts a class/interface/trait/enum declaration AND its members.
+func appendType(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns string, kind symbol.SymbolKind, out *[]language.SymbolDraft) {
+	name := childText(node, lang, src, "name")
+	if name == "" {
+		return
+	}
+	qualified := qualify(ns, name)
+	*out = append(*out, language.SymbolDraft{
+		Name:      name,
+		Qualified: qualified,
+		Kind:      kind,
+		Location:  nodeLocation(node, file),
+		StartByte: node.StartByte(),
+		EndByte:   node.EndByte(),
+		Exported:  true,
+	})
+
+	// Member body: declaration_list for class/interface/trait, or
+	// enum_declaration_list for enum. Only direct children are inspected.
+	body := childByType(node, lang, "declaration_list")
+	if body == nil {
+		body = childByType(node, lang, "enum_declaration_list")
+	}
+	if body != nil {
+		extractMembers(body, lang, src, file, qualified, name, out)
+	}
+}
+
+// extractMembers reads the DIRECT children of a container body. It never
+// descends into method bodies.
+func extractMembers(body *ts.Node, lang *ts.Language, src []byte, file source.FileID, containerQual, containerName string, out *[]language.SymbolDraft) {
+	for i := 0; i < body.ChildCount(); i++ {
+		member := body.Child(i)
+		switch member.Type(lang) {
+		case "method_declaration":
+			appendMethod(member, lang, src, file, containerQual, containerName, out)
+		case "property_declaration":
+			appendProperties(member, lang, src, file, containerQual, containerName, out)
+		case "const_declaration":
+			appendConstElements(member, lang, src, file, "", containerQual, containerName, out)
+		case "enum_case":
+			appendEnumCase(member, lang, src, file, containerQual, containerName, out)
+			// Note: use_declaration (trait use) and others are intentionally
+			// ignored until PHP-4/PHP-5.
+		}
+	}
+}
+
+// appendMethod extracts a method/constructor and any constructor-promoted
+// properties. __construct maps to KindConstructor; other magic methods remain
+// KindMethod; __destruct is NOT a constructor.
+func appendMethod(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, containerQual, containerName string, out *[]language.SymbolDraft) {
+	name := childText(node, lang, src, "name")
+	if name == "" {
+		return
+	}
+	kind := symbol.KindMethod
+	if name == "__construct" {
+		kind = symbol.KindConstructor
+	}
+	*out = append(*out, language.SymbolDraft{
+		Name:      name,
+		Qualified: containerQual + "." + name,
+		Kind:      kind,
+		Location:  nodeLocation(node, file),
+		StartByte: node.StartByte(),
+		EndByte:   node.EndByte(),
+		Parent:    containerQual,
+		Receiver:  containerName,
+		Exported:  visibilityExported(node, lang, src),
+	})
+
+	// Constructor property promotion: promoted parameters are class properties.
+	// They live in formal_parameters as property_promotion_parameter nodes;
+	// plain simple_parameter nodes are NOT properties.
+	if fp := childByType(node, lang, "formal_parameters"); fp != nil {
+		for i := 0; i < fp.ChildCount(); i++ {
+			param := fp.Child(i)
+			if param.Type(lang) != "property_promotion_parameter" {
+				continue
+			}
+			pname := variableName(param, lang, src)
+			if pname == "" {
+				continue
+			}
+			*out = append(*out, language.SymbolDraft{
+				Name:      pname,
+				Qualified: containerQual + "." + pname,
+				Kind:      symbol.KindProperty,
+				Location:  nodeLocation(param, file),
+				StartByte: param.StartByte(),
+				EndByte:   param.EndByte(),
+				Parent:    containerQual,
+				Receiver:  containerName,
+				Exported:  visibilityExported(param, lang, src),
+			})
+		}
+	}
+}
+
+// appendProperties extracts each property_element in a property_declaration.
+func appendProperties(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, containerQual, containerName string, out *[]language.SymbolDraft) {
+	exported := visibilityExported(node, lang, src)
+	for i := 0; i < node.ChildCount(); i++ {
+		el := node.Child(i)
+		if el.Type(lang) != "property_element" {
+			continue
+		}
+		pname := variableName(el, lang, src)
+		if pname == "" {
+			continue
+		}
+		*out = append(*out, language.SymbolDraft{
+			Name:      pname,
+			Qualified: containerQual + "." + pname,
+			Kind:      symbol.KindProperty,
+			Location:  nodeLocation(el, file),
+			StartByte: el.StartByte(),
+			EndByte:   el.EndByte(),
+			Parent:    containerQual,
+			Receiver:  containerName,
+			Exported:  exported,
+		})
+	}
+}
+
+// appendConstElements extracts each const_element in a const_declaration. When
+// containerQual is empty the constants are global (no parent); otherwise they
+// are class/enum constants with Parent set.
+func appendConstElements(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns, containerQual, containerName string, out *[]language.SymbolDraft) {
+	exported := visibilityExported(node, lang, src)
 	for i := 0; i < node.ChildCount(); i++ {
 		el := node.Child(i)
 		if el.Type(lang) != "const_element" {
@@ -142,16 +271,59 @@ func appendConsts(node *ts.Node, lang *ts.Language, src []byte, file source.File
 		if name == "" {
 			continue
 		}
-		*out = append(*out, language.SymbolDraft{
+		d := language.SymbolDraft{
 			Name:      name,
-			Qualified: qualify(ns, name),
 			Kind:      symbol.KindConstant,
 			Location:  nodeLocation(el, file),
 			StartByte: el.StartByte(),
 			EndByte:   el.EndByte(),
-			Exported:  true,
-		})
+			Exported:  exported,
+		}
+		if containerQual != "" {
+			d.Qualified = containerQual + "." + name
+			d.Parent = containerQual
+			d.Receiver = containerName
+		} else {
+			d.Qualified = qualify(ns, name)
+		}
+		*out = append(*out, d)
 	}
+}
+
+// appendEnumCase extracts an enum case as a constant whose parent is the enum.
+func appendEnumCase(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, containerQual, containerName string, out *[]language.SymbolDraft) {
+	name := childText(node, lang, src, "name")
+	if name == "" {
+		return
+	}
+	*out = append(*out, language.SymbolDraft{
+		Name:      name,
+		Qualified: containerQual + "." + name,
+		Kind:      symbol.KindConstant,
+		Location:  nodeLocation(node, file),
+		StartByte: node.StartByte(),
+		EndByte:   node.EndByte(),
+		Parent:    containerQual,
+		Receiver:  containerName,
+		Exported:  true, // enum cases are always publicly accessible
+	})
+}
+
+// visibilityExported maps PHP member visibility to the Ark Exported flag.
+// public (or omitted → PHP default public) → true; protected/private → false.
+func visibilityExported(node *ts.Node, lang *ts.Language, src []byte) bool {
+	v := childText(node, lang, src, "visibility_modifier")
+	return v == "" || v == "public"
+}
+
+// variableName returns the bare name (no leading "$") of the variable_name
+// child of node, e.g. property_element or property_promotion_parameter.
+func variableName(node *ts.Node, lang *ts.Language, src []byte) string {
+	vn := childByType(node, lang, "variable_name")
+	if vn == nil {
+		return ""
+	}
+	return childText(vn, lang, src, "name")
 }
 
 // qualify joins a namespace path and a name using PHP's "\" namespace separator
