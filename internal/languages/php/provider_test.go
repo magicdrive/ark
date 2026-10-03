@@ -24,6 +24,17 @@ func extractDrafts(t *testing.T, src string) ([]language.SymbolDraft, map[string
 	return ext.Symbols, byQual
 }
 
+// extractImports runs Extract and returns the imports in source order.
+func extractImports(t *testing.T, src string) []language.ImportDraft {
+	t.Helper()
+	p := NewProvider()
+	ext, err := p.Extract(context.Background(), source.FileID("test.php"), []byte(src))
+	if err != nil {
+		t.Fatalf("Extract error: %v", err)
+	}
+	return ext.Imports
+}
+
 func TestPHPProvider_Identity(t *testing.T) {
 	p := NewProvider()
 	if p.Language() != "php" {
@@ -361,6 +372,181 @@ func TestPHPProvider_Deterministic(t *testing.T) {
 	}
 }
 
+// ---- PHP-4: namespace imports / use ----
+
+func TestPHPProvider_Imports_Forms(t *testing.T) {
+	imports := extractImports(t, `<?php
+use App\Model\User;
+use App\Model\Repository as Repo;
+use App\Model\User, App\Model\Account;
+use App\Model\{Thing, Account as DomainAccount};
+use function App\Util\helper;
+use function App\Util\helper as appHelper;
+use const App\Config\DEFAULT_LIMIT;
+use const App\Config\DEFAULT_LIMIT as LIMIT;
+`)
+	type pa struct{ path, alias string }
+	want := []pa{
+		{"App\\Model\\User", ""},
+		{"App\\Model\\Repository", "Repo"},
+		{"App\\Model\\User", ""},
+		{"App\\Model\\Account", ""},
+		{"App\\Model\\Thing", ""},
+		{"App\\Model\\Account", "DomainAccount"},
+		{"App\\Util\\helper", ""},
+		{"App\\Util\\helper", "appHelper"},
+		{"App\\Config\\DEFAULT_LIMIT", ""},
+		{"App\\Config\\DEFAULT_LIMIT", "LIMIT"},
+	}
+	if len(imports) != len(want) {
+		t.Fatalf("got %d imports, want %d: %+v", len(imports), len(want), imports)
+	}
+	for i, w := range want {
+		if imports[i].Path != w.path || imports[i].Alias != w.alias {
+			t.Errorf("import[%d] = {Path:%q Alias:%q}, want {Path:%q Alias:%q}",
+				i, imports[i].Path, imports[i].Alias, w.path, w.alias)
+		}
+		if imports[i].Location.File == "" {
+			t.Errorf("import[%d] has empty Location.File", i)
+		}
+	}
+}
+
+func TestPHPProvider_Imports_MixedGrouped(t *testing.T) {
+	imports := extractImports(t, `<?php
+use App\Foo\{Bar, function baz, const QUX};
+`)
+	// Kind markers are dropped; targets/aliases are preserved and flattened.
+	want := []string{"App\\Foo\\Bar", "App\\Foo\\baz", "App\\Foo\\QUX"}
+	if len(imports) != len(want) {
+		t.Fatalf("got %d imports, want %d: %+v", len(imports), len(want), imports)
+	}
+	for i, w := range want {
+		if imports[i].Path != w {
+			t.Errorf("import[%d].Path = %q, want %q", i, imports[i].Path, w)
+		}
+	}
+}
+
+func TestPHPProvider_Imports_LeadingBackslash(t *testing.T) {
+	imports := extractImports(t, `<?php
+use \App\Model\User;
+`)
+	if len(imports) != 1 || imports[0].Path != "App\\Model\\User" {
+		t.Fatalf("leading backslash not normalized: %+v", imports)
+	}
+}
+
+func TestPHPProvider_Imports_NamespaceContextNotApplied(t *testing.T) {
+	// `use` targets are fully qualified; current namespace must NOT be prepended.
+	imports := extractImports(t, `<?php
+namespace App\Service;
+use Domain\Model\User;
+`)
+	if len(imports) != 1 || imports[0].Path != "Domain\\Model\\User" {
+		t.Fatalf("namespace context wrongly applied to import: %+v", imports)
+	}
+}
+
+func TestPHPProvider_Imports_BracketedAndMultipleNamespaces(t *testing.T) {
+	imports := extractImports(t, `<?php
+namespace A {
+    use X\One;
+}
+namespace B {
+    use Y\Two;
+}
+`)
+	want := []string{"X\\One", "Y\\Two"}
+	if len(imports) != len(want) {
+		t.Fatalf("got %d imports, want %d: %+v", len(imports), len(want), imports)
+	}
+	for i, w := range want {
+		if imports[i].Path != w {
+			t.Errorf("import[%d].Path = %q, want %q", i, imports[i].Path, w)
+		}
+	}
+}
+
+func TestPHPProvider_Imports_SourceOrderPreserved(t *testing.T) {
+	imports := extractImports(t, `<?php
+use App\B;
+use App\A;
+use App\C;
+`)
+	want := []string{"App\\B", "App\\A", "App\\C"}
+	for i, w := range want {
+		if imports[i].Path != w {
+			t.Errorf("import[%d].Path = %q, want %q (source order must be preserved)", i, imports[i].Path, w)
+		}
+	}
+}
+
+func TestPHPProvider_Imports_DuplicatesNotDeduped(t *testing.T) {
+	imports := extractImports(t, `<?php
+use App\Model\User;
+use App\Model\User as U2;
+`)
+	if len(imports) != 2 {
+		t.Fatalf("duplicate textual names with different aliases must not be deduped: %+v", imports)
+	}
+}
+
+// Negative: trait `use` inside a class body must NOT become an import.
+func TestPHPProvider_TraitUseNotImport(t *testing.T) {
+	imports := extractImports(t, `<?php
+namespace App;
+use App\Logging\Logger;
+class UserService {
+    use LogsActivity;
+    use AnotherTrait;
+    public function m(): void {}
+}
+`)
+	if len(imports) != 1 || imports[0].Path != "App\\Logging\\Logger" {
+		t.Fatalf("trait use must not be an import; got %+v", imports)
+	}
+}
+
+// Regression: PHP-3 symbol extraction is unaffected by import handling.
+func TestPHPProvider_Imports_SymbolRegression(t *testing.T) {
+	_, m := extractDrafts(t, `<?php
+namespace App\Service;
+use App\Model\User;
+class UserService {
+    use LogsActivity;
+    private User $user;
+    public function find(int $id): User {}
+}
+`)
+	for q, k := range map[string]symbol.SymbolKind{
+		"App\\Service\\UserService":      symbol.KindClass,
+		"App\\Service\\UserService.user": symbol.KindProperty,
+		"App\\Service\\UserService.find": symbol.KindMethod,
+	} {
+		if d, ok := m[q]; !ok || d.Kind != k {
+			t.Errorf("symbol regression: %q missing or wrong kind (%+v)", q, d)
+		}
+	}
+}
+
+func TestPHPProvider_Imports_Deterministic(t *testing.T) {
+	src := `<?php
+use App\Model\{User, Account as A};
+use function App\f;
+`
+	a := extractImports(t, src)
+	b := extractImports(t, src)
+	if len(a) != len(b) {
+		t.Fatalf("non-deterministic import count: %d vs %d", len(a), len(b))
+	}
+	for i := range a {
+		if a[i].Path != b[i].Path || a[i].Alias != b[i].Alias {
+			t.Errorf("non-deterministic import at %d: %+v vs %+v", i, a[i], b[i])
+		}
+	}
+}
+
 func TestPHPProvider_Safety(t *testing.T) {
 	inputs := map[string]string{
 		"empty":          ``,
@@ -370,6 +556,9 @@ func TestPHPProvider_Safety(t *testing.T) {
 		"partial_prop":   `<?php class C { private `,
 		"bad_const":      `<?php class C { const = ; public function ok() {} }`,
 		"unclosed_class": `<?php class C {`,
+		"broken_use":     `<?php use App\ ; use ; use App\Model\{ ;`,
+		"use_no_tail":    `<?php use ;`,
+		"group_empty":    `<?php use App\{};`,
 	}
 	p := NewProvider()
 	for name, src := range inputs {

@@ -22,6 +22,7 @@ package php
 
 import (
 	"context"
+	"strings"
 
 	"github.com/odvcencio/gotreesitter/grammars"
 
@@ -41,7 +42,7 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-3" }
+func (p *Provider) CacheVersion() string { return "php-4" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
@@ -58,22 +59,27 @@ func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (l
 	}
 	defer tree.Release()
 
-	var drafts []language.SymbolDraft
+	var syms []language.SymbolDraft
+	var imports []language.ImportDraft
 	// Namespace context is threaded explicitly through the walk — never stored
 	// in global/shared state — so extraction is deterministic and reentrant.
-	extractContainer(tree.RootNode(), lang, src, file, "", &drafts)
-	return language.Extraction{Symbols: drafts}, nil
+	extractContainer(tree.RootNode(), lang, src, file, "", &syms, &imports)
+	return language.Extraction{Symbols: syms, Imports: imports}, nil
 }
 
 // extractContainer walks the direct children of node (the program root, or a
-// bracketed namespace body) extracting top-level declarations. ns is the active
-// namespace path ("" = global namespace).
-func extractContainer(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns string, out *[]language.SymbolDraft) {
+// bracketed namespace body) extracting top-level declarations and namespace
+// imports. ns is the active namespace path ("" = global namespace).
+func extractContainer(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, ns string, out *[]language.SymbolDraft, imp *[]language.ImportDraft) {
 	for i := 0; i < node.ChildCount(); i++ {
 		child := node.Child(i)
 		switch child.Type(lang) {
 		case "namespace_definition":
-			ns = phpNamespace(child, lang, src, file, ns, out)
+			ns = phpNamespace(child, lang, src, file, ns, out, imp)
+		case "namespace_use_declaration":
+			// Namespace import (NOT trait `use`, which is a use_declaration
+			// inside a declaration_list and is never seen here).
+			appendImports(child, lang, src, file, imp)
 		case "class_declaration":
 			appendType(child, lang, src, file, ns, symbol.KindClass, out)
 		case "interface_declaration":
@@ -93,7 +99,7 @@ func extractContainer(node *ts.Node, lang *ts.Language, src []byte, file source.
 
 // phpNamespace handles a namespace_definition. See PHP-2 for the statement vs
 // bracketed semantics.
-func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, outerNS string, out *[]language.SymbolDraft) string {
+func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, outerNS string, out *[]language.SymbolDraft, imp *[]language.ImportDraft) string {
 	name := childText(node, lang, src, "namespace_name")
 	if name != "" {
 		*out = append(*out, language.SymbolDraft{
@@ -107,10 +113,91 @@ func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.File
 		})
 	}
 	if body := childByType(node, lang, "compound_statement"); body != nil {
-		extractContainer(body, lang, src, file, name, out)
+		extractContainer(body, lang, src, file, name, out, imp)
 		return outerNS
 	}
 	return name
+}
+
+// appendImports flattens a namespace_use_declaration into one ImportDraft per
+// semantic import clause (D6). It handles non-grouped and grouped forms, plus
+// per-clause `function`/`const` kind markers. Import kind (class/function/
+// const) is intentionally not represented: the existing ImportDraft has no kind
+// field and the import TARGET + alias are what matter here; see the completion
+// report for why dropping kind is correct for Ark's current use.
+func appendImports(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, imp *[]language.ImportDraft) {
+	// Grouped form: a namespace_name prefix followed by a namespace_use_group.
+	prefix := ""
+	if group := childByType(node, lang, "namespace_use_group"); group != nil {
+		prefix = childText(node, lang, src, "namespace_name")
+		for i := 0; i < group.ChildCount(); i++ {
+			clause := group.Child(i)
+			if clause.Type(lang) != "namespace_use_clause" {
+				continue
+			}
+			if d, ok := parseUseClause(clause, lang, src, file, prefix); ok {
+				*imp = append(*imp, d)
+			}
+		}
+		return
+	}
+	// Non-grouped form: one or more namespace_use_clause children.
+	for i := 0; i < node.ChildCount(); i++ {
+		clause := node.Child(i)
+		if clause.Type(lang) != "namespace_use_clause" {
+			continue
+		}
+		if d, ok := parseUseClause(clause, lang, src, file, ""); ok {
+			*imp = append(*imp, d)
+		}
+	}
+}
+
+// parseUseClause parses one namespace_use_clause into an ImportDraft. prefix is
+// the group prefix for grouped use ("" otherwise). Path keeps PHP namespace
+// identity with a leading "\" stripped (D1 / §8); Alias is the explicit `as`
+// name or "" (no alias → ImportDraft convention of empty = use base name).
+func parseUseClause(clause *ts.Node, lang *ts.Language, src []byte, file source.FileID, prefix string) (language.ImportDraft, bool) {
+	var tail, alias string
+	afterAs := false
+	for i := 0; i < clause.ChildCount(); i++ {
+		c := clause.Child(i)
+		switch c.Type(lang) {
+		case "function", "const":
+			// import kind marker — not represented in ImportDraft.
+		case "as":
+			afterAs = true
+		case "qualified_name":
+			if !afterAs {
+				tail = c.Text(src)
+			}
+		case "name":
+			if afterAs {
+				alias = c.Text(src)
+			} else if tail == "" {
+				tail = c.Text(src)
+			}
+		}
+	}
+	if tail == "" {
+		return language.ImportDraft{}, false
+	}
+	path := tail
+	if prefix != "" {
+		path = prefix + "\\" + tail
+	}
+	path = normalizeNamespacePath(path)
+	return language.ImportDraft{
+		Path:     path,
+		Alias:    alias,
+		Location: nodeLocation(clause, file),
+	}, true
+}
+
+// normalizeNamespacePath strips a single leading namespace separator so that
+// `\App\Model\User` and `App\Model\User` resolve to the same Ark identity (§8).
+func normalizeNamespacePath(path string) string {
+	return strings.TrimPrefix(path, "\\")
 }
 
 // appendNamed extracts a single named declaration (function; also used for the
