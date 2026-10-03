@@ -181,12 +181,25 @@ func (b *builder) resolve() {
 		switch meta.kind {
 		case reference.KindCall:
 			kind = EdgeCalls
+		case reference.KindConstruction:
+			// Construction is modelled as a call-like edge. This is an explicit
+			// decision, NOT a default fallback: `new T()` depends on T much like
+			// a call. (Preserves pre-D4 behavior that relied on the old default.)
+			kind = EdgeCalls
 		case reference.KindTypeUse:
 			kind = EdgeUsesType
 		case reference.KindImport:
 			kind = EdgeImports
+		case reference.KindInheritance:
+			kind = EdgeExtends
+		case reference.KindImplements:
+			kind = EdgeImplements
+		case reference.KindUsesTrait:
+			kind = EdgeUsesTrait
 		default:
-			kind = EdgeCalls
+			// Never fabricate graph semantics for an unmapped ReferenceKind
+			// (e.g. read/write/unknown or any future kind). Skip the edge.
+			continue
 		}
 
 		edge := GraphEdge{

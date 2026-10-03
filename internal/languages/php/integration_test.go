@@ -65,3 +65,63 @@ func TestPHP_ContainmentThroughIndex(t *testing.T) {
 		}
 	}
 }
+
+// edgeKind returns the EdgeKind from `from` (qualified) to `to` (qualified), or "".
+func edgeKind(idx *index.RepositoryIndex, from, to string) index.EdgeKind {
+	syms := idx.FindSymbolsByQualified(from)
+	if len(syms) == 0 {
+		return ""
+	}
+	for _, e := range idx.GetCallees(syms[0].ID) {
+		if s, ok := idx.GetSymbol(e.To); ok && s.Qualified == to {
+			return e.Kind
+		}
+	}
+	return ""
+}
+
+// TestPHP_TypedRelationEdges is Acceptance Criterion B: PHP extends/implements/
+// trait-use flow through the resolver into typed graph edges when the target is
+// uniquely resolved.
+func TestPHP_TypedRelationEdges(t *testing.T) {
+	dir := testdataDir(t, "relations")
+	idx, err := index.New(context.Background(), dir, []language.Provider{php.NewProvider()})
+	if err != nil {
+		t.Fatalf("index.New: %v", err)
+	}
+	cases := []struct {
+		to   string
+		kind index.EdgeKind
+	}{
+		{"Base", index.EdgeExtends},
+		{"Contract", index.EdgeImplements},
+		{"Logs", index.EdgeUsesTrait},
+	}
+	for _, c := range cases {
+		if got := edgeKind(idx, "Child", c.to); got != c.kind {
+			t.Errorf("edge Child->%s = %q, want %q", c.to, got, c.kind)
+		}
+	}
+}
+
+// TestPHP_AmbiguousRelationNoEdge is Acceptance Criterion C: an ambiguous
+// (multi-candidate) relation target must NOT produce a graph edge.
+func TestPHP_AmbiguousRelationNoEdge(t *testing.T) {
+	dir := testdataDir(t, "ambig")
+	idx, err := index.New(context.Background(), dir, []language.Provider{php.NewProvider()})
+	if err != nil {
+		t.Fatalf("index.New: %v", err)
+	}
+	// Two "Base" classes exist (namespaces A and B); Child extends Base is
+	// ambiguous → Candidate → no EdgeExtends to either.
+	syms := idx.FindSymbolsByQualified("Child")
+	if len(syms) == 0 {
+		t.Fatal("Child symbol missing")
+	}
+	for _, e := range idx.GetCallees(syms[0].ID) {
+		if e.Kind == index.EdgeExtends {
+			to, _ := idx.GetSymbol(e.To)
+			t.Errorf("ambiguous extends must not create an edge; got Child->%s", to.Qualified)
+		}
+	}
+}

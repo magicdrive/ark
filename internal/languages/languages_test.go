@@ -55,12 +55,13 @@ func TestRegistry_TSXIsReferences(t *testing.T) {
 	}
 }
 
-// TestRegistry_PHPIsSymbols pins PHP-2: PHP is registered at SupportLevelSymbols
-// (top-level symbol extraction) and maps the .php extension.
-func TestRegistry_PHPIsSymbols(t *testing.T) {
+// TestRegistry_PHPIsReferences pins PHP-5: PHP is registered at
+// SupportLevelReferences (symbols + imports + references/relations) and maps
+// the .php extension.
+func TestRegistry_PHPIsReferences(t *testing.T) {
 	reg := languages.Registry()
-	if lvl := reg.SupportLevelFor("php"); lvl != language.SupportLevelSymbols {
-		t.Errorf("php SupportLevel = %v, want symbols", lvl)
+	if lvl := reg.SupportLevelFor("php"); lvl != language.SupportLevelReferences {
+		t.Errorf("php SupportLevel = %v, want references", lvl)
 	}
 	if d, ok := reg.DetectByFilename("index.php"); !ok || d.Language != "php" {
 		t.Errorf("DetectByFilename(index.php) = %v,%v; want php", d.Language, ok)

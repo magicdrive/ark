@@ -2,6 +2,7 @@ package php
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/language"
@@ -543,6 +544,140 @@ use function App\f;
 	for i := range a {
 		if a[i].Path != b[i].Path || a[i].Alias != b[i].Alias {
 			t.Errorf("non-deterministic import at %d: %+v vs %+v", i, a[i], b[i])
+		}
+	}
+}
+
+// ---- PHP-4 focused: 4 high-risk concerns ----
+
+func importPaths(ds []language.ImportDraft) []string {
+	out := make([]string, len(ds))
+	for i, d := range ds {
+		out[i] = d.Path
+	}
+	return out
+}
+
+func eqStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// Concern 1: grouped-use prefix joining must not break on "\" presence/absence
+// (no doubled "\\" between segments, no missing separator).
+func TestPHPImports_GroupedPrefixJoin(t *testing.T) {
+	cases := []struct {
+		src  string
+		want []string
+	}{
+		{`<?php
+use App\Model\{User, Account};`, []string{"App\\Model\\User", "App\\Model\\Account"}},
+		{`<?php
+use App\{Thing};`, []string{"App\\Thing"}},
+		{`<?php
+use App\{Sub\Thing, Other};`, []string{"App\\Sub\\Thing", "App\\Other"}},
+		{`<?php
+use Deeply\Nested\Ns\{A, B\C};`, []string{"Deeply\\Nested\\Ns\\A", "Deeply\\Nested\\Ns\\B\\C"}},
+	}
+	for _, c := range cases {
+		got := importPaths(extractImports(t, c.src))
+		if !eqStrings(got, c.want) {
+			t.Errorf("src %q: paths = %v, want %v", c.src, got, c.want)
+		}
+		for _, p := range got {
+			if strings.Contains(p, "\\\\") {
+				t.Errorf("path %q contains a doubled separator", p)
+			}
+			if strings.HasPrefix(p, "\\") {
+				t.Errorf("path %q has a leading separator (should be normalized)", p)
+			}
+		}
+	}
+}
+
+// Invalid PHP (leading "\" before a grouped prefix) must not panic.
+func TestPHPImports_GroupedLeadingBackslashNoPanic(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic on invalid grouped use: %v", r)
+		}
+	}()
+	_ = extractImports(t, `<?php
+use \App\Model\{User, Account};
+`)
+}
+
+// Concern 2: mixed grouped use must not leak the function/const kind markers
+// into Path.
+func TestPHPImports_MixedGroupedNoKindInPath(t *testing.T) {
+	got := importPaths(extractImports(t, `<?php
+use App\Foo\{Bar, function baz, const QUX};
+`))
+	want := []string{"App\\Foo\\Bar", "App\\Foo\\baz", "App\\Foo\\QUX"}
+	if !eqStrings(got, want) {
+		t.Fatalf("paths = %v, want %v", got, want)
+	}
+	for _, p := range got {
+		if strings.Contains(p, "function") || strings.Contains(p, "const") {
+			t.Errorf("kind marker leaked into path %q", p)
+		}
+	}
+}
+
+// Concern 3: trait use (including multi-trait and adaptation blocks) must never
+// become an import, regardless of surrounding namespace imports.
+func TestPHPImports_TraitUseNeverImported(t *testing.T) {
+	// Trait use only, no namespace import → zero imports.
+	if got := extractImports(t, `<?php
+class C {
+    use A;
+    use B, D;
+    use E { E::foo as bar; }
+}
+`); len(got) != 0 {
+		t.Errorf("trait-use-only file produced imports: %+v", got)
+	}
+
+	// Namespace import + trait uses → only the namespace import.
+	got := importPaths(extractImports(t, `<?php
+namespace App;
+use App\Logging\Logger;
+class UserService {
+    use A;
+    use B, D;
+    use E { E::foo as bar; }
+    public function m(): void {}
+}
+`))
+	if !eqStrings(got, []string{"App\\Logging\\Logger"}) {
+		t.Errorf("imports = %v, want only [App\\Logging\\Logger]", got)
+	}
+}
+
+// Concern 4: source order is preserved and duplicates are NOT deduped, even
+// when plain and grouped forms are interleaved.
+func TestPHPImports_OrderAndDuplicates(t *testing.T) {
+	got := extractImports(t, `<?php
+use App\B;
+use App\{A, C};
+use App\B;
+use App\B as Other;
+`)
+	wantPath := []string{"App\\B", "App\\A", "App\\C", "App\\B", "App\\B"}
+	wantAlias := []string{"", "", "", "", "Other"}
+	if len(got) != len(wantPath) {
+		t.Fatalf("got %d imports, want %d: %+v", len(got), len(wantPath), got)
+	}
+	for i := range wantPath {
+		if got[i].Path != wantPath[i] || got[i].Alias != wantAlias[i] {
+			t.Errorf("import[%d] = {%q,%q}, want {%q,%q}", i, got[i].Path, got[i].Alias, wantPath[i], wantAlias[i])
 		}
 	}
 }

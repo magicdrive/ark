@@ -42,7 +42,7 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-4" }
+func (p *Provider) CacheVersion() string { return "php-5" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
@@ -64,7 +64,8 @@ func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (l
 	// Namespace context is threaded explicitly through the walk — never stored
 	// in global/shared state — so extraction is deterministic and reentrant.
 	extractContainer(tree.RootNode(), lang, src, file, "", &syms, &imports)
-	return language.Extraction{Symbols: syms, Imports: imports}, nil
+	refs := extractReferences(tree.RootNode(), lang, src, file)
+	return language.Extraction{Symbols: syms, References: refs, Imports: imports}, nil
 }
 
 // extractContainer walks the direct children of node (the program root, or a
