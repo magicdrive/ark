@@ -1,0 +1,18 @@
+# file: broken.tsx
+## symbols
+## references
+## imports
+## diagnostics
+
+# file: component.tsx
+## symbols
+symbol Props kind=interface qualified="Props" parent="" receiver="" exported=true @component.tsx:3:8-5:2
+symbol Greeting kind=function qualified="Greeting" parent="" receiver="" exported=true @component.tsx:7:8-14:2
+symbol Title kind=constant qualified="Title" parent="" receiver="" exported=true @component.tsx:16:14-16:42
+## references
+ref useState kind=call container="Greeting" receiver="" call=true @component.tsx:8:29-8:37
+ref setCount kind=call container="Greeting" receiver="" call=true @component.tsx:10:25-10:33
+## imports
+import path="react" alias="" @component.tsx:1:1-1:34
+## diagnostics
+

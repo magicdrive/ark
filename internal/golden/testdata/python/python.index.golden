@@ -1,0 +1,26 @@
+## stats
+files=6 symbols=7 references=11 relations=1 skipped=0
+lang python=6
+## symbols
+symbol broken kind=function lang=python qualified="broken" receiver="" exported=true @broken.py:1:1-2:9
+symbol good kind=function lang=python qualified="good" receiver="" exported=true @broken.py:5:1-6:9
+symbol Draft kind=class lang=python qualified="Draft" receiver="" exported=true @draft.py:3:1-5:20
+symbol Repository kind=class lang=python qualified="Repository" receiver="" exported=true @repository.py:4:1-8:17
+symbol UserService kind=class lang=python qualified="UserService" receiver="" exported=true @service.py:5:1-13:21
+symbol test_create kind=function lang=python qualified="test_create" receiver="" exported=true @test_service.py:4:1-6:22
+symbol User kind=class lang=python qualified="User" receiver="" exported=true @user.py:4:1-10:20
+## references
+ref user kind=import container="" receiver="" call=false @repository.py:1:1-1:22
+ref User kind=call container="find" receiver="" call=true @repository.py:6:13-6:17
+ref repository kind=import container="" receiver="" call=false @service.py:1:1-1:34
+ref user kind=import container="" receiver="" call=false @service.py:2:1-2:22
+ref Repository kind=call container="__init__" receiver="" call=true @service.py:7:21-7:31
+ref User kind=call container="create" receiver="" call=true @service.py:10:13-10:17
+ref find kind=call container="create" receiver="" call=true @service.py:12:17-12:31
+ref save kind=call container="create" receiver="found" call=true @service.py:13:9-13:19
+ref service kind=import container="" receiver="" call=false @test_service.py:1:1-1:32
+ref UserService kind=call container="test_create" receiver="" call=true @test_service.py:5:9-5:20
+ref create kind=call container="test_create" receiver="s" call=true @test_service.py:6:5-6:13
+## edges
+edge test_create -calls-> UserService confidence=strong evidence=[same_package:symbol "UserService" found in same package as test_service.py]
+## diagnostics

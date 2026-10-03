@@ -1,0 +1,54 @@
+# file: broken.py
+## symbols
+symbol broken kind=function qualified="broken" parent="" receiver="" exported=true @broken.py:1:1-2:9
+symbol good kind=function qualified="good" parent="" receiver="" exported=true @broken.py:5:1-6:9
+## references
+## imports
+## diagnostics
+
+# file: draft.py
+## symbols
+symbol Draft kind=class qualified="Draft" parent="" receiver="" exported=true @draft.py:3:1-5:20
+## references
+## imports
+## diagnostics
+
+# file: repository.py
+## symbols
+symbol Repository kind=class qualified="Repository" parent="" receiver="" exported=true @repository.py:4:1-8:17
+## references
+ref User kind=call container="find" receiver="" call=true @repository.py:6:13-6:17
+## imports
+import path="user" alias="" @repository.py:1:1-1:22
+## diagnostics
+
+# file: service.py
+## symbols
+symbol UserService kind=class qualified="UserService" parent="" receiver="" exported=true @service.py:5:1-13:21
+## references
+ref Repository kind=call container="__init__" receiver="" call=true @service.py:7:21-7:31
+ref User kind=call container="create" receiver="" call=true @service.py:10:13-10:17
+ref find kind=call container="create" receiver="" call=true @service.py:12:17-12:31
+ref save kind=call container="create" receiver="found" call=true @service.py:13:9-13:19
+## imports
+import path="repository" alias="" @service.py:1:1-1:34
+import path="user" alias="" @service.py:2:1-2:22
+## diagnostics
+
+# file: test_service.py
+## symbols
+symbol test_create kind=function qualified="test_create" parent="" receiver="" exported=true @test_service.py:4:1-6:22
+## references
+ref UserService kind=call container="test_create" receiver="" call=true @test_service.py:5:9-5:20
+ref create kind=call container="test_create" receiver="s" call=true @test_service.py:6:5-6:13
+## imports
+import path="service" alias="" @test_service.py:1:1-1:32
+## diagnostics
+
+# file: user.py
+## symbols
+symbol User kind=class qualified="User" parent="" receiver="" exported=true @user.py:4:1-10:20
+## references
+## imports
+## diagnostics
+

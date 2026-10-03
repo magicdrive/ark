@@ -40,6 +40,10 @@ func allProviders() []language.Provider {
 // Each entry is a self-contained single-language repository.
 var baselineLanguages = []string{
 	"go",
+	"typescript",
+	"tsx",
+	"javascript",
+	"python",
 }
 
 func testdataDir() string {
@@ -129,7 +133,11 @@ func TestIndexGolden(t *testing.T) {
 // TestIndexDeterminism asserts the Definition of Done from Phase 0: indexing
 // the same repository many times yields a byte-for-byte identical snapshot.
 func TestIndexDeterminism(t *testing.T) {
-	const runs = 100
+	runs := 100
+	if testing.Short() {
+		// The DoD is 100 identical builds; -short keeps the heavy -race pass fast.
+		runs = 10
+	}
 	for _, lang := range baselineLanguages {
 		lang := lang
 		t.Run(lang, func(t *testing.T) {
