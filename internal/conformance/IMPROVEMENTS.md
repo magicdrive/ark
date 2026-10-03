@@ -9,16 +9,39 @@ contract. Fixing any of these is behavior-changing and belongs to a later PR.
 The non-failing audit `TestQualityCandidates` in this package reports the
 current status of each candidate at runtime (`go test -run TestQualityCandidates -v`).
 
-Status measured on 2026-10-03 against providers: go, typescript, tsx,
-javascript, python.
+Status measured against providers: go, typescript, tsx, javascript, python, php.
 
-| ID | Candidate | go | typescript | tsx | javascript | python |
-|----|-----------|----|-----------|----|-----------|--------|
-| Q1 | Partial extraction from broken source | partial (1) | none (0) | none (0) | none (0) | partial (2) |
-| Q2 | Diagnostic emitted on broken source | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Q3 | Class/container member methods extracted as symbols | ✓ (receiver) | ✗ | ✗ | ✗ | ✗ |
-| Q4 | `SymbolDraft.Parent` populated for nested symbols | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Q5 | MCP index/relations handle `.tsx` (registry-wide) | n/a | n/a | ✅ CLOSED | n/a | n/a |
+| ID | Candidate | go | typescript | tsx | javascript | python | php |
+|----|-----------|----|-----------|----|-----------|--------|-----|
+| Q1 | Partial extraction from broken source | partial | none | none | none | partial | partial |
+| Q2 | Diagnostic emitted on broken source | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
+| Q3 | Class/container member methods extracted as symbols | ✓ (receiver) | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Q4 | `SymbolDraft.Parent` populated for nested symbols | ✗ | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Q5 | MCP index/relations handle `.tsx` (registry-wide) | n/a | n/a | ✅ CLOSED | n/a | n/a | n/a |
+| Q6 | `IncludeTests` recognises the language's test files | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ (deferred) |
+
+### Q3 / Q4 — PHP status (PHP-3)
+
+PHP **satisfies Q3 and Q4**: it extracts class/interface/trait/enum members
+(methods, constructors, properties, class constants, enum cases, constructor-
+promoted properties) as symbols with `Receiver` set to the declaring type, and
+populates `SymbolDraft.Parent` with the container's qualified name so the index
+builds `symbol.ParentQualified`. This is verified end-to-end through the real
+Repository Index (`internal/languages/php` integration tests). Q3/Q4 remain
+open for TS/TSX/JS/Python — their status is unchanged and PHP did not alter
+their providers.
+
+### Q6 — `IncludeTests` test-file detection for PHP (deferred, architecture-blocked)
+
+`isTestFile` (`internal/context/engine.go`) recognises Go (`_test.go`),
+TS/TSX/JS (`.test.*`/`.spec.*`) and Python (`test_*`/`*_test.py`) test files by
+path, but has **no PHP entry**, so `IncludeTests=false` is a no-op for PHP
+(frozen by `TestContext_IncludeTestsNoOpForPHP`). A correct, non-hacky fix needs
+test-file classification metadata on the Language Descriptor plumbed into the
+Context Engine — a Domain IR + Context API change that falls under the PHP-8
+STOP conditions (certification is not an architecture-redesign phase). Deferred
+to a dedicated, language-neutral test-detection consolidation. No PHP-specific
+string check was added to the generic Context Engine.
 
 ## Q1 — Partial extraction from broken source
 
@@ -96,3 +119,21 @@ Resolution: `tsxCompatExclusion` was removed; index/relations use the full
 registry, making `.tsx` handling consistent across all MCP tools. The PR-1
 behavior lock (`TestTSXCompatBehavior`) was replaced by the regression tests
 noted above.
+
+## PHP (PHP-1 … PHP-8) — fixed vs. deferred
+
+### Fixed / delivered
+- Symbols, members, containment (Q3/Q4), imports/aliases/grouped use.
+- References: function/static/instance/`$this` calls, construction, class-constant reads, type references.
+- Typed relations: `extends` / `implements` / `uses_trait` → `EdgeExtends` / `EdgeImplements` / `EdgeUsesTrait` (D4), carried Provider → Graph.
+- Graph Builder hardening: unknown `ReferenceKind` never fabricates an edge (`default: continue`); construction is an explicit call-like edge.
+- Receiver-aware resolution (language-neutral): an explicit **type** receiver (`User::m()`) constrains member resolution so it can never fall back to an unrelated same-name member (removed a false Exact); variable/`$this`/dynamic receivers unchanged.
+- Context: typed relation reason labels (`extends`/`implements`/`uses_trait`) via `EdgeKind`; type-dependency path hardened to exact-name + unique (no ambiguous/prefix fabrication).
+
+### Deferred (precision / future architecture — not correctness bugs)
+- **Resolver**: `Import.Path ↔ Symbol.Qualified` semantic-identity resolution; alias precision; namespace-aware resolution; `ReferenceKind × SymbolKind` compatibility; inherited-member and trait-member lookup (needs relation-aware resolution — mind Resolver↔Graph ordering); no type inference.
+- **Context**: unify the type-dependency path onto resolver-validated graph edges; reverse typed-relation context (`extended_by` / `implemented_by` / `trait_used_by`); relation-aware ranking weights (current scoring is sufficient on measured scenarios).
+- **Test detection**: Q6 above (Descriptor-driven, language-neutral).
+- **Framework awareness** (Laravel/Symfony/Doctrine/PHPUnit): out of scope — a future Framework Evidence Provider, not PHP language support.
+
+These are honest degradations (Candidate/Unresolved/omitted), never false Exact/Strong or fabricated edges.

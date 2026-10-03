@@ -42,8 +42,12 @@ func specList() []spec {
 		{typescript.NewTSXProvider(), grammars.TsxLanguage, language.SupportLevelReferences},
 		{javascript.NewProvider(), grammars.JavascriptLanguage, language.SupportLevelReferences},
 		{python.NewProvider(), grammars.PythonLanguage, language.SupportLevelReferences},
-		// PHP-5: symbols + members + imports + references/relations/resolution.
-		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelReferences},
+		// PHP (PHP-1..8): symbols + members + imports + references + typed
+		// relations + resolution + typed graph, certified for agent-oriented
+		// context quality. Held at Graph (not ContextQualityCertified) because
+		// import/namespace/inherited-member resolution precision is honestly
+		// limited vs a compiler; see internal/conformance/IMPROVEMENTS.md.
+		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelGraph},
 	}
 }
 

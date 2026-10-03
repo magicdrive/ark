@@ -8,6 +8,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/languages/javascript"
+	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/source"
@@ -70,6 +71,16 @@ func fixtures() []providerFixture {
 				{Name: "calls", File: "calls.py", Source: []byte("def run():\n    greet()\n    u = User()\n    u.save()\n")},
 			},
 			broken: conformance.Case{Name: "broken", File: "broken.py", Source: []byte("def broken(:\n    pass\ndef good():\n    pass\n")},
+		},
+		{
+			name:     "php",
+			provider: php.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "basic.php", Source: []byte("<?php\nfunction greet(): void {}\nconst C = 1;\n")},
+				{Name: "class", File: "cls.php", Source: []byte("<?php\nnamespace App;\nuse App\\Model\\User;\nclass UserService {\n    private User $user;\n    public function find(int $id): User { return $this->user; }\n}\n")},
+				{Name: "relations", File: "rel.php", Source: []byte("<?php\nclass Child extends Base implements Contract {\n    use LogsActivity;\n    public static function make(): self { return new self(); }\n}\n")},
+			},
+			broken: conformance.Case{Name: "broken", File: "broken.php", Source: []byte("<?php\nclass Broken { public function m( {\nfunction good() {}\n")},
 		},
 	}
 }

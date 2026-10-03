@@ -204,7 +204,7 @@ ark mcp-init --force
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | Language (go, typescript, tsx, javascript, python) | auto-detect |
+| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php) | auto-detect |
 | `--format <text\|json>` | Output format | `text` |
 | `-h, --help` | Show help | – |
 
@@ -220,7 +220,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | Language (go, typescript, tsx, javascript, python) | auto-detect |
+| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php) | auto-detect |
 | `--format <text\|json>` | Output format | `text` |
 | `-h, --help` | Show help | – |
 
@@ -454,7 +454,42 @@ Symbols: 11
 
 - **No CGO required** — Cross-compile anywhere, single static binary
 - **Real parsing** — Not regex hacks, actual AST-based symbol extraction
-- **Multi-language** — Go, TypeScript, JavaScript, Python (and growing!)
+- **Multi-language** — Go, TypeScript, TSX, JavaScript, Python, PHP (and growing!)
+
+### 🌐 Language Support
+
+Ark advertises only the capabilities it actually tests. Levels build up:
+Parse → Symbols → References → Resolution → Graph → Context.
+
+| Language   | Parse | Symbols | References | Resolution | Graph | Context |
+|------------|:-----:|:-------:|:----------:|:----------:|:-----:|:-------:|
+| Go         |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+| TypeScript |   ✓   |    ✓    |     ✓      |            |       |         |
+| TSX        |   ✓   |    ✓    |     ✓      |            |       |         |
+| JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
+| Python     |   ✓   |    ✓    |     ✓      |            |       |         |
+| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+
+`get_language_support` reports each language's tested level at runtime.
+
+#### PHP — static code intelligence
+
+Ark statically extracts PHP **symbols** (namespaces, classes, interfaces,
+traits, enums, functions, constants, methods, constructors, properties,
+class constants, enum cases, promoted properties), **imports** (plain / aliased
+/ grouped / function / const `use`), **references** (function / static /
+instance / `$this` calls, construction, class-constant reads, type references),
+and **typed relations** (`extends` / `implements` / trait `use`) into a typed
+symbol graph and agent-oriented context — while **preserving uncertainty** for
+dynamic or ambiguous constructs.
+
+**Known limitations (by design):** dynamic calls / construction (`$obj->$m()`,
+`new $c()`) are not guessed; variable receivers are not type-inferred; there is
+no Composer / PSR-4 / autoload resolution; `use`-alias and inherited/trait member
+resolution are intentionally conservative (honest `Candidate` / `Unresolved`
+rather than a fabricated answer); no framework (Laravel/Symfony/…) semantics.
+Ark performs **pure static analysis** and never executes repository code,
+Composer, or any PHP tooling.
 
 ### 🤖 LLM-Optimized Workflow
 
