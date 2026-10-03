@@ -9,12 +9,12 @@ func TestDetectLanguage(t *testing.T) {
 		filename string
 		want     SupportedLanguage
 	}{
-		{"main.go", LangGo},
-		{"app.ts", LangTypeScript},
-		{"component.tsx", LangTSX},
-		{"script.js", LangJavaScript},
-		{"module.mjs", LangJavaScript},
-		{"app.py", LangPython},
+		{"main.go", SupportedLanguage("go")},
+		{"app.ts", SupportedLanguage("typescript")},
+		{"component.tsx", SupportedLanguage("tsx")},
+		{"script.js", SupportedLanguage("javascript")},
+		{"module.mjs", SupportedLanguage("javascript")},
+		{"app.py", SupportedLanguage("python")},
 		{"unknown.xyz", LangUnknown},
 		{"README.md", LangUnknown},
 	}

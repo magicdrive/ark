@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/magicdrive/ark/internal/symbol"
-
 	arkctx "github.com/magicdrive/ark/internal/context"
 )
 
@@ -47,6 +45,10 @@ func ContextToolDefinitions() []Tool {
 						"description": "Output format",
 						"default":     "text",
 					},
+					"filePattern": map[string]interface{}{
+						"type":        "string",
+						"description": "Narrow an ambiguous symbol name by file-path substring",
+					},
 				},
 				"required": []string{"path", "symbol"},
 			},
@@ -80,6 +82,10 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 	if v, ok := args["format"].(string); ok {
 		format = v
 	}
+	filePattern := ""
+	if v, ok := args["filePattern"].(string); ok {
+		filePattern = v
+	}
 
 	fullPath, _, err := h.resolveToolPath(path)
 	if err != nil {
@@ -97,26 +103,22 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 		}, nil
 	}
 
-	// Find the target symbol.
-	var targetID symbol.SymbolID
-	syms := idx.FindSymbolsByQualified(symName)
-	if len(syms) == 0 {
-		syms = idx.FindSymbols(symName)
-	}
-	if len(syms) > 0 {
-		targetID = syms[0].ID
-	}
-
-	if targetID == "" {
+	// Resolve the target symbol. Never silently pick among multiple viable
+	// targets — ambiguity returns candidate evidence instead.
+	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
+	if !tl.Found {
 		msg := fmt.Sprintf("symbol %q not found in %s", symName, path)
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: msg}},
 		}, nil
 	}
+	if tl.Ambiguous {
+		return ambiguousTargetResult(symName, tl.Candidates), nil
+	}
 
 	eng := arkctx.New(idx, fullPath)
 	result, err := eng.Build(context.Background(), arkctx.Request{
-		Target:       targetID,
+		Target:       tl.Symbol.ID,
 		MaxTokens:    maxTokens,
 		MaxDepth:     maxDepth,
 		IncludeTests: includeTests,

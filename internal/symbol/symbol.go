@@ -22,6 +22,7 @@ const (
 	KindClass       SymbolKind = "class"
 	KindInterface   SymbolKind = "interface"
 	KindStruct      SymbolKind = "struct"
+	KindTrait       SymbolKind = "trait"
 	KindEnum        SymbolKind = "enum"
 	KindType        SymbolKind = "type"
 	KindTypeAlias   SymbolKind = "type_alias"

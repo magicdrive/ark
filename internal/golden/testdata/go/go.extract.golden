@@ -1,0 +1,57 @@
+# file: broken.go
+## symbols
+symbol Broken kind=function qualified="Broken" parent="" receiver="" exported=true @broken.go:3:1-5:15
+## references
+## imports
+## diagnostics
+
+# file: draft.go
+## symbols
+symbol Draft kind=struct qualified="Draft" parent="" receiver="" exported=true @draft.go:5:6-5:20
+symbol Save kind=method qualified="Draft.Save" parent="" receiver="Draft" exported=true @draft.go:8:1-10:2
+## references
+## imports
+## diagnostics
+
+# file: repository.go
+## symbols
+symbol Repository kind=struct qualified="Repository" parent="" receiver="" exported=true @repository.go:6:6-6:25
+symbol Find kind=method qualified="Repository.Find" parent="" receiver="Repository" exported=true @repository.go:9:1-12:2
+## references
+ref Println kind=call container="Repository.Find" receiver="fmt" call=true @repository.go:10:2-10:13
+ref User kind=construction container="Repository.Find" receiver="" call=false @repository.go:11:10-11:14
+## imports
+import path="fmt" alias="" @repository.go:3:8-3:13
+## diagnostics
+
+# file: service.go
+## symbols
+symbol UserService kind=struct qualified="UserService" parent="" receiver="" exported=true @service.go:4:6-6:2
+symbol Create kind=method qualified="UserService.Create" parent="" receiver="UserService" exported=true @service.go:9:1-13:2
+## references
+ref User kind=construction container="UserService.Create" receiver="" call=false @service.go:10:7-10:11
+ref Find kind=call container="UserService.Create" receiver="s.repo" call=true @service.go:11:11-11:22
+ref Save kind=call container="UserService.Create" receiver="found" call=true @service.go:12:9-12:19
+## imports
+## diagnostics
+
+# file: service_test.go
+## symbols
+symbol TestCreate kind=function qualified="TestCreate" parent="" receiver="" exported=true @service_test.go:5:1-10:2
+## references
+ref UserService kind=construction container="TestCreate" receiver="" call=false @service_test.go:6:8-6:19
+ref Create kind=call container="TestCreate" receiver="s" call=true @service_test.go:7:12-7:20
+ref Fatal kind=call container="TestCreate" receiver="t" call=true @service_test.go:8:3-8:10
+## imports
+import path="testing" alias="" @service_test.go:3:8-3:17
+## diagnostics
+
+# file: user.go
+## symbols
+symbol User kind=struct qualified="User" parent="" receiver="" exported=true @user.go:4:6-7:2
+symbol Save kind=method qualified="User.Save" parent="" receiver="User" exported=true @user.go:10:1-12:2
+symbol DefaultRole kind=constant qualified="DefaultRole" parent="" receiver="" exported=true @user.go:14:7-14:29
+## references
+## imports
+## diagnostics
+

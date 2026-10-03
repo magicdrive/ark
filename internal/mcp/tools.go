@@ -13,10 +13,7 @@ import (
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/languages/golang"
-	"github.com/magicdrive/ark/internal/languages/javascript"
-	"github.com/magicdrive/ark/internal/languages/python"
-	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages"
 )
 
 // ToolsHandler handles all MCP tools
@@ -44,14 +41,11 @@ func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cac
 	}
 }
 
-// defaultProviders returns the standard set of language providers.
+// defaultProviders returns the providers used for repository indexing and
+// relation queries: the full canonical language registry. Every MCP
+// intelligence tool now dispatches through the same registry.
 func defaultProviders() []language.Provider {
-	return []language.Provider{
-		golang.NewProvider(),
-		typescript.NewProvider(),
-		javascript.NewProvider(),
-		python.NewProvider(),
-	}
+	return languages.Registry().Providers()
 }
 
 // buildIndex constructs a RepositoryIndex for fullPath, using the cache store

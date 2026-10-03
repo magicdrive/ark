@@ -9,10 +9,7 @@ import (
 	"sort"
 
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/languages/golang"
-	"github.com/magicdrive/ark/internal/languages/javascript"
-	"github.com/magicdrive/ark/internal/languages/python"
-	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/source"
 )
@@ -64,20 +61,16 @@ type referenceResult struct {
 	IsCall       bool                  `json:"isCall,omitempty"`
 }
 
-// languageRegistry maps extensions to providers for reference extraction.
+// refProviderRegistry maps file extensions to providers for reference
+// extraction. It is derived from the canonical language registry, so it covers
+// every supported language (including tsx).
 var refProviderRegistry = buildRefProviderRegistry()
 
 func buildRefProviderRegistry() map[string]language.Provider {
 	m := map[string]language.Provider{}
-	for _, p := range []language.Provider{
-		golang.NewProvider(),
-		typescript.NewProvider(),
-		typescript.NewTSXProvider(),
-		javascript.NewProvider(),
-		python.NewProvider(),
-	} {
-		for _, ext := range p.Extensions() {
-			m[ext] = p
+	for _, d := range languages.Registry().Descriptors() {
+		for _, ext := range d.Extensions {
+			m[ext] = d.Provider
 		}
 	}
 	return m

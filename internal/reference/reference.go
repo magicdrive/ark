@@ -21,6 +21,7 @@ const (
 	KindTypeUse      ReferenceKind = "type_use"
 	KindInheritance  ReferenceKind = "inheritance"
 	KindImplements   ReferenceKind = "implementation"
+	KindUsesTrait    ReferenceKind = "uses_trait"
 	KindImport       ReferenceKind = "import"
 	KindConstruction ReferenceKind = "construction"
 	KindUnknown      ReferenceKind = "unknown"

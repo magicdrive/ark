@@ -35,6 +35,10 @@ func ImpactToolDefinitions() []Tool {
 						"enum":    []string{"text", "json"},
 						"default": "text",
 					},
+					"filePattern": map[string]interface{}{
+						"type":        "string",
+						"description": "Narrow an ambiguous symbol name by file-path substring",
+					},
 				},
 				"required": []string{"path", "symbol"},
 			},
@@ -60,6 +64,10 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 	if v, ok := args["format"].(string); ok {
 		format = v
 	}
+	filePattern := ""
+	if v, ok := args["filePattern"].(string); ok {
+		filePattern = v
+	}
 
 	fullPath, _, pathErr := h.resolveToolPath(path)
 	if pathErr != nil {
@@ -77,18 +85,20 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 		}, nil
 	}
 
-	syms := idx.FindSymbolsByQualified(symName)
-	if len(syms) == 0 {
-		syms = idx.FindSymbols(symName)
-	}
-	if len(syms) == 0 {
+	// Resolve the target symbol. Impact analysis MUST NOT run on an arbitrary
+	// first candidate: a false target produces a plausible but wrong report.
+	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
+	if !tl.Found {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("symbol %q not found in %s", symName, path)}},
 		}, nil
 	}
+	if tl.Ambiguous {
+		return ambiguousTargetResult(symName, tl.Candidates), nil
+	}
 
 	g := graph.New(idx)
-	result, err := impact.Analyze(context.Background(), idx, g, syms[0].ID, maxDepth)
+	result, err := impact.Analyze(context.Background(), idx, g, tl.Symbol.ID, maxDepth)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error analyzing impact: %v", err)}},

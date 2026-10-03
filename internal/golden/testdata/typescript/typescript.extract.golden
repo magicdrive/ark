@@ -1,0 +1,54 @@
+# file: broken.ts
+## symbols
+## references
+## imports
+## diagnostics
+
+# file: draft.ts
+## symbols
+symbol Draft kind=class qualified="Draft" parent="" receiver="" exported=true @draft.ts:3:8-5:2
+## references
+## imports
+## diagnostics
+
+# file: repository.ts
+## symbols
+symbol Repository kind=class qualified="Repository" parent="" receiver="" exported=true @repository.ts:3:8-9:2
+## references
+ref User kind=construction container="find" receiver="" call=false @repository.ts:5:15-5:25
+## imports
+import path="./user" alias="" @repository.ts:1:1-1:31
+## diagnostics
+
+# file: service.test.ts
+## symbols
+## references
+ref test kind=call container="" receiver="" call=true @service.test.ts:3:1-3:5
+ref UserService kind=construction container="" receiver="" call=false @service.test.ts:4:13-4:30
+ref create kind=call container="" receiver="s" call=true @service.test.ts:5:3-5:11
+## imports
+import path="./service" alias="" @service.test.ts:1:1-1:41
+## diagnostics
+
+# file: service.ts
+## symbols
+symbol UserService kind=class qualified="UserService" parent="" receiver="" exported=true @service.ts:4:8-13:2
+## references
+ref Repository kind=construction container="" receiver="" call=false @service.ts:5:18-5:34
+ref User kind=construction container="create" receiver="" call=false @service.ts:8:15-8:25
+ref find kind=call container="create" receiver="this.repo" call=true @service.ts:10:19-10:33
+ref save kind=call container="create" receiver="found" call=true @service.ts:11:5-11:15
+## imports
+import path="./repository" alias="" @service.ts:1:1-1:43
+import path="./user" alias="" @service.ts:2:1-2:31
+## diagnostics
+
+# file: user.ts
+## symbols
+symbol Account kind=interface qualified="Account" parent="" receiver="" exported=true @user.ts:1:8-4:2
+symbol User kind=class qualified="User" parent="" receiver="" exported=true @user.ts:6:8-11:2
+symbol DEFAULT_ROLE kind=constant qualified="DEFAULT_ROLE" parent="" receiver="" exported=true @user.ts:13:14-13:37
+## references
+## imports
+## diagnostics
+

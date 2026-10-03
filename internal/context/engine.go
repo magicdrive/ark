@@ -154,6 +154,23 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 	}, nil
 }
 
+// reasonForEdge maps a graph EdgeKind to a context reason label. Typed relation
+// edges keep their semantic meaning; all other outgoing edges (calls, type use,
+// imports) remain the generic "direct callee". Language-neutral: it switches on
+// graph semantics, not on any provider's syntax.
+func reasonForEdge(k index.EdgeKind) string {
+	switch k {
+	case index.EdgeExtends:
+		return "extends"
+	case index.EdgeImplements:
+		return "implements"
+	case index.EdgeUsesTrait:
+		return "uses_trait"
+	default:
+		return "direct callee"
+	}
+}
+
 // collectCandidates gathers symbols related to target up to req.MaxDepth.
 func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidate {
 	seen := make(map[symbol.SymbolID]bool)
@@ -179,21 +196,31 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 
 	add(target, "target", resolver.ConfidenceExact, 0)
 
-	// Direct callees.
+	// Direct callees. Typed relation edges (extends/implements/uses_trait) carry
+	// their semantic meaning into the reason label via the graph EdgeKind; this
+	// is language-neutral (no provider-specific logic).
 	for _, edge := range e.idx.GetCallees(target.ID) {
 		if sym, ok := e.idx.GetSymbol(edge.To); ok {
-			add(sym, "direct callee", edge.Confidence, 1)
+			add(sym, reasonForEdge(edge.Kind), edge.Confidence, 1)
 		}
 	}
 
-	// Types used by this symbol.
+	// Types used by this symbol. Only surface a type dependency when its name
+	// resolves to a single symbol: an ambiguous (multi-candidate) type must not
+	// be fabricated into context, and prefix matches (e.g. "User" → "UserFactory")
+	// must not leak in.
 	for _, ref := range e.idx.ReferencesByContainer(target.ID) {
 		if ref.Kind != reference.KindTypeUse {
 			continue
 		}
-		syms := e.idx.FindSymbols(ref.Name)
-		for _, sym := range syms {
-			add(sym, "type dependency", resolver.ConfidenceStrong, 1)
+		var exact []symbol.Symbol
+		for _, sym := range e.idx.FindSymbols(ref.Name) {
+			if sym.Name == ref.Name {
+				exact = append(exact, sym)
+			}
+		}
+		if len(exact) == 1 {
+			add(exact[0], "type dependency", resolver.ConfidenceStrong, 1)
 		}
 	}
 

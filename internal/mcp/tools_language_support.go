@@ -3,8 +3,7 @@ package mcp
 import (
 	"encoding/json"
 
-	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/syntax"
+	"github.com/magicdrive/ark/internal/languages"
 )
 
 // LanguageSupportToolDefinitions returns the get_language_support tool definition.
@@ -29,14 +28,13 @@ type languageSupportEntry struct {
 }
 
 func (h *ToolsHandler) getLanguageSupport(_ map[string]interface{}) (*CallToolResult, error) {
+	reg := languages.Registry()
 	var entries []languageSupportEntry
-	for _, lang := range syntax.SupportedLanguages() {
-		langStr := string(lang)
-		level := language.SupportLevelFor(langStr)
+	for _, d := range reg.Descriptors() {
 		entries = append(entries, languageSupportEntry{
-			Language:   langStr,
-			Level:      level.String(),
-			Extensions: syntax.ExtensionsFor(lang),
+			Language:   string(d.Language),
+			Level:      d.SupportLevel.String(),
+			Extensions: reg.ExtensionsFor(d.Language),
 		})
 	}
 

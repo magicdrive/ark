@@ -10,10 +10,6 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/languages/golang"
-	"github.com/magicdrive/ark/internal/languages/javascript"
-	"github.com/magicdrive/ark/internal/languages/python"
-	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
@@ -41,6 +37,10 @@ func RelationsToolDefinitions() []Tool {
 						"type":        "integer",
 						"description": "Maximum number of relations to return",
 						"default":     50,
+					},
+					"filePattern": map[string]interface{}{
+						"type":        "string",
+						"description": "Narrow an ambiguous symbol name by file-path substring",
 					},
 				},
 				"required": []string{"path", "symbol"},
@@ -77,6 +77,10 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 	if v, ok := args["maxResults"].(float64); ok {
 		maxResults = int(v)
 	}
+	filePattern := ""
+	if v, ok := args["filePattern"].(string); ok {
+		filePattern = v
+	}
 
 	fullPath, _, pathErr := h.resolveToolPath(path)
 	if pathErr != nil {
@@ -85,12 +89,8 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 			IsError: true,
 		}, nil
 	}
-	providers := []language.Provider{
-		golang.NewProvider(),
-		typescript.NewProvider(),
-		javascript.NewProvider(),
-		python.NewProvider(),
-	}
+	// Same provider set as repository indexing: the full canonical registry.
+	providers := defaultProviders()
 
 	fileIndexes, err := buildFileIndexes(fullPath, providers)
 	if err != nil {
@@ -103,15 +103,18 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 	res := resolver.New(fileIndexes)
 	resolutions := res.Resolve()
 
-	// Find the target symbol(s) matching symName.
-	targetIDs := make(map[symbol.SymbolID]bool)
-	for _, fi := range fileIndexes {
-		for _, sym := range fi.Symbols {
-			if sym.Name == symName || sym.Qualified == symName {
-				targetIDs[sym.ID] = true
-			}
-		}
+	// Resolve exactly one target symbol. A short name matching several symbols
+	// must NOT merge their relations into one answer — return ambiguity instead.
+	tl := resolveTarget(targetCandidatesFromFileIndexes(fileIndexes, symName), filePattern)
+	if !tl.Found {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: fmt.Sprintf("symbol %q not found in %s", symName, path)}},
+		}, nil
 	}
+	if tl.Ambiguous {
+		return ambiguousTargetResult(symName, tl.Candidates), nil
+	}
+	targetIDs := map[symbol.SymbolID]bool{tl.Symbol.ID: true}
 
 	// Build relation entries.
 	var relations []relationEntry

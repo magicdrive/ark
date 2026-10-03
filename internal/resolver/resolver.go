@@ -82,34 +82,43 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 		Confidence:    ConfidenceUnresolved,
 	}
 
+	// Explicit type receiver: when the receiver expression itself names a
+	// repository type symbol (e.g. PHP `User::create()`, where `User` is a
+	// class), the target MUST be a member of that type. We constrain every
+	// name-based candidate stage so an explicit type receiver can never be
+	// ignored in favour of a weaker bare-name match on an unrelated member.
+	// Variable/expression receivers (e.g. Go `s.Create()`, where `s` is not a
+	// type) are NOT constrained — existing resolver behaviour is preserved.
+	typeRecv := ref.ReceiverExpr != "" && r.isTypeReceiver(ref.ReceiverExpr)
+
 	// Stage 1: same file + same container (lexical scope).
-	if candidates := r.sameFileContainerMatch(ref, fi); len(candidates) > 0 {
+	if candidates := r.constrainReceiver(r.sameFileContainerMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
 		return r.pickBest(res, candidates, ConfidenceExact, EvidenceSameLexicalScope,
 			fmt.Sprintf("symbol %q defined in same container %q", ref.Name, ref.Container))
 	}
 
 	// Stage 2: same file, any symbol.
-	if candidates := r.sameFileMatch(ref, fi); len(candidates) > 0 {
+	if candidates := r.constrainReceiver(r.sameFileMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
 		return r.pickBest(res, candidates, ConfidenceExact, EvidenceSameFile,
 			fmt.Sprintf("symbol %q defined in same file %s", ref.Name, fi.FileID))
 	}
 
 	// Stage 3: explicit import match.
-	if candidates := r.importMatch(ref, fi); len(candidates) > 0 {
+	if candidates := r.constrainReceiver(r.importMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
 		return r.pickBest(res, candidates, ConfidenceExact, EvidenceExplicitImport,
 			fmt.Sprintf("symbol %q resolved via import", ref.Name))
 	}
 
 	// Stage 4: qualified receiver match (e.g. Go: repo.Save → ReceiverType.Save).
 	if ref.ReceiverExpr != "" {
-		if candidates := r.receiverMatch(ref, fi); len(candidates) > 0 {
+		if candidates := r.constrainReceiver(r.receiverMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
 			return r.pickBest(res, candidates, ConfidenceStrong, EvidenceQualifiedReceiver,
 				fmt.Sprintf("receiver %q suggests qualified name", ref.ReceiverExpr))
 		}
 	}
 
 	// Stage 5: same package / directory.
-	if candidates := r.samePackageMatch(ref, fi); len(candidates) > 0 {
+	if candidates := r.constrainReceiver(r.samePackageMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
 		return r.pickBest(res, candidates, ConfidenceStrong, EvidenceSamePackage,
 			fmt.Sprintf("symbol %q found in same package as %s", ref.Name, fi.FileID))
 	}
@@ -120,6 +129,8 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 		// Stage 6a: try unqualified tail of qualified names.
 		all = r.byNameSuffix(ref.Name)
 	}
+	// An explicit type receiver must not fall back to an incompatible member.
+	all = r.constrainReceiver(all, ref, typeRecv)
 	switch len(all) {
 	case 0:
 		// ConfidenceUnresolved — no candidate at all.
@@ -145,6 +156,38 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 		}
 	}
 	return res
+}
+
+// isTypeReceiver reports whether expr names a repository type-like symbol
+// (class/interface/struct/enum/trait). This is a language-neutral check over
+// existing symbol identity — it does not interpret any language's syntax.
+func (r *Resolver) isTypeReceiver(expr string) bool {
+	for _, s := range r.byName[expr] {
+		switch s.Kind {
+		case symbol.KindClass, symbol.KindInterface, symbol.KindStruct, symbol.KindEnum, symbol.KindTrait:
+			return true
+		}
+	}
+	return false
+}
+
+// constrainReceiver narrows candidates to members of an explicit type receiver.
+// When typeRecv is false it is a no-op (variable/expression receiver → existing
+// behaviour). When true, only members whose declaring-type Receiver exactly
+// matches the receiver expression survive; non-members (empty Receiver) and
+// members of other types are dropped. This prevents an explicit type receiver
+// from resolving to an unrelated same-name member.
+func (r *Resolver) constrainReceiver(cands []symbol.Symbol, ref reference.Reference, typeRecv bool) []symbol.Symbol {
+	if !typeRecv {
+		return cands
+	}
+	var out []symbol.Symbol
+	for _, s := range cands {
+		if s.Receiver == ref.ReceiverExpr {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // sameFileContainerMatch finds symbols in the same file whose ParentQualified

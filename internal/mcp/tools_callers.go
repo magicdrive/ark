@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -140,52 +139,18 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		}, nil
 	}
 
-	// Find all symbols matching the name.
-	// If the input looks like a qualified name (contains "."), skip the short-name lookup
-	// to avoid accidental partial matches.
-	var syms []symbol.Symbol
-	if strings.Contains(symName, ".") {
-		syms = idx.FindSymbolsByQualified(symName)
-	} else {
-		syms = idx.FindSymbols(symName)
-		if len(syms) == 0 {
-			syms = idx.FindSymbolsByQualified(symName)
-		}
-	}
-	// Apply filePattern filter when provided — narrows same-qualified-name symbols
-	// that exist in multiple packages (e.g. Resolver.Resolve in resolver vs skill).
-	if filePattern != "" {
-		filtered := syms[:0]
-		for _, s := range syms {
-			if strings.Contains(string(s.Location.File), filePattern) {
-				filtered = append(filtered, s)
-			}
-		}
-		syms = filtered
-	}
-	if len(syms) == 0 {
+	// Resolve exactly one target symbol via the shared single-target contract.
+	// Multiple matches never merge: return deterministic candidate evidence.
+	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
+	if !tl.Found {
 		out := callersResult{Symbol: symName, Edges: []edgeEntry{}}
 		b, _ := json.MarshalIndent(out, "", "  ")
 		return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
 	}
-	// When multiple symbols share the same name, merging their edges produces
-	// misleading results. Return an error listing candidates with file paths so
-	// the caller can retry with filePattern to narrow the match.
-	if len(syms) > 1 {
-		candidates := make([]string, 0, len(syms))
-		for _, s := range syms {
-			candidates = append(candidates, fmt.Sprintf("  %s  (%s)  %s", s.Qualified, s.Kind, s.Location.File))
-		}
-		sort.Strings(candidates)
-		msg := fmt.Sprintf(
-			"Ambiguous symbol %q — %d matches found. Add filePattern to narrow by file path:\n%s",
-			symName, len(syms), strings.Join(candidates, "\n"),
-		)
-		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: msg}},
-			IsError: true,
-		}, nil
+	if tl.Ambiguous {
+		return ambiguousTargetResult(symName, tl.Candidates), nil
 	}
+	syms := []symbol.Symbol{tl.Symbol}
 
 	var edges []edgeEntry
 	seen := make(map[[2]symbol.SymbolID]bool)

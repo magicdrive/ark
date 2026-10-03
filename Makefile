@@ -99,7 +99,7 @@ dev-tools:
 # Execute goreg -w to entire gofile.
 .PHONY: goreg
 goreg:
-	git ls-files | grep -e '.go$$' | xargs -I GOFILE goreg -w GOFILE
+	git ls-files '*.go' | grep -v '/testdata/' | xargs -I GOFILE goreg -w GOFILE
 
 # Publish to github.com
 .PHONY: publish

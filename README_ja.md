@@ -203,7 +203,7 @@ ark mcp-init --force
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python) | 自動検出 |
+| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python, php) | 自動検出 |
 | `--format <text\|json>` | 出力フォーマット | `text` |
 | `-h, --help` | ヘルプを表示 | – |
 
@@ -219,7 +219,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python) | 自動検出 |
+| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python, php) | 自動検出 |
 | `--format <text\|json>` | 出力フォーマット | `text` |
 | `-h, --help` | ヘルプを表示 | – |
 
@@ -453,7 +453,45 @@ Symbols: 11
 
 - **CGO 不要** — どこでもクロスコンパイル可能、シングル静的バイナリ
 - **本物の解析** — 正規表現ハックではなく、AST ベースのシンボル抽出
-- **マルチ言語対応** — Go、TypeScript、JavaScript、Python（対応言語は増加中！）
+- **マルチ言語対応** — Go、TypeScript、TSX、JavaScript、Python、PHP（対応言語は増加中！）
+
+### 🌐 言語サポート
+
+Ark は実際にテスト済みの能力だけを表明します。レベルは積み上げ式です：
+Parse → Symbols → References → Resolution → Graph → Context。
+
+| 言語       | Parse | Symbols | References | Resolution | Graph | Context |
+|------------|:-----:|:-------:|:----------:|:----------:|:-----:|:-------:|
+| Go         |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+| TypeScript |   ✓   |    ✓    |     ✓      |            |       |         |
+| TSX        |   ✓   |    ✓    |     ✓      |            |       |         |
+| JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
+| Python     |   ✓   |    ✓    |     ✓      |            |       |         |
+| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
+
+チェックマークは、canonical Language Registry がその言語の **認定サポートレベル**
+として表明している段階を示します（`get_language_support` が実行時に報告）。PHP の
+`get_context` 経路は実装済みで専用の context-quality テストもありますが、namespace/
+import・継承/trait メンバ解決など resolver の精度を意図的に保守的に保っているため、
+PHP は **Graph** レベルで表明しています。過大表明を避けるため Context 列は未チェック
+のままにしています。
+
+#### PHP — 静的コードインテリジェンス
+
+Ark は PHP の **シンボル**（namespace / class / interface / trait / enum /
+function / 定数 / method / constructor / property / class 定数 / enum case /
+promoted property）、**import**（plain / alias / grouped / function / const の
+`use`）、**参照**（function / static / instance / `$this` 呼び出し、construction、
+class 定数 read、型参照）、**typed relation**（`extends` / `implements` / trait
+`use`）を静的に抽出し、typed symbol graph と agent 向け context を構築します。
+動的・曖昧な構文については **不確実性をそのまま保持**します。
+
+**既知の制限（設計上の意図）**：動的呼び出し・動的生成（`$obj->$m()`、`new $c()`）は
+推測しません。変数レシーバの型推論は行いません。Composer / PSR-4 / autoload 解決は
+ありません。`use` エイリアスや継承・trait メンバ解決は保守的（捏造せず honest な
+`Candidate` / `Unresolved`）です。framework（Laravel/Symfony 等）セマンティクスは
+扱いません。Ark は **純粋な静的解析**のみを行い、リポジトリのコード・Composer・PHP
+ツールを一切実行しません。
 
 ### 🤖 LLM-Optimized Workflow
 

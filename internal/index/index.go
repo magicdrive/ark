@@ -24,6 +24,11 @@ const (
 	EdgeCalledBy EdgeKind = "called_by"
 	EdgeUsesType EdgeKind = "uses_type"
 	EdgeImports  EdgeKind = "imports"
+	// Typed relation edges (D4). Forward-only; the reverse edge remains the
+	// generic EdgeCalledBy, consistent with the existing reverse-edge model.
+	EdgeExtends    EdgeKind = "extends"
+	EdgeImplements EdgeKind = "implements"
+	EdgeUsesTrait  EdgeKind = "uses_trait"
 )
 
 // GraphEdge is a directed relationship between two symbols with confidence.

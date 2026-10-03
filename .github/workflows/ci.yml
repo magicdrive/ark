@@ -23,7 +23,10 @@ jobs:
 
       - name: Check formatting
         run: |
-          files=$(gofmt -l .)
+          # Exclude testdata: fixtures are not real source and some are
+          # intentionally malformed (e.g. internal/golden/testdata/go/broken.go
+          # freezes broken-source extraction behavior and must not be parseable).
+          files=$(git ls-files '*.go' | grep -v '/testdata/' | xargs gofmt -l)
           if [ -n "$files" ]; then
             echo "gofmt found unformatted files:"
             echo "$files"
@@ -66,3 +69,6 @@ jobs:
 
       - name: Run fuzz smoke (extraction)
         run: go test -fuzz=FuzzExtract -fuzztime=10s ./internal/languages/golang/
+
+      - name: Run fuzz smoke (PHP extraction)
+        run: go test -fuzz=FuzzExtractPHP -fuzztime=10s ./internal/languages/php/
