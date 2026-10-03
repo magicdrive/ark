@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry (its exclusion from MCP
 // indexing is a separate, MCP-local compatibility concern).
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -52,5 +52,17 @@ func TestRegistry_DescriptorIntegrity(t *testing.T) {
 func TestRegistry_TSXIsReferences(t *testing.T) {
 	if lvl := languages.Registry().SupportLevelFor("tsx"); lvl != language.SupportLevelReferences {
 		t.Errorf("tsx SupportLevel = %v, want references", lvl)
+	}
+}
+
+// TestRegistry_PHPIsParse pins PHP-1: PHP is registered at SupportLevelParse
+// (parser wired, no extraction yet) and maps the .php extension.
+func TestRegistry_PHPIsParse(t *testing.T) {
+	reg := languages.Registry()
+	if lvl := reg.SupportLevelFor("php"); lvl != language.SupportLevelParse {
+		t.Errorf("php SupportLevel = %v, want parse", lvl)
+	}
+	if d, ok := reg.DetectByFilename("index.php"); !ok || d.Language != "php" {
+		t.Errorf("DetectByFilename(index.php) = %v,%v; want php", d.Language, ok)
 	}
 }

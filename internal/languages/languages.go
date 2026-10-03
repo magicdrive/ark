@@ -19,6 +19,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/languages/javascript"
+	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 )
@@ -41,6 +42,8 @@ func specList() []spec {
 		{typescript.NewTSXProvider(), grammars.TsxLanguage, language.SupportLevelReferences},
 		{javascript.NewProvider(), grammars.JavascriptLanguage, language.SupportLevelReferences},
 		{python.NewProvider(), grammars.PythonLanguage, language.SupportLevelReferences},
+		// PHP-1: parser wired; no extraction yet (SupportLevelParse).
+		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelParse},
 	}
 }
 
