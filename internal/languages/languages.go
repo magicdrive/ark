@@ -42,8 +42,9 @@ func specList() []spec {
 		{typescript.NewTSXProvider(), grammars.TsxLanguage, language.SupportLevelReferences},
 		{javascript.NewProvider(), grammars.JavascriptLanguage, language.SupportLevelReferences},
 		{python.NewProvider(), grammars.PythonLanguage, language.SupportLevelReferences},
-		// PHP-1: parser wired; no extraction yet (SupportLevelParse).
-		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelParse},
+		// PHP-2: top-level symbol extraction (namespace/class/interface/trait/
+		// enum/function/global const). Members/imports/refs arrive in PHP-3+.
+		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelSymbols},
 	}
 }
 
