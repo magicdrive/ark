@@ -14,9 +14,10 @@ import (
 	"context"
 	"sort"
 
-	ctxengine "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
+
+	ctxengine "github.com/magicdrive/ark/internal/context"
 )
 
 // Scenario is an agent-oriented context expectation over a fixture repository.

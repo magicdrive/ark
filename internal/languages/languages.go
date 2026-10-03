@@ -13,8 +13,9 @@
 package languages
 
 import (
-	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
+
+	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"

@@ -6,11 +6,12 @@ import (
 	"runtime"
 	"testing"
 
-	ctxengine "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/source"
+
+	ctxengine "github.com/magicdrive/ark/internal/context"
 )
 
 func benchCorpusDir() string {
