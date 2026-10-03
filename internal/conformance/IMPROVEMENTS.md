@@ -18,7 +18,7 @@ javascript, python.
 | Q2 | Diagnostic emitted on broken source | ✗ | ✗ | ✗ | ✗ | ✗ |
 | Q3 | Class/container member methods extracted as symbols | ✓ (receiver) | ✗ | ✗ | ✗ | ✗ |
 | Q4 | `SymbolDraft.Parent` populated for nested symbols | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Q5 | MCP index/relations handle `.tsx` (registry-wide) | n/a | n/a | ✗ | n/a | n/a |
+| Q5 | MCP index/relations handle `.tsx` (registry-wide) | n/a | n/a | ✅ CLOSED | n/a | n/a |
 
 ## Q1 — Partial extraction from broken source
 
@@ -70,7 +70,15 @@ Target (design decision for a later PR): either populate `Parent` with the
 enclosing symbol's qualified name, or formally document `Qualified` as the
 single source of truth for nesting and drop `Parent`.
 
-## Q5 — MCP index/relations do not handle `.tsx`
+## Q5 — MCP index/relations do not handle `.tsx` — CLOSED
+
+**Status: CLOSED.** `tsxCompatExclusion` and all related compatibility code have
+been removed; `defaultProviders()` now returns the full canonical registry, so
+indexing, `get_relations`, graph, and context all handle `.tsx` through the same
+path as every other language — identical to `find_references`. Regression tests:
+`TestIndexHandlesTSX` and `TestTSXUnifiedAcrossTools` (`internal/mcp`).
+
+The original gap, for the record:
 
 Discovered during Registry Consolidation (PR 1 / Phase 1). The MCP
 `defaultProviders()` set — used by repository indexing and `get_relations` —
@@ -84,6 +92,7 @@ filtered out at the MCP indexing layer via `tsxCompatExclusion`
 (`internal/mcp/tools.go`) — an implementation-level shim, **not** a statement
 about the language's capability or `SupportLevel`.
 
-Target: a small follow-up PR removes `tsxCompatExclusion` so index/relations use
-the full registry, making `.tsx` handling consistent across all MCP tools. The
-behavior lock is `TestTSXCompatBehavior` (`internal/mcp`).
+Resolution: `tsxCompatExclusion` was removed; index/relations use the full
+registry, making `.tsx` handling consistent across all MCP tools. The PR-1
+behavior lock (`TestTSXCompatBehavior`) was replaced by the regression tests
+noted above.

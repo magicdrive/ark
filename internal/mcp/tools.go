@@ -16,15 +16,6 @@ import (
 	"github.com/magicdrive/ark/internal/languages"
 )
 
-// tsxCompatExclusion is the language identity that the index/relations code
-// paths have historically NOT handled. The canonical registry DOES include
-// "tsx" as a first-class language; this exclusion exists ONLY to preserve the
-// pre-existing MCP indexing behavior (PR 1 is behavior-preserving). It is an
-// implementation-level compatibility shim, NOT a statement about the language's
-// capability or SupportLevel. A follow-up PR will integrate tsx here and remove
-// this constant. See internal/conformance/IMPROVEMENTS.md (Q5).
-const tsxCompatExclusion = language.Language("tsx")
-
 // ToolsHandler handles all MCP tools
 type ToolsHandler struct {
 	rootDir    string
@@ -51,17 +42,10 @@ func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cac
 }
 
 // defaultProviders returns the providers used for repository indexing and
-// relation queries. It is the canonical registry set MINUS the historical
-// tsx exclusion (see tsxCompatExclusion).
+// relation queries: the full canonical language registry. Every MCP
+// intelligence tool now dispatches through the same registry.
 func defaultProviders() []language.Provider {
-	var out []language.Provider
-	for _, d := range languages.Registry().Descriptors() {
-		if d.Language == tsxCompatExclusion {
-			continue
-		}
-		out = append(out, d.Provider)
-	}
-	return out
+	return languages.Registry().Providers()
 }
 
 // buildIndex constructs a RepositoryIndex for fullPath, using the cache store

@@ -81,7 +81,7 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 			IsError: true,
 		}, nil
 	}
-	// Same provider set as repository indexing (tsx excluded for compat).
+	// Same provider set as repository indexing: the full canonical registry.
 	providers := defaultProviders()
 
 	fileIndexes, err := buildFileIndexes(fullPath, providers)
