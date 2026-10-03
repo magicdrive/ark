@@ -468,9 +468,15 @@ Parse → Symbols → References → Resolution → Graph → Context.
 | TSX        |   ✓   |    ✓    |     ✓      |            |       |         |
 | JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
 | Python     |   ✓   |    ✓    |     ✓      |            |       |         |
-| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
 
-`get_language_support` reports each language's tested level at runtime.
+A checkmark means the canonical Language Registry advertises that level as the
+language's certified support level; `get_language_support` reports it at runtime.
+PHP's `get_context` path is implemented and covered by dedicated context-quality
+tests, but PHP is advertised at **Graph** level because several resolver
+precision areas (namespace/import, inherited and trait member resolution) remain
+intentionally conservative — so the Context cell is left unchecked rather than
+overstating certification.
 
 #### PHP — static code intelligence
 

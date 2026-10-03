@@ -467,7 +467,14 @@ Parse → Symbols → References → Resolution → Graph → Context。
 | TSX        |   ✓   |    ✓    |     ✓      |            |       |         |
 | JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
 | Python     |   ✓   |    ✓    |     ✓      |            |       |         |
-| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
+
+チェックマークは、canonical Language Registry がその言語の **認定サポートレベル**
+として表明している段階を示します（`get_language_support` が実行時に報告）。PHP の
+`get_context` 経路は実装済みで専用の context-quality テストもありますが、namespace/
+import・継承/trait メンバ解決など resolver の精度を意図的に保守的に保っているため、
+PHP は **Graph** レベルで表明しています。過大表明を避けるため Context 列は未チェック
+のままにしています。
 
 #### PHP — 静的コードインテリジェンス
 

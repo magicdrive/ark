@@ -43,7 +43,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"language": map[string]interface{}{
 						"type":        "string",
-						"description": "Language filter (go/typescript/javascript/python)",
+						"description": "Language filter (go/typescript/tsx/javascript/python/php)",
 					},
 					"filePattern": map[string]interface{}{
 						"type":        "string",

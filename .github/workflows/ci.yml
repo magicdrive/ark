@@ -66,3 +66,6 @@ jobs:
 
       - name: Run fuzz smoke (extraction)
         run: go test -fuzz=FuzzExtract -fuzztime=10s ./internal/languages/golang/
+
+      - name: Run fuzz smoke (PHP extraction)
+        run: go test -fuzz=FuzzExtractPHP -fuzztime=10s ./internal/languages/php/
