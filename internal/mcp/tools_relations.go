@@ -10,10 +10,6 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/languages/golang"
-	"github.com/magicdrive/ark/internal/languages/javascript"
-	"github.com/magicdrive/ark/internal/languages/python"
-	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
@@ -85,12 +81,8 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 			IsError: true,
 		}, nil
 	}
-	providers := []language.Provider{
-		golang.NewProvider(),
-		typescript.NewProvider(),
-		javascript.NewProvider(),
-		python.NewProvider(),
-	}
+	// Same provider set as repository indexing (tsx excluded for compat).
+	providers := defaultProviders()
 
 	fileIndexes, err := buildFileIndexes(fullPath, providers)
 	if err != nil {

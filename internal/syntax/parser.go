@@ -7,10 +7,7 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/languages/golang"
-	"github.com/magicdrive/ark/internal/languages/javascript"
-	"github.com/magicdrive/ark/internal/languages/python"
-	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/source"
 )
 
@@ -18,16 +15,6 @@ var (
 	ErrUnsupportedLanguage = errors.New("unsupported syntax language")
 	ErrParseFailed         = errors.New("failed to parse source")
 )
-
-// providers maps each SupportedLanguage to its extraction Provider.
-// Tree-sitter usage is fully contained inside each provider.
-var providers = map[SupportedLanguage]language.Provider{
-	LangGo:         golang.NewProvider(),
-	LangTypeScript: typescript.NewProvider(),
-	LangTSX:        typescript.NewTSXProvider(),
-	LangJavaScript: javascript.NewProvider(),
-	LangPython:     python.NewProvider(),
-}
 
 // ParseResult holds the result of parsing a source file.
 // It is used by RunSyntaxCommand for raw AST output; symbol extraction now
@@ -57,7 +44,7 @@ func ParseFile(filename string, source []byte) (*ParseResult, error) {
 
 // Parse parses source code with a specific language.
 func Parse(lang SupportedLanguage, src []byte) (*ParseResult, error) {
-	tsLang := GetLanguage(lang)
+	tsLang := grammarFor(lang)
 	if tsLang == nil {
 		return nil, ErrUnsupportedLanguage
 	}
@@ -84,7 +71,7 @@ func ExtractSymbolsFromFile(filename string, src []byte) (*FileSymbols, error) {
 		return nil, ErrUnsupportedLanguage
 	}
 
-	p, ok := providers[lang]
+	p, ok := languages.Registry().Provider(lang)
 	if !ok {
 		return nil, ErrUnsupportedLanguage
 	}
@@ -110,7 +97,7 @@ func ExtractSymbols(result *ParseResult) []Symbol {
 		return nil
 	}
 
-	p, ok := providers[result.Lang]
+	p, ok := languages.Registry().Provider(result.Lang)
 	if !ok {
 		return nil
 	}

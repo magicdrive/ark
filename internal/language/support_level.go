@@ -32,20 +32,3 @@ func (l SupportLevel) String() string {
 		return "none"
 	}
 }
-
-// SupportLevelFor returns the tested support level for the given language name.
-func SupportLevelFor(lang string) SupportLevel {
-	switch lang {
-	case "go":
-		// Go has symbols, references, resolution, graph, and context quality tests.
-		return SupportLevelContextQualityCertified
-	case "typescript", "tsx", "javascript":
-		// TS/JS have symbol and reference extraction tested.
-		return SupportLevelReferences
-	case "python":
-		// Python has symbol and reference extraction tested.
-		return SupportLevelReferences
-	default:
-		return SupportLevelNone
-	}
-}
