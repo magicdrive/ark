@@ -4,7 +4,7 @@ Description:
    Yet another alternate [directory|repository] represent text generator tool.
 
 Sub commands:
-  setup                                            One-step setup: MCP config + Claude Code slash command.
+  setup <client>                                   Configure Ark for a supported coding agent (claude, cursor, codex, cline).
   mcp-server                                       Start MCP server.
   mcp-init                                         Add ark MCP server config to .mcp.json.
   syntax <file>                                    Parse file and output AST using Tree-sitter.
@@ -34,13 +34,15 @@ general (text generator mode) options:
   -S, --silent                                     Specify flag process without displaying messages during processing. (optional.)
   -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
 
-setup options:
+setup <client> options:
+  <client>                                         Target coding agent: claude, cursor, codex, cline.
+                                                   (ark setup without a client is a deprecated Claude alias.)
   -h, --help                                       Show help message.
-  -n, --name <name>                                Project name (default: current directory name).
+  -n, --name <name>                                Claude skill/slash-command name (Claude only. default: current directory name).
   -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
   -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
-  -g, --global                                     Write MCP config to ~/.claude/settings.json.
-  -f, --force                                      Overwrite existing entries.
+  -g, --global                                     Configure Ark in the client's user-level MCP configuration.
+  -f, --force                                      Replace an existing Ark-owned MCP entry (never touches other config).
 
 mcp-init options:
   -h, --help                                       Show help message.

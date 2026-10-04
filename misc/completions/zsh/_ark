@@ -42,7 +42,7 @@ mcp_opts=(
 subcommands=(
   'mcp-server:Start MCP server'
   'mcp-init:Register MCP server entry in settings.json'
-  'setup:Setup MCP server and Claude Code skill'
+  'setup:Configure Ark for a coding agent (claude/cursor/codex/cline)'
   'syntax:Parse file and output AST'
   'symbol:Extract symbols from file'
   'skill:Generate Cline/ChatGPT Skill'
@@ -105,7 +105,8 @@ case $state in
     case $words[1] in
       mcp-server) _arguments -C "${mcp_opts[@]}" '*:files:_files' ;;
       mcp-init)   _arguments -C "${mcp_init_opts[@]}" ;;
-      setup)      _arguments -C "${setup_opts[@]}" ;;
+      setup)      _arguments -C "${setup_opts[@]}" \
+                    '1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline"))' ;;
       syntax)     _arguments -C "${syntax_opts[@]}" '*:file:_files' ;;
       symbol)     _arguments -C "${symbol_opts[@]}" '*:file:_files' ;;
       skill)

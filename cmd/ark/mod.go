@@ -9,6 +9,7 @@ import (
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
 	"github.com/magicdrive/ark/internal/mcp"
+	"github.com/magicdrive/ark/internal/setup"
 	"github.com/magicdrive/ark/internal/skill"
 	"github.com/magicdrive/ark/internal/syntax"
 )
@@ -56,56 +57,37 @@ func runSetupCommand() {
 		os.Exit(0)
 	}
 
-	arkPath := resolveArkPath(opt.ArkPath)
-
-	rootDir := opt.RootDir
-	if abs, err := filepath.Abs(rootDir); err == nil {
-		rootDir = abs
+	// Resolve the target client. `ark setup` with no client stays a Claude Code
+	// alias during v4.x, with a deprecation warning (plan §6).
+	rawClient := opt.Client
+	if rawClient == "" {
+		fmt.Fprintln(os.Stderr, setup.DeprecatedNoClientWarning)
+		fmt.Fprintln(os.Stderr)
+		rawClient = string(setup.ClientClaude)
 	}
-
-	name := opt.Name
-	if name == "" {
-		name = filepath.Base(rootDir)
-	}
-
-	fmt.Println("Setting up Ark MCP for Claude Code...")
-	fmt.Println()
-
-	// Step 1: mcp-init
-	if err := mcp.RunMCPInit(&mcp.MCPInitOptions{
-		ArkPath:    arkPath,
-		RootDir:    rootDir,
-		ServerName: "ark",
-		Global:     opt.GlobalFlag,
-		Force:      opt.ForceFlag,
-	}); err != nil {
-		log.Fatalf("Error (mcp-init): %v\n", err)
-	}
-
-	fmt.Println()
-
-	// Step 2: skill (generates .claude/commands/<name>.md)
-	cwd, err := os.Getwd()
+	client, err := setup.ParseClientID(rawClient)
 	if err != nil {
-		log.Fatalf("Fatal Error: cannot determine current directory: %v\n", err)
-	}
-	analysis, _ := skill.NewAnalyzer(cwd).Analyze()
-	if err := skill.GenerateRepository(skill.RepositoryOptions{
-		Name:     name,
-		Output:   filepath.Join("skills", name),
-		Analysis: analysis,
-		Archive:  false,
-	}); err != nil {
-		log.Fatalf("Error (skill): %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
-	fmt.Println()
-	fmt.Println("✓ Setup complete!")
-	fmt.Println()
-	fmt.Println("Next step: restart Claude Code to approve the MCP server.")
-	fmt.Printf("Then use: /%s\n", name)
+	res, err := setup.Run(setup.Options{
+		Client:  client,
+		Name:    opt.Name,
+		ArkPath: opt.ArkPath,
+		RootDir: opt.RootDir,
+		Global:  opt.GlobalFlag,
+		Force:   opt.ForceFlag,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
 
-	mcp.SuggestCLAUDEMd(cwd)
+	for _, w := range res.Warnings {
+		fmt.Fprintf(os.Stderr, "Warning: %s\n", w)
+	}
+	fmt.Print(res.Report())
 }
 
 func runMCPInitCommand() {

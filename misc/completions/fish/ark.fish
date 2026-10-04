@@ -22,7 +22,7 @@ complete -c ark -n '__fish_ark_is_first_arg'    \
         -d 'Generate Cline/ChatGPT Skill'
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'setup'                              \
-        -d 'Setup MCP server and Claude Code skill'
+        -d 'Configure Ark for a coding agent'
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'mcp-init'                           \
         -d 'Register MCP server entry in settings.json'
@@ -152,9 +152,21 @@ complete -c ark -n '__fish_seen_subcommand_from skill; and __fish_seen_subcomman
 complete -c ark -n '__fish_seen_subcommand_from skill; and __fish_seen_subcommand_from inspect' \
         -s h -l help -d 'Show help'
 
+# ----- setup client (first positional) ---------------------------------------
+function __fish_ark_setup_no_client
+    set cmd (commandline -opc)
+    not contains -- claude $cmd; and not contains -- cursor $cmd
+    and not contains -- codex $cmd; and not contains -- cline $cmd
+end
+
+complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'claude' -d 'Configure Ark for Claude Code'
+complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'cursor' -d 'Configure Ark for Cursor'
+complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'codex'  -d 'Configure Ark for Codex'
+complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'cline'  -d 'Configure Ark for Cline'
+
 # ----- setup options ---------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from setup' \
-        -l name -s n -d 'Project name' -r
+        -l name -s n -d 'Claude skill name (Claude only)' -r
 complete -c ark -n '__fish_seen_subcommand_from setup' \
         -l ark-path -s p -d 'Path to ark binary' -r -F
 complete -c ark -n '__fish_seen_subcommand_from setup' \
