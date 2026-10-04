@@ -19,6 +19,7 @@ _skill_init_opts="--name --output --archive -h --help"
 _skill_update_opts="--force --dry-run -h --help"
 _skill_inspect_opts="-h --help"
 _setup_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
+_setup_clients="claude cursor codex cline"
 _mcp_init_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 
 # -------- Fallback helpers (if bash-completion is missing) -------------------
@@ -110,7 +111,20 @@ _ark() {
   case $mode in
     mcp)                   COMPREPLY=( $(compgen -W "${_mcp_flags} ${_mcp_opts}" -- "$cur") ) ;;
     mcp-init)              COMPREPLY=( $(compgen -W "${_mcp_init_opts}" -- "$cur") ) ;;
-    setup)                 COMPREPLY=( $(compgen -W "${_setup_opts}" -- "$cur") ) ;;
+    setup)
+      # Suggest the client as the first positional, options afterwards.
+      local _has_client=0 _i
+      for (( _i=2; _i<cword; _i++ )); do
+        case "${COMP_WORDS[_i]}" in
+          claude|cursor|codex|cline) _has_client=1; break ;;
+        esac
+      done
+      if [[ $_has_client -eq 0 && $cur != -* ]]; then
+        COMPREPLY=( $(compgen -W "${_setup_clients}" -- "$cur") )
+      else
+        COMPREPLY=( $(compgen -W "${_setup_opts}" -- "$cur") )
+      fi
+      ;;
     syntax)                COMPREPLY=( $(compgen -W "${_syntax_opts}" -- "$cur") ) ;;
     symbol)                COMPREPLY=( $(compgen -W "${_symbol_opts}" -- "$cur") ) ;;
     skill)                 COMPREPLY=( $(compgen -W "${_skill_opts}" -- "$cur") ) ;;

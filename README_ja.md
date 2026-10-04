@@ -40,28 +40,49 @@ ark <ディレクトリ名>    # カレントディレクトリに ark-output.tx
 
 ---
 
-### 3. Set up Ark MCP for Claude Code
+### 3. 使っている coding agent 向けに Ark をセットアップ
 
-プロジェクトルートで一度だけ実行します:
+coding agent を選び、プロジェクトルートで `ark setup` を一度だけ実行します:
 
 ```bash
 cd /your/project
-ark setup --name my-project
+
+ark setup claude   # Claude Code
+# または
+ark setup cursor   # Cursor
+# または
+ark setup codex    # Codex
+# または
+ark setup cline    # Cline CLI
 ```
 
-このコマンド一つで:
-- `.mcp.json` を書き込み — Ark MCP サーバーを登録
-- `.claude/commands/my-project.md` をインストール — `/my-project` をスラッシュコマンドとして有効化
+これはクライアントの設定に Ark MCP サーバーを登録します。**Claude Code** の場合は
+加えてプロジェクト skill / `/<name>` スラッシュコマンドも生成します。
 
-その後 **Claude Code を再起動** して、プロンプトに従い MCP サーバーを承認してください。
+その後 **クライアントを再起動（またはリロード）** し、プロンプトに従い Ark MCP サーバーを承認してください。
 
-準備ができたら以下が使えます:
-- **`/my-project`** — Ark MCP ツールでコードベースを探索するスラッシュコマンド
-- **MCP ツール直接呼び出し** — `mcp__ark__find_symbol`、`mcp__ark__get_symbols` など
+#### Agent 対応マトリクス
 
-```
-/my-project         ← 19 種類の Ark MCP ツールを持つ探索アシスタントを起動
-```
+Ark が `setup` 経路を実際にテストしているクライアントのみを Supported として掲載しています。
+
+| クライアント | セットアップコマンド | 書き込む設定 |
+|--------------|---------------------|--------------|
+| Claude Code  | `ark setup claude`  | `.mcp.json`（project）/ `~/.claude/settings.json`（`--global`） |
+| Cursor       | `ark setup cursor`  | `.cursor/mcp.json`（project）/ `~/.cursor/mcp.json`（`--global`） |
+| Codex        | `ark setup codex`   | Codex のユーザー設定（公式 `codex` CLI 経由） |
+| Cline        | `ark setup cline`   | `~/.cline/mcp.json`（Cline **CLI**。下記注記参照） |
+
+> **Cline の対象範囲:** v4.1 がサポートするのは **Cline CLI** の設定 `~/.cline/mcp.json` のみです。
+> Cline の VS Code / Cursor / Windsurf 拡張が使う MCP 設定
+> (`.../globalStorage/.../cline_mcp_settings.json`) は **対象外** です — Ark は OS/エディタ固有の
+> ストレージパスを探索しません。IDE 拡張向けは手動で設定してください。
+
+セットアップ後は MCP ツールを直接呼び出せます（`mcp__ark__find_symbol`、
+`mcp__ark__get_symbols` など）。Claude Code では生成された `/<name>` スラッシュコマンドも使えます。
+
+> **`--force` は「Ark のエントリを置換する」であって「あなたの設定を上書きする」ではありません。**
+> `--force` が置き換えるのは Ark 自身の MCP エントリだけです。無関係な MCP サーバーの削除、
+> 未知フィールドの破棄、壊れた設定の修復、他のクライアント設定の上書きは一切行いません。
 
 > **Tip:** プロジェクトルートに `CLAUDE.md` を置くと、Claude Code が自動的に Ark MCP ツールを使うよう誘導できます。すぐ使えるテンプレートを [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example) に用意しています。
 
@@ -71,7 +92,7 @@ ark setup --name my-project
 
 ```text
 ark [オプション] <ディレクトリ>
-ark setup [オプション]
+ark setup <client> [オプション]
 ark mcp-server [オプション]
 ark mcp-init [オプション]
 ark syntax <ファイル> [オプション]
@@ -85,7 +106,7 @@ ark skill [オプション]
 
 | Command | Description |
 |---------|-------------|
-| `setup` | ワンステップセットアップ: MCP 設定 + Claude Code スラッシュコマンドの生成 |
+| `setup <client>` | サポートする coding agent 向けに Ark を設定（claude, cursor, codex, cline） |
 | `mcp-server` | Ark を MCP サーバーとして起動 (stdio または HTTP) |
 | `mcp-init` | `.mcp.json` に Ark MCP 設定を追加 |
 | `syntax` | Tree-sitter を使ってファイルを解析し AST を出力 |
@@ -121,29 +142,85 @@ ark skill [オプション]
 
 ---
 
-## ⚡ setup — One-step Claude Code Setup
+## ⚡ setup — ワンコマンドの Agent セットアップ
 
-`ark setup` はあらゆるプロジェクトへの Ark 統合を最速で行う方法です。`mcp-init` と `skill` を 1 コマンドで完結させます:
+`ark setup <client>` はあらゆるプロジェクトへの Ark 統合を最速で行う方法です。
+対象クライアントの設定に Ark MCP サーバーを登録します（Claude Code ではさらに
+プロジェクト skill / スラッシュコマンドを生成します）。
 
 ```bash
 cd /your/project
-ark setup --name my-project
+ark setup cursor
+ark setup claude --name my-project   # --name は Claude の skill 名のみに影響
+ark setup codex --global
 ```
-
-以下の 3 つを一度に実行します:
-1. `.mcp.json` を書き込み — プロジェクトの Ark MCP サーバーを登録
-2. `skills/my-project/` を生成 — スキルドキュメント一式を作成
-3. `.claude/commands/my-project.md` をインストール — Claude Code スラッシュコマンドとして有効化
-
-その後 Claude Code を再起動して MCP サーバーを承認すれば、すぐに使えます。
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--name <name>` | `-n` | プロジェクト名（スキルとスラッシュコマンドに使用） | ディレクトリ名 |
-| `--ark-path <path>` | `-p` | ark バイナリのパス | 自動検出 |
-| `--root <dir>` | `-r` | 提供するルートディレクトリ | `$PWD` |
-| `--global` | `-g` | MCP 設定を `~/.claude/settings.json` に書き込む | `.mcp.json` |
-| `--force` | `-f` | 既存エントリを上書き | – |
+| `<client>` | – | 対象 agent: `claude`, `cursor`, `codex`, `cline` | – |
+| `--name <name>` | `-n` | Claude の skill/スラッシュコマンド名（**Claude のみ**） | ディレクトリ名 |
+| `--ark-path <path>` | `-p` | `ark` バイナリのパス（セットアップ時に検証） | 自動検出（`PATH` 上の `ark`） |
+| `--root <dir>` | `-r` | 提供するリポジトリルート | `$PWD` |
+| `--global` | `-g` | クライアントの**ユーザーレベル** MCP 設定を使用 | project スコープ |
+| `--force` | `-f` | 競合時に **Ark 所有の**エントリを置換 | – |
+
+### 安全性の契約（Safety contract）
+
+`ark setup` は *退屈なほど安全にインストールできる* よう設計されています:
+
+- **冪等（Idempotent）** — 何度実行しても、設定済みなら以降は変更しません
+  （等価な設定なら no-op。ファイルの書き直しすら行いません）。
+- **競合安全（Conflict-safe）** — 既存の Ark エントリが要求と異なる場合はセットアップを失敗させ、
+  `--force` での再実行を促します。黙って上書きしません。
+- **保持（Preserving）** — 無関係な MCP サーバーや未知フィールドは常に保持します。
+- **修復しない** — 壊れた/パース不能な設定は報告するだけで、上書きしません（`--force` でも）。
+- **アトミック（Atomic）** — 設定ファイルは一時ファイル + rename で置換し、
+  同時変更（lost-update）検出と write 後の検証（verify-after-write）を行います。
+
+`ark setup`（クライアント指定なし）は v4.x の間 `ark setup claude` の **非推奨**エイリアスとして
+維持され、警告を表示します。
+
+### 手動設定（Manual configuration）
+
+`ark setup` を実行できない場合（管理対象マシン、読み取り専用設定、特殊なインストール）は、
+Ark MCP サーバーを手動で追加してください。コマンドは常に `ark mcp-server --root <path>` です。
+
+**Claude Code** — `.mcp.json`（project）または `~/.claude/settings.json`（global）:
+
+```json
+{
+  "mcpServers": {
+    "ark": { "type": "stdio", "command": "ark",
+             "args": ["mcp-server", "--root", "${CLAUDE_PROJECT_DIR:-.}/"], "env": {} }
+  }
+}
+```
+
+**Cursor** — `.cursor/mcp.json`（project）または `~/.cursor/mcp.json`（global）:
+
+```json
+{
+  "mcpServers": {
+    "ark": { "command": "ark", "args": ["mcp-server", "--root", "/abs/path/to/repo"], "env": {} }
+  }
+}
+```
+
+**Cline CLI** — `~/.cline/mcp.json`: Cursor と同じ形式。
+
+**Codex** — 公式 CLI で登録: `codex mcp add ark -- ark mcp-server --root /abs/path/to/repo`。
+
+### トラブルシューティング
+
+| 症状 | 対処 |
+|------|------|
+| `ark command ... not found on PATH` | `ark` を `PATH` に通すか、`--ark-path /full/path/to/ark` を指定。 |
+| クライアントが Ark を検出しない | クライアントを完全に再起動/リロードして MCP 設定を再読込。 |
+| `found a different Ark MCP configuration` | 要求が既存と異なる。`--force` で再実行。 |
+| `cannot parse <file>` | 設定が壊れている。手動で修正（Ark は壊れたファイルに触れません）。 |
+| `the Codex CLI (codex) was not found` | Codex（`codex`）をインストールするか手動設定（上記参照）。 |
+| `root directory does not exist` | 存在する `--root` を指定（Ark は事前に検証します）。 |
+| Permission denied | 設定ファイル/ディレクトリが書き込み不可。権限を修正するか `--global` を使用。 |
 
 ---
 

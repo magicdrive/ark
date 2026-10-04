@@ -15,22 +15,33 @@ var claudeMdSnippet string
 // SuggestCLAUDEMd checks if CLAUDE.md already has Ark MCP instructions.
 // If not, it prints a suggestion to add them. No files are written.
 func SuggestCLAUDEMd(rootDir string) {
+	if s := CLAUDEMdSuggestion(rootDir); s != "" {
+		fmt.Println(s)
+	}
+}
+
+// CLAUDEMdSuggestion returns the CLAUDE.md advisory text for rootDir, or an
+// empty string when CLAUDE.md already contains Ark MCP instructions. No files
+// are written. Callers that want to print it directly can use SuggestCLAUDEMd.
+func CLAUDEMdSuggestion(rootDir string) string {
 	path := filepath.Join(rootDir, "CLAUDE.md")
 	data, err := os.ReadFile(path)
 	if err == nil && strings.Contains(string(data), "mcp__ark__") {
-		return
+		return ""
 	}
 
-	fmt.Println()
+	var b strings.Builder
+	b.WriteString("\n")
 	if os.IsNotExist(err) {
-		fmt.Println("ℹ  CLAUDE.md not found. Create one with:")
+		b.WriteString("ℹ  CLAUDE.md not found. Create one with:\n")
 	} else {
-		fmt.Println("ℹ  CLAUDE.md: no Ark MCP instructions found. Add this:")
+		b.WriteString("ℹ  CLAUDE.md: no Ark MCP instructions found. Add this:\n")
 	}
-	fmt.Println()
-	fmt.Println("   ---  CLAUDE.md  ---")
+	b.WriteString("\n")
+	b.WriteString("   ---  CLAUDE.md  ---\n")
 	for _, line := range strings.Split(claudeMdSnippet, "\n") {
-		fmt.Printf("   %s\n", line)
+		b.WriteString("   " + line + "\n")
 	}
-	fmt.Println("   --------------------")
+	b.WriteString("   --------------------")
+	return b.String()
 }

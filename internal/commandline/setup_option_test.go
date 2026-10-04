@@ -80,6 +80,51 @@ func TestSetupOptParse_ShortFlags(t *testing.T) {
 	}
 }
 
+func TestSetupOptParse_PositionalClient(t *testing.T) {
+	// client before options
+	_, opt, err := commandline.SetupOptParse([]string{"cursor", "--force"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opt.Client != "cursor" {
+		t.Errorf("Client: got %q want cursor", opt.Client)
+	}
+	if !opt.ForceFlag {
+		t.Error("ForceFlag should parse when it follows the client token")
+	}
+
+	// flags-before-client is NOT supported: it must be an explicit error, not a
+	// silently half-working alternate syntax (formal contract §17-18).
+	_, _, err = commandline.SetupOptParse([]string{"--global", "codex"})
+	if err == nil {
+		t.Error("flags-before-client should be rejected")
+	}
+
+	// an extra positional after the client is also an error
+	_, _, err = commandline.SetupOptParse([]string{"cursor", "extra"})
+	if err == nil {
+		t.Error("unexpected extra positional should be rejected")
+	}
+
+	// no client → empty (caller treats as deprecated claude alias)
+	_, opt, err = commandline.SetupOptParse([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opt.Client != "" {
+		t.Errorf("Client: got %q want empty", opt.Client)
+	}
+
+	// client-first with trailing flags parses fully
+	_, opt, err = commandline.SetupOptParse([]string{"claude", "--global"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if opt.Client != "claude" || !opt.GlobalFlag {
+		t.Errorf("client-first with flags failed: client=%q global=%v", opt.Client, opt.GlobalFlag)
+	}
+}
+
 func TestSetupOptParse_Help(t *testing.T) {
 	for _, flag := range []string{"--help", "-h"} {
 		_, opt, err := commandline.SetupOptParse([]string{flag})

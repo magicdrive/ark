@@ -41,28 +41,49 @@ ark <dirname>                # creates ark-output.txt in the cwd
 
 ---
 
-### 3. Set up Ark MCP for Claude Code
+### 3. Set up Ark for your coding agent
 
-Run once in your project root:
+Choose your coding agent and run `ark setup` once in your project root:
 
 ```bash
 cd /your/project
-ark setup --name my-project
+
+ark setup claude   # Claude Code
+# or
+ark setup cursor   # Cursor
+# or
+ark setup codex    # Codex
+# or
+ark setup cline    # Cline CLI
 ```
 
-This single command:
-- Writes `.mcp.json` — registers the Ark MCP server
-- Installs `.claude/commands/my-project.md` — activates `/my-project` as a slash command
+This registers the Ark MCP server in the client's configuration. For **Claude Code**
+it additionally generates a project skill / `/<name>` slash command.
 
-Then **restart Claude Code** and approve the MCP server when prompted.
+Then **restart (or reload) your client** and approve the Ark MCP server when prompted.
 
-After that, you can use:
-- **`/my-project`** — slash command that explores your codebase using Ark MCP tools
-- **MCP tools directly** — `mcp__ark__find_symbol`, `mcp__ark__get_symbols`, etc.
+#### Agent integration matrix
 
-```
-/my-project         ← loads exploration assistant with all 19 Ark MCP tools
-```
+Only clients Ark actually tests a `setup` path for are listed as supported.
+
+| Client       | Setup command       | Config written                                   |
+|--------------|---------------------|--------------------------------------------------|
+| Claude Code  | `ark setup claude`  | `.mcp.json` (project) / `~/.claude/settings.json` (`--global`) |
+| Cursor       | `ark setup cursor`  | `.cursor/mcp.json` (project) / `~/.cursor/mcp.json` (`--global`) |
+| Codex        | `ark setup codex`   | Codex user config, via the official `codex` CLI  |
+| Cline        | `ark setup cline`   | `~/.cline/mcp.json` (Cline **CLI**; see note below) |
+
+> **Cline scope:** v4.1 supports the **Cline CLI** configuration at `~/.cline/mcp.json` only.
+> The MCP settings used by Cline's VS Code / Cursor / Windsurf extensions
+> (`.../globalStorage/.../cline_mcp_settings.json`) are **out of scope** — Ark never
+> probes OS/editor-specific storage paths. Configure the IDE extension manually if needed.
+
+After setup you can use the MCP tools directly — `mcp__ark__find_symbol`,
+`mcp__ark__get_symbols`, etc. — and, with Claude Code, the generated `/<name>` slash command.
+
+> **`--force` means "replace Ark's entry", not "overwrite your config".**
+> `--force` replaces only Ark's own MCP entry. It never deletes unrelated MCP servers,
+> discards unknown fields, repairs malformed config, or overwrites other client settings.
 
 > **Tip:** Add a `CLAUDE.md` to your project root to instruct Claude Code to use Ark MCP tools automatically. A ready-to-use template is available at [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
 
@@ -72,7 +93,7 @@ After that, you can use:
 
 ```text
 ark [OPTIONS] <dirname>
-ark setup [OPTIONS]
+ark setup <client> [OPTIONS]
 ark mcp-server [OPTIONS]
 ark mcp-init [OPTIONS]
 ark syntax <file> [OPTIONS]
@@ -86,7 +107,7 @@ ark skill [OPTIONS]
 
 | Command      | Description                                      |
 |--------------|--------------------------------------------------|
-| `setup`      | One-step setup: MCP config + Claude Code slash command. |
+| `setup <client>` | Configure Ark for a supported coding agent (claude, cursor, codex, cline). |
 | `mcp-server` | Run Ark as an MCP server (stdio or HTTP).        |
 | `mcp-init`   | Add ark MCP config to `.mcp.json`.              |
 | `syntax`     | Parse file and output AST using Tree-sitter.     |
@@ -122,29 +143,86 @@ ark skill [OPTIONS]
 
 ---
 
-## ⚡ setup — One-step Claude Code Setup
+## ⚡ setup — One-command Agent Setup
 
-`ark setup` is the fastest way to integrate Ark into any project. It combines `mcp-init` and `skill` in a single command:
+`ark setup <client>` is the fastest way to integrate Ark into any project. It
+registers the Ark MCP server in the target client's configuration (and, for
+Claude Code, generates the project skill / slash command).
 
 ```bash
 cd /your/project
-ark setup --name my-project
+ark setup cursor
+ark setup claude --name my-project   # --name only affects the Claude skill
+ark setup codex --global
 ```
-
-This does three things at once:
-1. Writes `.mcp.json` — registers the Ark MCP server for this project
-2. Generates `skills/my-project/` — full skill documentation
-3. Installs `.claude/commands/my-project.md` — activates `/my-project` as a Claude Code slash command
-
-Then restart Claude Code to approve the MCP server, and you're ready.
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--name <name>` | `-n` | Project name (used for skill and slash command) | directory name |
-| `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
-| `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
-| `--global` | `-g` | Write MCP config to `~/.claude/settings.json` | `.mcp.json` |
-| `--force` | `-f` | Overwrite existing entries | – |
+| `<client>` | – | Target agent: `claude`, `cursor`, `codex`, `cline` | – |
+| `--name <name>` | `-n` | Claude skill/slash-command name (**Claude only**) | directory name |
+| `--ark-path <path>` | `-p` | Path to the `ark` binary (validated at setup time) | auto-detect (`ark` on `PATH`) |
+| `--root <dir>` | `-r` | Repository root to serve | `$PWD` |
+| `--global` | `-g` | Use the client's **user-level** MCP configuration | project scope |
+| `--force` | `-f` | Replace an existing **Ark-owned** entry on conflict | – |
+
+### Safety contract
+
+`ark setup` is designed to be *boring to install*:
+
+- **Idempotent** — running it repeatedly makes no further changes once configured
+  (equivalent config → no-op, the file is not even rewritten).
+- **Conflict-safe** — if an existing Ark entry differs from what you request, setup
+  fails and tells you to re-run with `--force`. It never silently overwrites.
+- **Preserving** — unrelated MCP servers and unknown fields are always kept.
+- **Never repairs** — a malformed/unparseable config is reported, never overwritten
+  (even with `--force`).
+- **Atomic** — config files are replaced via a temp file + rename, with a
+  concurrent-modification (lost-update) check and a verify-after-write step.
+
+`ark setup` (with no client) remains a **deprecated** alias for `ark setup claude`
+during v4.x and prints a warning.
+
+### Manual configuration
+
+If `ark setup` cannot run (managed machine, read-only config, unusual install), add
+the Ark MCP server yourself. The command is always `ark mcp-server --root <path>`.
+
+**Claude Code** — `.mcp.json` (project) or `~/.claude/settings.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "ark": { "type": "stdio", "command": "ark",
+             "args": ["mcp-server", "--root", "${CLAUDE_PROJECT_DIR:-.}/"], "env": {} }
+  }
+}
+```
+
+**Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "ark": { "command": "ark", "args": ["mcp-server", "--root", "/abs/path/to/repo"], "env": {} }
+  }
+}
+```
+
+**Cline CLI** — `~/.cline/mcp.json`: same shape as Cursor.
+
+**Codex** — register via the official CLI: `codex mcp add ark -- ark mcp-server --root /abs/path/to/repo`.
+
+### Troubleshooting
+
+| Symptom | Fix |
+|---------|-----|
+| `ark command ... not found on PATH` | Install `ark` on `PATH`, or pass `--ark-path /full/path/to/ark`. |
+| Client does not detect Ark | Fully restart/reload the client so it re-reads MCP config. |
+| `found a different Ark MCP configuration` | Intended config differs from existing; re-run with `--force`. |
+| `cannot parse <file>` | The config is malformed; fix it by hand — Ark will not touch a broken file. |
+| `the Codex CLI (codex) was not found` | Install Codex (`codex`), or configure manually (see above). |
+| `root directory does not exist` | Pass a `--root` that exists; Ark validates it up front. |
+| Permission denied | The config file/dir is not writable; fix permissions or use `--global`. |
 
 ---
 
