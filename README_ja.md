@@ -372,6 +372,11 @@ ark instruction claude >> CLAUDE.md    # 既存の Ark セクションと重複�
 
 ## 🎯 skill Command
 
+Ark の skill は、**Ark MCP を効果的に使うための、タスク指向のガイダンス**を提供します: どの目的にどの
+ツール（repository map、symbol context、graph relations、change impact、検索）を使うか、ツールの組み合わせ方、
+探索をやめる判断、曖昧・不確かな結果の扱い。`CLAUDE.md` 向けの短い常設ガイダンスを出力する
+[`ark instruction`](#-instruction--agent-向け利用指示) より詳しい内容ですが、どちらも同じ利用モデルを教えます。
+
 ### Subcommands
 
 | Subcommand | Description |
@@ -416,7 +421,7 @@ ark skill inspect                       # 検出されたスキルを表示
 - コーディング規約のリファレンスファイル
 
 **Explorer Skill** (`skill add-explorer`): コードナビゲーション用の軽量スキル
-- Ark MCP ツールの使い方ガイド
+- Ark MCP を使うためのタスク指向ガイダンス（目的 → ツール、不確かさの扱い）
 - 既存プロジェクトスキルと併用可能
 
 ### Generated Files
@@ -426,6 +431,8 @@ ark skill inspect                       # 検出されたスキルを表示
 - `agents/openai.yaml` — OpenAI/Cline エージェント設定
 - `agents/claude-code.md` — Claude Code カスタムエージェント（`mcp__ark__*` ツール名を使用）
 - `references/conventions.md` — プロジェクト規約（Repository Skill のみ）
+
+`ark skill update` が更新するのは `SKILL.md` と `agents/openai.yaml` で、`agents/claude-code.md` とインストール済みスラッシュコマンドは、スキルの生成時に書き込まれます。
 
 `agents/claude-code.md` は 19 種類の Ark MCP ツールを使用する Claude Code スラッシュコマンドとして `.claude/commands/` にも自動インストールされます。
 

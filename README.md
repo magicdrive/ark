@@ -372,6 +372,12 @@ instruction after setup; `ark skill` (reusable skill / slash-command artifacts) 
 
 ## 🎯 skill Command
 
+Ark skills provide **task-oriented guidance for using Ark MCP effectively**: which tool fits which goal
+(repository map, symbol context, graph relations, change impact, search), how the tools combine, when to
+stop exploring, and how to treat ambiguous or uncertain results. They are richer than
+[`ark instruction`](#-instruction--agent-usage-instructions), which prints the short standing guidance
+for `CLAUDE.md`; both teach the same usage model.
+
 ### Subcommands
 
 | Subcommand | Description |
@@ -416,7 +422,7 @@ ark skill inspect                      # Show detected skills
 - Conventions reference file
 
 **Explorer Skill** (`skill add-explorer`): Lightweight companion skill for code navigation:
-- Ark MCP tool usage guide
+- Task-oriented guidance for using Ark MCP (goal → tool, uncertainty handling)
 - Works alongside existing project skills
 
 ### Generated Files
@@ -426,6 +432,8 @@ Skills include YAML frontmatter for safe updates:
 - `agents/openai.yaml` - OpenAI/Cline agent configuration
 - `agents/claude-code.md` - Claude Code custom agent (uses `mcp__ark__*` tool names)
 - `references/conventions.md` - Project conventions (Repository Skill only)
+
+`ark skill update` refreshes `SKILL.md` and `agents/openai.yaml`; `agents/claude-code.md` and the installed slash command are written when a skill is generated.
 
 The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 19 Ark MCP tools.
 

@@ -170,3 +170,36 @@ func TestClaude_SetupSuccessShowsCanonicalInstruction(t *testing.T) {
 		t.Error("setup must not write CLAUDE.md")
 	}
 }
+
+// `ark setup claude` generates the v4 skill (goal-driven Ark model), and its
+// slash command is the same v4 content. Nothing else about setup changes.
+func TestClaude_SetupGeneratesV4Skill(t *testing.T) {
+	root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Chdir(root)
+	if _, err := Run(Options{Client: ClientClaude, ArkPath: ark, RootDir: root, Name: "proj"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range []string{
+		filepath.Join("skills", "proj", "SKILL.md"),
+		filepath.Join("skills", "proj", "agents", "claude-code.md"),
+		filepath.Join(".claude", "commands", "proj.md"),
+	} {
+		b, err := os.ReadFile(filepath.Join(root, rel))
+		if err != nil {
+			t.Fatalf("%s: %v", rel, err)
+		}
+		text := string(b)
+		for _, want := range []string{"get_repository_map", "get_context", "get_relations", "analyze_change_impact", "do not pick the first result"} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s lacks %q", rel, want)
+			}
+		}
+		for _, old := range []string{"NEVER", "last resort", "First step", "Start exploration with"} {
+			if strings.Contains(text, old) {
+				t.Errorf("%s still has the old model's %q", rel, old)
+			}
+		}
+	}
+}
