@@ -1,0 +1,131 @@
+## stats
+files=15 symbols=45 references=51 relations=27 skipped=0
+lang tsx=2
+lang typescript=13
+## symbols
+symbol OrderRepository kind=class lang=typescript qualified="OrderRepository" receiver="" exported=true @ambiguity/orders.ts:3:8-5:2
+symbol save kind=method lang=typescript qualified="OrderRepository.save" receiver="OrderRepository" exported=true @ambiguity/orders.ts:4:3-4:28
+symbol persist kind=function lang=typescript qualified="persist" receiver="" exported=true @ambiguity/orders.ts:7:8-9:2
+symbol unknownReceiver kind=function lang=typescript qualified="unknownReceiver" receiver="" exported=true @ambiguity/orders.ts:11:8-13:2
+symbol UserRepository kind=class lang=typescript qualified="UserRepository" receiver="" exported=true @ambiguity/repositories.ts:1:8-3:2
+symbol save kind=method lang=typescript qualified="UserRepository.save" receiver="UserRepository" exported=true @ambiguity/repositories.ts:2:3-2:28
+symbol build kind=function lang=typescript qualified="build" receiver="" exported=true @imports/consumer.ts:7:8-14:2
+symbol User kind=class lang=typescript qualified="User" receiver="" exported=true @imports/user.ts:1:8-6:2
+symbol constructor kind=constructor lang=typescript qualified="User.constructor" receiver="User" exported=true @imports/user.ts:2:3-2:38
+symbol name kind=property lang=typescript qualified="User.name" receiver="User" exported=true @imports/user.ts:2:15-2:34
+symbol create kind=method lang=typescript qualified="User.create" receiver="User" exported=true @imports/user.ts:3:3-5:4
+symbol makeUser kind=function lang=typescript qualified="makeUser" receiver="" exported=true @imports/user.ts:8:16-10:2
+symbol UserId kind=type_alias lang=typescript qualified="UserId" receiver="" exported=true @imports/user.ts:12:8-12:29
+symbol Parent kind=interface lang=typescript qualified="Parent" receiver="" exported=true @inheritance/shapes.ts:1:8-3:2
+symbol id kind=method lang=typescript qualified="Parent.id" receiver="Parent" exported=true @inheritance/shapes.ts:2:3-2:15
+symbol Child kind=interface lang=typescript qualified="Child" receiver="" exported=true @inheritance/shapes.ts:5:8-7:2
+symbol extra kind=method lang=typescript qualified="Child.extra" receiver="Child" exported=true @inheritance/shapes.ts:6:3-6:16
+symbol Base kind=class lang=typescript qualified="Base" receiver="" exported=true @inheritance/shapes.ts:9:8-9:21
+symbol Impl kind=class lang=typescript qualified="Impl" receiver="" exported=true @inheritance/shapes.ts:11:8-16:2
+symbol id kind=method lang=typescript qualified="Impl.id" receiver="Impl" exported=true @inheritance/shapes.ts:12:3-14:4
+symbol extra kind=method lang=typescript qualified="Impl.extra" receiver="Impl" exported=true @inheritance/shapes.ts:15:3-15:19
+symbol BaseService kind=class lang=typescript qualified="BaseService" receiver="" exported=true @members/service.ts:4:8-7:2
+symbol name kind=method lang=typescript qualified="BaseService.name" receiver="BaseService" exported=true @members/service.ts:5:3-5:26
+symbol log kind=method lang=typescript qualified="BaseService.log" receiver="BaseService" exported=false @members/service.ts:6:3-6:38
+symbol UserService kind=class lang=typescript qualified="UserService" receiver="" exported=true @members/service.ts:9:8-38:2
+symbol count kind=property lang=typescript qualified="UserService.count" receiver="UserService" exported=false @members/service.ts:10:3-10:20
+symbol constructor kind=constructor lang=typescript qualified="UserService.constructor" receiver="UserService" exported=true @members/service.ts:12:3-14:4
+symbol repo kind=property lang=typescript qualified="UserService.repo" receiver="UserService" exported=false @members/service.ts:12:15-12:52
+symbol name kind=method lang=typescript qualified="UserService.name" receiver="UserService" exported=true @members/service.ts:16:3-18:4
+symbol create kind=method lang=typescript qualified="UserService.create" receiver="UserService" exported=true @members/service.ts:20:3-25:4
+symbol from kind=method lang=typescript qualified="UserService.from" receiver="UserService" exported=true @members/service.ts:27:3-29:4
+symbol total kind=property lang=typescript qualified="UserService.total" receiver="UserService" exported=true @members/service.ts:31:3-37:4
+symbol Service kind=interface lang=typescript qualified="Service" receiver="" exported=true @members/service.ts:40:8-43:2
+symbol name kind=method lang=typescript qualified="Service.name" receiver="Service" exported=true @members/service.ts:41:3-41:17
+symbol id kind=property lang=typescript qualified="Service.id" receiver="Service" exported=true @members/service.ts:42:3-42:22
+symbol run kind=function lang=typescript qualified="run" receiver="" exported=true @reexports/app.ts:3:8-7:2
+symbol Alpha kind=class lang=typescript qualified="Alpha" receiver="" exported=true @reexports/cycle/a.ts:2:8-2:22
+symbol Beta kind=class lang=typescript qualified="Beta" receiver="" exported=true @reexports/cycle/b.ts:2:8-2:21
+symbol Order kind=class lang=typescript qualified="Order" receiver="" exported=true @reexports/domain/order.ts:1:8-1:22
+symbol Account kind=class lang=typescript qualified="Account" receiver="" exported=true @reexports/domain/user.ts:1:8-3:2
+symbol open kind=method lang=typescript qualified="Account.open" receiver="Account" exported=true @reexports/domain/user.ts:2:3-2:18
+symbol useUser kind=function lang=tsx qualified="useUser" receiver="" exported=true @tsx/card.tsx:1:8-3:2
+symbol UserCard kind=function lang=tsx qualified="UserCard" receiver="" exported=true @tsx/card.tsx:5:8-7:2
+symbol Layout kind=constant lang=tsx qualified="Layout" receiver="" exported=true @tsx/card.tsx:9:14-11:2
+symbol UserPage kind=function lang=tsx qualified="UserPage" receiver="" exported=true @tsx/page.tsx:3:8-12:2
+## references
+ref ./repositories kind=import container="" receiver="" call=false @ambiguity/orders.ts:1:1-1:49
+ref UserRepository kind=type_use container="persist" receiver="" call=false @ambiguity/orders.ts:7:31-7:45
+ref save kind=call container="persist" receiver="repo" receiver_type="UserRepository" call=true @ambiguity/orders.ts:8:8-8:12
+ref save kind=call container="unknownReceiver" receiver="r" call=true @ambiguity/orders.ts:12:5-12:9
+ref ./user kind=import container="" receiver="" call=false @imports/consumer.ts:1:1-1:61
+ref ./user kind=import container="" receiver="" call=false @imports/consumer.ts:2:1-2:33
+ref ./user kind=import container="" receiver="" call=false @imports/consumer.ts:3:1-3:38
+ref zod kind=import container="" receiver="" call=false @imports/consumer.ts:4:1-4:25
+ref @/shared/helper kind=import container="" receiver="" call=false @imports/consumer.ts:5:1-5:42
+ref UserId kind=type_use container="build" receiver="" call=false @imports/consumer.ts:7:27-7:33
+ref DomainUser kind=type_use container="build" receiver="" call=false @imports/consumer.ts:7:36-7:46
+ref makeUser kind=call container="build" receiver="" call=true @imports/consumer.ts:8:13-8:21
+ref create kind=call container="build" receiver="users.User" call=true @imports/consumer.ts:9:24-9:30
+ref DomainUser kind=construction container="build" receiver="" call=false @imports/consumer.ts:10:17-10:27
+ref string kind=call container="build" receiver="z" call=true @imports/consumer.ts:11:5-11:11
+ref helper kind=call container="build" receiver="" call=true @imports/consumer.ts:12:3-12:9
+ref create kind=call container="build" receiver="User" call=true @imports/consumer.ts:13:15-13:21
+ref String kind=call container="build" receiver="" call=true @imports/consumer.ts:13:22-13:28
+ref User kind=type_use container="User.create" receiver="" call=false @imports/user.ts:3:32-3:36
+ref User kind=construction container="User.create" receiver="" call=false @imports/user.ts:4:16-4:20
+ref User kind=type_use container="makeUser" receiver="" call=false @imports/user.ts:8:49-8:53
+ref create kind=call container="makeUser" receiver="User" call=true @imports/user.ts:9:15-9:21
+ref Parent kind=inheritance container="Child" receiver="" call=false @inheritance/shapes.ts:5:32-5:38
+ref Base kind=inheritance container="Impl" receiver="" call=false @inheritance/shapes.ts:11:27-11:31
+ref Child kind=implementation container="Impl" receiver="" call=false @inheritance/shapes.ts:11:43-11:48
+ref ../ambiguity/repositories kind=import container="" receiver="" call=false @members/service.ts:1:1-1:60
+ref ../imports/user kind=import container="" receiver="" call=false @members/service.ts:2:1-2:40
+ref BaseService kind=inheritance container="UserService" receiver="" call=false @members/service.ts:9:34-9:45
+ref UserRepository kind=type_use container="UserService.constructor" receiver="" call=false @members/service.ts:12:38-12:52
+ref User kind=type_use container="UserService.create" receiver="" call=false @members/service.ts:20:25-20:29
+ref User kind=construction container="UserService.create" receiver="" call=false @members/service.ts:21:19-21:23
+ref save kind=call container="UserService.create" receiver="this.repo" receiver_type="UserRepository" call=true @members/service.ts:22:15-22:19
+ref log kind=call container="UserService.create" receiver="this" receiver_type="UserService" call=true @members/service.ts:23:10-23:13
+ref UserRepository kind=type_use container="UserService.from" receiver="" call=false @members/service.ts:27:21-27:35
+ref UserService kind=type_use container="UserService.from" receiver="" call=false @members/service.ts:27:38-27:49
+ref UserService kind=construction container="UserService.from" receiver="" call=false @members/service.ts:28:16-28:27
+ref ./index kind=import container="" receiver="" call=false @reexports/app.ts:1:1-1:42
+ref Account kind=construction container="run" receiver="" call=false @reexports/app.ts:4:17-4:24
+ref open kind=call container="run" receiver="a" receiver_type="Account" call=true @reexports/app.ts:5:5-5:9
+ref Order kind=construction container="run" receiver="" call=false @reexports/app.ts:6:7-6:12
+ref ./b kind=import container="" receiver="" call=false @reexports/cycle/a.ts:1:1-1:21
+ref ./a kind=import container="" receiver="" call=false @reexports/cycle/b.ts:1:1-1:21
+ref ./user kind=import container="" receiver="" call=false @reexports/domain/index.ts:1:1-1:34
+ref ./user kind=import container="" receiver="" call=false @reexports/domain/index.ts:2:1-2:51
+ref ./order kind=import container="" receiver="" call=false @reexports/domain/index.ts:3:1-3:25
+ref ./order kind=import container="" receiver="" call=false @reexports/domain/index.ts:4:1-4:35
+ref ./domain kind=import container="" receiver="" call=false @reexports/index.ts:1:1-1:26
+ref ./card kind=import container="" receiver="" call=false @tsx/page.tsx:1:1-1:52
+ref useUser kind=call container="UserPage" receiver="" call=true @tsx/page.tsx:4:16-4:23
+ref Header kind=call container="UserPage" receiver="Layout" call=true @tsx/page.tsx:7:8-7:21
+ref UserCard kind=call container="UserPage" receiver="" call=true @tsx/page.tsx:8:8-8:16
+## edges
+edge Child -extends-> Parent confidence=exact evidence=[same_file:symbol "Parent" defined in same file inheritance/shapes.ts]
+edge Impl -extends-> Base confidence=exact evidence=[same_file:symbol "Base" defined in same file inheritance/shapes.ts]
+edge Impl -implements-> Child confidence=exact evidence=[same_file:symbol "Child" defined in same file inheritance/shapes.ts]
+edge User.create -calls-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
+edge User.create -uses_type-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
+edge UserPage -calls-> UserCard confidence=exact evidence=[module_binding:"UserCard" bound by import (tsx/page.tsx ← "./card" → tsx/card.tsx exports "UserCard")]
+edge UserPage -calls-> useUser confidence=exact evidence=[module_binding:"useUser" bound by import (tsx/page.tsx ← "./card" → tsx/card.tsx exports "useUser")]
+edge UserService -extends-> BaseService confidence=exact evidence=[same_file:symbol "BaseService" defined in same file members/service.ts]
+edge UserService.constructor -uses_type-> UserRepository confidence=exact evidence=[module_binding:"UserRepository" bound by import (members/service.ts ← "../ambiguity/repositories" → ambiguity/repositories.ts exports "UserRepository")]
+edge UserService.create -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (members/service.ts ← "../imports/user" → imports/user.ts exports "User")]
+edge UserService.create -calls-> UserRepository.save confidence=exact evidence=[receiver_type:receiver "this.repo" declared as "UserRepository"]
+edge UserService.create -uses_type-> User confidence=exact evidence=[module_binding:"User" bound by import (members/service.ts ← "../imports/user" → imports/user.ts exports "User")]
+edge UserService.from -calls-> UserService confidence=exact evidence=[same_file:symbol "UserService" defined in same file members/service.ts]
+edge UserService.from -uses_type-> UserRepository confidence=exact evidence=[module_binding:"UserRepository" bound by import (members/service.ts ← "../ambiguity/repositories" → ambiguity/repositories.ts exports "UserRepository")]
+edge UserService.from -uses_type-> UserService confidence=exact evidence=[same_file:symbol "UserService" defined in same file members/service.ts]
+edge build -calls-> User confidence=exact evidence=[module_binding:"DomainUser" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
+edge build -calls-> User.create confidence=exact evidence=[module_binding:receiver "User" is a module binding (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
+edge build -calls-> makeUser confidence=exact evidence=[module_binding:"makeUser" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "default")]
+edge build -uses_type-> User confidence=exact evidence=[module_binding:"DomainUser" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
+edge build -uses_type-> UserId confidence=exact evidence=[module_binding:"UserId" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "UserId")]
+edge makeUser -calls-> User.create confidence=exact evidence=[same_file:symbol "create" defined in same file imports/user.ts]
+edge makeUser -uses_type-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
+edge persist -calls-> UserRepository.save confidence=exact evidence=[receiver_type:receiver "repo" declared as "UserRepository"]
+edge persist -uses_type-> UserRepository confidence=exact evidence=[module_binding:"UserRepository" bound by import (ambiguity/orders.ts ← "./repositories" → ambiguity/repositories.ts exports "UserRepository")]
+edge run -calls-> Account confidence=exact evidence=[module_binding:"Account" bound by import (reexports/app.ts ← "./index" → reexports/index.ts exports "Account" → reexports/domain/index.ts exports "Account" → reexports/domain/user.ts exports "Account")]
+edge run -calls-> Account.open confidence=exact evidence=[receiver_type:receiver "a" declared as "Account"]
+edge run -calls-> Order confidence=exact evidence=[module_binding:"Order" bound by import (reexports/app.ts ← "./index" → reexports/index.ts exports "Order" → reexports/domain/index.ts exports "Order" → reexports/domain/order.ts exports "Order")]
+## diagnostics

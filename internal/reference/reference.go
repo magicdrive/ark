@@ -37,6 +37,9 @@ type Reference struct {
 	Location     source.Location
 	Container    string // qualified name of enclosing symbol, empty if unknown
 	ReceiverExpr string // e.g. "repo" in repo.Save()
+	// ReceiverType is provider-proven declared type evidence for the receiver
+	// (see language.ReferenceDraft.ReceiverType); "" when not proven.
+	ReceiverType string
 	IsCall       bool
 }
 

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/reference"
@@ -19,6 +20,11 @@ type FileIndex struct {
 	Symbols    []symbol.Symbol
 	References []reference.Reference
 	Imports    []language.ImportDraft
+
+	// Module-binding evidence (see language.Extraction).
+	Bindings     []language.BindingDraft
+	Exports      []language.ExportDraft
+	ModuleScoped bool
 }
 
 // Resolver resolves syntactic references to candidate symbols using
@@ -32,6 +38,12 @@ type Resolver struct {
 	byQualified map[string][]symbol.Symbol
 	// byFile maps FileID → FileIndex.
 	byFile map[source.FileID]*FileIndex
+	// byID maps SymbolID → symbol.
+	byID map[symbol.SymbolID]symbol.Symbol
+
+	// exportMemo caches complete module export lookups (see modules.go).
+	memoMu     sync.Mutex
+	exportMemo map[string]bindResult
 }
 
 // New builds a Resolver from a set of file indexes.
@@ -41,11 +53,14 @@ func New(files []FileIndex) *Resolver {
 		byName:      make(map[string][]symbol.Symbol),
 		byQualified: make(map[string][]symbol.Symbol),
 		byFile:      make(map[source.FileID]*FileIndex),
+		byID:        make(map[symbol.SymbolID]symbol.Symbol),
+		exportMemo:  make(map[string]bindResult),
 	}
 	for i := range files {
 		fi := &files[i]
 		r.byFile[fi.FileID] = fi
 		for _, sym := range fi.Symbols {
+			r.byID[sym.ID] = sym
 			r.byName[sym.Name] = append(r.byName[sym.Name], sym)
 			if sym.Qualified != "" {
 				r.byQualified[sym.Qualified] = append(r.byQualified[sym.Qualified], sym)
@@ -75,21 +90,58 @@ func (r *Resolver) Resolve() []Resolution {
 }
 
 // ResolveReference resolves a single reference within its file context.
+//
+// A reference with a receiver is first classified (R1–R4):
+//
+//	R1 binding receiver   – the receiver is a module import binding of the file
+//	R2 declared type      – the provider proved the receiver's declared type
+//	   module receiver    – legacy ImportDraft alias (e.g. Go `fmt.Println`)
+//	R3 type-name receiver – the receiver names a repository type (e.g. `User::create`)
+//	R4 untyped receiver   – anything else: no type evidence, capped at Candidate
+//
+// R1 and R2 are authoritative: when they cannot resolve, the reference is
+// Unresolved — they never fall back to name heuristics.
 func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resolution {
 	res := Resolution{
 		ReferenceID:   ref.ID,
 		ReferenceName: ref.Name,
 		Confidence:    ConfidenceUnresolved,
 	}
+	if ref.ReceiverExpr == "" {
+		return r.resolveByName(res, ref, fi)
+	}
+	switch {
+	case hasBinding(&fi, ref.ReceiverExpr):
+		return r.resolveViaReceiverBinding(res, ref, fi)
+	case ref.ReceiverType != "":
+		return r.resolveViaReceiverType(res, ref, fi)
+	case r.isModuleReceiver(ref.ReceiverExpr, fi), r.isTypeReceiver(ref.ReceiverExpr):
+		return r.resolveByName(res, ref, fi)
+	default:
+		return capUntypedReceiver(r.resolveByName(res, ref, fi), ref)
+	}
+}
 
+// resolveByName runs the name-based stages. For a module-scoped file, names
+// without a local declaration or explicit binding are capped at Candidate and
+// the legacy implicit ImportDraft alias match is not applied.
+func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi FileIndex) Resolution {
 	// Explicit type receiver: when the receiver expression itself names a
 	// repository type symbol (e.g. PHP `User::create()`, where `User` is a
 	// class), the target MUST be a member of that type. We constrain every
 	// name-based candidate stage so an explicit type receiver can never be
 	// ignored in favour of a weaker bare-name match on an unrelated member.
-	// Variable/expression receivers (e.g. Go `s.Create()`, where `s` is not a
-	// type) are NOT constrained — existing resolver behaviour is preserved.
 	typeRecv := ref.ReceiverExpr != "" && r.isTypeReceiver(ref.ReceiverExpr)
+	// A receiverless name never denotes a receiver-attached member: members are
+	// reached through a receiver (R1–R4), never by their bare name.
+	free := ref.ReceiverExpr == ""
+	narrow := func(cands []symbol.Symbol) []symbol.Symbol {
+		cands = r.constrainReceiver(cands, ref, typeRecv)
+		if free {
+			cands = withoutMembers(cands)
+		}
+		return cands
+	}
 
 	// Stage 1: same file + same container (lexical scope).
 	if candidates := r.constrainReceiver(r.sameFileContainerMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
@@ -98,29 +150,36 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 	}
 
 	// Stage 2: same file, any symbol.
-	if candidates := r.constrainReceiver(r.sameFileMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
+	if candidates := narrow(r.sameFileMatch(ref, fi)); len(candidates) > 0 {
 		return r.pickBest(res, candidates, ConfidenceExact, EvidenceSameFile,
 			fmt.Sprintf("symbol %q defined in same file %s", ref.Name, fi.FileID))
 	}
 
-	// Stage 3: explicit import match.
-	if candidates := r.constrainReceiver(r.importMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
-		return r.pickBest(res, candidates, ConfidenceExact, EvidenceExplicitImport,
-			fmt.Sprintf("symbol %q resolved via import", ref.Name))
+	// Stage 3a: explicit module binding (authoritative for the bound name).
+	if free && hasBinding(&fi, ref.Name) {
+		return r.resolveViaBinding(res, ref, fi)
+	}
+
+	// Stage 3b: legacy explicit import match (implicit ImportDraft alias).
+	if !fi.ModuleScoped {
+		if candidates := narrow(r.importMatch(ref, fi)); len(candidates) > 0 {
+			return r.pickBest(res, candidates, ConfidenceExact, EvidenceExplicitImport,
+				fmt.Sprintf("symbol %q resolved via import", ref.Name))
+		}
 	}
 
 	// Stage 4: qualified receiver match (e.g. Go: repo.Save → ReceiverType.Save).
 	if ref.ReceiverExpr != "" {
-		if candidates := r.constrainReceiver(r.receiverMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
+		if candidates := narrow(r.receiverMatch(ref, fi)); len(candidates) > 0 {
 			return r.pickBest(res, candidates, ConfidenceStrong, EvidenceQualifiedReceiver,
 				fmt.Sprintf("receiver %q suggests qualified name", ref.ReceiverExpr))
 		}
 	}
 
 	// Stage 5: same package / directory.
-	if candidates := r.constrainReceiver(r.samePackageMatch(ref, fi), ref, typeRecv); len(candidates) > 0 {
-		return r.pickBest(res, candidates, ConfidenceStrong, EvidenceSamePackage,
-			fmt.Sprintf("symbol %q found in same package as %s", ref.Name, fi.FileID))
+	if candidates := narrow(r.samePackageMatch(ref, fi)); len(candidates) > 0 {
+		return capModuleScope(r.pickBest(res, candidates, ConfidenceStrong, EvidenceSamePackage,
+			fmt.Sprintf("symbol %q found in same package as %s", ref.Name, fi.FileID)), fi)
 	}
 
 	// Stage 6/7: repository-wide search.
@@ -130,7 +189,8 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 		all = r.byNameSuffix(ref.Name)
 	}
 	// An explicit type receiver must not fall back to an incompatible member.
-	all = r.constrainReceiver(all, ref, typeRecv)
+	all = narrow(all)
+
 	switch len(all) {
 	case 0:
 		// ConfidenceUnresolved — no candidate at all.
@@ -155,7 +215,7 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 			{Kind: EvidenceCandidateSet, Detail: fmt.Sprintf("%d candidates for %q", len(all), ref.Name)},
 		}
 	}
-	return res
+	return capModuleScope(res, fi)
 }
 
 // isTypeReceiver reports whether expr names a repository type-like symbol

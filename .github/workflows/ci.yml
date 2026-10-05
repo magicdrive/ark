@@ -72,3 +72,9 @@ jobs:
 
       - name: Run fuzz smoke (PHP extraction)
         run: go test -fuzz=FuzzExtractPHP -fuzztime=10s ./internal/languages/php/
+
+      - name: Run fuzz smoke (TypeScript/TSX extraction)
+        run: go test -run '^$' -fuzz=FuzzExtractTypeScript -fuzztime=10s ./internal/languages/typescript/
+
+      - name: Run fuzz smoke (TypeScript module specifiers)
+        run: go test -run '^$' -fuzz=FuzzModuleSpec -fuzztime=10s ./internal/languages/typescript/

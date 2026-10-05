@@ -12,10 +12,13 @@ package contextquality
 
 import (
 	"context"
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/symbol"
 
 	ctxengine "github.com/magicdrive/ark/internal/context"
 )
@@ -25,10 +28,17 @@ type Scenario struct {
 	Name            string
 	Task            string
 	TargetQualified string
-	Depth           int
-	MaxTokens       int
-	IncludeTests    bool
+	// TargetFile pins the target to one file when its qualified name is
+	// declared in several files. The harness never picks among several
+	// same-named targets: an unpinned ambiguous target is an error.
+	TargetFile   string
+	Depth        int
+	MaxTokens    int
+	IncludeTests bool
 
+	// Required / Irrelevant entries are qualified names, optionally pinned to a
+	// file as "path/to/file.ext#Qualified" when the qualified name alone is not
+	// unique in the fixture repository.
 	Required   []string // qualified names that SHOULD appear in context
 	Optional   []string // useful-but-not-required (not scored for/against)
 	Irrelevant []string // qualified names that should NOT crowd out required
@@ -68,9 +78,23 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 	if err != nil {
 		return Result{}, err
 	}
-	targets := idx.FindSymbolsByQualified(s.TargetQualified)
+	var targets []symbol.Symbol
+	for _, t := range idx.FindSymbolsByQualified(s.TargetQualified) {
+		if s.TargetFile == "" || string(t.Location.File) == s.TargetFile {
+			targets = append(targets, t)
+		}
+	}
 	if len(targets) == 0 {
 		return Result{}, nil // TargetFound stays false
+	}
+	if len(targets) > 1 {
+		files := make([]string, len(targets))
+		for i, t := range targets {
+			files[i] = string(t.Location.File)
+		}
+		sort.Strings(files)
+		return Result{}, fmt.Errorf("contextquality: target %q is ambiguous (%s); set Scenario.TargetFile",
+			s.TargetQualified, strings.Join(files, ", "))
 	}
 
 	eng := ctxengine.New(idx, root)
@@ -102,7 +126,8 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 			Tokens:    it.Tokens,
 		})
 		selectedSet[it.Symbol.Qualified] = true
-		if it.Symbol.Qualified == s.TargetQualified {
+		selectedSet[string(it.Symbol.Location.File)+"#"+it.Symbol.Qualified] = true
+		if it.Symbol.ID == targets[0].ID {
 			out.TargetIncluded = true
 		}
 	}

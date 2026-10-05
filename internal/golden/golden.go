@@ -44,8 +44,8 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	sort.Slice(refs, func(i, j int) bool { return refDraftLess(refs[i], refs[j]) })
 	b.WriteString("## references\n")
 	for _, r := range refs {
-		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, r.IsCall, loc(r.Location))
+		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s call=%t %s\n",
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -59,6 +59,10 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	for _, im := range imps {
 		fmt.Fprintf(&b, "import path=%q alias=%q %s\n", im.Path, im.Alias, loc(im.Location))
 	}
+
+	// Module-binding evidence is printed only when a provider emits it, so
+	// snapshots of providers that do not model bindings stay byte-identical.
+	writeModuleBindings(&b, ext)
 
 	b.WriteString("## diagnostics\n")
 	for _, d := range sortedDiagnostics(ext.Diagnostics) {
@@ -103,8 +107,8 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		refs := idx.ReferencesByFile(f)
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
-			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, r.IsCall, loc(r.Location))
+			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s call=%t %s\n",
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -232,4 +236,50 @@ func refLess(a, b reference.Reference) bool {
 		return a.Name < b.Name
 	}
 	return a.Kind < b.Kind
+}
+
+// receiverType renders provider-proven receiver type evidence, or nothing.
+func receiverType(t string) string {
+	if t == "" {
+		return ""
+	}
+	return fmt.Sprintf(" receiver_type=%q", t)
+}
+
+func moduleSpec(m language.ModuleSpec) string {
+	parts := make([]string, len(m.Candidates))
+	for i, c := range m.Candidates {
+		parts[i] = fmt.Sprintf("%s@%d", c.File, c.Priority)
+	}
+	cands := "external"
+	if m.Candidates != nil {
+		cands = "[" + strings.Join(parts, " ") + "]"
+	}
+	return fmt.Sprintf("module=%q candidates=%s", m.Specifier, cands)
+}
+
+// writeModuleBindings serializes bindings / exports / module scope in source
+// order (providers emit them deterministically; order is part of the contract).
+func writeModuleBindings(b *strings.Builder, ext language.Extraction) {
+	if ext.ModuleScoped {
+		b.WriteString("## module_scoped\n")
+	}
+	if len(ext.Bindings) > 0 {
+		b.WriteString("## bindings\n")
+		for _, bd := range ext.Bindings {
+			fmt.Fprintf(b, "binding %s kind=%s imported=%q type_only=%t %s %s\n",
+				bd.Local, bd.Kind, bd.Imported, bd.TypeOnly, moduleSpec(bd.Module), loc(bd.Location))
+		}
+	}
+	if len(ext.Exports) > 0 {
+		b.WriteString("## exports\n")
+		for _, ed := range ext.Exports {
+			mod := ""
+			if ed.Kind != language.ExportLocal {
+				mod = " " + moduleSpec(ed.Module)
+			}
+			fmt.Fprintf(b, "export kind=%s exported=%q local=%q except=%q type_only=%t%s %s\n",
+				ed.Kind, ed.Exported, ed.Local, ed.Except, ed.TypeOnly, mod, loc(ed.Location))
+		}
+	}
 }

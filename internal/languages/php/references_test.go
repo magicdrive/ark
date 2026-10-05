@@ -44,10 +44,10 @@ class S {
 }`)
 	cases := map[string]phpRef{
 		"helper": {kind: "call", container: "App\\S.m", receiver: "", call: true},
-		"save":   {kind: "call", container: "App\\S.m", receiver: "S", call: true},    // $this → class bare
-		"flush":  {kind: "call", container: "App\\S.m", receiver: "", call: true},     // other var → empty (safe)
-		"create": {kind: "call", container: "App\\S.m", receiver: "User", call: true}, // static receiver
-		"make":   {kind: "call", container: "App\\S.m", receiver: "", call: true},     // self:: → empty
+		"save":   {kind: "call", container: "App\\S.m", receiver: "S", call: true},      // $this → class bare
+		"flush":  {kind: "call", container: "App\\S.m", receiver: "$other", call: true}, // other var → verbatim (untyped, R4)
+		"create": {kind: "call", container: "App\\S.m", receiver: "User", call: true},   // static receiver
+		"make":   {kind: "call", container: "App\\S.m", receiver: "", call: true},       // self:: → empty
 	}
 	for name, want := range cases {
 		if got, ok := m[name]; !ok {
@@ -305,20 +305,27 @@ func TestPHPRef_Safety(t *testing.T) {
 	}
 }
 
-// Negative: a bare instance-variable receiver must not be set as ReceiverExpr
-// (which could false-match a class whose Receiver equals that lowercase name).
-func TestPHPRef_InstanceReceiverNotFabricated(t *testing.T) {
-	_, m := refIndex(t, `<?php
+// STOP-3 contract: an instance-variable receiver is recorded verbatim (so the
+// resolver can tell a member call from a receiverless name) and carries NO
+// declared type unless it is proven. The resolver caps such untyped receivers
+// at Candidate, so the verbatim text can never produce a false Exact/Strong.
+func TestPHPRef_InstanceReceiverVerbatimUntyped(t *testing.T) {
+	refs, m := refIndex(t, `<?php
 class C {
     public function m() {
         $user->save();
         $repo->find();
     }
 }`)
-	if got := m["save"]; got.receiver != "" {
-		t.Errorf("$user->save() receiver = %q, want empty (instance receiver must not be fabricated)", got.receiver)
+	if got := m["save"]; got.receiver != "$user" {
+		t.Errorf("$user->save() receiver = %q, want verbatim \"$user\"", got.receiver)
 	}
-	if got := m["find"]; got.receiver != "" {
-		t.Errorf("$repo->find() receiver = %q, want empty", got.receiver)
+	if got := m["find"]; got.receiver != "$repo" {
+		t.Errorf("$repo->find() receiver = %q, want verbatim \"$repo\"", got.receiver)
+	}
+	for _, r := range refs {
+		if r.ReceiverType != "" {
+			t.Errorf("%s: unproven receiver got ReceiverType %q", r.Name, r.ReceiverType)
+		}
 	}
 }

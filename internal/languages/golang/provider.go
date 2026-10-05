@@ -21,7 +21,7 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "1" }
+func (p *Provider) CacheVersion() string        { return "go-2" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
@@ -268,8 +268,8 @@ func isExported(name string) bool {
 
 // extractGoReferences walks the AST and collects syntactic references and imports.
 func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
-	c := &goRefCollector{lang: lang, src: src, file: file}
-	c.walk(root, "")
+	c := &goRefCollector{lang: lang, src: src, file: file, fields: collectGoStructFields(root, lang, src)}
+	c.walk(root, "", nil)
 	return c.refs, c.imports
 }
 
@@ -279,15 +279,19 @@ type goRefCollector struct {
 	file    source.FileID
 	refs    []language.ReferenceDraft
 	imports []language.ImportDraft
+	fields  goStructFields // same-file struct field types (receiver evidence)
 }
 
-func (c *goRefCollector) walk(node *ts.Node, container string) {
+// walk collects references. env carries the proven receiver types of the
+// enclosing function (see receiver_types.go); nil outside functions.
+func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 	t := node.Type(c.lang)
 	switch t {
 	case "function_declaration":
 		name := childText(node, c.lang, c.src, "identifier")
+		fnEnv := goFunctionTypeEnv(node, c.lang, c.src)
 		for i := 0; i < node.ChildCount(); i++ {
-			c.walk(node.Child(i), name)
+			c.walk(node.Child(i), name, fnEnv)
 		}
 		return
 	case "method_declaration":
@@ -305,22 +309,23 @@ func (c *goRefCollector) walk(node *ts.Node, container string) {
 		if recv != "" {
 			qualified = recv + "." + name
 		}
+		fnEnv := goFunctionTypeEnv(node, c.lang, c.src)
 		for i := 0; i < node.ChildCount(); i++ {
-			c.walk(node.Child(i), qualified)
+			c.walk(node.Child(i), qualified, fnEnv)
 		}
 		return
 	case "import_declaration":
 		c.collectImports(node)
 		return // don't recurse into imports
 	case "call_expression":
-		c.collectCall(node, container)
+		c.collectCall(node, container, env)
 		// fall through to recurse for nested calls
 	case "composite_literal":
 		c.collectComposite(node, container)
 		// fall through to recurse
 	}
 	for i := 0; i < node.ChildCount(); i++ {
-		c.walk(node.Child(i), container)
+		c.walk(node.Child(i), container, env)
 	}
 }
 
@@ -388,7 +393,7 @@ func goStringLiteralContent(node *ts.Node, lang *ts.Language, src []byte) string
 	return raw
 }
 
-func (c *goRefCollector) collectCall(node *ts.Node, container string) {
+func (c *goRefCollector) collectCall(node *ts.Node, container string, env goTypeEnv) {
 	// call_expression: first child = function expr, last child = argument_list
 	if node.ChildCount() == 0 {
 		return
@@ -404,6 +409,7 @@ func (c *goRefCollector) collectCall(node *ts.Node, container string) {
 		Container:    container,
 		Location:     nodeLocation(funcNode, c.file),
 		ReceiverExpr: recv,
+		ReceiverType: env.receiverType(recv, funcNode.StartByte(), c.fields),
 		IsCall:       true,
 	})
 }

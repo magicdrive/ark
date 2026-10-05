@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
@@ -119,16 +120,18 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 	// Build relation entries.
 	var relations []relationEntry
 	seen := make(map[string]bool)
+	locate := newRefLocator(fileIndexes)
 
 	for _, resolution := range resolutions {
 		if resolution.Confidence == resolver.ConfidenceUnresolved {
 			continue
 		}
 		// Find ref in file indexes.
-		refObj := findReference(fileIndexes, resolution.ReferenceID)
-		if refObj == nil {
+		loc, ok := locate[resolution.ReferenceID]
+		if !ok {
 			continue
 		}
+		refObj := loc.ref
 
 		// "calls": the container symbol calls one of our targets.
 		for _, cand := range resolution.Candidates {
@@ -138,7 +141,7 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 			if refObj.Container == "" {
 				continue
 			}
-			key := "calls:" + refObj.Container + ":" + cand.Qualified
+			key := "calls:" + string(loc.file) + ":" + refObj.Container + ":" + cand.Qualified
 			if seen[key] {
 				continue
 			}
@@ -151,7 +154,7 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 				Direction:  "called_by",
 				Name:       cand.Name,
 				Qualified:  refObj.Container,
-				File:       string(refObj.Location.File),
+				File:       string(loc.file),
 				Kind:       string(refObj.Kind),
 				Confidence: resolution.Confidence.String(),
 				Evidence:   ev,
@@ -159,12 +162,17 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 		}
 
 		// "called_by": our target symbol contains this reference.
+		// The containing symbol is identified by (file, qualified): a reference
+		// belongs to the target only when it sits in the target's own file.
 		for _, fi := range fileIndexes {
+			if fi.FileID != loc.file {
+				continue
+			}
 			for _, sym := range fi.Symbols {
 				if !targetIDs[sym.ID] {
 					continue
 				}
-				if refObj.Container != sym.Qualified && refObj.Container != sym.Name {
+				if refObj.Container != sym.Qualified {
 					continue
 				}
 				for _, cand := range resolution.Candidates {
@@ -221,8 +229,16 @@ func buildFileIndexes(root string, providers []language.Provider) ([]resolver.Fi
 
 	var indexes []resolver.FileIndex
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		if d.IsDir() {
+			// Same skip rule as repository indexing (hidden dirs, vendor,
+			// node_modules); the scan root itself is always entered.
+			if path != root && index.SkipDirName(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		ext := strings.ToLower(filepath.Ext(path))
 		p, ok := extMap[ext]
@@ -243,60 +259,28 @@ func buildFileIndexes(root string, providers []language.Provider) ([]resolver.Fi
 			return nil // partial failure: skip file
 		}
 
-		var syms []symbol.Symbol
-		for _, draft := range extraction.Symbols {
-			qualified := draft.Qualified
-			if qualified == "" {
-				qualified = draft.Name
-			}
-			syms = append(syms, symbol.Symbol{
-				ID:        symbol.NewSymbolID(string(p.Language()), string(fileID), draft.Kind, qualified),
-				Name:      draft.Name,
-				Qualified: qualified,
-				Kind:      draft.Kind,
-				Language:  string(p.Language()),
-				Location:  draft.Location,
-				Receiver:  draft.Receiver,
-				Signature: draft.Signature,
-				Exported:  draft.Exported,
-			})
-		}
-
-		var refs []reference.Reference
-		for _, rd := range extraction.References {
-			loc := rd.Location
-			refs = append(refs, reference.Reference{
-				ID:           reference.NewReferenceID(string(p.Language()), fileID, reference.ReferenceKind(rd.Kind), rd.Name, loc),
-				Name:         rd.Name,
-				Kind:         reference.ReferenceKind(rd.Kind),
-				Language:     string(p.Language()),
-				Location:     loc,
-				Container:    rd.Container,
-				ReceiverExpr: rd.ReceiverExpr,
-				IsCall:       rd.IsCall,
-			})
-		}
-
-		indexes = append(indexes, resolver.FileIndex{
-			FileID:     fileID,
-			Language:   string(p.Language()),
-			Symbols:    syms,
-			References: refs,
-			Imports:    extraction.Imports,
-		})
+		// Same conversion as repository indexing: one source of truth for
+		// symbol identity, containment and reference evidence.
+		indexes = append(indexes, index.NewFileIndex(string(p.Language()), fileID, extraction))
 		return nil
 	})
 	return indexes, err
 }
 
-// findReference locates a Reference by ID across all file indexes.
-func findReference(files []resolver.FileIndex, id reference.ReferenceID) *reference.Reference {
+// refLocator maps a ReferenceID to the reference and the file that contains it.
+type refLocator map[reference.ReferenceID]locatedRef
+
+type locatedRef struct {
+	ref  *reference.Reference
+	file source.FileID
+}
+
+func newRefLocator(files []resolver.FileIndex) refLocator {
+	m := make(refLocator)
 	for i := range files {
 		for j := range files[i].References {
-			if files[i].References[j].ID == id {
-				return &files[i].References[j]
-			}
+			m[files[i].References[j].ID] = locatedRef{ref: &files[i].References[j], file: files[i].FileID}
 		}
 	}
-	return nil
+	return m
 }

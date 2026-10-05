@@ -46,8 +46,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 			return ctx.Err()
 		}
 		if d.IsDir() {
-			name := d.Name()
-			if strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules" {
+			if SkipDirName(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -76,10 +75,13 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 		// Try cache hit first.
 		if cached, hit, _ := store.Get(cacheKey); hit {
 			b.ingestExtraction(fileID, cached.Language, language.Extraction{
-				Symbols:     cached.Symbols,
-				References:  cached.References,
-				Imports:     cached.Imports,
-				Diagnostics: cached.Diagnostics,
+				Symbols:      cached.Symbols,
+				References:   cached.References,
+				Imports:      cached.Imports,
+				Diagnostics:  cached.Diagnostics,
+				Bindings:     cached.Bindings,
+				Exports:      cached.Exports,
+				ModuleScoped: cached.ModuleScoped,
 			})
 			return nil
 		}
@@ -101,12 +103,15 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 
 		// Persist to cache (best-effort; errors are ignored).
 		_ = store.Put(&cache.CachedExtraction{
-			Key:         cacheKey,
-			Language:    lang,
-			Symbols:     extraction.Symbols,
-			References:  extraction.References,
-			Imports:     extraction.Imports,
-			Diagnostics: extraction.Diagnostics,
+			Key:          cacheKey,
+			Language:     lang,
+			Symbols:      extraction.Symbols,
+			References:   extraction.References,
+			Imports:      extraction.Imports,
+			Diagnostics:  extraction.Diagnostics,
+			Bindings:     extraction.Bindings,
+			Exports:      extraction.Exports,
+			ModuleScoped: extraction.ModuleScoped,
 		})
 		return nil
 	})

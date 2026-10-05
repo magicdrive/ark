@@ -49,9 +49,27 @@ func TestRegistry_DescriptorIntegrity(t *testing.T) {
 	}
 }
 
-func TestRegistry_TSXIsReferences(t *testing.T) {
-	if lvl := languages.Registry().SupportLevelFor("tsx"); lvl != language.SupportLevelReferences {
-		t.Errorf("tsx SupportLevel = %v, want references", lvl)
+// TestRegistry_TypeScriptAndTSXAreContextQualityCertified pins the promotion
+// evidence boundary: TypeScript and TSX are certified independently by their
+// own scenarios (internal/languages/typescript: graph adversarial fixtures,
+// context-quality scenarios, MCP end-to-end, cache, fuzz, determinism). A
+// regression of any of those suites must come with an explicit demotion here.
+func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
+	for _, lang := range []language.Language{"typescript", "tsx"} {
+		if lvl := languages.Registry().SupportLevelFor(lang); lvl != language.SupportLevelContextQualityCertified {
+			t.Errorf("%s SupportLevel = %v, want context_quality_certified", lang, lvl)
+		}
+	}
+	// Other languages are unchanged by the TypeScript certification.
+	for lang, want := range map[language.Language]language.SupportLevel{
+		"javascript": language.SupportLevelReferences,
+		"python":     language.SupportLevelReferences,
+		"go":         language.SupportLevelContextQualityCertified,
+		"php":        language.SupportLevelGraph,
+	} {
+		if got := languages.Registry().SupportLevelFor(lang); got != want {
+			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)
+		}
 	}
 }
 

@@ -58,6 +58,7 @@ func RunContract(t *testing.T, p language.Provider, valid []Case) {
 				checkSymbolInvariants(t, c, ext)
 				checkReferenceInvariants(t, ext)
 				checkImportInvariants(t, ext)
+				checkModuleBindingInvariants(t, ext)
 			})
 		}
 	})
@@ -171,6 +172,16 @@ func checkImportInvariants(t *testing.T, ext language.Extraction) {
 		if im.Location.File == "" {
 			t.Errorf("import[%d] %q: Location.File is empty", i, im.Path)
 		}
+	}
+}
+
+// checkModuleBindingInvariants enforces the language-neutral ModuleSpec /
+// BindingDraft / ExportDraft contract (clean root-relative candidates, sorted
+// by (Priority, File), well-formed binding and export kinds).
+func checkModuleBindingInvariants(t *testing.T, ext language.Extraction) {
+	t.Helper()
+	for _, err := range language.ValidateModuleBindings(ext) {
+		t.Errorf("module binding contract: %v", err)
 	}
 }
 

@@ -431,21 +431,24 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 
 	symbols := syntax.ExtractSymbols(parseResult)
 
-	// Find the symbol
-	var foundSymbol *syntax.Symbol
-	for _, sym := range symbols {
-		if sym.Name == name {
-			foundSymbol = &sym
-			break
+	// Find the symbol. A name that denotes several symbols of the file (e.g. two
+	// classes that both define `save`) is ambiguity, never "the first one".
+	picked, ambiguous := pickFileSymbol(symbols, name)
+	if len(ambiguous) > 0 {
+		var b strings.Builder
+		fmt.Fprintf(&b, "Ambiguous symbol %q in %s — %d matches found. Retry with one of the qualified names below:\n", name, path, len(ambiguous))
+		for _, a := range ambiguous {
+			fmt.Fprintf(&b, "  %s  (%s)  line %d\n", fileSymbolQualified(a), a.Kind, a.StartLine)
 		}
+		return &CallToolResult{Content: []Content{{Type: "text", Text: b.String()}}, IsError: true}, nil
 	}
-
-	if foundSymbol == nil {
+	if picked == nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Symbol not found: %s", name)}},
 			IsError: true,
 		}, nil
 	}
+	foundSymbol := picked
 
 	// Build response
 	response := map[string]interface{}{
@@ -487,4 +490,43 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 	return &CallToolResult{
 		Content: []Content{{Type: "text", Text: string(output)}},
 	}, nil
+}
+
+// fileSymbolQualified returns Owner.name for members and name otherwise.
+func fileSymbolQualified(s syntax.Symbol) string {
+	owner := s.Parent
+	if owner == "" {
+		owner = s.Receiver
+	}
+	if owner == "" {
+		return s.Name
+	}
+	return owner + "." + s.Name
+}
+
+// pickFileSymbol selects the one symbol a (possibly qualified) name denotes in
+// a file. A qualified match ("UserService.create") wins over a bare-name
+// match; when the best tier has several symbols they are returned as
+// ambiguous and nothing is picked.
+func pickFileSymbol(symbols []syntax.Symbol, name string) (picked *syntax.Symbol, ambiguous []syntax.Symbol) {
+	var byQualified, byName []syntax.Symbol
+	for _, s := range symbols {
+		if fileSymbolQualified(s) == name {
+			byQualified = append(byQualified, s)
+		}
+		if s.Name == name {
+			byName = append(byName, s)
+		}
+	}
+	for _, tier := range [][]syntax.Symbol{byQualified, byName} {
+		switch len(tier) {
+		case 0:
+			continue
+		case 1:
+			return &tier[0], nil
+		default:
+			return nil, tier
+		}
+	}
+	return nil, nil
 }

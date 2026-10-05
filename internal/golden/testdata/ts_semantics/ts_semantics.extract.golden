@@ -1,0 +1,267 @@
+# file: ambiguity/orders.ts
+## symbols
+symbol OrderRepository kind=class qualified="OrderRepository" parent="" receiver="" exported=true @ambiguity/orders.ts:3:8-5:2
+symbol save kind=method qualified="OrderRepository.save" parent="OrderRepository" receiver="OrderRepository" exported=true @ambiguity/orders.ts:4:3-4:28
+symbol persist kind=function qualified="persist" parent="" receiver="" exported=true @ambiguity/orders.ts:7:8-9:2
+symbol unknownReceiver kind=function qualified="unknownReceiver" parent="" receiver="" exported=true @ambiguity/orders.ts:11:8-13:2
+## references
+ref UserRepository kind=type_use container="persist" receiver="" call=false @ambiguity/orders.ts:7:31-7:45
+ref save kind=call container="persist" receiver="repo" receiver_type="UserRepository" call=true @ambiguity/orders.ts:8:8-8:12
+ref save kind=call container="unknownReceiver" receiver="r" call=true @ambiguity/orders.ts:12:5-12:9
+## imports
+import path="./repositories" alias="" @ambiguity/orders.ts:1:1-1:49
+## module_scoped
+## bindings
+binding UserRepository kind=named imported="UserRepository" type_only=false module="./repositories" candidates=[ambiguity/repositories.ts@0 ambiguity/repositories.tsx@1 ambiguity/repositories/index.ts@2 ambiguity/repositories/index.tsx@3] @ambiguity/orders.ts:1:10-1:24
+## exports
+export kind=local exported="OrderRepository" local="OrderRepository" except=[] type_only=false @ambiguity/orders.ts:3:1-5:2
+export kind=local exported="persist" local="persist" except=[] type_only=false @ambiguity/orders.ts:7:1-9:2
+export kind=local exported="unknownReceiver" local="unknownReceiver" except=[] type_only=false @ambiguity/orders.ts:11:1-13:2
+## diagnostics
+
+# file: ambiguity/repositories.ts
+## symbols
+symbol UserRepository kind=class qualified="UserRepository" parent="" receiver="" exported=true @ambiguity/repositories.ts:1:8-3:2
+symbol save kind=method qualified="UserRepository.save" parent="UserRepository" receiver="UserRepository" exported=true @ambiguity/repositories.ts:2:3-2:28
+## references
+## imports
+## module_scoped
+## exports
+export kind=local exported="UserRepository" local="UserRepository" except=[] type_only=false @ambiguity/repositories.ts:1:1-3:2
+## diagnostics
+
+# file: imports/consumer.ts
+## symbols
+symbol build kind=function qualified="build" parent="" receiver="" exported=true @imports/consumer.ts:7:8-14:2
+## references
+ref UserId kind=type_use container="build" receiver="" call=false @imports/consumer.ts:7:27-7:33
+ref DomainUser kind=type_use container="build" receiver="" call=false @imports/consumer.ts:7:36-7:46
+ref makeUser kind=call container="build" receiver="" call=true @imports/consumer.ts:8:13-8:21
+ref create kind=call container="build" receiver="users.User" call=true @imports/consumer.ts:9:24-9:30
+ref DomainUser kind=construction container="build" receiver="" call=false @imports/consumer.ts:10:17-10:27
+ref string kind=call container="build" receiver="z" call=true @imports/consumer.ts:11:5-11:11
+ref helper kind=call container="build" receiver="" call=true @imports/consumer.ts:12:3-12:9
+ref create kind=call container="build" receiver="User" call=true @imports/consumer.ts:13:15-13:21
+ref String kind=call container="build" receiver="" call=true @imports/consumer.ts:13:22-13:28
+## imports
+import path="./user" alias="" @imports/consumer.ts:1:1-1:61
+import path="./user" alias="" @imports/consumer.ts:2:1-2:33
+import path="./user" alias="" @imports/consumer.ts:3:1-3:38
+import path="@/shared/helper" alias="" @imports/consumer.ts:5:1-5:42
+import path="zod" alias="" @imports/consumer.ts:4:1-4:25
+## module_scoped
+## bindings
+binding makeUser kind=named imported="default" type_only=false module="./user" candidates=[imports/user.ts@0 imports/user.tsx@1 imports/user/index.ts@2 imports/user/index.tsx@3] @imports/consumer.ts:1:8-1:16
+binding User kind=named imported="User" type_only=false module="./user" candidates=[imports/user.ts@0 imports/user.tsx@1 imports/user/index.ts@2 imports/user/index.tsx@3] @imports/consumer.ts:1:20-1:24
+binding DomainUser kind=named imported="User" type_only=false module="./user" candidates=[imports/user.ts@0 imports/user.tsx@1 imports/user/index.ts@2 imports/user/index.tsx@3] @imports/consumer.ts:1:26-1:44
+binding users kind=namespace imported="" type_only=false module="./user" candidates=[imports/user.ts@0 imports/user.tsx@1 imports/user/index.ts@2 imports/user/index.tsx@3] @imports/consumer.ts:2:8-2:18
+binding UserId kind=named imported="UserId" type_only=true module="./user" candidates=[imports/user.ts@0 imports/user.tsx@1 imports/user/index.ts@2 imports/user/index.tsx@3] @imports/consumer.ts:3:15-3:21
+binding z kind=named imported="z" type_only=false module="zod" candidates=external @imports/consumer.ts:4:10-4:11
+binding helper kind=named imported="helper" type_only=false module="@/shared/helper" candidates=external @imports/consumer.ts:5:10-5:16
+## exports
+export kind=local exported="build" local="build" except=[] type_only=false @imports/consumer.ts:7:1-14:2
+## diagnostics
+
+# file: imports/user.ts
+## symbols
+symbol User kind=class qualified="User" parent="" receiver="" exported=true @imports/user.ts:1:8-6:2
+symbol constructor kind=constructor qualified="User.constructor" parent="User" receiver="User" exported=true @imports/user.ts:2:3-2:38
+symbol name kind=property qualified="User.name" parent="User" receiver="User" exported=true @imports/user.ts:2:15-2:34
+symbol create kind=method qualified="User.create" parent="User" receiver="User" exported=true @imports/user.ts:3:3-5:4
+symbol makeUser kind=function qualified="makeUser" parent="" receiver="" exported=true @imports/user.ts:8:16-10:2
+symbol UserId kind=type_alias qualified="UserId" parent="" receiver="" exported=true @imports/user.ts:12:8-12:29
+## references
+ref User kind=type_use container="User.create" receiver="" call=false @imports/user.ts:3:32-3:36
+ref User kind=construction container="User.create" receiver="" call=false @imports/user.ts:4:16-4:20
+ref User kind=type_use container="makeUser" receiver="" call=false @imports/user.ts:8:49-8:53
+ref create kind=call container="makeUser" receiver="User" call=true @imports/user.ts:9:15-9:21
+## imports
+## module_scoped
+## exports
+export kind=local exported="User" local="User" except=[] type_only=false @imports/user.ts:1:1-6:2
+export kind=local exported="default" local="makeUser" except=[] type_only=false @imports/user.ts:8:1-10:2
+export kind=local exported="UserId" local="UserId" except=[] type_only=true @imports/user.ts:12:1-12:29
+## diagnostics
+
+# file: inheritance/shapes.ts
+## symbols
+symbol Parent kind=interface qualified="Parent" parent="" receiver="" exported=true @inheritance/shapes.ts:1:8-3:2
+symbol id kind=method qualified="Parent.id" parent="Parent" receiver="Parent" exported=true @inheritance/shapes.ts:2:3-2:15
+symbol Child kind=interface qualified="Child" parent="" receiver="" exported=true @inheritance/shapes.ts:5:8-7:2
+symbol extra kind=method qualified="Child.extra" parent="Child" receiver="Child" exported=true @inheritance/shapes.ts:6:3-6:16
+symbol Base kind=class qualified="Base" parent="" receiver="" exported=true @inheritance/shapes.ts:9:8-9:21
+symbol Impl kind=class qualified="Impl" parent="" receiver="" exported=true @inheritance/shapes.ts:11:8-16:2
+symbol id kind=method qualified="Impl.id" parent="Impl" receiver="Impl" exported=true @inheritance/shapes.ts:12:3-14:4
+symbol extra kind=method qualified="Impl.extra" parent="Impl" receiver="Impl" exported=true @inheritance/shapes.ts:15:3-15:19
+## references
+ref Parent kind=inheritance container="Child" receiver="" call=false @inheritance/shapes.ts:5:32-5:38
+ref Base kind=inheritance container="Impl" receiver="" call=false @inheritance/shapes.ts:11:27-11:31
+ref Child kind=implementation container="Impl" receiver="" call=false @inheritance/shapes.ts:11:43-11:48
+## imports
+## module_scoped
+## exports
+export kind=local exported="Parent" local="Parent" except=[] type_only=true @inheritance/shapes.ts:1:1-3:2
+export kind=local exported="Child" local="Child" except=[] type_only=true @inheritance/shapes.ts:5:1-7:2
+export kind=local exported="Base" local="Base" except=[] type_only=false @inheritance/shapes.ts:9:1-9:21
+export kind=local exported="Impl" local="Impl" except=[] type_only=false @inheritance/shapes.ts:11:1-16:2
+## diagnostics
+
+# file: members/service.ts
+## symbols
+symbol BaseService kind=class qualified="BaseService" parent="" receiver="" exported=true @members/service.ts:4:8-7:2
+symbol name kind=method qualified="BaseService.name" parent="BaseService" receiver="BaseService" exported=true @members/service.ts:5:3-5:26
+symbol log kind=method qualified="BaseService.log" parent="BaseService" receiver="BaseService" exported=false @members/service.ts:6:3-6:38
+symbol UserService kind=class qualified="UserService" parent="" receiver="" exported=true @members/service.ts:9:8-38:2
+symbol count kind=property qualified="UserService.count" parent="UserService" receiver="UserService" exported=false @members/service.ts:10:3-10:20
+symbol constructor kind=constructor qualified="UserService.constructor" parent="UserService" receiver="UserService" exported=true @members/service.ts:12:3-14:4
+symbol repo kind=property qualified="UserService.repo" parent="UserService" receiver="UserService" exported=false @members/service.ts:12:15-12:52
+symbol name kind=method qualified="UserService.name" parent="UserService" receiver="UserService" exported=true @members/service.ts:16:3-18:4
+symbol create kind=method qualified="UserService.create" parent="UserService" receiver="UserService" exported=true @members/service.ts:20:3-25:4
+symbol from kind=method qualified="UserService.from" parent="UserService" receiver="UserService" exported=true @members/service.ts:27:3-29:4
+symbol total kind=property qualified="UserService.total" parent="UserService" receiver="UserService" exported=true @members/service.ts:31:3-37:4
+symbol Service kind=interface qualified="Service" parent="" receiver="" exported=true @members/service.ts:40:8-43:2
+symbol name kind=method qualified="Service.name" parent="Service" receiver="Service" exported=true @members/service.ts:41:3-41:17
+symbol id kind=property qualified="Service.id" parent="Service" receiver="Service" exported=true @members/service.ts:42:3-42:22
+## references
+ref BaseService kind=inheritance container="UserService" receiver="" call=false @members/service.ts:9:34-9:45
+ref UserRepository kind=type_use container="UserService.constructor" receiver="" call=false @members/service.ts:12:38-12:52
+ref User kind=type_use container="UserService.create" receiver="" call=false @members/service.ts:20:25-20:29
+ref User kind=construction container="UserService.create" receiver="" call=false @members/service.ts:21:19-21:23
+ref save kind=call container="UserService.create" receiver="this.repo" receiver_type="UserRepository" call=true @members/service.ts:22:15-22:19
+ref log kind=call container="UserService.create" receiver="this" receiver_type="UserService" call=true @members/service.ts:23:10-23:13
+ref UserRepository kind=type_use container="UserService.from" receiver="" call=false @members/service.ts:27:21-27:35
+ref UserService kind=type_use container="UserService.from" receiver="" call=false @members/service.ts:27:38-27:49
+ref UserService kind=construction container="UserService.from" receiver="" call=false @members/service.ts:28:16-28:27
+## imports
+import path="../ambiguity/repositories" alias="" @members/service.ts:1:1-1:60
+import path="../imports/user" alias="" @members/service.ts:2:1-2:40
+## module_scoped
+## bindings
+binding UserRepository kind=named imported="UserRepository" type_only=false module="../ambiguity/repositories" candidates=[ambiguity/repositories.ts@0 ambiguity/repositories.tsx@1 ambiguity/repositories/index.ts@2 ambiguity/repositories/index.tsx@3] @members/service.ts:1:10-1:24
+binding User kind=named imported="User" type_only=false module="../imports/user" candidates=[imports/user.ts@0 imports/user.tsx@1 imports/user/index.ts@2 imports/user/index.tsx@3] @members/service.ts:2:10-2:14
+## exports
+export kind=local exported="BaseService" local="BaseService" except=[] type_only=false @members/service.ts:4:1-7:2
+export kind=local exported="UserService" local="UserService" except=[] type_only=false @members/service.ts:9:1-38:2
+export kind=local exported="Service" local="Service" except=[] type_only=true @members/service.ts:40:1-43:2
+## diagnostics
+
+# file: reexports/app.ts
+## symbols
+symbol run kind=function qualified="run" parent="" receiver="" exported=true @reexports/app.ts:3:8-7:2
+## references
+ref Account kind=construction container="run" receiver="" call=false @reexports/app.ts:4:17-4:24
+ref open kind=call container="run" receiver="a" receiver_type="Account" call=true @reexports/app.ts:5:5-5:9
+ref Order kind=construction container="run" receiver="" call=false @reexports/app.ts:6:7-6:12
+## imports
+import path="./index" alias="" @reexports/app.ts:1:1-1:42
+## module_scoped
+## bindings
+binding Account kind=named imported="Account" type_only=false module="./index" candidates=[reexports/index.ts@0 reexports/index.tsx@1 reexports/index/index.ts@2 reexports/index/index.tsx@3] @reexports/app.ts:1:10-1:17
+binding Order kind=named imported="Order" type_only=false module="./index" candidates=[reexports/index.ts@0 reexports/index.tsx@1 reexports/index/index.ts@2 reexports/index/index.tsx@3] @reexports/app.ts:1:19-1:24
+## exports
+export kind=local exported="run" local="run" except=[] type_only=false @reexports/app.ts:3:1-7:2
+## diagnostics
+
+# file: reexports/cycle/a.ts
+## symbols
+symbol Alpha kind=class qualified="Alpha" parent="" receiver="" exported=true @reexports/cycle/a.ts:2:8-2:22
+## references
+## imports
+import path="./b" alias="" @reexports/cycle/a.ts:1:1-1:21
+## module_scoped
+## exports
+export kind=all exported="" local="" except=["default"] type_only=false module="./b" candidates=[reexports/cycle/b.ts@0 reexports/cycle/b.tsx@1 reexports/cycle/b/index.ts@2 reexports/cycle/b/index.tsx@3] @reexports/cycle/a.ts:1:1-1:21
+export kind=local exported="Alpha" local="Alpha" except=[] type_only=false @reexports/cycle/a.ts:2:1-2:22
+## diagnostics
+
+# file: reexports/cycle/b.ts
+## symbols
+symbol Beta kind=class qualified="Beta" parent="" receiver="" exported=true @reexports/cycle/b.ts:2:8-2:21
+## references
+## imports
+import path="./a" alias="" @reexports/cycle/b.ts:1:1-1:21
+## module_scoped
+## exports
+export kind=all exported="" local="" except=["default"] type_only=false module="./a" candidates=[reexports/cycle/a.ts@0 reexports/cycle/a.tsx@1 reexports/cycle/a/index.ts@2 reexports/cycle/a/index.tsx@3] @reexports/cycle/b.ts:1:1-1:21
+export kind=local exported="Beta" local="Beta" except=[] type_only=false @reexports/cycle/b.ts:2:1-2:21
+## diagnostics
+
+# file: reexports/domain/index.ts
+## symbols
+## references
+## imports
+import path="./order" alias="" @reexports/domain/index.ts:3:1-3:25
+import path="./order" alias="" @reexports/domain/index.ts:4:1-4:35
+import path="./user" alias="" @reexports/domain/index.ts:1:1-1:34
+import path="./user" alias="" @reexports/domain/index.ts:2:1-2:51
+## module_scoped
+## exports
+export kind=from exported="Account" local="Account" except=[] type_only=false module="./user" candidates=[reexports/domain/user.ts@0 reexports/domain/user.tsx@1 reexports/domain/user/index.ts@2 reexports/domain/user/index.tsx@3] @reexports/domain/index.ts:1:1-1:34
+export kind=from exported="DomainAccount" local="Account" except=[] type_only=false module="./user" candidates=[reexports/domain/user.ts@0 reexports/domain/user.tsx@1 reexports/domain/user/index.ts@2 reexports/domain/user/index.tsx@3] @reexports/domain/index.ts:2:1-2:51
+export kind=all exported="" local="" except=["default"] type_only=false module="./order" candidates=[reexports/domain/order.ts@0 reexports/domain/order.tsx@1 reexports/domain/order/index.ts@2 reexports/domain/order/index.tsx@3] @reexports/domain/index.ts:3:1-3:25
+export kind=namespace exported="orders" local="" except=[] type_only=false module="./order" candidates=[reexports/domain/order.ts@0 reexports/domain/order.tsx@1 reexports/domain/order/index.ts@2 reexports/domain/order/index.tsx@3] @reexports/domain/index.ts:4:1-4:35
+## diagnostics
+
+# file: reexports/domain/order.ts
+## symbols
+symbol Order kind=class qualified="Order" parent="" receiver="" exported=true @reexports/domain/order.ts:1:8-1:22
+## references
+## imports
+## module_scoped
+## exports
+export kind=local exported="Order" local="Order" except=[] type_only=false @reexports/domain/order.ts:1:1-1:22
+## diagnostics
+
+# file: reexports/domain/user.ts
+## symbols
+symbol Account kind=class qualified="Account" parent="" receiver="" exported=true @reexports/domain/user.ts:1:8-3:2
+symbol open kind=method qualified="Account.open" parent="Account" receiver="Account" exported=true @reexports/domain/user.ts:2:3-2:18
+## references
+## imports
+## module_scoped
+## exports
+export kind=local exported="Account" local="Account" except=[] type_only=false @reexports/domain/user.ts:1:1-3:2
+## diagnostics
+
+# file: reexports/index.ts
+## symbols
+## references
+## imports
+import path="./domain" alias="" @reexports/index.ts:1:1-1:26
+## module_scoped
+## exports
+export kind=all exported="" local="" except=["default"] type_only=false module="./domain" candidates=[reexports/domain.ts@0 reexports/domain.tsx@1 reexports/domain/index.ts@2 reexports/domain/index.tsx@3] @reexports/index.ts:1:1-1:26
+## diagnostics
+
+# file: tsx/card.tsx
+## symbols
+symbol useUser kind=function qualified="useUser" parent="" receiver="" exported=true @tsx/card.tsx:1:8-3:2
+symbol UserCard kind=function qualified="UserCard" parent="" receiver="" exported=true @tsx/card.tsx:5:8-7:2
+symbol Layout kind=constant qualified="Layout" parent="" receiver="" exported=true @tsx/card.tsx:9:14-11:2
+## references
+## imports
+## module_scoped
+## exports
+export kind=local exported="useUser" local="useUser" except=[] type_only=false @tsx/card.tsx:1:1-3:2
+export kind=local exported="UserCard" local="UserCard" except=[] type_only=false @tsx/card.tsx:5:1-7:2
+export kind=local exported="Layout" local="Layout" except=[] type_only=false @tsx/card.tsx:9:1-11:3
+## diagnostics
+
+# file: tsx/page.tsx
+## symbols
+symbol UserPage kind=function qualified="UserPage" parent="" receiver="" exported=true @tsx/page.tsx:3:8-12:2
+## references
+ref useUser kind=call container="UserPage" receiver="" call=true @tsx/page.tsx:4:16-4:23
+ref Header kind=call container="UserPage" receiver="Layout" call=true @tsx/page.tsx:7:8-7:21
+ref UserCard kind=call container="UserPage" receiver="" call=true @tsx/page.tsx:8:8-8:16
+## imports
+import path="./card" alias="" @tsx/page.tsx:1:1-1:52
+## module_scoped
+## bindings
+binding UserCard kind=named imported="UserCard" type_only=false module="./card" candidates=[tsx/card.ts@0 tsx/card.tsx@1 tsx/card/index.ts@2 tsx/card/index.tsx@3] @tsx/page.tsx:1:10-1:18
+binding useUser kind=named imported="useUser" type_only=false module="./card" candidates=[tsx/card.ts@0 tsx/card.tsx@1 tsx/card/index.ts@2 tsx/card/index.tsx@3] @tsx/page.tsx:1:20-1:27
+binding Layout kind=named imported="Layout" type_only=false module="./card" candidates=[tsx/card.ts@0 tsx/card.tsx@1 tsx/card/index.ts@2 tsx/card/index.tsx@3] @tsx/page.tsx:1:29-1:35
+## exports
+export kind=local exported="UserPage" local="UserPage" except=[] type_only=false @tsx/page.tsx:3:1-12:2
+## diagnostics
+

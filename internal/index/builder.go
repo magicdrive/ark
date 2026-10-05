@@ -1,6 +1,7 @@
 package index
 
 import (
+	"slices"
 	"sort"
 
 	"github.com/magicdrive/ark/internal/language"
@@ -34,6 +35,10 @@ type builder struct {
 
 	// for resolution
 	resolverFiles []resolver.FileIndex
+
+	// containers caches (file, qualified) → distinct symbol IDs for container
+	// identification; built lazily during resolve().
+	containers map[source.FileID]map[string][]symbol.SymbolID
 }
 
 func newBuilder() *builder {
@@ -67,6 +72,27 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 		b.stats.Languages[lang]++
 	}
 
+	fi := NewFileIndex(lang, fileID, ex)
+	for _, sym := range fi.Symbols {
+		b.symbolsByID[sym.ID] = sym
+		b.symbolsByFile[fileID] = append(b.symbolsByFile[fileID], sym)
+		b.symbolsByName[sym.Name] = append(b.symbolsByName[sym.Name], sym)
+		if sym.Qualified != "" {
+			b.symbolsByQualified[sym.Qualified] = append(b.symbolsByQualified[sym.Qualified], sym)
+		}
+		b.symbolsByKind[sym.Kind] = append(b.symbolsByKind[sym.Kind], sym)
+		b.stats.Symbols++
+	}
+	b.referencesByFile[fileID] = fi.References
+	b.stats.References += len(fi.References)
+	b.resolverFiles = append(b.resolverFiles, fi)
+}
+
+// NewFileIndex converts one file's provider Extraction into the resolver's
+// FileIndex. It is the single conversion used by every pipeline that feeds the
+// resolver (repository indexing and MCP relations), so symbol identity,
+// containment and reference evidence cannot diverge between surfaces.
+func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) resolver.FileIndex {
 	// Build symbols.
 	var fileSymbols []symbol.Symbol
 	for _, sd := range ex.Symbols {
@@ -85,23 +111,14 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 			sym.Parent = symbol.NewSymbolID(lang, string(fileID), symbol.KindUnknown, sd.Parent)
 			sym.ParentQualified = sd.Parent
 		}
-
-		b.symbolsByID[sym.ID] = sym
-		b.symbolsByFile[fileID] = append(b.symbolsByFile[fileID], sym)
-		b.symbolsByName[sym.Name] = append(b.symbolsByName[sym.Name], sym)
-		if sym.Qualified != "" {
-			b.symbolsByQualified[sym.Qualified] = append(b.symbolsByQualified[sym.Qualified], sym)
-		}
-		b.symbolsByKind[sym.Kind] = append(b.symbolsByKind[sym.Kind], sym)
 		fileSymbols = append(fileSymbols, sym)
-		b.stats.Symbols++
 	}
 
 	// Build references. Container stays as a qualified-name string (reference.Reference.Container is string).
 	var fileRefs []reference.Reference
 	for _, rd := range ex.References {
 		rk := reference.ReferenceKind(rd.Kind)
-		ref := reference.Reference{
+		fileRefs = append(fileRefs, reference.Reference{
 			ID:           reference.NewReferenceID(lang, fileID, rk, rd.Name, rd.Location),
 			Name:         rd.Name,
 			Kind:         rk,
@@ -109,33 +126,32 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 			Location:     rd.Location,
 			Container:    rd.Container, // qualified name string
 			ReceiverExpr: rd.ReceiverExpr,
+			ReceiverType: rd.ReceiverType,
 			IsCall:       rd.IsCall,
-		}
-		fileRefs = append(fileRefs, ref)
-		b.stats.References++
+		})
 	}
 	// Also index imports as KindImport references so package-dependency queries
 	// (e.g. repomap) can use ReferencesByFile without a separate import API.
 	for _, imp := range ex.Imports {
-		ref := reference.Reference{
+		fileRefs = append(fileRefs, reference.Reference{
 			ID:       reference.NewReferenceID(lang, fileID, reference.KindImport, imp.Path, imp.Location),
 			Name:     imp.Path,
 			Kind:     reference.KindImport,
 			Language: lang,
 			Location: imp.Location,
-		}
-		fileRefs = append(fileRefs, ref)
-		b.stats.References++
+		})
 	}
-	b.referencesByFile[fileID] = fileRefs
 
-	b.resolverFiles = append(b.resolverFiles, resolver.FileIndex{
-		FileID:     fileID,
-		Language:   lang,
-		Symbols:    fileSymbols,
-		References: fileRefs,
-		Imports:    ex.Imports,
-	})
+	return resolver.FileIndex{
+		FileID:       fileID,
+		Language:     lang,
+		Symbols:      fileSymbols,
+		References:   fileRefs,
+		Imports:      ex.Imports,
+		Bindings:     ex.Bindings,
+		Exports:      ex.Exports,
+		ModuleScoped: ex.ModuleScoped,
+	}
 }
 
 // resolve runs the resolver and builds graph edges.
@@ -146,15 +162,16 @@ func (b *builder) resolve() {
 	r := resolver.New(b.resolverFiles)
 	resolutions := r.Resolve()
 
-	// Build lookup: referenceID → (container qualified name, kind)
+	// Build lookup: referenceID → (file, container qualified name, kind)
 	type refMeta struct {
+		file          source.FileID
 		containerQual string
 		kind          reference.ReferenceKind
 	}
 	refMetaMap := make(map[reference.ReferenceID]refMeta)
 	for _, fi := range b.resolverFiles {
 		for _, ref := range fi.References {
-			refMetaMap[ref.ID] = refMeta{containerQual: ref.Container, kind: ref.Kind}
+			refMetaMap[ref.ID] = refMeta{file: fi.FileID, containerQual: ref.Container, kind: ref.Kind}
 		}
 	}
 
@@ -170,12 +187,12 @@ func (b *builder) resolve() {
 			continue
 		}
 
-		// Look up container SymbolID from qualified name.
-		containerSyms := b.symbolsByQualified[meta.containerQual]
-		if len(containerSyms) == 0 {
+		// The container is identified by (file, qualified) — never by a
+		// repository-global qualified name, which may be declared in many files.
+		containerID, ok := b.containerSymbol(meta.file, meta.containerQual)
+		if !ok {
 			continue
 		}
-		containerID := containerSyms[0].ID
 
 		var kind EdgeKind
 		switch meta.kind {
@@ -237,14 +254,41 @@ func (b *builder) resolve() {
 			if ref.Container == "" {
 				continue
 			}
-			syms := b.symbolsByQualified[ref.Container]
-			if len(syms) == 0 {
+			cid, ok := b.containerSymbol(fi.FileID, ref.Container)
+			if !ok {
 				continue
 			}
-			cid := syms[0].ID
 			b.referencesByContainer[cid] = append(b.referencesByContainer[cid], ref)
 		}
 	}
+}
+
+// containerSymbol identifies the enclosing symbol of a reference by
+// (file, qualified). It reports false when no symbol or more than one distinct
+// symbol in that file carries the qualified name: an unidentifiable container
+// produces no edge rather than an arbitrarily chosen one.
+func (b *builder) containerSymbol(file source.FileID, qualified string) (symbol.SymbolID, bool) {
+	if qualified == "" {
+		return "", false
+	}
+	if b.containers == nil {
+		b.containers = make(map[source.FileID]map[string][]symbol.SymbolID, len(b.symbolsByFile))
+	}
+	byQual, ok := b.containers[file]
+	if !ok {
+		byQual = make(map[string][]symbol.SymbolID)
+		for _, s := range b.symbolsByFile[file] {
+			if !slices.Contains(byQual[s.Qualified], s.ID) {
+				byQual[s.Qualified] = append(byQual[s.Qualified], s.ID)
+			}
+		}
+		b.containers[file] = byQual
+	}
+	ids := byQual[qualified]
+	if len(ids) != 1 {
+		return "", false
+	}
+	return ids[0], true
 }
 
 // freeze converts builder state into an immutable RepositoryIndex.

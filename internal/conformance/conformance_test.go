@@ -40,6 +40,7 @@ func fixtures() []providerFixture {
 				{Name: "basic", File: "basic.ts", Source: []byte("export function greet() {}\nexport const C = 1;\n")},
 				{Name: "class_iface", File: "cls.ts", Source: []byte("import { X } from \"./x\";\nexport interface I { a: number }\nexport class User implements I { a = 0; save(): void {} }\n")},
 				{Name: "calls", File: "calls.ts", Source: []byte("function run() { greet(); const u = new User(); u.save(); }\n")},
+				{Name: "modules", File: "src/mod.ts", Source: []byte("import D, { A as B, type T } from \"./a\";\nimport * as ns from \"../up\";\nexport { B as C } from \"./b.js\";\nexport * from \"zod\";\nexport * as q from \"../../../escape\";\nexport default class K extends D { constructor(private r: B) { super(); } get v() { return 1 } set v(x) {} static s() { ns.go(); } }\n")},
 			},
 			broken: conformance.Case{Name: "broken", File: "broken.ts", Source: []byte("export class B {\n  m( {\n}\nexport function good() {}\n")},
 		},
@@ -49,6 +50,7 @@ func fixtures() []providerFixture {
 			valid: []conformance.Case{
 				{Name: "component", File: "c.tsx", Source: []byte("import { useState } from \"react\";\nexport function App() { const [n, setN] = useState(0); return <div onClick={() => setN(n+1)}>{n}</div>; }\n")},
 				{Name: "arrow", File: "a.tsx", Source: []byte("export const T = () => <h1>hi</h1>;\n")},
+				{Name: "components", File: "src/p.tsx", Source: []byte("import { Card } from \"./card\";\nimport * as UI from \"./ui\";\nexport const P = () => <div><Card /><UI.Button /><span /></div>;\n")},
 			},
 			broken: conformance.Case{Name: "broken", File: "broken.tsx", Source: []byte("export function B( {\n return <div>;\n}\nexport function Good() { return <i/>; }\n")},
 		},

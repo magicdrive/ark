@@ -15,8 +15,8 @@ Status measured against providers: go, typescript, tsx, javascript, python, php.
 |----|-----------|----|-----------|----|-----------|--------|-----|
 | Q1 | Partial extraction from broken source | partial | none | none | none | partial | partial |
 | Q2 | Diagnostic emitted on broken source | ✗ | ✗ | ✗ | ✗ | ✗ | ✗ |
-| Q3 | Class/container member methods extracted as symbols | ✓ (receiver) | ✗ | ✗ | ✗ | ✗ | **✓** |
-| Q4 | `SymbolDraft.Parent` populated for nested symbols | ✗ | ✗ | ✗ | ✗ | ✗ | **✓** |
+| Q3 | Class/container member methods extracted as symbols | ✓ (receiver) | **✓** | **✓** | ✗ | ✗ | **✓** |
+| Q4 | `SymbolDraft.Parent` populated for nested symbols | ✗ | **✓** | **✓** | ✗ | ✗ | **✓** |
 | Q5 | MCP index/relations handle `.tsx` (registry-wide) | n/a | n/a | ✅ CLOSED | n/a | n/a | n/a |
 | Q6 | `IncludeTests` recognises the language's test files | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ (deferred) |
 
@@ -28,8 +28,13 @@ promoted properties) as symbols with `Receiver` set to the declaring type, and
 populates `SymbolDraft.Parent` with the container's qualified name so the index
 builds `symbol.ParentQualified`. This is verified end-to-end through the real
 Repository Index (`internal/languages/php` integration tests). Q3/Q4 remain
-open for TS/TSX/JS/Python — their status is unchanged and PHP did not alter
+open for JS/Python — their status is unchanged and PHP did not alter
 their providers.
+
+TypeScript and TSX now **also satisfy Q3 and Q4** (TypeScript Intelligence
+project): class / interface members are first-class symbols with
+`Qualified = Class.member`, `Parent = Class`, `Receiver = Class`; a get/set
+pair is one `KindProperty` symbol. Q1/Q2 remain open for TS/TSX.
 
 ### Q6 — `IncludeTests` test-file detection for PHP (deferred, architecture-blocked)
 

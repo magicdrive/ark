@@ -3,53 +3,89 @@
 symbol Broken kind=class qualified="Broken" parent="" receiver="" exported=true @broken.ts:1:8-5:26
 ## references
 ## imports
+## module_scoped
+## exports
+export kind=local exported="Broken" local="Broken" except=[] type_only=false @broken.ts:1:1-5:26
 ## diagnostics
 
 # file: draft.ts
 ## symbols
 symbol Draft kind=class qualified="Draft" parent="" receiver="" exported=true @draft.ts:3:8-5:2
+symbol save kind=method qualified="Draft.save" parent="Draft" receiver="Draft" exported=true @draft.ts:4:3-4:18
 ## references
 ## imports
+## module_scoped
+## exports
+export kind=local exported="Draft" local="Draft" except=[] type_only=false @draft.ts:3:1-5:2
 ## diagnostics
 
 # file: repository.ts
 ## symbols
 symbol Repository kind=class qualified="Repository" parent="" receiver="" exported=true @repository.ts:3:8-9:2
+symbol find kind=method qualified="Repository.find" parent="Repository" receiver="Repository" exported=true @repository.ts:4:3-8:4
 ## references
-ref User kind=construction container="find" receiver="" call=false @repository.ts:5:15-5:25
+ref User kind=type_use container="Repository.find" receiver="" call=false @repository.ts:4:21-4:25
+ref User kind=construction container="Repository.find" receiver="" call=false @repository.ts:5:19-5:23
 ## imports
 import path="./user" alias="" @repository.ts:1:1-1:31
+## module_scoped
+## bindings
+binding User kind=named imported="User" type_only=false module="./user" candidates=[user.ts@0 user.tsx@1 user/index.ts@2 user/index.tsx@3] @repository.ts:1:10-1:14
+## exports
+export kind=local exported="Repository" local="Repository" except=[] type_only=false @repository.ts:3:1-9:2
 ## diagnostics
 
 # file: service.test.ts
 ## symbols
 ## references
 ref test kind=call container="" receiver="" call=true @service.test.ts:3:1-3:5
-ref UserService kind=construction container="" receiver="" call=false @service.test.ts:4:13-4:30
-ref create kind=call container="" receiver="s" call=true @service.test.ts:5:3-5:11
+ref UserService kind=construction container="" receiver="" call=false @service.test.ts:4:17-4:28
+ref create kind=call container="" receiver="s" receiver_type="UserService" call=true @service.test.ts:5:5-5:11
 ## imports
 import path="./service" alias="" @service.test.ts:1:1-1:41
+## module_scoped
+## bindings
+binding UserService kind=named imported="UserService" type_only=false module="./service" candidates=[service.ts@0 service.tsx@1 service/index.ts@2 service/index.tsx@3] @service.test.ts:1:10-1:21
 ## diagnostics
 
 # file: service.ts
 ## symbols
 symbol UserService kind=class qualified="UserService" parent="" receiver="" exported=true @service.ts:4:8-13:2
+symbol repo kind=property qualified="UserService.repo" parent="UserService" receiver="UserService" exported=false @service.ts:5:3-5:34
+symbol create kind=method qualified="UserService.create" parent="UserService" receiver="UserService" exported=true @service.ts:7:3-12:4
 ## references
-ref Repository kind=construction container="" receiver="" call=false @service.ts:5:18-5:34
-ref User kind=construction container="create" receiver="" call=false @service.ts:8:15-8:25
-ref find kind=call container="create" receiver="this.repo" call=true @service.ts:10:19-10:33
-ref save kind=call container="create" receiver="found" call=true @service.ts:11:5-11:15
+ref Repository kind=construction container="UserService.repo" receiver="" call=false @service.ts:5:22-5:32
+ref User kind=construction container="UserService.create" receiver="" call=false @service.ts:8:19-8:23
+ref find kind=call container="UserService.create" receiver="this.repo" receiver_type="Repository" call=true @service.ts:10:29-10:33
+ref save kind=call container="UserService.create" receiver="found" call=true @service.ts:11:11-11:15
 ## imports
 import path="./repository" alias="" @service.ts:1:1-1:43
 import path="./user" alias="" @service.ts:2:1-2:31
+## module_scoped
+## bindings
+binding Repository kind=named imported="Repository" type_only=false module="./repository" candidates=[repository.ts@0 repository.tsx@1 repository/index.ts@2 repository/index.tsx@3] @service.ts:1:10-1:20
+binding User kind=named imported="User" type_only=false module="./user" candidates=[user.ts@0 user.tsx@1 user/index.ts@2 user/index.tsx@3] @service.ts:2:10-2:14
+## exports
+export kind=local exported="UserService" local="UserService" except=[] type_only=false @service.ts:4:1-13:2
 ## diagnostics
 
 # file: user.ts
 ## symbols
 symbol Account kind=interface qualified="Account" parent="" receiver="" exported=true @user.ts:1:8-4:2
+symbol id kind=property qualified="Account.id" parent="Account" receiver="Account" exported=true @user.ts:2:3-2:13
+symbol name kind=property qualified="Account.name" parent="Account" receiver="Account" exported=true @user.ts:3:3-3:15
 symbol User kind=class qualified="User" parent="" receiver="" exported=true @user.ts:6:8-11:2
+symbol id kind=property qualified="User.id" parent="User" receiver="User" exported=true @user.ts:7:3-7:9
+symbol name kind=property qualified="User.name" parent="User" receiver="User" exported=true @user.ts:8:3-8:12
+symbol save kind=method qualified="User.save" parent="User" receiver="User" exported=true @user.ts:10:3-10:18
 symbol DEFAULT_ROLE kind=constant qualified="DEFAULT_ROLE" parent="" receiver="" exported=true @user.ts:13:14-13:37
 ## references
+ref Account kind=implementation container="User" receiver="" call=false @user.ts:6:30-6:37
 ## imports
+## module_scoped
+## exports
+export kind=local exported="Account" local="Account" except=[] type_only=true @user.ts:1:1-4:2
+export kind=local exported="User" local="User" except=[] type_only=false @user.ts:6:1-11:2
+export kind=local exported="DEFAULT_ROLE" local="DEFAULT_ROLE" except=[] type_only=false @user.ts:13:1-13:38
 ## diagnostics
 

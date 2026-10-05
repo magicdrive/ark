@@ -7,12 +7,21 @@
 # file: component.tsx
 ## symbols
 symbol Props kind=interface qualified="Props" parent="" receiver="" exported=true @component.tsx:3:8-5:2
+symbol name kind=property qualified="Props.name" parent="Props" receiver="Props" exported=true @component.tsx:4:3-4:15
 symbol Greeting kind=function qualified="Greeting" parent="" receiver="" exported=true @component.tsx:7:8-14:2
-symbol Title kind=constant qualified="Title" parent="" receiver="" exported=true @component.tsx:16:14-16:42
+symbol Title kind=function qualified="Title" parent="" receiver="" exported=true @component.tsx:16:14-16:42
 ## references
+ref Props kind=type_use container="Greeting" receiver="" call=false @component.tsx:7:33-7:38
 ref useState kind=call container="Greeting" receiver="" call=true @component.tsx:8:29-8:37
 ref setCount kind=call container="Greeting" receiver="" call=true @component.tsx:10:25-10:33
 ## imports
 import path="react" alias="" @component.tsx:1:1-1:34
+## module_scoped
+## bindings
+binding useState kind=named imported="useState" type_only=false module="react" candidates=external @component.tsx:1:10-1:18
+## exports
+export kind=local exported="Props" local="Props" except=[] type_only=true @component.tsx:3:1-5:2
+export kind=local exported="Greeting" local="Greeting" except=[] type_only=false @component.tsx:7:1-14:2
+export kind=local exported="Title" local="Title" except=[] type_only=false @component.tsx:16:1-16:43
 ## diagnostics
 

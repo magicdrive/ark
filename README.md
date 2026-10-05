@@ -542,8 +542,8 @@ Parse → Symbols → References → Resolution → Graph → Context.
 | Language   | Parse | Symbols | References | Resolution | Graph | Context |
 |------------|:-----:|:-------:|:----------:|:----------:|:-----:|:-------:|
 | Go         |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
-| TypeScript |   ✓   |    ✓    |     ✓      |            |       |         |
-| TSX        |   ✓   |    ✓    |     ✓      |            |       |         |
+| TypeScript |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+| TSX        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
 | JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
 | Python     |   ✓   |    ✓    |     ✓      |            |       |         |
 | PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
@@ -555,6 +555,51 @@ tests, but PHP is advertised at **Graph** level because several resolver
 precision areas (namespace/import, inherited and trait member resolution) remain
 intentionally conservative — so the Context cell is left unchecked rather than
 overstating certification.
+
+#### TypeScript / TSX — static code intelligence
+
+Ark statically extracts **symbols** with stable containment (classes,
+interfaces, type aliases, enums, functions, `const` components, and every class /
+interface **member**: constructors, instance / static / abstract methods,
+properties, constructor parameter properties, arrow-function fields; a
+getter/setter pair is one property symbol), **module bindings** (named, aliased,
+default, namespace and type-only imports), **export tables** (local, aliased,
+default, named re-export, `export *`, `export * as ns`, barrel chains),
+**references** (calls, `this.m()`, static and namespace-qualified calls,
+construction, type references, JSX components) and **typed relations**
+(`extends` / `implements`) into a typed symbol graph and agent-oriented context.
+
+Resolution is evidence-based and conservative. Explicit repository-local
+relative imports (`./user`, `../domain/user`, `./user.ts`, `./user/index`)
+resolve deterministically through aliases and barrel chains (bounded and
+cycle-safe) to the **defining** symbol. A member call resolves only when its
+receiver type is proven structurally — `this`, an explicit type annotation,
+`const x = new T()`, or a typed field / constructor parameter property; a
+receiver without such evidence (`repo.save()` with an unannotated `repo`) stays
+`Candidate`/`Unresolved` even when only one `save` exists. Intrinsic JSX
+elements (`<div />`) are never repository references.
+
+| | Status |
+|---|---|
+| **Certified** (tested end-to-end: graph adversarial fixtures, context-quality scenarios with recall 1.00 and no false Exact / fabricated edge, MCP, cache, fuzz, determinism) | relative-import resolution, aliases, default / namespace / type-only imports, barrels, member resolution under proven receiver types, `this` / static members, `extends` / `implements`, JSX component references |
+| **Intentionally unresolved** (honest `Candidate` / `Unresolved`, never a guess) | external packages (`zod`, `react`, `node:fs`), path aliases (`@/foo`, tsconfig `paths`), variable receivers without proven type, inherited-member lookup, declaration merging (same name as interface + class), computed / dynamic access (`a[k]()`), `.js`-suffixed specifiers when both `.ts` and `.tsx` exist, anonymous default exports |
+| **Not implemented** | return-type propagation and type inference (`const u = repo.find()`), control-flow narrowing, compiler-equivalent overload resolution, `.d.ts` / `.mts` / `package.json` resolution, `tsconfig` interpretation, `namespace` bodies, enum members, destructured declarations, framework semantics (React / Next / Nest / Angular), decorator / DI inference |
+
+**Module resolution is not compiler-equivalent.** Ark assigns deterministic
+priority only within the repository-local, config-independent lexical subset it
+explicitly supports (`./user` → `user.ts`, `user.tsx`, `user/index.ts`,
+`user/index.tsx`, in that order; `.js` / `.jsx` substitutes are deliberately
+unranked and stay ambiguous when both a `.ts` and a `.tsx` exist). Ark does not
+interpret `tsconfig`, `moduleResolution`, `moduleSuffixes` or `package.json`.
+Projects whose resolution depends on those settings may resolve differently from
+Ark's repository-local lexical subset.
+
+Same-named static and instance members of one class share one symbol identity,
+and a non-adjacent getter/setter pair uses the first accessor as its span.
+Files without any `import` / `export` are treated as scripts (globals) and keep
+the legacy proximity rules. Ark performs **pure static analysis** and never
+executes repository code, Node, npm / yarn / pnpm / bun, `tsc`, `tsserver`,
+package scripts, or repository configuration.
 
 #### PHP — static code intelligence
 

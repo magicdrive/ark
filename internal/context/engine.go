@@ -10,7 +10,6 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/index"
-	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -205,24 +204,12 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 		}
 	}
 
-	// Types used by this symbol. Only surface a type dependency when its name
-	// resolves to a single symbol: an ambiguous (multi-candidate) type must not
-	// be fabricated into context, and prefix matches (e.g. "User" → "UserFactory")
-	// must not leak in.
-	for _, ref := range e.idx.ReferencesByContainer(target.ID) {
-		if ref.Kind != reference.KindTypeUse {
-			continue
-		}
-		var exact []symbol.Symbol
-		for _, sym := range e.idx.FindSymbols(ref.Name) {
-			if sym.Name == ref.Name {
-				exact = append(exact, sym)
-			}
-		}
-		if len(exact) == 1 {
-			add(exact[0], "type dependency", resolver.ConfidenceStrong, 1)
-		}
-	}
+	// Type dependencies arrive through the graph: a resolved type reference is an
+	// EdgeUsesType edge and is collected with the direct callees above. The
+	// engine deliberately does not look type names up itself — a name-based
+	// search here would be a second resolver that bypasses the resolver's
+	// ambiguity, import and module-scope evidence (e.g. pulling in a repository
+	// class that merely shares its name with an externally imported type).
 
 	// Direct callers (lower priority).
 	for _, edge := range e.idx.GetCallers(target.ID) {

@@ -44,6 +44,7 @@ var baselineLanguages = []string{
 	"tsx",
 	"javascript",
 	"python",
+	"ts_semantics",
 }
 
 func testdataDir() string {

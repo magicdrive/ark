@@ -39,8 +39,8 @@ type spec struct {
 func specList() []spec {
 	return []spec{
 		{golang.NewProvider(), grammars.GoLanguage, language.SupportLevelContextQualityCertified},
-		{typescript.NewProvider(), grammars.TypescriptLanguage, language.SupportLevelReferences},
-		{typescript.NewTSXProvider(), grammars.TsxLanguage, language.SupportLevelReferences},
+		{typescript.NewProvider(), grammars.TypescriptLanguage, language.SupportLevelContextQualityCertified},
+		{typescript.NewTSXProvider(), grammars.TsxLanguage, language.SupportLevelContextQualityCertified},
 		{javascript.NewProvider(), grammars.JavascriptLanguage, language.SupportLevelReferences},
 		{python.NewProvider(), grammars.PythonLanguage, language.SupportLevelReferences},
 		// PHP (PHP-1..8): symbols + members + imports + references + typed

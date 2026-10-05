@@ -14,5 +14,10 @@ type CachedExtraction struct {
 	References  []language.ReferenceDraft `json:"references"`
 	Imports     []language.ImportDraft    `json:"imports"`
 	Diagnostics []language.Diagnostic     `json:"diagnostics"`
-	CachedAt    time.Time                 `json:"cachedAt"`
+	// Module-binding evidence (schema v2). Absent for providers that do not
+	// model module bindings.
+	Bindings     []language.BindingDraft `json:"bindings,omitempty"`
+	Exports      []language.ExportDraft  `json:"exports,omitempty"`
+	ModuleScoped bool                    `json:"moduleScoped,omitempty"`
+	CachedAt     time.Time               `json:"cachedAt"`
 }

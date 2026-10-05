@@ -540,8 +540,8 @@ Parse → Symbols → References → Resolution → Graph → Context。
 | 言語       | Parse | Symbols | References | Resolution | Graph | Context |
 |------------|:-----:|:-------:|:----------:|:----------:|:-----:|:-------:|
 | Go         |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
-| TypeScript |   ✓   |    ✓    |     ✓      |            |       |         |
-| TSX        |   ✓   |    ✓    |     ✓      |            |       |         |
+| TypeScript |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
+| TSX        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
 | JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
 | Python     |   ✓   |    ✓    |     ✓      |            |       |         |
 | PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
@@ -552,6 +552,46 @@ Parse → Symbols → References → Resolution → Graph → Context。
 import・継承/trait メンバ解決など resolver の精度を意図的に保守的に保っているため、
 PHP は **Graph** レベルで表明しています。過大表明を避けるため Context 列は未チェック
 のままにしています。
+
+#### TypeScript / TSX — 静的コードインテリジェンス
+
+Ark は **シンボル**（class / interface / type alias / enum / 関数 / `const` コンポーネント、
+および class・interface の **メンバ** — constructor、instance / static / abstract メソッド、
+プロパティ、コンストラクタ引数プロパティ、アロー関数フィールド。getter/setter の組は
+1 つのプロパティ）を安定した containment 付きで、**module binding**（named / alias /
+default / namespace / type-only の import）、**export テーブル**（ローカル export、別名、
+default、named re-export、`export *`、`export * as ns`、barrel チェーン）、**参照**
+（呼び出し、`this.m()`、static / namespace 経由の呼び出し、construction、型参照、JSX
+コンポーネント）、**typed relation**（`extends` / `implements`）を静的に抽出し、typed
+symbol graph と agent 向け context を構築します。
+
+解決は根拠ベースで保守的です。リポジトリ内の相対 import（`./user`、`../domain/user`、
+`./user.ts`、`./user/index`）は、alias と barrel チェーン（深さ・状態数に上限、循環安全）
+を辿って **定義側のシンボル** に決定的に解決されます。メンバ呼び出しは、レシーバの型が
+構造的に証明できる場合（`this`、明示的な型注釈、`const x = new T()`、型付きフィールド /
+コンストラクタ引数プロパティ）のみ解決します。型注釈のないレシーバ（`repo.save()`）は、
+リポジトリ内に `save` が 1 つしかなくても `Candidate` / `Unresolved` のままです。
+intrinsic な JSX 要素（`<div />`）はリポジトリ参照になりません。
+
+| | 状態 |
+|---|---|
+| **認定済み**（graph の adversarial fixture、recall 1.00 かつ false Exact・捏造 edge ゼロの context-quality scenario、MCP、cache、fuzz、決定性で検証） | 相対 import 解決、alias、default / namespace / type-only import、barrel、型が証明されたレシーバでのメンバ解決、`this` / static メンバ、`extends` / `implements`、JSX コンポーネント参照 |
+| **意図的に未解決**（推測せず honest な `Candidate` / `Unresolved`） | 外部パッケージ（`zod`、`react`、`node:fs`）、path alias（`@/foo`、tsconfig `paths`）、型が証明できない変数レシーバ、継承メンバの探索、宣言マージ（interface + class の同名）、computed / 動的アクセス（`a[k]()`）、`.ts` と `.tsx` が両方ある場合の `.js` 付き specifier、名前のない default export |
+| **未実装** | 戻り値型の伝播・型推論（`const u = repo.find()`）、制御フローによる narrowing、コンパイラ同等の overload 解決、`.d.ts` / `.mts` / `package.json` 解決、`tsconfig` の解釈、`namespace` 本体、enum メンバ、分割代入の宣言、framework セマンティクス（React / Next / Nest / Angular）、decorator / DI 推論 |
+
+**module 解決はコンパイラ同等ではありません。** Ark は、サポート対象として明示した、
+リポジトリ内・設定非依存の字句的な部分集合の範囲でのみ、決定的な優先度を付与します
+（`./user` → `user.ts`、`user.tsx`、`user/index.ts`、`user/index.tsx` の順。`.js` / `.jsx`
+による置換は意図的に順位付けせず、`.ts` と `.tsx` が両方ある場合は曖昧のままです）。
+Ark は `tsconfig`・`moduleResolution`・`moduleSuffixes`・`package.json` を解釈しません。
+これらの設定に依存して解決されるプロジェクトでは、Ark の字句的な部分集合と異なる解決に
+なる場合があります。
+
+同一 class 内の同名 static / instance メンバは 1 つのシンボルを共有し、離れた getter/setter
+は最初の accessor を範囲とします。`import` / `export` を持たないファイルはスクリプト（グロー
+バル）として扱い、従来の近接ルールのままです。Ark は **純粋な静的解析**のみを行い、
+リポジトリのコード・Node・npm / yarn / pnpm / bun・`tsc`・`tsserver`・package script・
+リポジトリ設定を一切実行しません。
 
 #### PHP — 静的コードインテリジェンス
 

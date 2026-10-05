@@ -27,6 +27,11 @@ type refCollector struct {
 }
 
 func (c *refCollector) add(nameNode *ts.Node, name string, kind reference.ReferenceKind, container, receiver string, isCall bool) {
+	c.addTyped(nameNode, name, kind, container, receiver, "", isCall)
+}
+
+// addTyped is add with provider-proven receiver type evidence.
+func (c *refCollector) addTyped(nameNode *ts.Node, name string, kind reference.ReferenceKind, container, receiver, receiverType string, isCall bool) {
 	if name == "" || nameNode == nil {
 		return
 	}
@@ -36,6 +41,7 @@ func (c *refCollector) add(nameNode *ts.Node, name string, kind reference.Refere
 		Container:    container,
 		Location:     nodeLocation(nameNode, c.file),
 		ReceiverExpr: receiver,
+		ReceiverType: receiverType,
 		IsCall:       isCall,
 	})
 }
@@ -61,7 +67,7 @@ func (c *refCollector) walkContainer(node *ts.Node, ns string) {
 			c.emitReturnType(child, fq)
 			c.emitParamTypes(child, fq)
 			if body := childByType(child, c.lang, "compound_statement"); body != nil {
-				c.walkBody(body, fq, "")
+				c.walkBody(body, fq, "", phpFunctionTypeEnv(child, c.lang, c.src, nil))
 			}
 		case "namespace_use_declaration":
 			// Imports are handled in the symbol pass; not references.
@@ -69,7 +75,7 @@ func (c *refCollector) walkContainer(node *ts.Node, ns string) {
 			// Top-level script statements: references attach to no symbol
 			// (container ""), so they never form a graph edge but remain
 			// findable by name.
-			c.walkBody(child, "", "")
+			c.walkBody(child, "", "", nil)
 		}
 	}
 }
@@ -117,6 +123,7 @@ func (c *refCollector) emitClauseNames(clause *ts.Node, kind reference.Reference
 
 // walkMembers handles trait use, member signature types, and method bodies.
 func (c *refCollector) walkMembers(body *ts.Node, classQual, classBare string) {
+	props := phpClassPropertyTypes(body, c.lang, c.src)
 	for i := 0; i < body.ChildCount(); i++ {
 		member := body.Child(i)
 		switch member.Type(c.lang) {
@@ -129,7 +136,7 @@ func (c *refCollector) walkMembers(body *ts.Node, classQual, classBare string) {
 			c.emitReturnType(member, mq)
 			c.emitParamTypes(member, mq)
 			if mbody := childByType(member, c.lang, "compound_statement"); mbody != nil {
-				c.walkBody(mbody, mq, classBare)
+				c.walkBody(mbody, mq, classBare, phpFunctionTypeEnv(member, c.lang, c.src, props))
 			}
 		case "property_declaration":
 			c.emitTypeChildren(member, classQual)
@@ -204,14 +211,18 @@ func (c *refCollector) collectNamedTypes(node *ts.Node, container string) {
 // references. It does not descend into nested named declarations or anonymous
 // classes (those are separate containers / have no symbol identity). selfClass
 // is the enclosing class's bare name, used only to resolve `$this` receivers.
-func (c *refCollector) walkBody(node *ts.Node, container, selfClass string) {
+// env is the function's proven receiver-type evidence (nil when none).
+func (c *refCollector) walkBody(node *ts.Node, container, selfClass string, env *phpTypeEnv) {
 	switch node.Type(c.lang) {
 	case "function_definition", "method_declaration", "anonymous_class":
 		return
+	case "anonymous_function", "arrow_function":
+		// Closures have their own variable scope: no receiver evidence inside.
+		env = nil
 	case "function_call_expression":
 		c.emitFunctionCall(node, container)
 	case "member_call_expression":
-		c.emitMemberCall(node, container, selfClass)
+		c.emitMemberCall(node, container, selfClass, env)
 	case "scoped_call_expression":
 		c.emitScopedCall(node, container)
 	case "object_creation_expression":
@@ -220,7 +231,7 @@ func (c *refCollector) walkBody(node *ts.Node, container, selfClass string) {
 		c.emitConstAccess(node, container)
 	}
 	for i := 0; i < node.ChildCount(); i++ {
-		c.walkBody(node.Child(i), container, selfClass)
+		c.walkBody(node.Child(i), container, selfClass, env)
 	}
 }
 
@@ -232,20 +243,25 @@ func (c *refCollector) emitFunctionCall(node *ts.Node, container string) {
 	c.add(callee, lastName(callee, c.lang, c.src), reference.KindCall, container, "", true)
 }
 
-func (c *refCollector) emitMemberCall(node *ts.Node, container, selfClass string) {
+func (c *refCollector) emitMemberCall(node *ts.Node, container, selfClass string, env *phpTypeEnv) {
 	method := childByType(node, c.lang, "name")
 	if method == nil {
 		return // dynamic method (e.g. $obj->$m()) — not fabricated
 	}
-	receiver := ""
-	// Only `$this` is safely known (it is the enclosing class). Other variable
-	// receivers are left empty to avoid false receiver matches.
-	if recv := node.Child(0); recv != nil && recv.Type(c.lang) == "variable_name" {
-		if childText(recv, c.lang, c.src, "name") == "this" {
-			receiver = selfClass
-		}
+	recv := node.Child(0)
+	if recv == nil {
+		return
 	}
-	c.add(method, method.Text(c.src), reference.KindCall, container, receiver, true)
+	// `$this` is the enclosing class (an explicit type receiver). Every other
+	// receiver is recorded verbatim — "" is reserved for receiverless names —
+	// with declared-type evidence only when it is proven (receiver_types.go).
+	receiver, receiverType := recv.Text(c.src), ""
+	if phpVarName(recv, c.lang, c.src) == "this" {
+		receiver = selfClass
+	} else {
+		receiverType = env.receiverType(recv, node.StartByte(), c.lang, c.src)
+	}
+	c.addTyped(method, method.Text(c.src), reference.KindCall, container, receiver, receiverType, true)
 }
 
 func (c *refCollector) emitScopedCall(node *ts.Node, container string) {

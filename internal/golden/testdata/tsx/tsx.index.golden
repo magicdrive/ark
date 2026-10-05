@@ -1,13 +1,16 @@
 ## stats
-files=2 symbols=3 references=3 relations=0 skipped=0
+files=2 symbols=4 references=4 relations=1 skipped=0
 lang tsx=2
 ## symbols
 symbol Props kind=interface lang=tsx qualified="Props" receiver="" exported=true @component.tsx:3:8-5:2
+symbol name kind=property lang=tsx qualified="Props.name" receiver="Props" exported=true @component.tsx:4:3-4:15
 symbol Greeting kind=function lang=tsx qualified="Greeting" receiver="" exported=true @component.tsx:7:8-14:2
-symbol Title kind=constant lang=tsx qualified="Title" receiver="" exported=true @component.tsx:16:14-16:42
+symbol Title kind=function lang=tsx qualified="Title" receiver="" exported=true @component.tsx:16:14-16:42
 ## references
 ref react kind=import container="" receiver="" call=false @component.tsx:1:1-1:34
+ref Props kind=type_use container="Greeting" receiver="" call=false @component.tsx:7:33-7:38
 ref useState kind=call container="Greeting" receiver="" call=true @component.tsx:8:29-8:37
 ref setCount kind=call container="Greeting" receiver="" call=true @component.tsx:10:25-10:33
 ## edges
+edge Greeting -uses_type-> Props confidence=exact evidence=[same_file:symbol "Props" defined in same file component.tsx]
 ## diagnostics

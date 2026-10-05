@@ -103,8 +103,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 			return ctx.Err()
 		}
 		if d.IsDir() {
-			name := d.Name()
-			if strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules" {
+			if SkipDirName(d.Name()) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -156,6 +155,13 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 }
 
 // ---- Symbol queries ----
+
+// SkipDirName reports whether a directory is never indexed: hidden
+// directories, vendor and node_modules. Every surface that scans a repository
+// for symbols must use this one rule so they all see the same files.
+func SkipDirName(name string) bool {
+	return strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules"
+}
 
 // GetSymbol returns a symbol by its ID.
 func (idx *RepositoryIndex) GetSymbol(id symbol.SymbolID) (symbol.Symbol, bool) {
