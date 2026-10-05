@@ -32,8 +32,8 @@ func TestClientCopilot_RegisteredAndNamed(t *testing.T) {
 		t.Fatalf("ParseClientID(copilot) = %v, %v", got, err)
 	}
 	ids := SupportedClientStrings()
-	if ids[len(ids)-1] != "copilot" {
-		t.Errorf("copilot must follow the existing clients in canonical order: %v", ids)
+	if ids[len(ids)-2] != "copilot" || ids[len(ids)-1] != "copilot-cli" {
+		t.Errorf("copilot, copilot-cli must follow the existing clients in canonical order: %v", ids)
 	}
 	if _, err := ParseClientID("github-copilot"); err == nil {
 		t.Error("only the name `copilot` is a client; other spellings must be rejected")

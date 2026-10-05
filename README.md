@@ -57,6 +57,8 @@ ark setup codex    # Codex
 ark setup cline    # Cline CLI
 # or
 ark setup copilot  # GitHub Copilot Chat / Agent mode in VS Code (this repository)
+# or
+ark setup copilot-cli  # GitHub Copilot CLI (this repository)
 ```
 
 This registers the Ark MCP server in the client's configuration. For **Claude Code**
@@ -75,6 +77,7 @@ Only clients Ark actually tests a `setup` path for are listed as supported.
 | Codex        | `ark setup codex`   | Codex user config, via the official `codex` CLI  |
 | Cline        | `ark setup cline`   | `~/.cline/mcp.json` (Cline **CLI**; see note below) |
 | GitHub Copilot (VS Code) | `ark setup copilot` | `.vscode/mcp.json` (project only; see note below) |
+| GitHub Copilot CLI | `ark setup copilot-cli` | `.github/mcp.json` (project only; see note below) |
 
 > **Cline scope:** v4.1 supports the **Cline CLI** configuration at `~/.cline/mcp.json` only.
 > The MCP settings used by Cline's VS Code / Cursor / Windsurf extensions
@@ -86,12 +89,23 @@ Only clients Ark actually tests a `setup` path for are listed as supported.
 > supported (the VS Code user-level path is not officially documented). It does **not** configure
 > the Copilot CLI, the GitHub-hosted Copilot agent, or GitHub repository settings, and it never
 > touches the portable `.mcp.json` (used by Claude Code). Copilot CLI setup is not currently
-> managed by `ark setup copilot`.
+> managed by `ark setup copilot` — that is what `copilot-cli` below is for.
 >
 > The generated `--root` is the **absolute path of your repository** (VS Code's documentation does not
 > guarantee workspace-variable substitution in `.vscode/mcp.json` `args`, nor its meaning in multi-root
 > workspaces), so the file is machine-specific: do not commit/share it as-is, or have each developer
 > run `ark setup copilot` locally. `command` is `ark` (resolved on `PATH`) unless you pass `--ark-path`.
+
+> **Copilot CLI scope:** `ark setup copilot-cli` (a different client from `copilot`) configures the
+> **GitHub Copilot CLI** for the current repository only: `.github/mcp.json` (`mcpServers`, a `local`
+> entry). `--global` is not supported (`~/.copilot/mcp-config.json` is not managed), and the
+> `copilot mcp` command is not used. Copilot CLI gives a `.mcp.json` server of the same name
+> **precedence over `.github/mcp.json`**, so if `<root>/.mcp.json` already defines `mcpServers.ark`,
+> setup is **refused** (also with `--force`; nothing is changed). A closer nested `.mcp.json`
+> defining `ark` outranks it too, which Ark cannot detect at setup time; likewise running
+> `ark setup claude` *after* `copilot-cli` creates a root `.mcp.json` `ark` entry that takes
+> precedence. As above, `--root` is an absolute path: each developer should run
+> `ark setup copilot-cli` locally rather than committing the file.
 
 After setup you can use the MCP tools directly — `mcp__ark__find_symbol`,
 `mcp__ark__get_symbols`, etc. — and, with Claude Code, the generated `/<name>` slash command.
@@ -122,7 +136,7 @@ ark skill [OPTIONS]
 
 | Command      | Description                                      |
 |--------------|--------------------------------------------------|
-| `setup <client>` | Configure Ark for a supported coding agent (claude, cursor, codex, cline, copilot). |
+| `setup <client>` | Configure Ark for a supported coding agent (claude, cursor, codex, cline, copilot, copilot-cli). |
 | `mcp-server` | Run Ark as an MCP server (stdio or HTTP).        |
 | `mcp-init`   | Add ark MCP config to `.mcp.json`.              |
 | `syntax`     | Parse file and output AST using Tree-sitter.     |
@@ -173,7 +187,7 @@ ark setup codex --global
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `<client>` | – | Target agent: `claude`, `cursor`, `codex`, `cline`, `copilot` (VS Code Copilot, project only) | – |
+| `<client>` | – | Target agent: `claude`, `cursor`, `codex`, `cline`, `copilot` (VS Code Copilot) or `copilot-cli` (GitHub Copilot CLI); both project only | – |
 | `--name <name>` | `-n` | Claude skill/slash-command name (**Claude only**) | directory name |
 | `--ark-path <path>` | `-p` | Path to the `ark` binary (validated at setup time) | auto-detect (`ark` on `PATH`) |
 | `--root <dir>` | `-r` | Repository root to serve | `$PWD` |
@@ -531,7 +545,7 @@ cp misc/completions/fish/ark.fish ~/.config/fish/completions/
 
 Completions cover the subcommands, every flag, the finite flag values
 (`--lang`, `--format`, `--type`, `on`/`off`, ...) and `ark setup <client>`
-(`claude`, `cursor`, `codex`, `cline`, `copilot`). Standalone per-shell files are in
+(`claude`, `cursor`, `codex`, `cline`, `copilot`, `copilot-cli`). Standalone per-shell files are in
 `misc/completions/{bash,zsh,fish}/`. Tests (`internal/completion`) fail if a
 completion file drifts from the CLI, the setup client registry or the language
 registry.

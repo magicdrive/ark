@@ -4,7 +4,7 @@ Description:
    Yet another alternate [directory|repository] represent text generator tool.
 
 Sub commands:
-  setup <client>                                   Configure Ark for a supported coding agent (claude, cursor, codex, cline, copilot).
+  setup <client>                                   Configure Ark for a supported coding agent (claude, cursor, codex, cline, copilot, copilot-cli).
   mcp-server                                       Start MCP server.
   mcp-init                                         Add ark MCP server config to .mcp.json.
   syntax <file>                                    Parse file and output AST using Tree-sitter.
@@ -35,9 +35,11 @@ general (text generator mode) options:
   -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
 
 setup <client> options:
-  <client>                                         Target coding agent: claude, cursor, codex, cline, copilot.
-                                                   (copilot = GitHub Copilot Chat / Agent mode in VS Code, project .vscode/mcp.json only;
-                                                    not the Copilot CLI or the GitHub-hosted agent. --global is not supported for copilot.)
+  <client>                                         Target coding agent: claude, cursor, codex, cline, copilot, copilot-cli.
+                                                   copilot     = GitHub Copilot Chat / Agent mode in VS Code (project .vscode/mcp.json only)
+                                                   copilot-cli = GitHub Copilot CLI (project .github/mcp.json only; refused if <root>/.mcp.json
+                                                                 already defines "ark", which Copilot CLI prefers)
+                                                   --global is not supported for copilot / copilot-cli; neither configures the GitHub-hosted agent.
                                                    (ark setup without a client is a deprecated Claude alias.)
   -h, --help                                       Show help message.
   -n, --name <name>                                Claude skill/slash-command name (Claude only. default: current directory name).

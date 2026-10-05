@@ -47,6 +47,8 @@ func adapterFor(id ClientID) (adapter, error) {
 		return newCodexAdapter(), nil
 	case ClientCopilot:
 		return newCopilotAdapter(), nil
+	case ClientCopilotCLI:
+		return newCopilotCLIAdapter(), nil
 	default:
 		return nil, fmt.Errorf("no adapter registered for client %q", id)
 	}

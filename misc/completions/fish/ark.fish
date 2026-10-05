@@ -173,6 +173,7 @@ complete -c ark -n '__fish_ark_setup_client_position' -a 'cursor' -d 'Configure 
 complete -c ark -n '__fish_ark_setup_client_position' -a 'codex'  -d 'Configure Ark for Codex'
 complete -c ark -n '__fish_ark_setup_client_position' -a 'cline'  -d 'Configure Ark for Cline'
 complete -c ark -n '__fish_ark_setup_client_position' -a 'copilot' -d 'Configure Ark for GitHub Copilot in VS Code'
+complete -c ark -n '__fish_ark_setup_client_position' -a 'copilot-cli' -d 'Configure Ark for GitHub Copilot CLI'
 
 # ----- setup options ---------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from setup' \
