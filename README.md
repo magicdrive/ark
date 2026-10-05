@@ -114,7 +114,9 @@ After setup you can use the MCP tools directly — `mcp__ark__find_symbol`,
 > `--force` replaces only Ark's own MCP entry. It never deletes unrelated MCP servers,
 > discards unknown fields, repairs malformed config, or overwrites other client settings.
 
-> **Tip:** Add a `CLAUDE.md` to your project root to instruct Claude Code to use Ark MCP tools automatically. A ready-to-use template is available at [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
+> **Tip:** `setup` connects Ark MCP to your agent; `instruction` tells the agent how to use it effectively. To
+> instruct Claude Code, run `ark instruction claude` and add the output to your project's `CLAUDE.md` (see
+> [`ark instruction`](#-instruction--agent-usage-instructions)). A ready-to-use template is at [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
 
 ---
 
@@ -142,6 +144,7 @@ ark skill [OPTIONS]
 | `syntax`     | Parse file and output AST using Tree-sitter.     |
 | `symbol`     | Extract symbols (functions, types, etc.) from file. |
 | `skill`      | Generate Ark MCP skill for Claude Code / OpenAI. |
+| `instruction <target>` | Print agent instructions for using Ark MCP (target: `claude`). |
 
 ---
 
@@ -346,6 +349,24 @@ ark symbol main.go                # Extract symbols from Go file
 ark symbol app.ts --format json   # Extract symbols, JSON output
 ark symbol script.py --lang python
 ```
+
+---
+
+## 📜 instruction — Agent usage instructions
+
+`ark instruction <target>` prints a short Markdown instruction that tells a coding agent how to use Ark MCP
+effectively (which tool to prefer for which question, when whole-file reads make sense, how to treat
+uncertain results). The only target today is `claude`: the output is ready to go into a project's `CLAUDE.md`.
+
+```bash
+ark instruction claude                 # print to stdout
+ark instruction claude > ark-instruction.md
+ark instruction claude >> CLAUDE.md    # review CLAUDE.md first to avoid duplicating an existing Ark section
+```
+
+It only prints text: Ark never edits `CLAUDE.md` or any other file, and nothing but the instruction goes to
+stdout. Unsupported targets fail with the list of supported ones. `ark setup claude` shows the same
+instruction after setup; `ark skill` (reusable skill / slash-command artifacts) is a separate feature.
 
 ---
 

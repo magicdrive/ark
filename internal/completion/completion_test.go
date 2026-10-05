@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/instruction"
 	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/setup"
 )
@@ -115,6 +116,42 @@ func TestSetupClientOnlyAsFirstOperand(t *testing.T) {
 					if clients[c] {
 						t.Errorf("ark %v offered client %q after the first operand", words, c)
 					}
+				}
+			}
+		})
+	}
+}
+
+// --- instruction targets ----------------------------------------------------------
+
+// ark instruction <TAB> offers exactly the instruction targets — a separate
+// registry from the setup clients, which must never leak into it.
+func TestInstructionTargetsMatchRegistry(t *testing.T) {
+	want := instruction.Targets()
+	setupOnly := map[string]bool{}
+	for _, id := range setup.SupportedClientStrings() {
+		if !contains(want, id) {
+			setupOnly[id] = true
+		}
+	}
+	if len(setupOnly) == 0 {
+		t.Fatal("fixture assumption: some setup clients are not instruction targets")
+	}
+	for _, tg := range allTargets() {
+		t.Run(tg.name, func(t *testing.T) {
+			got := nonOption(tg.complete(t, emptyDir(t), "instruction", ""))
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("ark instruction <TAB> = %v, want %v", got, want)
+			}
+			for _, g := range got {
+				if setupOnly[g] {
+					t.Errorf("setup client %q offered as an instruction target", g)
+				}
+			}
+			// Not offered once the target is given.
+			for _, g := range tg.complete(t, emptyDir(t), "instruction", "claude", "") {
+				if contains(want, g) {
+					t.Errorf("target offered after the first operand: %q", g)
 				}
 			}
 		})
@@ -361,7 +398,7 @@ func TestOperandCompletion(t *testing.T) {
 func TestCandidateOrderIsDeterministic(t *testing.T) {
 	queries := [][]string{
 		{""}, {"setup", ""}, {"skill", ""}, {"--"}, {"setup", "--"}, {"syntax", "--lang", ""},
-		{"mcp-server", "--type", ""}, {"skill", "update", "--"},
+		{"mcp-server", "--type", ""}, {"skill", "update", "--"}, {"instruction", ""}, {"instruction", "--"},
 	}
 	for _, tg := range allTargets() {
 		t.Run(tg.name, func(t *testing.T) {
@@ -388,7 +425,7 @@ func TestCandidatesAreSafeTokens(t *testing.T) {
 	queries := [][]string{
 		{""}, {"-"}, {"--"}, {"setup", ""}, {"setup", "-"}, {"skill", ""}, {"skill", "init", "-"},
 		{"mcp-server", "-"}, {"mcp-init", "-"}, {"syntax", "-"}, {"symbol", "--lang", ""},
-		{"-f", ""}, {"--output-format", ""},
+		{"-f", ""}, {"--output-format", ""}, {"instruction", ""}, {"instruction", "-"},
 	}
 	for _, tg := range allTargets() {
 		t.Run(tg.name, func(t *testing.T) {

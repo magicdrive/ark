@@ -10,6 +10,7 @@ Sub commands:
   syntax <file>                                    Parse file and output AST using Tree-sitter.
   symbol <file>                                    Extract symbols (functions, types, etc.) from file.
   skill                                            Generate Ark MCP skill for Claude Code / OpenAI.
+  instruction <target>                             Print agent instructions for using Ark MCP (target: claude).
 
 
 general (text generator mode) options:
@@ -73,6 +74,10 @@ mcp-server options:
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
+
+instruction options:
+  <target>                                         Instruction target: claude. Prints Markdown to stdout (paste it into CLAUDE.md); writes no files.
+  -h, --help                                       Show help message.
 
 syntax options:
   -h, --help                                       Show help message.

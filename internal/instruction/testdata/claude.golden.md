@@ -1,7 +1,3 @@
-# Project Name
-
-<!-- Replace this section with your own project description -->
-
 ## Ark Code Intelligence
 
 Use Ark MCP as the primary tool for repository exploration and code understanding when its structured tools can answer the question. Pick the tool that fits the question; you do not need to call them all.

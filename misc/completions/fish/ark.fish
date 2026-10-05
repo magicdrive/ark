@@ -12,7 +12,7 @@ function __fish_ark_no_subcommand
     # options are only valid before/without a subcommand.
     set cmd (commandline -opc)
     test (count $cmd) -lt 2; and return 0
-    not contains -- $cmd[2] mcp-server mcp-init setup syntax symbol skill
+    not contains -- $cmd[2] mcp-server mcp-init setup syntax symbol skill instruction
 end
 
 function __fish_ark_setup_client_position
@@ -35,6 +35,9 @@ complete -c ark -n '__fish_ark_is_first_arg'    \
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'skill'                              \
         -d 'Generate Cline/ChatGPT Skill'
+complete -c ark -n '__fish_ark_is_first_arg'    \
+        -a 'instruction'                        \
+        -d 'Print agent instructions for using Ark MCP'
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'setup'                              \
         -d 'Configure Ark for a coding agent'
@@ -166,6 +169,15 @@ complete -c ark -n '__fish_seen_subcommand_from skill; and __fish_seen_subcomman
 # ----- skill inspect options -------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from skill; and __fish_seen_subcommand_from inspect' \
         -s h -l help -d 'Show help'
+
+# ----- instruction target (first positional; NOT the setup clients) -----------
+function __fish_ark_instruction_target_position
+    set cmd (commandline -opc)
+    test (count $cmd) -eq 2; and test "$cmd[2]" = instruction
+end
+
+complete -c ark -n '__fish_ark_instruction_target_position' -a 'claude' -d 'Instructions for Claude Code (CLAUDE.md)'
+complete -c ark -n '__fish_seen_subcommand_from instruction' -s h -l help -d 'Show help'
 
 # ----- setup client (first positional) ---------------------------------------
 complete -c ark -n '__fish_ark_setup_client_position' -a 'claude' -d 'Configure Ark for Claude Code'

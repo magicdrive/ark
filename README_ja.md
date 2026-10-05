@@ -114,7 +114,10 @@ Ark が `setup` 経路を実際にテストしているクライアントのみ�
 > `--force` が置き換えるのは Ark 自身の MCP エントリだけです。無関係な MCP サーバーの削除、
 > 未知フィールドの破棄、壊れた設定の修復、他のクライアント設定の上書きは一切行いません。
 
-> **Tip:** プロジェクトルートに `CLAUDE.md` を置くと、Claude Code が自動的に Ark MCP ツールを使うよう誘導できます。すぐ使えるテンプレートを [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example) に用意しています。
+> **Tip:** `setup` は Ark MCP を agent に接続し、`instruction` は agent に Ark MCP の効果的な使い方を伝えます。
+> Claude Code に伝えるには、`ark instruction claude` を実行し、出力をプロジェクトの `CLAUDE.md` に追加してください
+> （[`ark instruction`](#-instruction--agent-向け利用指示) 参照）。すぐ使えるテンプレートは
+> [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example) にあります。
 
 ---
 
@@ -142,6 +145,7 @@ ark skill [オプション]
 | `syntax` | Tree-sitter を使ってファイルを解析し AST を出力 |
 | `symbol` | ファイルからシンボル（関数・型など）を抽出 |
 | `skill` | Claude Code / OpenAI 向けの Ark MCP スキルを生成 |
+| `instruction <target>` | agent 向けの Ark MCP 利用指示を出力（target: `claude`） |
 
 ---
 
@@ -345,6 +349,24 @@ ark symbol main.go                  # Go ファイルからシンボルを抽出
 ark symbol app.ts --format json     # TypeScript のシンボルを JSON 出力
 ark symbol script.py --lang python
 ```
+
+---
+
+## 📜 instruction — agent 向け利用指示
+
+`ark instruction <target>` は、coding agent が Ark MCP を効果的に使うための短い Markdown 指示（どの質問にどの
+ツールを選ぶか、ファイル全体の読み込みが適切な場面、不確かな結果の扱い）を出力します。現在の target は
+`claude` のみで、出力はプロジェクトの `CLAUDE.md` にそのまま追加できます。
+
+```bash
+ark instruction claude                 # 標準出力へ
+ark instruction claude > ark-instruction.md
+ark instruction claude >> CLAUDE.md    # 既存の Ark セクションと重複しないよう、先に CLAUDE.md を確認
+```
+
+出力するだけです。Ark が `CLAUDE.md` やその他のファイルを編集することはなく、標準出力には指示以外を出しません。
+未対応の target は、対応 target の一覧付きでエラーになります。`ark setup claude` も setup 後に同じ指示を表示します。
+`ark skill`（再利用可能な skill / スラッシュコマンド生成）は別の機能です。
 
 ---
 

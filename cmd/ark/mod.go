@@ -5,9 +5,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
+	"github.com/magicdrive/ark/internal/instruction"
 	"github.com/magicdrive/ark/internal/mcp"
 	"github.com/magicdrive/ark/internal/setup"
 	"github.com/magicdrive/ark/internal/skill"
@@ -34,6 +36,9 @@ func Execute(version string) {
 			return
 		case "skill":
 			runSkillCommand()
+			return
+		case "instruction":
+			runInstructionCommand()
 			return
 		}
 	}
@@ -88,6 +93,32 @@ func runSetupCommand() {
 		fmt.Fprintf(os.Stderr, "Warning: %s\n", w)
 	}
 	fmt.Print(res.Report())
+}
+
+// runInstructionCommand prints the Ark MCP usage instruction for an agent
+// target to stdout and nothing else. It never touches the filesystem; errors go
+// to stderr with a non-zero exit.
+func runInstructionCommand() {
+	_, opt, err := commandline.InstructionOptParse(os.Args[2:])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		os.Exit(0)
+	}
+	if opt.Target == "" {
+		fmt.Fprintf(os.Stderr, "Error: an instruction target is required; usage: ark instruction <target>\n\nsupported targets: %s\n",
+			strings.Join(instruction.Targets(), ", "))
+		os.Exit(1)
+	}
+	text, err := instruction.Render(opt.Target)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Print(text)
 }
 
 func runMCPInitCommand() {

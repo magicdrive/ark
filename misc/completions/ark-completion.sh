@@ -13,9 +13,10 @@
 # Bash part
 ###############################
 # ---- CLI contract tables (kept in sync with internal/commandline by tests) ----
-_ark_subcommands="mcp-server mcp-init setup syntax symbol skill"
+_ark_subcommands="mcp-server mcp-init setup syntax symbol skill instruction"
 _ark_skill_subcommands="init add-explorer update inspect"
 _ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
+_ark_instruction_targets="claude"   # instruction targets are NOT the setup clients
 _ark_langs="go typescript tsx javascript python php"
 _ark_exts="go js ts py java c cpp h txt md html css xml yml yaml json"
 _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"
@@ -34,6 +35,7 @@ _ark_skill_opts="--name --output --archive --force -h --help"
 _ark_skill_init_opts="--name --output --archive -h --help"
 _ark_skill_update_opts="--force --dry-run -h --help"
 _ark_skill_inspect_opts="-h --help"
+_ark_instruction_opts="-h --help"
 
 # ---- helpers (no hard dependency on the bash-completion package) --------------
 if ! declare -F _filedir >/dev/null 2>&1; then
@@ -78,7 +80,7 @@ _ark_bash() {
   # Mode comes from argv[1] only, exactly like the CLI dispatcher.
   local cmd=${COMP_WORDS[1]} sub=""
   case $cmd in
-    mcp-server|mcp-init|setup|syntax|symbol|skill) ;;
+    mcp-server|mcp-init|setup|syntax|symbol|skill|instruction) ;;
     *) cmd=general ;;
   esac
   if [[ $cmd == skill ]] && (( cword > 2 )); then
@@ -149,6 +151,13 @@ _ark_bash() {
       fi ;;
     syntax|symbol)
       if [[ $cur == -* ]]; then _ark_offer "${_ark_syntax_opts}"; else _filedir; fi ;;
+    instruction)
+      # `ark instruction <target>`: the target is the first operand.
+      if (( cword == 2 )) && [[ $cur != -* ]]; then
+        _ark_offer "${_ark_instruction_targets}"
+      else
+        _ark_offer "${_ark_instruction_opts}"
+      fi ;;
     skill)
       case $sub in
         init|add-explorer) _ark_offer "${_ark_skill_init_opts}" ;;
@@ -219,6 +228,7 @@ _ark_zsh() {
     'syntax:Parse file and output AST'
     'symbol:Extract symbols from file'
     'skill:Generate Cline/ChatGPT Skill'
+  'instruction:Print agent instructions for using Ark MCP'
   )
 
   syntax_opts=(
@@ -287,7 +297,8 @@ _ark_zsh() {
           (( CURRENT == 2 )) && client_arg=('1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline" copilot-vscode\:"Configure Ark for GitHub Copilot in VS Code" copilot-cli\:"Configure Ark for GitHub Copilot CLI"))')
           _arguments -C "${setup_opts[@]}" "${client_arg[@]}"
           ;;
-        syntax)     _arguments -C "${syntax_opts[@]}" '1:file:_files' ;;
+        instruction) _arguments -C '-h[Show help]' '--help[Show help]' '1:target:(claude)' ;;
+      syntax)     _arguments -C "${syntax_opts[@]}" '1:file:_files' ;;
         symbol)     _arguments -C "${symbol_opts[@]}" '1:file:_files' ;;
         skill)
           skill_sub=''

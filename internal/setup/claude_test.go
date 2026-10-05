@@ -3,7 +3,10 @@ package setup
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/magicdrive/ark/internal/instruction"
 )
 
 // chdir switches to dir for the duration of the test.
@@ -130,5 +133,40 @@ func TestClaude_Global_UsesClaudeSettings(t *testing.T) {
 	want := filepath.Join(tmp, ".claude", "settings.json")
 	if res.ConfigPath != want {
 		t.Errorf("global config path: got %s want %s", res.ConfigPath, want)
+	}
+}
+
+// The Ark usage instruction shown after a successful `ark setup claude` is the
+// canonical `ark instruction claude` text (single source), and setup itself
+// still writes only its usual artifacts.
+func TestClaude_SetupSuccessShowsCanonicalInstruction(t *testing.T) {
+	root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Chdir(root)
+
+	res, err := Run(Options{Client: ClientClaude, ArkPath: ark, RootDir: root})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := instruction.Render("claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	advisory := strings.Join(res.ExtraLines, "\n")
+	for k, l := range strings.Split(want, "\n") {
+		if l == "" {
+			continue
+		}
+		if !strings.Contains(advisory, "   "+l+"\n") && !strings.Contains(advisory, "   "+l) {
+			t.Fatalf("setup advisory is missing canonical line %d: %q\n%s", k, l, advisory)
+		}
+	}
+	if !strings.Contains(advisory, "   ---  CLAUDE.md  ---") {
+		t.Errorf("advisory block markers missing:\n%s", advisory)
+	}
+	// CLAUDE.md is advised, never written.
+	if _, err := os.Stat(filepath.Join(root, "CLAUDE.md")); err == nil {
+		t.Error("setup must not write CLAUDE.md")
 	}
 }

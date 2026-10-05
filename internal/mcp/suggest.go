@@ -6,11 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	_ "embed"
+	"github.com/magicdrive/ark/internal/instruction"
 )
-
-//go:embed claudemd_snippet.md
-var claudeMdSnippet string
 
 // SuggestCLAUDEMd checks if CLAUDE.md already has Ark MCP instructions.
 // If not, it prints a suggestion to add them. No files are written.
@@ -39,7 +36,10 @@ func CLAUDEMdSuggestion(rootDir string) string {
 	}
 	b.WriteString("\n")
 	b.WriteString("   ---  CLAUDE.md  ---\n")
-	for _, line := range strings.Split(claudeMdSnippet, "\n") {
+	// The advisory shows exactly what `ark instruction claude` prints: one
+	// canonical source (internal/instruction), never a second copy of the text.
+	snippet, _ := instruction.Render("claude")
+	for _, line := range strings.Split(snippet, "\n") {
 		b.WriteString("   " + line + "\n")
 	}
 	b.WriteString("   --------------------")
