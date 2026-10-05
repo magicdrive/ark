@@ -177,6 +177,11 @@ function __fish_ark_instruction_target_position
 end
 
 complete -c ark -n '__fish_ark_instruction_target_position' -a 'claude' -d 'Instructions for Claude Code (CLAUDE.md)'
+complete -c ark -n '__fish_ark_instruction_target_position' -a 'codex' -d 'Instructions for Codex (AGENTS.md)'
+complete -c ark -n '__fish_ark_instruction_target_position' -a 'cursor' -d 'Instructions for Cursor (AGENTS.md)'
+complete -c ark -n '__fish_ark_instruction_target_position' -a 'cline' -d 'Instructions for Cline (.clinerules/ark.md)'
+complete -c ark -n '__fish_ark_instruction_target_position' -a 'copilot-vscode' -d 'Instructions for GitHub Copilot in VS Code (.github/copilot-instructions.md)'
+complete -c ark -n '__fish_ark_instruction_target_position' -a 'copilot-cli' -d 'Instructions for GitHub Copilot CLI (.github/copilot-instructions.md)'
 complete -c ark -n '__fish_seen_subcommand_from instruction' -s h -l help -d 'Show help'
 
 # ----- setup client (first positional) ---------------------------------------

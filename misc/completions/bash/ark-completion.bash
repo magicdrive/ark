@@ -10,7 +10,7 @@
 _ark_subcommands="mcp-server mcp-init setup syntax symbol skill instruction"
 _ark_skill_subcommands="init add-explorer update inspect"
 _ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
-_ark_instruction_targets="claude"   # instruction targets are NOT the setup clients
+_ark_instruction_targets="claude codex cursor cline copilot-vscode copilot-cli"   # a separate registry from the setup clients (same names today, by coincidence)
 _ark_langs="go typescript tsx javascript python php"
 _ark_exts="go js ts py java c cpp h txt md html css xml yml yaml json"
 _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"

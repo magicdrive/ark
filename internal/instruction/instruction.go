@@ -8,7 +8,7 @@
 //     about any particular agent.
 //   - Target: how that guidance is presented to one agent. Targets are NOT the
 //     setup clients of internal/setup (a different concern with a different
-//     registry); only `claude` exists today.
+//     registry), even though today's target names happen to match them.
 //
 // Dependencies point one way: targets import the guidance, never the reverse,
 // so another target can be added later without touching the guidance.

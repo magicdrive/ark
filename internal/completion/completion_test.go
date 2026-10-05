@@ -124,34 +124,40 @@ func TestSetupClientOnlyAsFirstOperand(t *testing.T) {
 
 // --- instruction targets ----------------------------------------------------------
 
-// ark instruction <TAB> offers exactly the instruction targets — a separate
-// registry from the setup clients, which must never leak into it.
+// ark instruction <TAB> offers exactly the instruction targets, from the
+// instruction target registry itself — not the setup client registry. The two
+// registries name the same six agents today (coincidence, not equivalence;
+// see internal/instruction's package doc and
+// TestTargetsCurrentlyMatchSetupClientsByCoincidence), so this test reads only
+// instruction.Targets() and never asserts the sets differ.
 func TestInstructionTargetsMatchRegistry(t *testing.T) {
 	want := instruction.Targets()
-	setupOnly := map[string]bool{}
-	for _, id := range setup.SupportedClientStrings() {
-		if !contains(want, id) {
-			setupOnly[id] = true
-		}
-	}
-	if len(setupOnly) == 0 {
-		t.Fatal("fixture assumption: some setup clients are not instruction targets")
-	}
 	for _, tg := range allTargets() {
 		t.Run(tg.name, func(t *testing.T) {
 			got := nonOption(tg.complete(t, emptyDir(t), "instruction", ""))
 			if !reflect.DeepEqual(got, want) {
 				t.Errorf("ark instruction <TAB> = %v, want %v", got, want)
 			}
-			for _, g := range got {
-				if setupOnly[g] {
-					t.Errorf("setup client %q offered as an instruction target", g)
-				}
-			}
 			// Not offered once the target is given.
 			for _, g := range tg.complete(t, emptyDir(t), "instruction", "claude", "") {
 				if contains(want, g) {
 					t.Errorf("target offered after the first operand: %q", g)
+				}
+			}
+		})
+	}
+}
+
+// Names that are deliberately not instruction targets (an alias candidate
+// rejected by human decision, or a setup-only spelling) must never appear in
+// `ark instruction <TAB>`.
+func TestInstructionTargetsExcludeNonTargets(t *testing.T) {
+	for _, tg := range allTargets() {
+		t.Run(tg.name, func(t *testing.T) {
+			got := nonOption(tg.complete(t, emptyDir(t), "instruction", ""))
+			for _, bad := range []string{"agents", "copilot", "cursor-rules"} {
+				if contains(got, bad) {
+					t.Errorf("ark instruction <TAB> offers %q, which must not be a target", bad)
 				}
 			}
 		})

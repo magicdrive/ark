@@ -5,17 +5,33 @@ import (
 	"strings"
 )
 
-// A target renders the canonical guidance for one agent.
+// A target renders the canonical guidance for one agent. destination is the
+// suggested paste location for docs/help only; Render never writes it.
 type targetInfo struct {
-	name   string
-	render func(guidance string) string
+	name        string
+	destination string
+	render      func(guidance string) string
 }
 
-// targets is the ordered registry of instruction targets. It is independent of
-// the setup client registry: supporting an agent's MCP setup says nothing about
-// how (or whether) it takes standing instructions.
+// targets is the ordered registry of instruction targets. It is independent
+// of the setup client registry (internal/setup): supporting an agent's MCP
+// setup says nothing about how (or whether) it takes standing instructions.
+// The two registries currently name the same six agents, but that is
+// coincidence, not architecture — this file never reads internal/setup, and
+// nothing here is derived from it.
+//
+// Only `claude` has an officially documented, model-visible MCP tool-naming
+// convention (mcp__<server>__<tool>), so only it gets a dedicated renderer.
+// Every other target uses renderPlain: the canonical guidance's bare tool
+// names, unchanged. See docs/instruction-targets investigation (Opus,
+// 2026-10-05) for why no other synthetic naming is used.
 var targets = []targetInfo{
-	{"claude", renderClaude},
+	{"claude", "CLAUDE.md", renderClaude},
+	{"codex", "AGENTS.md", renderPlain},
+	{"cursor", "AGENTS.md", renderPlain},
+	{"cline", ".clinerules/ark.md", renderPlain},
+	{"copilot-vscode", ".github/copilot-instructions.md", renderPlain},
+	{"copilot-cli", ".github/copilot-instructions.md", renderPlain},
 }
 
 // Targets returns the supported instruction target names in canonical order.
@@ -33,6 +49,18 @@ func Render(target string) (string, error) {
 	for _, t := range targets {
 		if t.name == target {
 			return t.render(Guidance()), nil
+		}
+	}
+	return "", fmt.Errorf("unsupported instruction target %q\n\nsupported targets: %s", target, strings.Join(Targets(), ", "))
+}
+
+// Destination returns the suggested paste destination for the named target
+// (documentation only; Ark never writes to it). An unknown target is an error
+// that lists the supported ones.
+func Destination(target string) (string, error) {
+	for _, t := range targets {
+		if t.name == target {
+			return t.destination, nil
 		}
 	}
 	return "", fmt.Errorf("unsupported instruction target %q\n\nsupported targets: %s", target, strings.Join(Targets(), ", "))

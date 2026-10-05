@@ -2,9 +2,14 @@ package instruction_test
 
 import (
 	"flag"
+	"go/parser"
+	"go/token"
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
+	"sort"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -26,50 +31,92 @@ func render(t *testing.T, target string) string {
 
 // --- target registry --------------------------------------------------------
 
-func TestTargets_ClaudeOnly(t *testing.T) {
-	if got := strings.Join(instruction.Targets(), ","); got != "claude" {
-		t.Fatalf("Targets() = %q, want only claude", got)
+var wantTargets = []string{"claude", "codex", "cursor", "cline", "copilot-vscode", "copilot-cli"}
+
+func TestTargets_SixSupported(t *testing.T) {
+	if got := instruction.Targets(); !reflect.DeepEqual(got, wantTargets) {
+		t.Fatalf("Targets() = %v, want %v (in this order)", got, wantTargets)
 	}
-	if _, err := instruction.Render("claude"); err != nil {
-		t.Fatalf("claude must be valid: %v", err)
+	for _, name := range wantTargets {
+		if _, err := instruction.Render(name); err != nil {
+			t.Errorf("%s must be valid: %v", name, err)
+		}
 	}
 }
 
-// Every other agent — including all other setup clients — is unsupported, with
-// the supported targets listed in the error.
+// Every other name — including plausible but unsupported spellings — is
+// unsupported, with the supported targets listed in the error.
 func TestRender_UnknownTargets(t *testing.T) {
-	bad := []string{"cursor", "codex", "cline", "copilot-vscode", "copilot-cli", "copilot", "agents", "unknown", "", "Claude", "claude "}
+	bad := []string{"copilot", "agents", "cursor-rules", "claude-code", "openai", "github-copilot",
+		"vscode", "unknown", "", "Claude", "claude "}
 	for _, name := range bad {
 		out, err := instruction.Render(name)
 		if err == nil || out != "" {
 			t.Errorf("Render(%q) = %q, %v; want an error and no output", name, out, err)
 			continue
 		}
-		if !strings.Contains(err.Error(), "supported targets: claude") {
+		if !strings.Contains(err.Error(), "supported targets: "+strings.Join(wantTargets, ", ")) {
 			t.Errorf("Render(%q) error does not list the supported targets: %v", name, err)
 		}
 	}
 }
 
-// Instruction targets and setup clients are different registries: only one
-// name is shared today, by coincidence — adding a setup client adds no target.
-func TestTargetsAreIndependentOfSetupClients(t *testing.T) {
-	targets := map[string]bool{}
-	for _, name := range instruction.Targets() {
-		targets[name] = true
+// `agents` and `copilot` are deliberately not targets (nor aliases of one):
+// AGENTS.md is a destination some targets share, not an agent identity, and
+// `copilot` is ambiguous between copilot-vscode and copilot-cli.
+func TestRender_NoAgentsOrCopilotAlias(t *testing.T) {
+	for _, name := range []string{"agents", "copilot"} {
+		if _, err := instruction.Render(name); err == nil {
+			t.Errorf("%q must remain unsupported", name)
+		}
 	}
-	var setupOnly int
-	for _, id := range setup.SupportedClientStrings() {
-		if !targets[id] {
-			setupOnly++
-			if _, err := instruction.Render(id); err == nil {
-				t.Errorf("setup client %q became an instruction target", id)
+}
+
+// Instruction targets and setup clients are independent registries: this
+// package never imports internal/setup, so Targets() cannot be derived from
+// (or drift automatically with) the setup client registry. That today's two
+// registries happen to name the same six agents is coincidence, not an
+// architectural equivalence — each can grow or shrink on its own.
+func TestInstructionPackageDoesNotImportSetup(t *testing.T) {
+	dir := "."
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fset := token.NewFileSet()
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		f, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.ImportsOnly)
+		if err != nil {
+			t.Fatalf("parse %s: %v", name, err)
+		}
+		for _, imp := range f.Imports {
+			path, _ := strconv.Unquote(imp.Path.Value)
+			if path == "github.com/magicdrive/ark/internal/setup" {
+				t.Errorf("%s imports internal/setup; instruction targets must not be derived from setup clients", name)
 			}
 		}
 	}
-	if setupOnly == 0 {
-		t.Fatal("fixture assumption: setup clients that are not instruction targets exist")
+}
+
+// Confirms the fixture assumption behind TestInstructionPackageDoesNotImportSetup:
+// the two registries' name sets are equal today (by coincidence, per the
+// package doc), so a naive "disjoint sets" test would be the wrong contract.
+func TestTargetsCurrentlyMatchSetupClientsByCoincidence(t *testing.T) {
+	if got := sortedStrings(instruction.Targets()); !reflect.DeepEqual(got, sortedStrings(setup.SupportedClientStrings())) {
+		t.Fatalf("instruction.Targets() = %v, setup.SupportedClientStrings() = %v; "+
+			"update this fixture (and reread the package doc) if they are meant to diverge",
+			got, setup.SupportedClientStrings())
 	}
+}
+
+func sortedStrings(in []string) []string {
+	out := append([]string(nil), in...)
+	sort.Strings(out)
+	return out
 }
 
 // --- output -------------------------------------------------------------------
@@ -188,6 +235,81 @@ func TestClaudeTarget_OnlyPresentationDiffers(t *testing.T) {
 	// Undoing the prefix recovers the canonical text exactly.
 	if back := strings.ReplaceAll(out, "mcp__ark__", ""); back != instruction.Guidance() {
 		t.Error("the Claude output differs from the guidance by more than tool naming")
+	}
+}
+
+// --- plain targets (codex, cursor, cline, copilot-vscode, copilot-cli) --------------
+
+var plainTargets = []string{"codex", "cursor", "cline", "copilot-vscode", "copilot-cli"}
+
+// No agent other than Claude has an officially documented, model-visible MCP
+// tool-naming convention, so every other target renders the canonical
+// guidance byte-identical to Guidance(): no synthetic prefix, no qualified
+// name, nothing invented.
+func TestPlainTargets_ByteIdenticalToGuidance(t *testing.T) {
+	want := instruction.Guidance()
+	for _, name := range plainTargets {
+		if got := render(t, name); got != want {
+			t.Errorf("Render(%q) differs from Guidance():\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
+		}
+	}
+}
+
+// The five plain targets necessarily produce byte-identical output to each
+// other too (same input, same identity renderer).
+func TestPlainTargets_ByteIdenticalToEachOther(t *testing.T) {
+	first := render(t, plainTargets[0])
+	for _, name := range plainTargets[1:] {
+		if got := render(t, name); got != first {
+			t.Errorf("Render(%q) differs from Render(%q)", name, plainTargets[0])
+		}
+	}
+}
+
+// --- renderer mapping ---------------------------------------------------------------
+
+// claude is the only target with a dedicated renderer; every other target
+// uses the shared plain renderer. This is checked by behavior (does the
+// output carry the mcp__ark__ prefix?), not by reaching into the registry.
+func TestRendererMapping(t *testing.T) {
+	if out := render(t, "claude"); !strings.Contains(out, "mcp__ark__") {
+		t.Error("claude must use the Claude renderer (mcp__ark__ prefix)")
+	}
+	for _, name := range plainTargets {
+		if out := render(t, name); strings.Contains(out, "mcp__ark__") {
+			t.Errorf("%s must use the plain renderer, not Claude's mcp__ark__ prefix", name)
+		}
+	}
+}
+
+// --- destinations ---------------------------------------------------------------------
+
+func TestDestinations(t *testing.T) {
+	want := map[string]string{
+		"claude":         "CLAUDE.md",
+		"codex":          "AGENTS.md",
+		"cursor":         "AGENTS.md",
+		"cline":          ".clinerules/ark.md",
+		"copilot-vscode": ".github/copilot-instructions.md",
+		"copilot-cli":    ".github/copilot-instructions.md",
+	}
+	for name, dest := range want {
+		got, err := instruction.Destination(name)
+		if err != nil {
+			t.Errorf("Destination(%q): %v", name, err)
+			continue
+		}
+		if got != dest {
+			t.Errorf("Destination(%q) = %q, want %q", name, got, dest)
+		}
+	}
+	for _, name := range instruction.Targets() {
+		if _, ok := want[name]; !ok {
+			t.Errorf("target %q has no expected destination in this test; update the fixture", name)
+		}
+	}
+	if _, err := instruction.Destination("unknown"); err == nil {
+		t.Error("Destination(\"unknown\") must error")
 	}
 }
 

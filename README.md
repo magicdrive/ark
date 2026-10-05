@@ -116,7 +116,9 @@ After setup you can use the MCP tools directly — `mcp__ark__find_symbol`,
 
 > **Tip:** `setup` connects Ark MCP to your agent; `instruction` tells the agent how to use it effectively. To
 > instruct Claude Code, run `ark instruction claude` and add the output to your project's `CLAUDE.md` (see
-> [`ark instruction`](#-instruction--agent-usage-instructions)). A ready-to-use template is at [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
+> [`ark instruction`](#-instruction--agent-usage-instructions), which also covers `codex`, `cursor`, `cline`,
+> `copilot-vscode` and `copilot-cli`). A ready-to-use Claude template is at
+> [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
 
 ---
 
@@ -144,7 +146,7 @@ ark skill [OPTIONS]
 | `syntax`     | Parse file and output AST using Tree-sitter.     |
 | `symbol`     | Extract symbols (functions, types, etc.) from file. |
 | `skill`      | Generate Ark MCP skill for Claude Code / OpenAI. |
-| `instruction <target>` | Print agent instructions for using Ark MCP (target: `claude`). |
+| `instruction <target>` | Print agent instructions for using Ark MCP (target: `claude`, `codex`, `cursor`, `cline`, `copilot-vscode`, `copilot-cli`). |
 
 ---
 
@@ -356,17 +358,49 @@ ark symbol script.py --lang python
 
 `ark instruction <target>` prints a short Markdown instruction that tells a coding agent how to use Ark MCP
 effectively (which tool to prefer for which question, when whole-file reads make sense, how to treat
-uncertain results). The only target today is `claude`: the output is ready to go into a project's `CLAUDE.md`.
+uncertain results). The guidance itself is the same for every target; only its presentation changes —
+`claude` renders each tool name the way Claude Code exposes it (`mcp__ark__<tool>`), since that is the one
+agent whose model-visible MCP tool naming is officially documented. Every other target gets the guidance's
+bare tool names unchanged: Ark does not invent a tool-naming convention where none is documented.
+
+| Target | Agent / surface | Suggested destination |
+|--------|------------------|------------------------|
+| `claude` | Claude Code | `CLAUDE.md` |
+| `codex` | OpenAI Codex (CLI / IDE extension / cloud) | `AGENTS.md` |
+| `cursor` | Cursor | `AGENTS.md` |
+| `cline` | Cline | `.clinerules/ark.md` |
+| `copilot-vscode` | GitHub Copilot in VS Code | `.github/copilot-instructions.md` |
+| `copilot-cli` | GitHub Copilot CLI | `.github/copilot-instructions.md` |
+
+"Suggested destination" is where each agent's own documentation says it looks for repository-local
+instructions — not the only mechanism that agent supports, and not something Ark writes for you.
 
 ```bash
-ark instruction claude                 # print to stdout
-ark instruction claude > ark-instruction.md
-ark instruction claude >> CLAUDE.md    # review CLAUDE.md first to avoid duplicating an existing Ark section
+ark instruction claude                      # print to stdout
+ark instruction codex > ark-instruction.md
+ark instruction codex >> AGENTS.md          # review AGENTS.md first to avoid duplicating an existing Ark section
+ark instruction cursor >> AGENTS.md
+mkdir -p .clinerules && ark instruction cline > .clinerules/ark.md
+ark instruction copilot-vscode >> .github/copilot-instructions.md
+ark instruction copilot-cli >> .github/copilot-instructions.md
 ```
 
-It only prints text: Ark never edits `CLAUDE.md` or any other file, and nothing but the instruction goes to
-stdout. Unsupported targets fail with the list of supported ones. `ark setup claude` shows the same
-instruction after setup; `ark skill` (reusable skill / slash-command artifacts) is a separate feature.
+It only prints text: Ark never creates or edits any of these files, and nothing but the instruction goes to
+stdout. Unsupported targets (e.g. `agents`, `copilot` — neither is a target; see below) fail with the list
+of supported ones. `ark setup claude` shows the same Claude instruction after setup; `ark skill` (reusable
+skill / slash-command artifacts) is a separate feature.
+
+An instruction file is context for the agent's model, not an enforced policy boundary — treat it the same
+way you would treat any other prompt text.
+
+`ark instruction <target>` and `ark setup <client>` currently name the same six agents, but they are
+independent registries for independent concerns: `setup` connects Ark's MCP server to a client; `instruction`
+teaches an agent how to use it. Either list can change without the other.
+
+**Why no `agents` or `copilot` target:** `AGENTS.md` is a destination that several targets happen to share,
+not an agent identity — Claude Code, for one, does not reliably read it (it is skipped whenever a `CLAUDE.md`
+is present). And `copilot` alone is ambiguous between `copilot-vscode` and `copilot-cli`, which read from the
+same file but are different setup surfaces. `ark instruction` always names the agent, never the file format.
 
 ---
 
@@ -375,8 +409,8 @@ instruction after setup; `ark skill` (reusable skill / slash-command artifacts) 
 Ark skills provide **task-oriented guidance for using Ark MCP effectively**: which tool fits which goal
 (repository map, symbol context, graph relations, change impact, search), how the tools combine, when to
 stop exploring, and how to treat ambiguous or uncertain results. They are richer than
-[`ark instruction`](#-instruction--agent-usage-instructions), which prints the short standing guidance
-for `CLAUDE.md`; both teach the same usage model.
+[`ark instruction`](#-instruction--agent-usage-instructions), which prints the same short standing guidance
+for whichever agent you target; both teach the same usage model.
 
 ### Subcommands
 

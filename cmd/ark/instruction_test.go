@@ -72,6 +72,9 @@ func sameTree(a, b map[string]string) bool {
 	return true
 }
 
+// All six targets in canonical order.
+var allInstructionTargets = []string{"claude", "codex", "cursor", "cline", "copilot-vscode", "copilot-cli"}
+
 // `ark instruction claude`: exit 0, stdout is exactly the canonical Claude
 // instruction, stderr is empty, repeated runs are identical, and the working
 // directory (even one holding CLAUDE.md / .mcp.json) is untouched.
@@ -103,6 +106,9 @@ func TestInstructionClaude_RealBinary(t *testing.T) {
 	if stdout != want {
 		t.Errorf("stdout is not exactly the canonical instruction:\n%s", stdout)
 	}
+	if !strings.Contains(stdout, "mcp__ark__") {
+		t.Error("claude output must carry the mcp__ark__ prefix")
+	}
 	if again, _, _ := runArk(t, bin, repo, "instruction", "claude"); again != stdout {
 		t.Error("output is not deterministic across runs")
 	}
@@ -125,6 +131,60 @@ func TestInstructionClaude_RealBinary(t *testing.T) {
 	}
 }
 
+// Every supported target: exit 0, stdout matches instruction.Render exactly,
+// stderr empty, filesystem unchanged. The five non-Claude targets additionally
+// must be byte-identical to the canonical (bare-name) guidance.
+func TestInstructionAllTargets_RealBinary(t *testing.T) {
+	bin := buildArk(t)
+	canonical := instruction.Guidance()
+	for _, target := range allInstructionTargets {
+		t.Run(target, func(t *testing.T) {
+			want, err := instruction.Render(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			repo := t.TempDir()
+			before := tree(t, repo)
+
+			stdout, stderr, code := runArk(t, bin, repo, "instruction", target)
+			if code != 0 {
+				t.Fatalf("exit=%d stderr=%q", code, stderr)
+			}
+			if stderr != "" {
+				t.Errorf("stderr not empty: %q", stderr)
+			}
+			if stdout != want {
+				t.Errorf("stdout differs from instruction.Render(%q)", target)
+			}
+			if !sameTree(before, tree(t, repo)) {
+				t.Errorf("ark instruction %s changed the filesystem", target)
+			}
+			if target != "claude" && stdout != canonical {
+				t.Errorf("ark instruction %s is not byte-identical to the canonical guidance", target)
+			}
+		})
+	}
+	// The five plain targets are also byte-identical to one another.
+	var plainOutputs = map[string]string{}
+	for _, target := range allInstructionTargets {
+		if target == "claude" {
+			continue
+		}
+		out, _, _ := runArk(t, bin, t.TempDir(), "instruction", target)
+		plainOutputs[target] = out
+	}
+	var first string
+	for target, out := range plainOutputs {
+		if first == "" {
+			first = out
+			continue
+		}
+		if out != first {
+			t.Errorf("ark instruction %s differs from the other plain targets", target)
+		}
+	}
+}
+
 // Unsupported or missing targets fail non-zero with the supported targets on
 // stderr, nothing on stdout and no filesystem mutation.
 func TestInstruction_UnsupportedTargets_RealBinary(t *testing.T) {
@@ -132,9 +192,9 @@ func TestInstruction_UnsupportedTargets_RealBinary(t *testing.T) {
 	repo := t.TempDir()
 	before := tree(t, repo)
 	for _, args := range [][]string{
-		{"instruction", "cursor"}, {"instruction", "codex"}, {"instruction", "cline"},
-		{"instruction", "copilot-vscode"}, {"instruction", "copilot-cli"}, {"instruction", "agents"},
-		{"instruction", "unknown"}, {"instruction"}, {"instruction", "claude", "extra"},
+		{"instruction", "agents"}, {"instruction", "copilot"}, {"instruction", "cursor-rules"},
+		{"instruction", "claude-code"}, {"instruction", "unknown"},
+		{"instruction"}, {"instruction", "claude", "extra"},
 	} {
 		stdout, stderr, code := runArk(t, bin, repo, args...)
 		if code == 0 {
@@ -146,7 +206,7 @@ func TestInstruction_UnsupportedTargets_RealBinary(t *testing.T) {
 		if !strings.Contains(stderr, "Error:") {
 			t.Errorf("ark %v: no error on stderr: %q", args, stderr)
 		}
-		if len(args) <= 2 && !strings.Contains(stderr, "supported targets: claude") {
+		if len(args) <= 2 && !strings.Contains(stderr, "supported targets: "+strings.Join(allInstructionTargets, ", ")) {
 			t.Errorf("ark %v: stderr does not list the supported targets: %q", args, stderr)
 		}
 	}

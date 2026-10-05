@@ -16,7 +16,7 @@
 _ark_subcommands="mcp-server mcp-init setup syntax symbol skill instruction"
 _ark_skill_subcommands="init add-explorer update inspect"
 _ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
-_ark_instruction_targets="claude"   # instruction targets are NOT the setup clients
+_ark_instruction_targets="claude codex cursor cline copilot-vscode copilot-cli"   # a separate registry from the setup clients (same names today, by coincidence)
 _ark_langs="go typescript tsx javascript python php"
 _ark_exts="go js ts py java c cpp h txt md html css xml yml yaml json"
 _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"
@@ -297,7 +297,7 @@ _ark_zsh() {
           (( CURRENT == 2 )) && client_arg=('1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline" copilot-vscode\:"Configure Ark for GitHub Copilot in VS Code" copilot-cli\:"Configure Ark for GitHub Copilot CLI"))')
           _arguments -C "${setup_opts[@]}" "${client_arg[@]}"
           ;;
-        instruction) _arguments -C '-h[Show help]' '--help[Show help]' '1:target:(claude)' ;;
+        instruction) _arguments -C '-h[Show help]' '--help[Show help]' '1:target:((claude\:"Instructions for Claude Code" codex\:"Instructions for Codex" cursor\:"Instructions for Cursor" cline\:"Instructions for Cline" copilot-vscode\:"Instructions for GitHub Copilot in VS Code" copilot-cli\:"Instructions for GitHub Copilot CLI"))' ;;
       syntax)     _arguments -C "${syntax_opts[@]}" '1:file:_files' ;;
         symbol)     _arguments -C "${symbol_opts[@]}" '1:file:_files' ;;
         skill)

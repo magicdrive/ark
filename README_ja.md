@@ -116,7 +116,8 @@ Ark が `setup` 経路を実際にテストしているクライアントのみ�
 
 > **Tip:** `setup` は Ark MCP を agent に接続し、`instruction` は agent に Ark MCP の効果的な使い方を伝えます。
 > Claude Code に伝えるには、`ark instruction claude` を実行し、出力をプロジェクトの `CLAUDE.md` に追加してください
-> （[`ark instruction`](#-instruction--agent-向け利用指示) 参照）。すぐ使えるテンプレートは
+> （[`ark instruction`](#-instruction--agent-向け利用指示) 参照。`codex`、`cursor`、`cline`、`copilot-vscode`、
+> `copilot-cli` にも対応しています）。Claude 向けのすぐ使えるテンプレートは
 > [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example) にあります。
 
 ---
@@ -145,7 +146,7 @@ ark skill [オプション]
 | `syntax` | Tree-sitter を使ってファイルを解析し AST を出力 |
 | `symbol` | ファイルからシンボル（関数・型など）を抽出 |
 | `skill` | Claude Code / OpenAI 向けの Ark MCP スキルを生成 |
-| `instruction <target>` | agent 向けの Ark MCP 利用指示を出力（target: `claude`） |
+| `instruction <target>` | agent 向けの Ark MCP 利用指示を出力（target: `claude`、`codex`、`cursor`、`cline`、`copilot-vscode`、`copilot-cli`） |
 
 ---
 
@@ -355,18 +356,51 @@ ark symbol script.py --lang python
 ## 📜 instruction — agent 向け利用指示
 
 `ark instruction <target>` は、coding agent が Ark MCP を効果的に使うための短い Markdown 指示（どの質問にどの
-ツールを選ぶか、ファイル全体の読み込みが適切な場面、不確かな結果の扱い）を出力します。現在の target は
-`claude` のみで、出力はプロジェクトの `CLAUDE.md` にそのまま追加できます。
+ツールを選ぶか、ファイル全体の読み込みが適切な場面、不確かな結果の扱い）を出力します。指示の本文はどの target
+でも同じで、違うのは見せ方だけです。`claude` だけは、tool 名を Claude Code が実際に見せる形
+（`mcp__ark__<tool>`）へ変換します。これは、model に見える MCP tool 名が公式に文書化されている唯一の agent
+だからです。他の target は、指示本文の素の tool 名をそのまま出力します。存在しない命名規則を Ark が勝手に
+作ることはありません。
+
+| Target | Agent / surface | 推奨する貼り付け先 |
+|--------|------------------|------------------|
+| `claude` | Claude Code | `CLAUDE.md` |
+| `codex` | OpenAI Codex（CLI / IDE拡張 / cloud） | `AGENTS.md` |
+| `cursor` | Cursor | `AGENTS.md` |
+| `cline` | Cline | `.clinerules/ark.md` |
+| `copilot-vscode` | GitHub Copilot in VS Code | `.github/copilot-instructions.md` |
+| `copilot-cli` | GitHub Copilot CLI | `.github/copilot-instructions.md` |
+
+「推奨する貼り付け先」は、各 agent の公式ドキュメントがrepository-localなinstructionを探す場所です。
+その agent が対応する唯一の仕組みという意味ではなく、Ark がそこへ書き込むわけでもありません。
 
 ```bash
-ark instruction claude                 # 標準出力へ
-ark instruction claude > ark-instruction.md
-ark instruction claude >> CLAUDE.md    # 既存の Ark セクションと重複しないよう、先に CLAUDE.md を確認
+ark instruction claude                      # 標準出力へ
+ark instruction codex > ark-instruction.md
+ark instruction codex >> AGENTS.md          # 既存の Ark セクションと重複しないよう、先に AGENTS.md を確認
+ark instruction cursor >> AGENTS.md
+mkdir -p .clinerules && ark instruction cline > .clinerules/ark.md
+ark instruction copilot-vscode >> .github/copilot-instructions.md
+ark instruction copilot-cli >> .github/copilot-instructions.md
 ```
 
-出力するだけです。Ark が `CLAUDE.md` やその他のファイルを編集することはなく、標準出力には指示以外を出しません。
-未対応の target は、対応 target の一覧付きでエラーになります。`ark setup claude` も setup 後に同じ指示を表示します。
+出力するだけです。Ark がこれらのファイルを作成・編集することはなく、標準出力には指示以外を出しません。
+未対応の target（例えば `agents` や `copilot` — どちらも target ではありません。下記参照）は、対応 target
+の一覧付きでエラーになります。`ark setup claude` も setup 後に同じ Claude 向け指示を表示します。
 `ark skill`（再利用可能な skill / スラッシュコマンド生成）は別の機能です。
+
+instruction fileは、agentのmodelに渡るcontextであり、強制力のあるpolicyの境界ではありません。他のprompt
+テキストと同様に扱ってください。
+
+`ark instruction <target>` と `ark setup <client>` は現在同じ6つの agent 名を使っていますが、別の目的を持つ
+別々のregistryです。`setup` は Ark の MCP サーバーを client に接続し、`instruction` はその使い方を agent に
+教えます。どちらか一方だけが増減することもあります。
+
+**`agents` や `copilot` を target にしない理由:** `AGENTS.md` は複数の target が偶然共有している貼り付け先で
+あり、agentの identity ではありません。実際 Claude Code は、`CLAUDE.md` があると `AGENTS.md` を確実には読み
+ません。また `copilot` だけでは、同じファイルを読むが setup 上は別の surface である `copilot-vscode` と
+`copilot-cli` のどちらかを特定できません。`ark instruction` は常に agent 名を指定し、ファイル形式では指定し
+ません。
 
 ---
 
@@ -374,7 +408,7 @@ ark instruction claude >> CLAUDE.md    # 既存の Ark セクションと重複�
 
 Ark の skill は、**Ark MCP を効果的に使うための、タスク指向のガイダンス**を提供します: どの目的にどの
 ツール（repository map、symbol context、graph relations、change impact、検索）を使うか、ツールの組み合わせ方、
-探索をやめる判断、曖昧・不確かな結果の扱い。`CLAUDE.md` 向けの短い常設ガイダンスを出力する
+探索をやめる判断、曖昧・不確かな結果の扱い。target先の agent に向けて同じ短い常設ガイダンスを出力する
 [`ark instruction`](#-instruction--agent-向け利用指示) より詳しい内容ですが、どちらも同じ利用モデルを教えます。
 
 ### Subcommands
