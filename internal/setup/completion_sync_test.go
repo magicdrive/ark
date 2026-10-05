@@ -7,14 +7,18 @@ import (
 	"testing"
 )
 
-// TestCompletionsListAllClients guards against drift between the supported-client
-// registry and the hand-written shell completions (plan §21). Every supported
-// client must appear in every completion file.
+// TestCompletionsListAllClients is a cheap guard: every supported client must
+// appear in every completion file. The behavioural guard (what each shell
+// actually offers at `ark setup <TAB>`, in registry order) lives in
+// internal/completion.
 func TestCompletionsListAllClients(t *testing.T) {
 	files := map[string]string{
 		"bash": filepath.Join("..", "..", "misc", "completions", "bash", "ark-completion.bash"),
 		"zsh":  filepath.Join("..", "..", "misc", "completions", "zsh", "_ark"),
 		"fish": filepath.Join("..", "..", "misc", "completions", "fish", "ark.fish"),
+		// The combined bash+zsh script is the one the README tells users to
+		// source; it was missing from this guard and drifted unnoticed.
+		"sh": filepath.Join("..", "..", "misc", "completions", "ark-completion.sh"),
 	}
 	for shell, path := range files {
 		data, err := os.ReadFile(path)

@@ -497,11 +497,19 @@ Arklite is a compact single‑line‑per‑file format tuned for LLM token effic
 ## 🧩 Shell Completions
 
 ```sh
-# Bash & Zsh
-source completions/ark-completion.sh
+# Bash & Zsh (one script for both)
+source misc/completions/ark-completion.sh
 # Fish
-funcsave ark
+mkdir -p ~/.config/fish/completions
+cp misc/completions/fish/ark.fish ~/.config/fish/completions/
 ```
+
+Completions cover the subcommands, every flag, the finite flag values
+(`--lang`, `--format`, `--type`, `on`/`off`, ...) and `ark setup <client>`
+(`claude`, `cursor`, `codex`, `cline`). Standalone per-shell files are in
+`misc/completions/{bash,zsh,fish}/`. Tests (`internal/completion`) fail if a
+completion file drifts from the CLI, the setup client registry or the language
+registry.
 
 ---
 

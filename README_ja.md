@@ -495,11 +495,18 @@ Arklite は LLM のトークン効率を高めるために設計された、フ�
 ## 🧩 Shell Completions
 
 ```sh
-# Bash / Zsh
-source completions/ark-completion.sh
+# Bash / Zsh（両対応の単一スクリプト）
+source misc/completions/ark-completion.sh
 # Fish
-funcsave ark
+mkdir -p ~/.config/fish/completions
+cp misc/completions/fish/ark.fish ~/.config/fish/completions/
 ```
+
+補完はサブコマンド、すべてのフラグ、有限値を取るフラグの値（`--lang`、`--format`、
+`--type`、`on`/`off` など）、`ark setup <client>`（`claude` / `cursor` / `codex` /
+`cline`）を対象とします。シェル別の単体ファイルは `misc/completions/{bash,zsh,fish}/`
+にあります。補完ファイルが CLI・setup client レジストリ・言語レジストリとずれると、
+テスト（`internal/completion`）が失敗します。
 
 ---
 

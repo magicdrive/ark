@@ -72,12 +72,12 @@ mcp-server options:
 
 syntax options:
   -h, --help                                       Show help message.
-  --lang <language>                                Specify language (go, typescript, tsx, javascript, python).
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php).
   --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
 
 symbol options:
   -h, --help                                       Show help message.
-  --lang <language>                                Specify language (go, typescript, tsx, javascript, python).
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php).
   --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
 
 skill subcommands:

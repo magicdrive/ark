@@ -33,6 +33,11 @@ jobs:
             exit 1
           fi
 
+      - name: Install zsh (shell completion tests)
+        # internal/completion runs the completion scripts under real bash and
+        # zsh; without zsh those subtests are skipped.
+        run: sudo apt-get update && sudo apt-get install -y zsh
+
       - name: Run go vet
         run: go vet ./...
 

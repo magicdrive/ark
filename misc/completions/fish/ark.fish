@@ -7,6 +7,21 @@ function __fish_ark_is_first_arg
     test (count $cmd) -eq 1
 end
 
+function __fish_ark_no_subcommand
+    # True when argv[1] is not a subcommand: the general (default) command, whose
+    # options are only valid before/without a subcommand.
+    set cmd (commandline -opc)
+    test (count $cmd) -lt 2; and return 0
+    not contains -- $cmd[2] mcp-server mcp-init setup syntax symbol skill
+end
+
+function __fish_ark_setup_client_position
+    # True only for the first operand after `ark setup`: the client must come
+    # first (the parser rejects flags-before-client).
+    set cmd (commandline -opc)
+    test (count $cmd) -eq 2; and test "$cmd[2]" = setup
+end
+
 # ----- sub-command ----------------------------------------------------------
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'mcp-server'                         \
@@ -28,28 +43,28 @@ complete -c ark -n '__fish_ark_is_first_arg'    \
         -d 'Register MCP server entry in settings.json'
 
 # ----- general flags (no argument) ------------------------------------------
-complete -c ark -s h -l help          -d 'Show help'
-complete -c ark -s v -l version       -d 'Show version'
-complete -c ark -s c -l compless      -d 'Compress output (arklite)'
-complete -c ark -s S -l silent        -d 'Silent mode'
-complete -c ark -s s -l skip-non-utf8 -d 'Skip non-UTF8 files'
-complete -c ark -s D -l delete-comment -d 'Delete code comments'
+complete -c ark -n '__fish_ark_no_subcommand' -s h -l help          -d 'Show help'
+complete -c ark -n '__fish_ark_no_subcommand' -s v -l version       -d 'Show version'
+complete -c ark -n '__fish_ark_no_subcommand' -s c -l compless      -d 'Compress output (arklite)'
+complete -c ark -n '__fish_ark_no_subcommand' -s S -l silent        -d 'Silent mode'
+complete -c ark -n '__fish_ark_no_subcommand' -s s -l skip-non-utf8 -d 'Skip non-UTF8 files'
+complete -c ark -n '__fish_ark_no_subcommand' -s D -l delete-comment -d 'Delete code comments'
 
 # ----- general options with arguments ---------------------------------------
-complete -c ark -l output-filename -s o -d 'Output file'      -r -f
-complete -c ark -l scan-buffer     -s b -d 'Buffer size'      -a '1M 5M 10M 100K'
-complete -c ark -l output-format   -s f -d 'Output format'    -a 'txt md xml arklite'
-complete -c ark -l mask-secrets    -s m -d 'Mask secrets'     -a 'on off'
-complete -c ark -l allow-gitignore -s a -d 'Use .gitignore'   -a 'on off'
-complete -c ark -l additionally-ignorerule -s A -d 'Extra ignore file' -r -f
-complete -c ark -l with-line-number -s n -d 'Line numbers'    -a 'on off'
-complete -c ark -l ignore-dotfile   -s d -d 'Ignore dotfiles' -a 'on off'
-complete -c ark -l pattern-regex    -s x -d 'Pattern regexp'  -r
-complete -c ark -l include-ext      -s i -d 'Include ext'     -r
-complete -c ark -l exclude-file-regex -s g -d 'Exclude file regex' -r
-complete -c ark -l exclude-dir-regex  -s G -d 'Exclude dir regex'  -r
-complete -c ark -l exclude-ext      -s e -d 'Exclude ext'     -r
-complete -c ark -l exclude-dir      -s E -d 'Exclude dir'     -r
+complete -c ark -n '__fish_ark_no_subcommand' -l output-filename -s o -d 'Output file'      -r -f
+complete -c ark -n '__fish_ark_no_subcommand' -l scan-buffer     -s b -d 'Buffer size'      -a '1M 5M 10M 100K'
+complete -c ark -n '__fish_ark_no_subcommand' -l output-format   -s f -d 'Output format'    -a 'txt md xml arklite auto'
+complete -c ark -n '__fish_ark_no_subcommand' -l mask-secrets    -s m -d 'Mask secrets'     -a 'on off'
+complete -c ark -n '__fish_ark_no_subcommand' -l allow-gitignore -s a -d 'Use .gitignore'   -a 'on off'
+complete -c ark -n '__fish_ark_no_subcommand' -l additionally-ignorerule -s A -d 'Extra ignore file' -r -f
+complete -c ark -n '__fish_ark_no_subcommand' -l with-line-number -s n -d 'Line numbers'    -a 'on off'
+complete -c ark -n '__fish_ark_no_subcommand' -l ignore-dotfile   -s d -d 'Ignore dotfiles' -a 'on off'
+complete -c ark -n '__fish_ark_no_subcommand' -l pattern-regex    -s x -d 'Pattern regexp'  -r
+complete -c ark -n '__fish_ark_no_subcommand' -l include-ext      -s i -d 'Include ext'     -r
+complete -c ark -n '__fish_ark_no_subcommand' -l exclude-file-regex -s g -d 'Exclude file regex' -r
+complete -c ark -n '__fish_ark_no_subcommand' -l exclude-dir-regex  -s G -d 'Exclude dir regex'  -r
+complete -c ark -n '__fish_ark_no_subcommand' -l exclude-ext      -s e -d 'Exclude ext'     -r
+complete -c ark -n '__fish_ark_no_subcommand' -l exclude-dir      -s E -d 'Exclude dir'     -r
 
 # ----- mcp-server flags ------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l no-cache -d 'Disable persistent index cache'
@@ -90,7 +105,7 @@ complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
 
 # ----- syntax options --------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from syntax' \
-        -l lang -d 'Language' -a 'go typescript tsx javascript python'
+        -l lang -d 'Language' -a 'go typescript tsx javascript python php'
 complete -c ark -n '__fish_seen_subcommand_from syntax' \
         -l format -d 'Output format' -a 'text json'
 complete -c ark -n '__fish_seen_subcommand_from syntax' \
@@ -98,7 +113,7 @@ complete -c ark -n '__fish_seen_subcommand_from syntax' \
 
 # ----- symbol options --------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from symbol' \
-        -l lang -d 'Language' -a 'go typescript tsx javascript python'
+        -l lang -d 'Language' -a 'go typescript tsx javascript python php'
 complete -c ark -n '__fish_seen_subcommand_from symbol' \
         -l format -d 'Output format' -a 'text json'
 complete -c ark -n '__fish_seen_subcommand_from symbol' \
@@ -153,16 +168,10 @@ complete -c ark -n '__fish_seen_subcommand_from skill; and __fish_seen_subcomman
         -s h -l help -d 'Show help'
 
 # ----- setup client (first positional) ---------------------------------------
-function __fish_ark_setup_no_client
-    set cmd (commandline -opc)
-    not contains -- claude $cmd; and not contains -- cursor $cmd
-    and not contains -- codex $cmd; and not contains -- cline $cmd
-end
-
-complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'claude' -d 'Configure Ark for Claude Code'
-complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'cursor' -d 'Configure Ark for Cursor'
-complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'codex'  -d 'Configure Ark for Codex'
-complete -c ark -n '__fish_seen_subcommand_from setup; and __fish_ark_setup_no_client' -a 'cline'  -d 'Configure Ark for Cline'
+complete -c ark -n '__fish_ark_setup_client_position' -a 'claude' -d 'Configure Ark for Claude Code'
+complete -c ark -n '__fish_ark_setup_client_position' -a 'cursor' -d 'Configure Ark for Cursor'
+complete -c ark -n '__fish_ark_setup_client_position' -a 'codex'  -d 'Configure Ark for Codex'
+complete -c ark -n '__fish_ark_setup_client_position' -a 'cline'  -d 'Configure Ark for Cline'
 
 # ----- setup options ---------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from setup' \
