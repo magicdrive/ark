@@ -1,7 +1,8 @@
 ## stats
-files=6 symbols=6 references=12 relations=0 skipped=0
+files=6 symbols=7 references=12 relations=0 skipped=0
 lang typescript=6
 ## symbols
+symbol Broken kind=class lang=typescript qualified="Broken" receiver="" exported=true @broken.ts:1:8-5:26
 symbol Draft kind=class lang=typescript qualified="Draft" receiver="" exported=true @draft.ts:3:8-5:2
 symbol Repository kind=class lang=typescript qualified="Repository" receiver="" exported=true @repository.ts:3:8-9:2
 symbol UserService kind=class lang=typescript qualified="UserService" receiver="" exported=true @service.ts:4:8-13:2
