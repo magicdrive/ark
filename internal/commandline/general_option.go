@@ -220,7 +220,9 @@ func (cr *Option) Normalize() error {
 	}
 
 	// allow-gitignore
+	allowGitignoreValid := true
 	if err := cr.AllowGitignoreFlag.Set(cr.AllowGitignoreFlagValue); err != nil {
+		allowGitignoreValid = false
 		errorMessages = append(errorMessages, fmt.Sprintf("--allow-gitignore %s", err.Error()))
 	}
 
@@ -284,7 +286,11 @@ func (cr *Option) Normalize() error {
 		cr.AdditionallyIgnoreRuleFilenameList = []string{}
 	}
 
-	cr.GitIgnoreRule, _ = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
+	// Only an accepted value may be read back: Bool() panics on an unset switch,
+	// and the invalid value is already reported through errorMessages below.
+	if allowGitignoreValid {
+		cr.GitIgnoreRule, _ = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
+	}
 
 	// compile regexp
 	if cr.PatternRegexpString != "" {
