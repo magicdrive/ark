@@ -5,14 +5,19 @@ import (
 )
 
 // jsonClient is the shared implementation for clients whose MCP configuration
-// is a JSON file with a top-level "mcpServers" object (Claude, Cursor, Cline).
+// is a JSON file with one top-level server-map object: "mcpServers" for Claude,
+// Cursor and Cline, or the key another client documents (see serversKey).
 //
 // Per-client variation is expressed as data/functions, not subclasses
 // (plan §8): where the config file lives, and how the desired Ark entry is
 // encoded. The safe read → classify → act → atomic-write → verify flow is
 // identical and lives in applyJSON.
 type jsonClient struct {
-	id          ClientID
+	id ClientID
+	// serversKey is the top-level server-map key of the client's schema. Empty
+	// means the default "mcpServers". It is data supplied by the adapter; this
+	// layer has no per-client conditions.
+	serversKey  string
 	serverName  string
 	managedBy   string
 	resolvePath func(opts Options) (string, error)
@@ -27,7 +32,11 @@ func (c jsonClient) applyJSON(opts Options) (*Result, error) {
 	}
 	desired := c.buildEntry(opts)
 
-	cfg, baseState, err := loadJSONConfig(path, c.serverName)
+	serversKey := c.serversKey
+	if serversKey == "" {
+		serversKey = mcpServersKey
+	}
+	cfg, baseState, err := loadJSONConfigKey(path, serversKey, c.serverName)
 	if err != nil {
 		return nil, err
 	}

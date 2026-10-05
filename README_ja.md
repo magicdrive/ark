@@ -54,6 +54,8 @@ ark setup cursor   # Cursor
 ark setup codex    # Codex
 # または
 ark setup cline    # Cline CLI
+# または
+ark setup copilot  # VS Code の GitHub Copilot Chat / Agent mode（このリポジトリ）
 ```
 
 これはクライアントの設定に Ark MCP サーバーを登録します。**Claude Code** の場合は
@@ -71,11 +73,25 @@ Ark が `setup` 経路を実際にテストしているクライアントのみ�
 | Cursor       | `ark setup cursor`  | `.cursor/mcp.json`（project）/ `~/.cursor/mcp.json`（`--global`） |
 | Codex        | `ark setup codex`   | Codex のユーザー設定（公式 `codex` CLI 経由） |
 | Cline        | `ark setup cline`   | `~/.cline/mcp.json`（Cline **CLI**。下記注記参照） |
+| GitHub Copilot (VS Code) | `ark setup copilot` | `.vscode/mcp.json`（プロジェクトのみ。下記注記参照） |
 
 > **Cline の対象範囲:** v4.1 がサポートするのは **Cline CLI** の設定 `~/.cline/mcp.json` のみです。
 > Cline の VS Code / Cursor / Windsurf 拡張が使う MCP 設定
 > (`.../globalStorage/.../cline_mcp_settings.json`) は **対象外** です — Ark は OS/エディタ固有の
 > ストレージパスを探索しません。IDE 拡張向けは手動で設定してください。
+
+> **Copilot の対象範囲:** `ark setup copilot` が設定するのは、現在のリポジトリの
+> **VS Code 上の GitHub Copilot Chat / Agent mode** のみです（`.vscode/mcp.json`、トップレベルは
+> `servers`）。`--global` は未対応です（VS Code のユーザー設定パスが公式に文書化されていないため）。
+> Copilot CLI、GitHub ホストの Copilot エージェント、GitHub のリポジトリ設定は**設定しません**。
+> Claude Code が使うポータブルな `.mcp.json` にも一切触れません。Copilot CLI の設定は
+> 現時点では `ark setup copilot` の管理対象外です。
+>
+> 生成される `--root` は**リポジトリの絶対パス**です（VS Code の公式ドキュメントは、
+> `.vscode/mcp.json` の `args` でのワークスペース変数の展開も、multi-root ワークスペースでの意味も
+> 保証していません）。そのためこのファイルはマシン固有です。そのままコミット・共有せず、各開発者が
+> ローカルで `ark setup copilot` を実行してください。`command` は、`--ark-path` を指定しない限り
+> `ark`（`PATH` で解決）です。
 
 セットアップ後は MCP ツールを直接呼び出せます（`mcp__ark__find_symbol`、
 `mcp__ark__get_symbols` など）。Claude Code では生成された `/<name>` スラッシュコマンドも使えます。
@@ -106,7 +122,7 @@ ark skill [オプション]
 
 | Command | Description |
 |---------|-------------|
-| `setup <client>` | サポートする coding agent 向けに Ark を設定（claude, cursor, codex, cline） |
+| `setup <client>` | サポートする coding agent 向けに Ark を設定（claude, cursor, codex, cline, copilot） |
 | `mcp-server` | Ark を MCP サーバーとして起動 (stdio または HTTP) |
 | `mcp-init` | `.mcp.json` に Ark MCP 設定を追加 |
 | `syntax` | Tree-sitter を使ってファイルを解析し AST を出力 |
@@ -157,7 +173,7 @@ ark setup codex --global
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `<client>` | – | 対象 agent: `claude`, `cursor`, `codex`, `cline` | – |
+| `<client>` | – | 対象 agent: `claude`, `cursor`, `codex`, `cline`, `copilot`（VS Code の Copilot、プロジェクトのみ） | – |
 | `--name <name>` | `-n` | Claude の skill/スラッシュコマンド名（**Claude のみ**） | ディレクトリ名 |
 | `--ark-path <path>` | `-p` | `ark` バイナリのパス（セットアップ時に検証） | 自動検出（`PATH` 上の `ark`） |
 | `--root <dir>` | `-r` | 提供するリポジトリルート | `$PWD` |
@@ -207,6 +223,16 @@ Ark MCP サーバーを手動で追加してください。コマンドは常に
 ```
 
 **Cline CLI** — `~/.cline/mcp.json`: Cursor と同じ形式。
+
+**GitHub Copilot (VS Code)** — `.vscode/mcp.json`: サーバーは `servers` の下に置き、`"type": "stdio"` を付けます:
+
+```json
+{
+  "servers": {
+    "ark": { "type": "stdio", "command": "ark", "args": ["mcp-server", "--root", "/abs/path/to/repo"], "env": {} }
+  }
+}
+```
 
 **Codex** — 公式 CLI で登録: `codex mcp add ark -- ark mcp-server --root /abs/path/to/repo`。
 
@@ -504,7 +530,7 @@ cp misc/completions/fish/ark.fish ~/.config/fish/completions/
 
 補完はサブコマンド、すべてのフラグ、有限値を取るフラグの値（`--lang`、`--format`、
 `--type`、`on`/`off` など）、`ark setup <client>`（`claude` / `cursor` / `codex` /
-`cline`）を対象とします。シェル別の単体ファイルは `misc/completions/{bash,zsh,fish}/`
+`cline` / `copilot`）を対象とします。シェル別の単体ファイルは `misc/completions/{bash,zsh,fish}/`
 にあります。補完ファイルが CLI・setup client レジストリ・言語レジストリとずれると、
 テスト（`internal/completion`）が失敗します。
 

@@ -17,6 +17,10 @@ const (
 	ClientCursor ClientID = "cursor"
 	ClientCodex  ClientID = "codex"
 	ClientCline  ClientID = "cline"
+	// ClientCopilot is GitHub Copilot Chat / Agent mode in VS Code, configured
+	// through the workspace's .vscode/mcp.json only. It does NOT cover the
+	// Copilot CLI, the GitHub-hosted Copilot agent, or VS Code user settings.
+	ClientCopilot ClientID = "copilot"
 )
 
 // clientInfo holds registry metadata for a supported client.
@@ -32,6 +36,7 @@ var registry = []clientInfo{
 	{ClientCursor, "Cursor", "Configure Ark for Cursor"},
 	{ClientCodex, "Codex", "Configure Ark for Codex"},
 	{ClientCline, "Cline", "Configure Ark for Cline"},
+	{ClientCopilot, "GitHub Copilot (VS Code)", "Configure Ark for GitHub Copilot in VS Code (project .vscode/mcp.json)"},
 }
 
 // SupportedClients returns the ordered list of supported client IDs.

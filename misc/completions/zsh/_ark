@@ -119,7 +119,7 @@ case $state in
         # `ark setup <client> [OPTIONS]`: the client is the first operand and
         # must precede every option.
         client_arg=()
-        (( CURRENT == 2 )) && client_arg=('1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline"))')
+        (( CURRENT == 2 )) && client_arg=('1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline" copilot\:"Configure Ark for GitHub Copilot in VS Code"))')
         _arguments -C "${setup_opts[@]}" "${client_arg[@]}"
         ;;
       syntax)     _arguments -C "${syntax_opts[@]}" '1:file:_files' ;;

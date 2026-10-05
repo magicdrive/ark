@@ -9,14 +9,18 @@ import (
 	"path/filepath"
 )
 
-// jsonConfig is an MCP configuration file that stores servers under a top-level
-// "mcpServers" object, as used by Claude Code, Cursor and the Cline CLI.
+// jsonConfig is an MCP configuration file that stores servers under one
+// top-level object. The object's key is supplied by the adapter: "mcpServers"
+// for Claude Code, Cursor and the Cline CLI (mcpServersKey, the default), and
+// whatever another client's documented schema uses ("servers" for VS Code).
+// This layer knows nothing about any particular client.
 //
 // The whole document is decoded into a map so unknown top-level keys, unknown
 // server entries and unknown fields inside the Ark entry are all preserved
 // across a rewrite (plan §13). Ark only ever touches its own entry.
 type jsonConfig struct {
 	path        string
+	serversKey  string // top-level server-map key of this client's schema
 	serverName  string
 	existed     bool
 	origBytes   []byte
@@ -32,10 +36,17 @@ const (
 	maxConfigSize = 16 << 20 // 16 MiB guard against oversized/hostile config (plan §33)
 )
 
-// loadJSONConfig reads and parses the config file, classifying any structural
-// problem as Malformed/Unavailable. It performs no mutation.
+// loadJSONConfig reads and parses a config file that keeps its servers under
+// the default "mcpServers" key. See loadJSONConfigKey.
 func loadJSONConfig(path, serverName string) (*jsonConfig, State, error) {
-	c := &jsonConfig{path: path, serverName: serverName, origMode: 0644}
+	return loadJSONConfigKey(path, mcpServersKey, serverName)
+}
+
+// loadJSONConfigKey reads and parses the config file, classifying any
+// structural problem as Malformed/Unavailable. serversKey names the top-level
+// server map. It performs no mutation.
+func loadJSONConfigKey(path, serversKey, serverName string) (*jsonConfig, State, error) {
+	c := &jsonConfig{path: path, serversKey: serversKey, serverName: serverName, origMode: 0644}
 
 	// Reject non-regular targets (symlink, device, etc.) before touching them.
 	if info, err := os.Lstat(path); err == nil {
@@ -77,13 +88,13 @@ func loadJSONConfig(path, serverName string) (*jsonConfig, State, error) {
 	}
 	c.doc = doc
 
-	switch v := doc[mcpServersKey].(type) {
+	switch v := doc[serversKey].(type) {
 	case nil:
 		c.mcpServers = map[string]any{}
 	case map[string]any:
 		c.mcpServers = v
 	default:
-		return nil, StateMalformed, fmt.Errorf("%s has an unexpected %q type (%T); Ark cannot safely merge and did not modify the file", path, mcpServersKey, v)
+		return nil, StateMalformed, fmt.Errorf("%s has an unexpected %q type (%T); Ark cannot safely merge and did not modify the file", path, serversKey, v)
 	}
 
 	if entry, ok := c.mcpServers[serverName]; ok {
@@ -111,7 +122,7 @@ func (c *jsonConfig) classify(desired map[string]any) (State, error) {
 // setEntry installs the desired Ark entry into the in-memory document.
 func (c *jsonConfig) setEntry(desired map[string]any) {
 	c.mcpServers[c.serverName] = desired
-	c.doc[mcpServersKey] = c.mcpServers
+	c.doc[c.serversKey] = c.mcpServers
 }
 
 // describeExisting renders the current Ark entry for conflict messages.
@@ -159,7 +170,7 @@ func (c *jsonConfig) verify(desired map[string]any, written []byte) error {
 		c.rollback()
 		return fmt.Errorf("verify failed: %s is not valid JSON after write: %w", c.path, err)
 	}
-	servers, _ := doc[mcpServersKey].(map[string]any)
+	servers, _ := doc[c.serversKey].(map[string]any)
 	eq, cmpErr := semanticEqual(servers[c.serverName], desired)
 	if cmpErr != nil || !eq {
 		c.rollback()

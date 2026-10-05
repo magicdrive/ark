@@ -28,8 +28,8 @@ func TestParseClientID(t *testing.T) {
 	}
 }
 
-func TestSupportedClients_FourClients(t *testing.T) {
-	want := []ClientID{ClientClaude, ClientCursor, ClientCodex, ClientCline}
+func TestSupportedClients_CanonicalOrder(t *testing.T) {
+	want := []ClientID{ClientClaude, ClientCursor, ClientCodex, ClientCline, ClientCopilot}
 	got := SupportedClients()
 	if len(got) != len(want) {
 		t.Fatalf("expected %d clients, got %d: %v", len(want), len(got), got)
@@ -47,6 +47,8 @@ func TestDisplayName(t *testing.T) {
 		ClientCursor: "Cursor",
 		ClientCodex:  "Codex",
 		ClientCline:  "Cline",
+		// Names the surface: VS Code only, not the Copilot CLI or cloud agent.
+		ClientCopilot: "GitHub Copilot (VS Code)",
 	}
 	for id, want := range cases {
 		if got := id.DisplayName(); got != want {
