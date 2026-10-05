@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func copilotConfig(root string) string { return filepath.Join(root, ".vscode", "mcp.json") }
+func copilotVSCodeConfig(root string) string { return filepath.Join(root, ".vscode", "mcp.json") }
 
 func servers(t *testing.T, doc map[string]any) map[string]any {
 	t.Helper()
@@ -27,30 +27,66 @@ func readBytes(t *testing.T, path string) []byte {
 	return b
 }
 
-func TestClientCopilot_RegisteredAndNamed(t *testing.T) {
-	if got, err := ParseClientID("copilot"); err != nil || got != ClientCopilot {
-		t.Fatalf("ParseClientID(copilot) = %v, %v", got, err)
+func TestClientCopilotVSCode_RegisteredAndNamed(t *testing.T) {
+	if got, err := ParseClientID("copilot-vscode"); err != nil || got != ClientCopilotVSCode {
+		t.Fatalf("ParseClientID(copilot-vscode) = %v, %v", got, err)
 	}
 	ids := SupportedClientStrings()
-	if ids[len(ids)-2] != "copilot" || ids[len(ids)-1] != "copilot-cli" {
-		t.Errorf("copilot, copilot-cli must follow the existing clients in canonical order: %v", ids)
+	want := []string{"claude", "cursor", "codex", "cline", "copilot-vscode", "copilot-cli"}
+	if strings.Join(ids, ",") != strings.Join(want, ",") {
+		t.Errorf("canonical client order = %v, want %v", ids, want)
 	}
-	if _, err := ParseClientID("github-copilot"); err == nil {
-		t.Error("only the name `copilot` is a client; other spellings must be rejected")
+	// Other spellings are plain unknown clients — no alias, no special case.
+	for _, name := range []string{"github-copilot", "copilot-code", "vscode-copilot"} {
+		if _, err := ParseClientID(name); err == nil {
+			t.Errorf("%q must not be a client", name)
+		}
 	}
 }
 
-// ark setup copilot → <root>/.vscode/mcp.json, top-level "servers", stdio entry.
-func TestCopilot_Absent_CreatesVSCodeConfig(t *testing.T) {
+// The former client name `copilot` is gone: it is an ordinary unknown client
+// (no deprecated alias, no special handling) and nothing is written.
+func TestOldCopilotClientName_IsUnknown_NoMutation(t *testing.T) {
+	if _, err := ParseClientID("copilot"); err == nil {
+		t.Fatal("`copilot` must not be a valid client")
+	} else {
+		if !strings.Contains(err.Error(), `unsupported client "copilot"`) {
+			t.Errorf("want the generic unknown-client error, got: %v", err)
+		}
+		for _, id := range SupportedClientStrings() {
+			if !strings.Contains(err.Error(), id) {
+				t.Errorf("error should list supported client %q: %v", id, err)
+			}
+		}
+		if strings.Contains(strings.ToLower(err.Error()), "deprecated") || strings.Contains(err.Error(), "renamed") {
+			t.Errorf("no deprecation/migration handling is wanted: %v", err)
+		}
+	}
+	for _, id := range SupportedClientStrings() {
+		if id == "copilot" {
+			t.Fatal("`copilot` is still in the registry")
+		}
+	}
 	root, ark := t.TempDir(), fakeArk(t)
-	res, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root})
+	if _, err := Run(Options{Client: ClientID("copilot"), ArkPath: ark, RootDir: root}); err == nil {
+		t.Fatal("Run accepted the old client name")
+	}
+	if entries, _ := os.ReadDir(root); len(entries) != 0 {
+		t.Errorf("rejected client created files: %v", entries)
+	}
+}
+
+// ark setup copilot-vscode → <root>/.vscode/mcp.json, top-level "servers", stdio entry.
+func TestCopilotVSCode_Absent_CreatesVSCodeConfig(t *testing.T) {
+	root, ark := t.TempDir(), fakeArk(t)
+	res, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.State != StateAbsent || !res.Changed || res.ConfigPath != copilotConfig(root) || res.Scope != "project" {
+	if res.State != StateAbsent || !res.Changed || res.ConfigPath != copilotVSCodeConfig(root) || res.Scope != "project" {
 		t.Fatalf("unexpected result: %+v", res)
 	}
-	doc := readJSON(t, copilotConfig(root))
+	doc := readJSON(t, copilotVSCodeConfig(root))
 	if _, bad := doc["mcpServers"]; bad {
 		t.Error(`VS Code's schema uses "servers"; "mcpServers" must not be written`)
 	}
@@ -66,34 +102,34 @@ func TestCopilot_Absent_CreatesVSCodeConfig(t *testing.T) {
 		t.Errorf("env = %v", entry["env"])
 	}
 	// Report names the surface honestly.
-	if rep := res.Report(); !strings.Contains(rep, "GitHub Copilot (VS Code)") || !strings.Contains(rep, copilotConfig(root)) {
+	if rep := res.Report(); !strings.Contains(rep, "GitHub Copilot (VS Code)") || !strings.Contains(rep, copilotVSCodeConfig(root)) {
 		t.Errorf("report does not name the surface/path:\n%s", rep)
 	}
 }
 
 // Re-running on the file Ark generated is Equivalent and changes nothing;
 // determinism: identical input → identical bytes.
-func TestCopilot_Equivalent_NoOp_AndDeterministic(t *testing.T) {
+func TestCopilotVSCode_Equivalent_NoOp_AndDeterministic(t *testing.T) {
 	root, ark := t.TempDir(), fakeArk(t)
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root}); err != nil {
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root}); err != nil {
 		t.Fatal(err)
 	}
-	first := readBytes(t, copilotConfig(root))
+	first := readBytes(t, copilotVSCodeConfig(root))
 
-	res, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root})
+	res, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root})
 	if err != nil || res.State != StateEquivalent || res.Changed {
 		t.Fatalf("second run: %+v err=%v", res, err)
 	}
-	if string(readBytes(t, copilotConfig(root))) != string(first) {
+	if string(readBytes(t, copilotVSCodeConfig(root))) != string(first) {
 		t.Error("Equivalent run modified the file")
 	}
 
 	other := t.TempDir()
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: other}); err != nil {
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: other}); err != nil {
 		t.Fatal(err)
 	}
 	a := strings.ReplaceAll(string(first), root, "<root>")
-	b := strings.ReplaceAll(string(readBytes(t, copilotConfig(other))), other, "<root>")
+	b := strings.ReplaceAll(string(readBytes(t, copilotVSCodeConfig(other))), other, "<root>")
 	if a != b {
 		t.Errorf("same input produced different output:\n%s\n%s", a, b)
 	}
@@ -116,9 +152,9 @@ const copilotExisting = `{
 
 // Other servers, "inputs" and unknown fields survive adding Ark — and survive
 // --force replacing a conflicting Ark entry.
-func TestCopilot_PreservesOtherServersInputsAndUnknownFields(t *testing.T) {
+func TestCopilotVSCode_PreservesOtherServersInputsAndUnknownFields(t *testing.T) {
 	root, ark := t.TempDir(), fakeArk(t)
-	p := copilotConfig(root)
+	p := copilotVSCodeConfig(root)
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	if err := os.WriteFile(p, []byte(copilotExisting), 0o644); err != nil {
 		t.Fatal(err)
@@ -141,7 +177,7 @@ func TestCopilot_PreservesOtherServersInputsAndUnknownFields(t *testing.T) {
 		}
 	}
 
-	if res, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root}); err != nil || res.State != StateAbsent {
+	if res, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root}); err != nil || res.State != StateAbsent {
 		t.Fatalf("add: %+v %v", res, err)
 	}
 	check("after add")
@@ -149,7 +185,7 @@ func TestCopilot_PreservesOtherServersInputsAndUnknownFields(t *testing.T) {
 	// Conflict (different ark path) is refused without --force…
 	ark2 := fakeArk(t)
 	snapshot := readBytes(t, p)
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark2, RootDir: root}); err == nil ||
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark2, RootDir: root}); err == nil ||
 		!strings.Contains(err.Error(), "--force") {
 		t.Fatalf("conflict must be refused with a --force hint, got %v", err)
 	}
@@ -157,7 +193,7 @@ func TestCopilot_PreservesOtherServersInputsAndUnknownFields(t *testing.T) {
 		t.Fatal("refused conflict modified the file")
 	}
 	// …and --force replaces ONLY the Ark entry.
-	res, err := Run(Options{Client: ClientCopilot, ArkPath: ark2, RootDir: root, Force: true})
+	res, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark2, RootDir: root, Force: true})
 	if err != nil || res.State != StateConflict || !res.Changed {
 		t.Fatalf("force: %+v %v", res, err)
 	}
@@ -168,7 +204,7 @@ func TestCopilot_PreservesOtherServersInputsAndUnknownFields(t *testing.T) {
 }
 
 // Malformed configuration is never overwritten — not even with --force.
-func TestCopilot_Malformed_NeverOverwritten(t *testing.T) {
+func TestCopilotVSCode_Malformed_NeverOverwritten(t *testing.T) {
 	cases := map[string]string{
 		"invalid json":      `{"servers": {`,
 		"servers not map":   `{"servers": []}`,
@@ -177,11 +213,11 @@ func TestCopilot_Malformed_NeverOverwritten(t *testing.T) {
 	for name, content := range cases {
 		t.Run(name, func(t *testing.T) {
 			root, ark := t.TempDir(), fakeArk(t)
-			p := copilotConfig(root)
+			p := copilotVSCodeConfig(root)
 			_ = os.MkdirAll(filepath.Dir(p), 0o755)
 			_ = os.WriteFile(p, []byte(content), 0o644)
 			for _, force := range []bool{false, true} {
-				if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root, Force: force}); err == nil {
+				if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root, Force: force}); err == nil {
 					t.Fatalf("force=%v: malformed config accepted", force)
 				}
 				if string(readBytes(t, p)) != content {
@@ -194,12 +230,12 @@ func TestCopilot_Malformed_NeverOverwritten(t *testing.T) {
 
 // A top-level "mcpServers" in .vscode/mcp.json is foreign data for this schema:
 // it is preserved untouched, and Ark still writes its entry under "servers".
-func TestCopilot_ForeignMcpServersKeyPreserved(t *testing.T) {
+func TestCopilotVSCode_ForeignMcpServersKeyPreserved(t *testing.T) {
 	root, ark := t.TempDir(), fakeArk(t)
-	p := copilotConfig(root)
+	p := copilotVSCodeConfig(root)
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	_ = os.WriteFile(p, []byte(`{"mcpServers": {"x": {"command": "y"}}}`), 0o644)
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root}); err != nil {
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root}); err != nil {
 		t.Fatal(err)
 	}
 	doc := readJSON(t, p)
@@ -212,16 +248,16 @@ func TestCopilot_ForeignMcpServersKeyPreserved(t *testing.T) {
 }
 
 // Unavailable: a symlinked or non-regular target is refused.
-func TestCopilot_Unavailable_Symlink(t *testing.T) {
+func TestCopilotVSCode_Unavailable_Symlink(t *testing.T) {
 	root, ark := t.TempDir(), fakeArk(t)
-	p := copilotConfig(root)
+	p := copilotVSCodeConfig(root)
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	target := filepath.Join(t.TempDir(), "real.json")
 	_ = os.WriteFile(target, []byte(`{}`), 0o644)
 	if err := os.Symlink(target, p); err != nil {
 		t.Skip("symlinks unavailable")
 	}
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root, Force: true}); err == nil ||
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root, Force: true}); err == nil ||
 		!strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("want symlink refusal, got %v", err)
 	}
@@ -231,13 +267,13 @@ func TestCopilot_Unavailable_Symlink(t *testing.T) {
 }
 
 // --global is an explicit unsupported error with NO filesystem mutation.
-func TestCopilot_Global_UnsupportedNoMutation(t *testing.T) {
+func TestCopilotVSCode_Global_UnsupportedNoMutation(t *testing.T) {
 	root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(home, ".config"))
-	_, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root, Global: true, Force: true})
-	if err == nil || !strings.Contains(err.Error(), "global setup is not supported for copilot") {
+	_, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root, Global: true, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "global setup is not supported for copilot-vscode") {
 		t.Fatalf("want unsupported error, got %v", err)
 	}
 	for _, dir := range []string{root, home} {
@@ -250,7 +286,7 @@ func TestCopilot_Global_UnsupportedNoMutation(t *testing.T) {
 
 // Isolation: .mcp.json (shared with the Claude adapter) is never read or
 // written, whatever it contains — including a Claude-owned Ark entry.
-func TestCopilot_NeverTouchesDotMcpJSON(t *testing.T) {
+func TestCopilotVSCode_NeverTouchesDotMcpJSON(t *testing.T) {
 	for name, content := range map[string]string{
 		"claude ark entry": `{"mcpServers":{"ark":{"type":"stdio","command":"ark","args":["mcp-server","--root","${CLAUDE_PROJECT_DIR:-.}/"],"env":{}},"keep":{"command":"x"}}}`,
 		"malformed":        `{ this is not json`,
@@ -263,8 +299,8 @@ func TestCopilot_NeverTouchesDotMcpJSON(t *testing.T) {
 			}
 			before, _ := os.Stat(mcpJSON)
 			for _, force := range []bool{false, true} {
-				if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root, Force: force}); err != nil {
-					t.Fatalf("copilot setup must not depend on .mcp.json: %v", err)
+				if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root, Force: force}); err != nil {
+					t.Fatalf("copilot-vscode setup must not depend on .mcp.json: %v", err)
 				}
 			}
 			if string(readBytes(t, mcpJSON)) != content {
@@ -286,7 +322,7 @@ func TestCopilot_NeverTouchesDotMcpJSON(t *testing.T) {
 
 // Claude's own setup in the same repository is unaffected by Copilot setup and
 // vice versa (no shared ownership).
-func TestCopilot_AndClaude_AreIndependent(t *testing.T) {
+func TestCopilotVSCode_AndClaude_AreIndependent(t *testing.T) {
 	root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
@@ -296,7 +332,7 @@ func TestCopilot_AndClaude_AreIndependent(t *testing.T) {
 	}
 	claudeBefore := readBytes(t, filepath.Join(root, ".mcp.json"))
 
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: ark, RootDir: root}); err != nil {
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: ark, RootDir: root}); err != nil {
 		t.Fatal(err)
 	}
 	if string(readBytes(t, filepath.Join(root, ".mcp.json"))) != string(claudeBefore) {
@@ -305,41 +341,41 @@ func TestCopilot_AndClaude_AreIndependent(t *testing.T) {
 	if _, err := Run(Options{Client: ClientClaude, ArkPath: ark, RootDir: root}); err != nil {
 		t.Fatalf("Claude setup must stay Equivalent after Copilot setup: %v", err)
 	}
-	if _, err := os.Stat(copilotConfig(root)); err != nil {
-		t.Error("copilot config missing")
+	if _, err := os.Stat(copilotVSCodeConfig(root)); err != nil {
+		t.Error("copilot-vscode config missing")
 	}
 }
 
 // Explicit --ark-path keeps the shared validation contract.
-func TestCopilot_ArkPathValidation(t *testing.T) {
+func TestCopilotVSCode_ArkPathValidation(t *testing.T) {
 	root := t.TempDir()
 	for name, path := range map[string]string{
 		"missing":   filepath.Join(t.TempDir(), "nope"),
 		"directory": t.TempDir(),
 	} {
-		if _, err := Run(Options{Client: ClientCopilot, ArkPath: path, RootDir: root}); err == nil {
+		if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: path, RootDir: root}); err == nil {
 			t.Errorf("%s: invalid --ark-path accepted", name)
 		}
-		if _, err := os.Stat(copilotConfig(root)); err == nil {
+		if _, err := os.Stat(copilotVSCodeConfig(root)); err == nil {
 			t.Errorf("%s: config written despite invalid --ark-path", name)
 		}
 	}
 	nonexec := filepath.Join(t.TempDir(), "ark")
 	_ = os.WriteFile(nonexec, []byte("x"), 0o644)
-	if _, err := Run(Options{Client: ClientCopilot, ArkPath: nonexec, RootDir: root}); err == nil {
+	if _, err := Run(Options{Client: ClientCopilotVSCode, ArkPath: nonexec, RootDir: root}); err == nil {
 		t.Error("non-executable --ark-path accepted")
 	}
 }
 
 // Lost-update protection and verify/rollback come from the shared layer: a
 // file changed between load and write is not clobbered.
-func TestCopilot_LostUpdateProtection(t *testing.T) {
+func TestCopilotVSCode_LostUpdateProtection(t *testing.T) {
 	root, ark := t.TempDir(), fakeArk(t)
-	p := copilotConfig(root)
+	p := copilotVSCodeConfig(root)
 	_ = os.MkdirAll(filepath.Dir(p), 0o755)
 	_ = os.WriteFile(p, []byte(copilotExisting), 0o644)
 
-	cfg, _, err := loadJSONConfigKey(p, copilotServersKey, "ark")
+	cfg, _, err := loadJSONConfigKey(p, copilotVSCodeServersKey, "ark")
 	if err != nil {
 		t.Fatal(err)
 	}

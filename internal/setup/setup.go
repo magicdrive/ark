@@ -45,8 +45,8 @@ func adapterFor(id ClientID) (adapter, error) {
 		return newClineAdapter(), nil
 	case ClientCodex:
 		return newCodexAdapter(), nil
-	case ClientCopilot:
-		return newCopilotAdapter(), nil
+	case ClientCopilotVSCode:
+		return newCopilotVSCodeAdapter(), nil
 	case ClientCopilotCLI:
 		return newCopilotCLIAdapter(), nil
 	default:

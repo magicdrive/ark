@@ -54,11 +54,11 @@ func TestClientCopilotCLI_RegisteredAndDistinctFromCopilot(t *testing.T) {
 	if got, err := ParseClientID("copilot-cli"); err != nil || got != ClientCopilotCLI {
 		t.Fatalf("ParseClientID(copilot-cli) = %v, %v", got, err)
 	}
-	if ClientCopilot.DisplayName() == ClientCopilotCLI.DisplayName() {
-		t.Error("`copilot` and `copilot-cli` must be distinguishable by display name")
+	if ClientCopilotVSCode.DisplayName() == ClientCopilotCLI.DisplayName() {
+		t.Error("`copilot-vscode` and `copilot-cli` must be distinguishable by display name")
 	}
-	if !strings.Contains(ClientCopilot.DisplayName(), "VS Code") || !strings.Contains(ClientCopilotCLI.DisplayName(), "CLI") {
-		t.Errorf("display names must name the surface: %q / %q", ClientCopilot.DisplayName(), ClientCopilotCLI.DisplayName())
+	if !strings.Contains(ClientCopilotVSCode.DisplayName(), "VS Code") || !strings.Contains(ClientCopilotCLI.DisplayName(), "CLI") {
+		t.Errorf("display names must name the surface: %q / %q", ClientCopilotVSCode.DisplayName(), ClientCopilotCLI.DisplayName())
 	}
 	if _, err := ParseClientID("github-copilot-cli"); err == nil {
 		t.Error("only `copilot-cli` is a client name")
@@ -364,7 +364,7 @@ func TestCopilotCLI_ThenClaude_ReverseOrder(t *testing.T) {
 // VS Code Copilot and Copilot CLI use different files and never touch each
 // other, in either order.
 func TestCopilotCLI_AndCopilotVSCode_AreIndependent(t *testing.T) {
-	for _, order := range [][]ClientID{{ClientCopilot, ClientCopilotCLI}, {ClientCopilotCLI, ClientCopilot}} {
+	for _, order := range [][]ClientID{{ClientCopilotVSCode, ClientCopilotCLI}, {ClientCopilotCLI, ClientCopilotVSCode}} {
 		root, ark := t.TempDir(), fakeArk(t)
 		var vscodeAfterFirst, cliAfterFirst fileSnap
 		for i, c := range order {
@@ -372,20 +372,20 @@ func TestCopilotCLI_AndCopilotVSCode_AreIndependent(t *testing.T) {
 				t.Fatalf("%v: %v", order, err)
 			}
 			if i == 0 {
-				vscodeAfterFirst, cliAfterFirst = snap(t, copilotConfig(root)), snap(t, cliConfig(root))
+				vscodeAfterFirst, cliAfterFirst = snap(t, copilotVSCodeConfig(root)), snap(t, cliConfig(root))
 			}
 		}
 		first := order[0]
-		if first == ClientCopilot && snap(t, copilotConfig(root)) != vscodeAfterFirst {
+		if first == ClientCopilotVSCode && snap(t, copilotVSCodeConfig(root)) != vscodeAfterFirst {
 			t.Errorf("%v: copilot-cli changed .vscode/mcp.json", order)
 		}
 		if first == ClientCopilotCLI && snap(t, cliConfig(root)) != cliAfterFirst {
-			t.Errorf("%v: copilot changed .github/mcp.json", order)
+			t.Errorf("%v: copilot-vscode changed .github/mcp.json", order)
 		}
 		if _, err := os.Stat(rootMcpJSON(root)); err == nil {
 			t.Errorf("%v: .mcp.json was created", order)
 		}
-		if vs := string(readBytes(t, copilotConfig(root))); !strings.Contains(vs, `"servers"`) || strings.Contains(vs, "mcpServers") {
+		if vs := string(readBytes(t, copilotVSCodeConfig(root))); !strings.Contains(vs, `"servers"`) || strings.Contains(vs, "mcpServers") {
 			t.Errorf("%v: .vscode/mcp.json has the wrong schema:\n%s", order, vs)
 		}
 	}

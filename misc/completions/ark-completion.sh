@@ -15,7 +15,7 @@
 # ---- CLI contract tables (kept in sync with internal/commandline by tests) ----
 _ark_subcommands="mcp-server mcp-init setup syntax symbol skill"
 _ark_skill_subcommands="init add-explorer update inspect"
-_ark_setup_clients="claude cursor codex cline copilot copilot-cli"
+_ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
 _ark_langs="go typescript tsx javascript python php"
 _ark_exts="go js ts py java c cpp h txt md html css xml yml yaml json"
 _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"
@@ -284,7 +284,7 @@ _ark_zsh() {
           # `ark setup <client> [OPTIONS]`: the client is the first operand and
           # must precede every option.
           client_arg=()
-          (( CURRENT == 2 )) && client_arg=('1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline" copilot\:"Configure Ark for GitHub Copilot in VS Code" copilot-cli\:"Configure Ark for GitHub Copilot CLI"))')
+          (( CURRENT == 2 )) && client_arg=('1:client:((claude\:"Configure Ark for Claude Code" cursor\:"Configure Ark for Cursor" codex\:"Configure Ark for Codex" cline\:"Configure Ark for Cline" copilot-vscode\:"Configure Ark for GitHub Copilot in VS Code" copilot-cli\:"Configure Ark for GitHub Copilot CLI"))')
           _arguments -C "${setup_opts[@]}" "${client_arg[@]}"
           ;;
         syntax)     _arguments -C "${syntax_opts[@]}" '1:file:_files' ;;

@@ -9,7 +9,7 @@
 # ---- CLI contract tables (kept in sync with internal/commandline by tests) ----
 _ark_subcommands="mcp-server mcp-init setup syntax symbol skill"
 _ark_skill_subcommands="init add-explorer update inspect"
-_ark_setup_clients="claude cursor codex cline copilot copilot-cli"
+_ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
 _ark_langs="go typescript tsx javascript python php"
 _ark_exts="go js ts py java c cpp h txt md html css xml yml yaml json"
 _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"

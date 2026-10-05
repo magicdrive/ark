@@ -18,7 +18,7 @@ var errCopilotCLIGlobalUnsupported = errors.New(
 //
 //	project: <root>/.github/mcp.json   (top-level "mcpServers", local entry)
 //
-// It is a different client from `copilot` (VS Code, .vscode/mcp.json) and
+// It is a different client from `copilot-vscode` (.vscode/mcp.json) and
 // shares no file with it. Explicitly NOT managed: the user-level
 // ~/.copilot/mcp-config.json, the `copilot mcp` CLI (its scope and
 // existing-name behavior are undocumented), the GitHub-hosted agent and GitHub

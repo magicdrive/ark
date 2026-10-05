@@ -55,7 +55,7 @@ ark setup codex    # Codex
 # または
 ark setup cline    # Cline CLI
 # または
-ark setup copilot  # VS Code の GitHub Copilot Chat / Agent mode（このリポジトリ）
+ark setup copilot-vscode  # VS Code の GitHub Copilot、Chat / Agent mode（このリポジトリ）
 # または
 ark setup copilot-cli  # GitHub Copilot CLI（このリポジトリ）
 ```
@@ -75,7 +75,7 @@ Ark が `setup` 経路を実際にテストしているクライアントのみ�
 | Cursor       | `ark setup cursor`  | `.cursor/mcp.json`（project）/ `~/.cursor/mcp.json`（`--global`） |
 | Codex        | `ark setup codex`   | Codex のユーザー設定（公式 `codex` CLI 経由） |
 | Cline        | `ark setup cline`   | `~/.cline/mcp.json`（Cline **CLI**。下記注記参照） |
-| GitHub Copilot (VS Code) | `ark setup copilot` | `.vscode/mcp.json`（プロジェクトのみ。下記注記参照） |
+| GitHub Copilot (VS Code) | `ark setup copilot-vscode` | `.vscode/mcp.json`（プロジェクトのみ。下記注記参照） |
 | GitHub Copilot CLI | `ark setup copilot-cli` | `.github/mcp.json`（プロジェクトのみ。下記注記参照） |
 
 > **Cline の対象範囲:** v4.1 がサポートするのは **Cline CLI** の設定 `~/.cline/mcp.json` のみです。
@@ -83,20 +83,20 @@ Ark が `setup` 経路を実際にテストしているクライアントのみ�
 > (`.../globalStorage/.../cline_mcp_settings.json`) は **対象外** です — Ark は OS/エディタ固有の
 > ストレージパスを探索しません。IDE 拡張向けは手動で設定してください。
 
-> **Copilot の対象範囲:** `ark setup copilot` が設定するのは、現在のリポジトリの
+> **Copilot (VS Code) の対象範囲:** `ark setup copilot-vscode` が設定するのは、現在のリポジトリの
 > **VS Code 上の GitHub Copilot Chat / Agent mode** のみです（`.vscode/mcp.json`、トップレベルは
 > `servers`）。`--global` は未対応です（VS Code のユーザー設定パスが公式に文書化されていないため）。
 > Copilot CLI、GitHub ホストの Copilot エージェント、GitHub のリポジトリ設定は**設定しません**。
 > Claude Code が使うポータブルな `.mcp.json` にも一切触れません。Copilot CLI の設定は
-> 現時点では `ark setup copilot` の管理対象外です（下記の `copilot-cli` が担当します）。
+> 現時点では `ark setup copilot-vscode` の管理対象外です（下記の `copilot-cli` が担当します）。
 >
 > 生成される `--root` は**リポジトリの絶対パス**です（VS Code の公式ドキュメントは、
 > `.vscode/mcp.json` の `args` でのワークスペース変数の展開も、multi-root ワークスペースでの意味も
 > 保証していません）。そのためこのファイルはマシン固有です。そのままコミット・共有せず、各開発者が
-> ローカルで `ark setup copilot` を実行してください。`command` は、`--ark-path` を指定しない限り
+> ローカルで `ark setup copilot-vscode` を実行してください。`command` は、`--ark-path` を指定しない限り
 > `ark`（`PATH` で解決）です。
 
-> **Copilot CLI の対象範囲:** `ark setup copilot-cli`（`copilot` とは別の client）は、現在のリポジトリの
+> **Copilot CLI の対象範囲:** `ark setup copilot-cli`（`copilot-vscode` とは別の client）は、現在のリポジトリの
 > **GitHub Copilot CLI** のみを設定します: `.github/mcp.json`（`mcpServers`、`local` entry）。
 > `--global` は未対応で（`~/.copilot/mcp-config.json` は管理しません）、`copilot mcp` コマンドも
 > 使いません。Copilot CLI は、同名のサーバーについて `.mcp.json` を `.github/mcp.json` より
@@ -136,7 +136,7 @@ ark skill [オプション]
 
 | Command | Description |
 |---------|-------------|
-| `setup <client>` | サポートする coding agent 向けに Ark を設定（claude, cursor, codex, cline, copilot, copilot-cli） |
+| `setup <client>` | サポートする coding agent 向けに Ark を設定（claude, cursor, codex, cline, copilot-vscode, copilot-cli） |
 | `mcp-server` | Ark を MCP サーバーとして起動 (stdio または HTTP) |
 | `mcp-init` | `.mcp.json` に Ark MCP 設定を追加 |
 | `syntax` | Tree-sitter を使ってファイルを解析し AST を出力 |
@@ -187,7 +187,7 @@ ark setup codex --global
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `<client>` | – | 対象 agent: `claude`, `cursor`, `codex`, `cline`, `copilot`（VS Code の Copilot）または `copilot-cli`（GitHub Copilot CLI）。どちらもプロジェクトのみ | – |
+| `<client>` | – | 対象 agent: `claude`, `cursor`, `codex`, `cline`, `copilot-vscode`（VS Code の GitHub Copilot）または `copilot-cli`（GitHub Copilot CLI）。どちらもプロジェクトのみ | – |
 | `--name <name>` | `-n` | Claude の skill/スラッシュコマンド名（**Claude のみ**） | ディレクトリ名 |
 | `--ark-path <path>` | `-p` | `ark` バイナリのパス（セットアップ時に検証） | 自動検出（`PATH` 上の `ark`） |
 | `--root <dir>` | `-r` | 提供するリポジトリルート | `$PWD` |
@@ -544,7 +544,7 @@ cp misc/completions/fish/ark.fish ~/.config/fish/completions/
 
 補完はサブコマンド、すべてのフラグ、有限値を取るフラグの値（`--lang`、`--format`、
 `--type`、`on`/`off` など）、`ark setup <client>`（`claude` / `cursor` / `codex` /
-`cline` / `copilot` / `copilot-cli`）を対象とします。シェル別の単体ファイルは `misc/completions/{bash,zsh,fish}/`
+`cline` / `copilot-vscode` / `copilot-cli`）を対象とします。シェル別の単体ファイルは `misc/completions/{bash,zsh,fish}/`
 にあります。補完ファイルが CLI・setup client レジストリ・言語レジストリとずれると、
 テスト（`internal/completion`）が失敗します。
 

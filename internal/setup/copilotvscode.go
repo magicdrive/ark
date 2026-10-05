@@ -5,18 +5,18 @@ import (
 	"path/filepath"
 )
 
-// copilotServersKey is the top-level server map of VS Code's own MCP schema
+// copilotVSCodeServersKey is the top-level server map of VS Code's own MCP schema
 // (.vscode/mcp.json). It differs from the "mcpServers" key of the portable
 // .mcp.json format and is supplied to the shared JSON layer as plain data.
-const copilotServersKey = "servers"
+const copilotVSCodeServersKey = "servers"
 
-// errCopilotGlobalUnsupported is returned for `ark setup copilot --global`.
-var errCopilotGlobalUnsupported = errors.New(
-	"global setup is not supported for copilot: Ark cannot determine VS Code's user-level " +
+// errCopilotVSCodeGlobalUnsupported is returned for `ark setup copilot-vscode --global`.
+var errCopilotVSCodeGlobalUnsupported = errors.New(
+	"global setup is not supported for copilot-vscode: Ark cannot determine VS Code's user-level " +
 		"MCP configuration path (it is profile- and remote-dependent and not officially documented); " +
-		"run `ark setup copilot` inside the repository to configure .vscode/mcp.json")
+		"run `ark setup copilot-vscode` inside the repository to configure .vscode/mcp.json")
 
-// newCopilotAdapter configures Ark for GitHub Copilot Chat / Agent mode in
+// newCopilotVSCodeAdapter configures Ark for GitHub Copilot Chat / Agent mode in
 // VS Code. Scope is deliberately narrow:
 //
 //	project: <root>/.vscode/mcp.json   (top-level "servers", stdio entry)
@@ -29,16 +29,16 @@ var errCopilotGlobalUnsupported = errors.New(
 // Entry schema (VS Code MCP configuration reference, stdio server): type
 // "stdio" (required), command (required), args, env. Ark manages only its own
 // entry; other servers, "inputs" and unknown fields are preserved by jsonConfig.
-func newCopilotAdapter() adapter {
+func newCopilotVSCodeAdapter() adapter {
 	return jsonClient{
-		id:         ClientCopilot,
-		serversKey: copilotServersKey,
+		id:         ClientCopilotVSCode,
+		serversKey: copilotVSCodeServersKey,
 		serverName: "ark",
 		managedBy:  "config file",
 		resolvePath: func(opts Options) (string, error) {
 			if opts.Global {
 				// Rejected before any filesystem access.
-				return "", errCopilotGlobalUnsupported
+				return "", errCopilotVSCodeGlobalUnsupported
 			}
 			return filepath.Join(opts.RootDir, ".vscode", "mcp.json"), nil
 		},
