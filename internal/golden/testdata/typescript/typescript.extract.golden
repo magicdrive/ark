@@ -1,5 +1,6 @@
 # file: broken.ts
 ## symbols
+symbol Broken kind=class qualified="Broken" parent="" receiver="" exported=true @broken.ts:1:8-5:26
 ## references
 ## imports
 ## diagnostics
