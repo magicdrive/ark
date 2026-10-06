@@ -2,6 +2,9 @@ package mcp
 
 // MCP JSON-RPC 2.0 message types
 
+// MCPRequest is a JSON-RPC request: a message whose id member is present and a
+// string or number. It is produced by classifyMessage (message.go), never by
+// decoding the wire directly — a message without an id is an MCPNotification.
 type MCPRequest struct {
 	JSONRPC string      `json:"jsonrpc"`
 	ID      interface{} `json:"id"`

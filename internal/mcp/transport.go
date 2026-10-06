@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -17,45 +18,52 @@ type Transport interface {
 	Stop() error
 }
 
-// RequestHandler processes MCP requests and returns responses
+// RequestHandler processes MCP requests and returns responses. It is called
+// only for messages classified as requests (see message.go); notifications and
+// client responses never reach it.
 type RequestHandler func(request *MCPRequest) *MCPResponse
 
 // StdioTransport handles stdin/stdout communication
-type StdioTransport struct{}
+type StdioTransport struct {
+	onNotification NotificationHandler
+
+	// in / out default to os.Stdin / os.Stdout (resolved when used). They exist
+	// so the real read-classify-write loop can be driven from tests.
+	in  io.Reader
+	out io.Writer
+}
 
 // NewStdioTransport creates a new stdio transport
 func NewStdioTransport() *StdioTransport {
 	return &StdioTransport{}
 }
 
+// WithNotificationHandler sets the receiver of JSON-RPC notifications. Without
+// one, notifications are accepted and ignored. In either case a notification
+// never produces a response.
+func (t *StdioTransport) WithNotificationHandler(h NotificationHandler) *StdioTransport {
+	t.onNotification = h
+	return t
+}
+
 // Start begins listening for requests on stdin
 func (t *StdioTransport) Start(handler RequestHandler) error {
 	log.Println("Starting MCP Server on stdin/stdout")
 
-	scanner := bufio.NewScanner(os.Stdin)
+	in := t.in
+	if in == nil {
+		in = os.Stdin
+	}
+	rt := router{request: handler, notification: t.onNotification}
+
+	scanner := bufio.NewScanner(in)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
 			continue
 		}
 
-		var request MCPRequest
-		if err := json.Unmarshal([]byte(line), &request); err != nil {
-			response := &MCPResponse{
-				JSONRPC: "2.0",
-				ID:      nil,
-				Error: &MCPError{
-					Code:    ErrorCodeParseError,
-					Message: "Parse error",
-					Data:    err.Error(),
-				},
-			}
-			t.sendResponse(response)
-			continue
-		}
-
-		response := handler(&request)
-		if response != nil {
+		if response := rt.route([]byte(line)); response != nil {
 			t.sendResponse(response)
 		}
 	}
@@ -79,7 +87,11 @@ func (t *StdioTransport) sendResponse(response *MCPResponse) {
 		log.Printf("Error marshaling response: %v", err)
 		return
 	}
-	fmt.Println(string(responseBytes))
+	out := t.out
+	if out == nil {
+		out = os.Stdout
+	}
+	fmt.Fprintln(out, string(responseBytes))
 }
 
 // HttpTransport handles HTTP communication
@@ -88,6 +100,8 @@ type HttpTransport struct {
 	port   string
 	mu     sync.Mutex
 	server *http.Server
+
+	onNotification NotificationHandler
 }
 
 // NewHttpTransport creates a new HTTP transport
@@ -96,6 +110,14 @@ func NewHttpTransport(host, port string) *HttpTransport {
 		host: host,
 		port: port,
 	}
+}
+
+// WithNotificationHandler sets the receiver of JSON-RPC notifications. Without
+// one, notifications are accepted and ignored. In either case a notification
+// never produces a JSON-RPC response (the HTTP reply is 202 with no body).
+func (t *HttpTransport) WithNotificationHandler(h NotificationHandler) *HttpTransport {
+	t.onNotification = h
+	return t
 }
 
 // Start begins listening for HTTP requests
@@ -164,22 +186,18 @@ func (t *HttpTransport) handleMCPRequest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	var request MCPRequest
-	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		response := &MCPResponse{
-			JSONRPC: "2.0",
-			ID:      nil,
-			Error: &MCPError{
-				Code:    ErrorCodeParseError,
-				Message: "Parse error",
-				Data:    err.Error(),
-			},
-		}
-		t.sendHTTPResponse(w, response)
+	// The same classification as stdio. A message that must not be answered
+	// (notification, client response) is accepted with 202 and no body.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
-
-	response := handler(&request)
+	response := router{request: handler, notification: t.onNotification}.route(body)
+	if response == nil {
+		w.WriteHeader(http.StatusAccepted)
+		return
+	}
 	t.sendHTTPResponse(w, response)
 }
 

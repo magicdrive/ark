@@ -19,11 +19,11 @@ func RunMCPServe(rootDir string, serverOpt *commandline.ServeOption) {
 	// Choose transport based on mode
 	switch serverOpt.McpServerType.String() {
 	case "http":
-		transport = NewHttpTransport("localhost", serverOpt.HttpPort)
+		transport = NewHttpTransport("localhost", serverOpt.HttpPort).WithNotificationHandler(server.processNotification)
 	case "stdio":
 		fallthrough
 	default:
-		transport = NewStdioTransport()
+		transport = NewStdioTransport().WithNotificationHandler(server.processNotification)
 	}
 
 	// Create request handler
@@ -89,6 +89,26 @@ func (s *MCPServer) processRequest(request *MCPRequest) *MCPResponse {
 				Message: fmt.Sprintf("Method not found: %s", request.Method),
 			},
 		}
+	}
+}
+
+// processNotification receives a JSON-RPC notification. It returns nothing: a
+// notification is never answered, whatever its method or outcome.
+//
+// None of the notifications below changes Ark's state: Ark sends no requests or
+// notifications of its own, keeps no session lifecycle state (tools are served
+// regardless of `initialized`), and executes requests one at a time, so by the
+// time a cancellation is read its request has already completed.
+func (s *MCPServer) processNotification(n *MCPNotification) {
+	switch n.Method {
+	case "notifications/initialized",
+		"notifications/cancelled",
+		"notifications/progress",
+		"notifications/roots/list_changed":
+		// Known and accepted; nothing to do.
+	default:
+		// Includes request methods sent without an id: those are not executed.
+		log.Printf("ark: ignoring unsupported notification %q", n.Method)
 	}
 }
 
