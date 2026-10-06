@@ -452,6 +452,8 @@ func postHTTP(t *testing.T, tr *HttpTransport, h RequestHandler, body string) (i
 	quietLog(t)
 	rr := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader(body))
+	req.Host = "localhost:8522"
+	req.Header.Set("Content-Type", "application/json")
 	tr.handleMCPRequest(rr, req, h)
 	return rr.Code, rr.Body.String()
 }

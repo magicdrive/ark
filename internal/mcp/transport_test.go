@@ -295,9 +295,8 @@ func TestHttpTransport_CORSHeaders(t *testing.T) {
 	}
 
 	// Check CORS headers
-	corsOrigin := resp.Header.Get("Access-Control-Allow-Origin")
-	if corsOrigin != "*" {
-		t.Errorf("Expected CORS origin '*', got '%s'", corsOrigin)
+	if got := resp.Header.Get("Access-Control-Allow-Origin"); got != "" {
+		t.Errorf("Access-Control-Allow-Origin must not be set, got %q", got)
 	}
 
 	corsMethods := resp.Header.Get("Access-Control-Allow-Methods")

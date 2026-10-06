@@ -17,6 +17,10 @@ import (
 )
 
 // ToolsHandler handles all MCP tools
+// defaultMaxFiles is the get_files_arklite file limit when maxFiles is absent
+// or not positive.
+const defaultMaxFiles = 10
+
 type ToolsHandler struct {
 	rootDir    string
 	opt        *commandline.Option
@@ -661,9 +665,12 @@ func (h *ToolsHandler) getFilesArklite(args map[string]interface{}) (*CallToolRe
 		}
 	}
 
-	maxFiles := 10
+	maxFiles := defaultMaxFiles
 	if val, ok := args["maxFiles"].(float64); ok {
 		maxFiles = int(val)
+	}
+	if maxFiles <= 0 {
+		maxFiles = defaultMaxFiles
 	}
 
 	if len(paths) > maxFiles {

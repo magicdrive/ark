@@ -3,7 +3,9 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"log"
+	"runtime/debug"
 )
 
 // Inbound message classification (JSON-RPC 2.0 as used by MCP).
@@ -177,7 +179,7 @@ func (rt router) route(raw []byte) *MCPResponse {
 	msg := classifyMessage(raw)
 	switch msg.kind {
 	case messageRequest:
-		return rt.request(msg.request)
+		return rt.dispatchRequest(msg.request)
 	case messageNotification:
 		rt.dispatchNotification(msg.notification)
 		return nil
@@ -201,4 +203,44 @@ func (rt router) dispatchNotification(n *MCPNotification) {
 		}
 	}()
 	rt.notification(n)
+}
+
+// dispatchRequest runs the request handler and contains a panic: a request
+// always gets exactly one response, so a handler that panics is answered with
+// -32603 for that request's id (no panic detail on the wire) and the transport
+// keeps serving. Notifications never come through here.
+func (rt router) dispatchRequest(req *MCPRequest) (resp *MCPResponse) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("ark: request %q handler panicked: %v\n%s", req.Method, r, debug.Stack())
+			resp = internalErrorResponse(req.ID)
+		}
+	}()
+	return rt.request(req)
+}
+
+// internalErrorResponse is the -32603 response for a request id. It carries no
+// detail: diagnostics go to the log, not to the client.
+func internalErrorResponse(id interface{}) *MCPResponse {
+	return &MCPResponse{
+		JSONRPC: "2.0",
+		ID:      id,
+		Error:   &MCPError{Code: ErrorCodeInternalError, Message: "Internal error"},
+	}
+}
+
+// encodeResponse serialises a response. If that fails, it falls back once to a
+// -32603 response for the same id so the request is not left unanswered; if the
+// fallback fails too it gives up with an error (no further retries).
+func encodeResponse(resp *MCPResponse) ([]byte, error) {
+	b, err := json.Marshal(resp)
+	if err == nil {
+		return b, nil
+	}
+	log.Printf("ark: marshaling response failed: %v", err)
+	b, ferr := json.Marshal(internalErrorResponse(resp.ID))
+	if ferr != nil {
+		return nil, fmt.Errorf("marshaling internal error response: %w", ferr)
+	}
+	return b, nil
 }

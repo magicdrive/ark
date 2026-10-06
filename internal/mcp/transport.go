@@ -2,15 +2,22 @@ package mcp
 
 import (
 	"bufio"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
+	"mime"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
 )
+
+// maxMessageBytes bounds one inbound JSON-RPC message: a stdio line or an HTTP
+// request body.
+const maxMessageBytes = 8 << 20
 
 // Transport represents the communication layer for MCP
 type Transport interface {
@@ -57,6 +64,7 @@ func (t *StdioTransport) Start(handler RequestHandler) error {
 	rt := router{request: handler, notification: t.onNotification}
 
 	scanner := bufio.NewScanner(in)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxMessageBytes)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" {
@@ -64,11 +72,16 @@ func (t *StdioTransport) Start(handler RequestHandler) error {
 		}
 
 		if response := rt.route([]byte(line)); response != nil {
-			t.sendResponse(response)
+			if err := t.sendResponse(response); err != nil {
+				return err
+			}
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			return fmt.Errorf("error reading from stdin: message exceeds %d bytes", maxMessageBytes)
+		}
 		return fmt.Errorf("error reading from stdin: %v", err)
 	}
 
@@ -80,18 +93,19 @@ func (t *StdioTransport) Stop() error {
 	return nil
 }
 
-// sendResponse sends a response to stdout
-func (t *StdioTransport) sendResponse(response *MCPResponse) {
-	responseBytes, err := json.Marshal(response)
+// sendResponse sends a response to stdout. It fails only when not even a
+// -32603 fallback response can be produced; the transport then stops.
+func (t *StdioTransport) sendResponse(response *MCPResponse) error {
+	responseBytes, err := encodeResponse(response)
 	if err != nil {
-		log.Printf("Error marshaling response: %v", err)
-		return
+		return err
 	}
 	out := t.out
 	if out == nil {
 		out = os.Stdout
 	}
 	fmt.Fprintln(out, string(responseBytes))
+	return nil
 }
 
 // HttpTransport handles HTTP communication
@@ -171,8 +185,18 @@ func (t *HttpTransport) Stop() error {
 
 // handleMCPRequest processes MCP requests over HTTP
 func (t *HttpTransport) handleMCPRequest(w http.ResponseWriter, r *http.Request, handler RequestHandler) {
-	// Set CORS headers
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	// The endpoint is for local clients. Host and Origin are checked first so a
+	// web page cannot reach it through DNS rebinding or a cross-origin fetch. No
+	// Access-Control-Allow-Origin is sent: browsers get no cross-origin access.
+	if !isLoopbackHost(r.Host) {
+		http.Error(w, "Forbidden: invalid Host", http.StatusForbidden)
+		return
+	}
+	if origin := r.Header.Get("Origin"); origin != "" && !isLoopbackOrigin(origin) {
+		http.Error(w, "Forbidden: invalid Origin", http.StatusForbidden)
+		return
+	}
+
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
 
@@ -186,10 +210,21 @@ func (t *HttpTransport) handleMCPRequest(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
+	// A simple cross-origin form post cannot carry application/json.
+	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
+		http.Error(w, "Content-Type must be application/json", http.StatusUnsupportedMediaType)
+		return
+	}
+
 	// The same classification as stdio. A message that must not be answered
 	// (notification, client response) is accepted with 202 and no body.
-	body, err := io.ReadAll(r.Body)
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxMessageBytes))
 	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "Request entity too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Bad request", http.StatusBadRequest)
 		return
 	}
@@ -203,12 +238,44 @@ func (t *HttpTransport) handleMCPRequest(w http.ResponseWriter, r *http.Request,
 
 // sendHTTPResponse sends a JSON response over HTTP
 func (t *HttpTransport) sendHTTPResponse(w http.ResponseWriter, response *MCPResponse) {
-	w.Header().Set("Content-Type", "application/json")
-
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	body, err := encodeResponse(response)
+	if err != nil {
 		log.Printf("Error encoding response: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
 	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(append(body, '\n'))
+}
+
+// isLoopbackName reports whether a bare host name is localhost or a loopback
+// IP literal.
+func isLoopbackName(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+// isLoopbackHost validates a Host header value ("host" or "host:port").
+func isLoopbackHost(hostport string) bool {
+	host := hostport
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		host = h
+	}
+	host = strings.TrimSuffix(strings.TrimPrefix(host, "["), "]")
+	return isLoopbackName(host)
+}
+
+// isLoopbackOrigin validates an Origin header value: an http(s) origin whose
+// host is loopback. "null" and anything unparsable are rejected.
+func isLoopbackOrigin(origin string) bool {
+	u, err := url.Parse(origin)
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
+		return false
+	}
+	return isLoopbackName(u.Hostname())
 }
 
 // handleDocumentation serves API documentation

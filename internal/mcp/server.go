@@ -72,6 +72,9 @@ func (s *MCPServer) processRequest(request *MCPRequest) *MCPResponse {
 	switch request.Method {
 	case "initialize":
 		return s.handleInitialize(request)
+	case "ping":
+		// MCP 2024-11-05 utilities/ping: an empty result, no capability needed.
+		return &MCPResponse{JSONRPC: "2.0", ID: request.ID, Result: struct{}{}}
 	case "tools/list":
 		return s.handleListTools(request)
 	case "tools/call":
