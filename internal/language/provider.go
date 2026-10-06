@@ -61,6 +61,26 @@ type ReferenceDraft struct {
 	// name as written in the reference's scope and is resolved like any other
 	// type name. It is never a type-inference result; "" means "not proven".
 	ReceiverType string `json:",omitempty"`
+
+	// NameQualified is the qualified identity of the declaration that Name
+	// denotes (the same string a repository symbol of that declaration carries
+	// as Symbol.Qualified), fixed by the language's own lexical name-resolution
+	// rules — scopes, imports, aliases, explicit qualification — and by nothing
+	// else: the provider never consults the repository. It is set only when
+	// those rules yield exactly one identity, only for a reference whose Name
+	// is itself a declaration name (ReceiverExpr == ""), and never for a member
+	// name: a member's home (the type itself, a parent, a trait, ...) is not
+	// lexically knowable. "" means "no qualified identity evidence"; the
+	// reference then resolves exactly as before.
+	NameQualified string `json:",omitempty"`
+
+	// ReceiverTypeQualified is the qualified identity of the receiver's type,
+	// determined like NameQualified: for a value receiver, that of its proven
+	// ReceiverType; for static member access (`Type::member`), where the
+	// receiver expression is itself a type name, that of the named type. It
+	// identifies the type only; looking up Name among that type's members is
+	// the resolver's job.
+	ReceiverTypeQualified string `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

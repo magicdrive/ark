@@ -40,7 +40,12 @@ type Reference struct {
 	// ReceiverType is provider-proven declared type evidence for the receiver
 	// (see language.ReferenceDraft.ReceiverType); "" when not proven.
 	ReceiverType string
-	IsCall       bool
+	// NameQualified / ReceiverTypeQualified are provider-determined qualified
+	// identities (see language.ReferenceDraft); "" when there is no such
+	// evidence.
+	NameQualified         string
+	ReceiverTypeQualified string
+	IsCall                bool
 }
 
 // NewReferenceID returns a deterministic ID derived from

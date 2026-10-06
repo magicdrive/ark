@@ -127,7 +127,10 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			Container:    rd.Container, // qualified name string
 			ReceiverExpr: rd.ReceiverExpr,
 			ReceiverType: rd.ReceiverType,
-			IsCall:       rd.IsCall,
+
+			NameQualified:         rd.NameQualified,
+			ReceiverTypeQualified: rd.ReceiverTypeQualified,
+			IsCall:                rd.IsCall,
 		})
 	}
 	// Also index imports as KindImport references so package-dependency queries

@@ -42,7 +42,7 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-6" }
+func (p *Provider) CacheVersion() string { return "php-7" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
@@ -101,7 +101,7 @@ func extractContainer(node *ts.Node, lang *ts.Language, src []byte, file source.
 // phpNamespace handles a namespace_definition. See PHP-2 for the statement vs
 // bracketed semantics.
 func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, outerNS string, out *[]language.SymbolDraft, imp *[]language.ImportDraft) string {
-	name := childText(node, lang, src, "namespace_name")
+	name := namespaceNameOf(node, lang, src)
 	if name != "" {
 		*out = append(*out, language.SymbolDraft{
 			Name:      name,
@@ -127,60 +127,21 @@ func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.File
 // field and the import TARGET + alias are what matter here; see the completion
 // report for why dropping kind is correct for Ark's current use.
 func appendImports(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, imp *[]language.ImportDraft) {
-	// Grouped form: a namespace_name prefix followed by a namespace_use_group.
-	prefix := ""
-	if group := childByType(node, lang, "namespace_use_group"); group != nil {
-		prefix = childText(node, lang, src, "namespace_name")
-		for i := 0; i < group.ChildCount(); i++ {
-			clause := group.Child(i)
-			if clause.Type(lang) != "namespace_use_clause" {
-				continue
-			}
-			if d, ok := parseUseClause(clause, lang, src, file, prefix); ok {
-				*imp = append(*imp, d)
-			}
-		}
-		return
-	}
-	// Non-grouped form: one or more namespace_use_clause children.
-	for i := 0; i < node.ChildCount(); i++ {
-		clause := node.Child(i)
-		if clause.Type(lang) != "namespace_use_clause" {
-			continue
-		}
-		if d, ok := parseUseClause(clause, lang, src, file, ""); ok {
+	visitUseClauses(node, lang, src, func(clause *ts.Node, prefix string, _ useKind) {
+		if d, ok := parseUseClause(clause, lang, src, file, prefix); ok {
 			*imp = append(*imp, d)
 		}
-	}
+	})
 }
 
 // parseUseClause parses one namespace_use_clause into an ImportDraft. prefix is
-// the group prefix for grouped use ("" otherwise). Path keeps PHP namespace
-// identity with a leading "\" stripped (D1 / §8); Alias is the explicit `as`
-// name or "" (no alias → ImportDraft convention of empty = use base name).
+// the canonical group prefix for grouped use ("" otherwise). Path keeps PHP
+// namespace identity with a leading "\" stripped (D1 / §8); Alias is the
+// explicit `as` name or "" (no alias → ImportDraft convention of empty = use
+// base name).
 func parseUseClause(clause *ts.Node, lang *ts.Language, src []byte, file source.FileID, prefix string) (language.ImportDraft, bool) {
-	var tail, alias string
-	afterAs := false
-	for i := 0; i < clause.ChildCount(); i++ {
-		c := clause.Child(i)
-		switch c.Type(lang) {
-		case "function", "const":
-			// import kind marker — not represented in ImportDraft.
-		case "as":
-			afterAs = true
-		case "qualified_name":
-			if !afterAs {
-				tail = c.Text(src)
-			}
-		case "name":
-			if afterAs {
-				alias = c.Text(src)
-			} else if tail == "" {
-				tail = c.Text(src)
-			}
-		}
-	}
-	if tail == "" {
+	tail, alias, _, ok := useClauseParts(clause, lang, src)
+	if !ok {
 		return language.ImportDraft{}, false
 	}
 	path := tail

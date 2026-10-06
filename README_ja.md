@@ -715,7 +715,11 @@ class 定数 read、型参照）、**typed relation**（`extends` / `implements`
 
 **既知の制限（設計上の意図）**：動的呼び出し・動的生成（`$obj->$m()`、`new $c()`）は
 推測しません。変数レシーバの型推論は行いません。Composer / PSR-4 / autoload 解決は
-ありません。`use` エイリアスや継承・trait メンバ解決は保守的（捏造せず honest な
+ありません。class 名はファイル自身の `namespace` / `use` / `use … as` / 完全修飾
+構文から確定し、リポジトリ内の宣言と完全一致で照合します（リポジトリに宣言のない
+class、例えば vendor の class は `Unresolved` のままで、同名のリポジトリ内 class には
+決して結び付けません。複数宣言されている名前は `Candidate` です）。継承・trait
+メンバ解決、関数・定数名、`self` / `static` / `parent` は保守的（捏造せず honest な
 `Candidate` / `Unresolved`）です。framework（Laravel/Symfony 等）セマンティクスは
 扱いません。Ark は **純粋な静的解析**のみを行い、リポジトリのコード・Composer・PHP
 ツールを一切実行しません。

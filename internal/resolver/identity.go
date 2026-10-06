@@ -1,0 +1,102 @@
+package resolver
+
+import (
+	"fmt"
+
+	"github.com/magicdrive/ark/internal/reference"
+	"github.com/magicdrive/ark/internal/symbol"
+)
+
+// Qualified identity (R0).
+//
+// A provider that knows from the language's own lexical rules which declaration
+// a written name denotes passes that identity as NameQualified (for the name
+// itself) or ReceiverTypeQualified (for the type of the receiver). The resolver
+// compares it, exactly, with the Symbol.Qualified of the repository's type
+// declarations of the same language:
+//
+//	one declaration   → Exact       (the program text names it)
+//	no declaration    → Unresolved  (an external symbol, or one that does not exist)
+//	several           → Candidate   (ambiguity is evidence; none is chosen)
+//
+// This is authoritative evidence. In particular a miss does NOT fall back to
+// same-file / import / receiver-suffix / same-package / unique-name matching:
+// those rest on repository-local similarity, and similarity must never override
+// an identity the language fixed explicitly — a `use Vendor\Request` is not the
+// repository's own `App\Models\Request`.
+//
+// Receiver identity and member lookup stay separate. ReceiverTypeQualified only
+// identifies the receiver's type; the member is then looked up exactly as under
+// any other proven receiver type (memberResolution). A member that is not found
+// on that type is Unresolved: inherited, trait and magic members are not
+// resolved here.
+
+// langQualified is the key of the qualified-identity index. Symbol.Qualified has
+// a different meaning in each language, so identities are only comparable within
+// one.
+type langQualified struct {
+	language  string
+	qualified string
+}
+
+// typeDecls returns the repository's type declarations named by (language,
+// qualified), in deterministic order. Only type-like symbols are indexed: this
+// lookup answers "which type is this identity?" and never matches a member,
+// function, constant or namespace that merely shares the string.
+func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
+	r.qualOnce.Do(func() {
+		r.qualified = make(map[langQualified][]symbol.Symbol)
+		for _, fi := range r.files {
+			for _, s := range fi.Symbols {
+				if s.Qualified == "" || !isTypeLike(s.Kind) {
+					continue
+				}
+				k := langQualified{s.Language, s.Qualified}
+				r.qualified[k] = append(r.qualified[k], s)
+			}
+		}
+		for _, syms := range r.qualified {
+			sortSymbols(syms)
+		}
+	})
+	return r.qualified[langQualified{language, qualified}]
+}
+
+// resolveQualifiedIdentity implements R0. It never falls back to name
+// heuristics, whatever the outcome.
+func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Reference) Resolution {
+	// The receiver's type identity, when present, qualifies the receiver; the
+	// reference's own Name is then a member of that type.
+	if ref.ReceiverTypeQualified != "" {
+		types := r.typeDecls(ref.Language, ref.ReceiverTypeQualified)
+		detail := fmt.Sprintf("receiver type %q", ref.ReceiverTypeQualified)
+		if len(types) == 0 {
+			return noQualifiedDeclaration(res, detail)
+		}
+		conf := ConfidenceExact
+		if len(types) > 1 {
+			conf = ConfidenceCandidate
+		}
+		return r.memberResolution(res, ref, types, conf, EvidenceQualifiedIdentity, detail)
+	}
+
+	types := r.typeDecls(ref.Language, ref.NameQualified)
+	detail := fmt.Sprintf("%q", ref.NameQualified)
+	if len(types) == 0 {
+		return noQualifiedDeclaration(res, detail)
+	}
+	where := fmt.Sprintf("declared at %s", types[0].Location.File)
+	if len(types) > 1 {
+		where = fmt.Sprintf("declared %d times", len(types))
+	}
+	// pickBest downgrades several declarations to Candidate.
+	return r.pickBest(res, types, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is "+where)
+}
+
+func noQualifiedDeclaration(res Resolution, detail string) Resolution {
+	res.Evidence = []ResolutionEvidence{{
+		Kind:   EvidenceQualifiedIdentity,
+		Detail: detail + " is not declared in the repository",
+	}}
+	return res
+}

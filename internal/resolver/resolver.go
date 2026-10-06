@@ -44,6 +44,13 @@ type Resolver struct {
 	// exportMemo caches complete module export lookups (see modules.go).
 	memoMu     sync.Mutex
 	exportMemo map[string]bindResult
+
+	// qualified indexes type declarations by (language, Symbol.Qualified) for
+	// authoritative qualified-identity lookup (see identity.go). It is built
+	// once, on first use, so repositories whose providers never emit qualified
+	// identities pay nothing for it.
+	qualOnce  sync.Once
+	qualified map[langQualified][]symbol.Symbol
 }
 
 // New builds a Resolver from a set of file indexes.
@@ -91,7 +98,9 @@ func (r *Resolver) Resolve() []Resolution {
 
 // ResolveReference resolves a single reference within its file context.
 //
-// A reference with a receiver is first classified (R1–R4):
+// A reference carrying a provider-determined qualified identity is resolved by
+// R0 (identity.go) and by nothing else. Otherwise a reference with a receiver is
+// classified (R1–R4):
 //
 //	R1 binding receiver   – the receiver is a module import binding of the file
 //	R2 declared type      – the provider proved the receiver's declared type
@@ -106,6 +115,11 @@ func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resol
 		ReferenceID:   ref.ID,
 		ReferenceName: ref.Name,
 		Confidence:    ConfidenceUnresolved,
+	}
+	// R0: a provider-determined qualified identity is authoritative and is
+	// resolved before — and instead of — every other rule below.
+	if ref.NameQualified != "" || ref.ReceiverTypeQualified != "" {
+		return r.resolveQualifiedIdentity(res, ref)
 	}
 	if ref.ReceiverExpr == "" {
 		return r.resolveByName(res, ref, fi)

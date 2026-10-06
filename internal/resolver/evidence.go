@@ -24,6 +24,12 @@ const (
 	// EvidenceModuleScope: the file is module-scoped and the name has no local
 	// declaration or binding; proximity/uniqueness matches are capped at Candidate.
 	EvidenceModuleScope EvidenceKind = "module_scope"
+	// EvidenceQualifiedIdentity: resolved by exact match of a provider-determined
+	// qualified identity (language.ReferenceDraft.NameQualified /
+	// ReceiverTypeQualified) against repository declarations. It is
+	// authoritative: when it applies no proximity, uniqueness or suffix
+	// heuristic is consulted, whatever the outcome.
+	EvidenceQualifiedIdentity EvidenceKind = "qualified_identity"
 )
 
 // ResolutionEvidence records why a particular candidate was matched.

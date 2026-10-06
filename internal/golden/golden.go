@@ -44,8 +44,8 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	sort.Slice(refs, func(i, j int) bool { return refDraftLess(refs[i], refs[j]) })
 	b.WriteString("## references\n")
 	for _, r := range refs {
-		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), r.IsCall, loc(r.Location))
+		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -107,8 +107,8 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		refs := idx.ReferencesByFile(f)
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
-			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), r.IsCall, loc(r.Location))
+			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -244,6 +244,20 @@ func receiverType(t string) string {
 		return ""
 	}
 	return fmt.Sprintf(" receiver_type=%q", t)
+}
+
+// qualifiedIdentity renders provider-determined qualified identity evidence.
+// Like receiverType it prints nothing when absent, so snapshots of providers
+// that do not set it are byte-identical to before the fields existed.
+func qualifiedIdentity(name, receiverType string) string {
+	var s string
+	if name != "" {
+		s += fmt.Sprintf(" name_qualified=%q", name)
+	}
+	if receiverType != "" {
+		s += fmt.Sprintf(" receiver_type_qualified=%q", receiverType)
+	}
+	return s
 }
 
 func moduleSpec(m language.ModuleSpec) string {

@@ -23,46 +23,59 @@ import (
 // Closure bodies get no evidence at all (separate variable scope).
 
 type phpVarType struct {
-	typ  string
+	typ  phpTypeRef
 	from uint32 // evidence applies to uses at or after this byte offset
+}
+
+// phpTypeRef is a proven class type: the name as written (its last segment) and
+// the FQN the lexical rules give that name in the scope it is written in. qual is
+// "" only when those rules yield no single identity.
+type phpTypeRef struct {
+	name string
+	qual string
 }
 
 // phpTypeEnv is the proven receiver-type environment of one function body.
 type phpTypeEnv struct {
 	vars  map[string]phpVarType // variable name (without '$') → type
-	props map[string]string     // enclosing class property name → declared type
+	props map[string]phpTypeRef // enclosing class property name → declared type
 }
 
-// phpTypeName returns the class name of a named_type / optional_type(named_type)
-// node, or "" for unions, intersections, builtins and relative types.
-func phpTypeName(n *ts.Node, lang *ts.Language, src []byte) string {
+// phpTypeName returns the class type of a named_type / optional_type(named_type)
+// node, or the zero value for unions, intersections, builtins and relative
+// types. sc is the lexical scope the type is written in.
+func phpTypeName(n *ts.Node, sc *nameScope, lang *ts.Language, src []byte) phpTypeRef {
 	switch n.Type(lang) {
 	case "named_type":
-		cls := firstChildOfTypes(n, lang, "name", "qualified_name")
+		cls := firstChildOfTypes(n, lang, "name", "qualified_name", "relative_name")
 		if cls == nil {
-			return ""
+			return phpTypeRef{}
 		}
 		name := lastName(cls, lang, src)
 		if isRelativeType(name) {
-			return ""
+			return phpTypeRef{}
 		}
-		return name
+		ref := phpTypeRef{name: name}
+		if sc != nil {
+			ref.qual, _ = sc.resolveClass(cls, lang, src)
+		}
+		return ref
 	case "optional_type":
 		if inner := childByType(n, lang, "named_type"); inner != nil {
-			return phpTypeName(inner, lang, src)
+			return phpTypeName(inner, sc, lang, src)
 		}
 	}
-	return ""
+	return phpTypeRef{}
 }
 
 // phpTypeOf returns the declared class type among node's direct children.
-func phpTypeOf(n *ts.Node, lang *ts.Language, src []byte) string {
+func phpTypeOf(n *ts.Node, sc *nameScope, lang *ts.Language, src []byte) phpTypeRef {
 	for i := 0; i < n.ChildCount(); i++ {
-		if t := phpTypeName(n.Child(i), lang, src); t != "" {
+		if t := phpTypeName(n.Child(i), sc, lang, src); t.name != "" {
 			return t
 		}
 	}
-	return ""
+	return phpTypeRef{}
 }
 
 func phpVarName(n *ts.Node, lang *ts.Language, src []byte) string {
@@ -74,8 +87,8 @@ func phpVarName(n *ts.Node, lang *ts.Language, src []byte) string {
 
 // phpClassPropertyTypes indexes typed instance properties of a class body,
 // including promoted constructor properties.
-func phpClassPropertyTypes(body *ts.Node, lang *ts.Language, src []byte) map[string]string {
-	props := make(map[string]string)
+func phpClassPropertyTypes(body *ts.Node, lang *ts.Language, src []byte, sc *nameScope) map[string]phpTypeRef {
+	props := make(map[string]phpTypeRef)
 	for i := 0; i < body.ChildCount(); i++ {
 		member := body.Child(i)
 		switch member.Type(lang) {
@@ -83,8 +96,8 @@ func phpClassPropertyTypes(body *ts.Node, lang *ts.Language, src []byte) map[str
 			if childByType(member, lang, "static_modifier") != nil {
 				continue
 			}
-			typ := phpTypeOf(member, lang, src)
-			if typ == "" {
+			typ := phpTypeOf(member, sc, lang, src)
+			if typ.name == "" {
 				continue
 			}
 			for j := 0; j < member.ChildCount(); j++ {
@@ -107,7 +120,7 @@ func phpClassPropertyTypes(body *ts.Node, lang *ts.Language, src []byte) map[str
 				if p.Type(lang) != "property_promotion_parameter" {
 					continue
 				}
-				if typ := phpTypeOf(p, lang, src); typ != "" {
+				if typ := phpTypeOf(p, sc, lang, src); typ.name != "" {
 					if name := phpVarName(childByType(p, lang, "variable_name"), lang, src); name != "" {
 						props[name] = typ
 					}
@@ -121,7 +134,7 @@ func phpClassPropertyTypes(body *ts.Node, lang *ts.Language, src []byte) map[str
 // phpVarUse accumulates how one variable is used in a function body.
 type phpVarUse struct {
 	assignments int
-	assignedTyp string
+	assignedTyp phpTypeRef
 	assignedAt  uint32
 	poisoned    bool
 }
@@ -129,6 +142,7 @@ type phpVarUse struct {
 type phpUseScan struct {
 	lang      *ts.Language
 	src       []byte
+	sc        *nameScope
 	uses      map[string]*phpVarUse
 	poisonAll bool
 }
@@ -179,8 +193,11 @@ func (s *phpUseScan) scan(node, parent *ts.Node, idx int) {
 			u.assignments++
 			rhs := parent.Child(parent.ChildCount() - 1)
 			if rhs != nil && rhs.Type(s.lang) == "object_creation_expression" {
-				if cls := firstChildOfTypes(rhs, s.lang, "name", "qualified_name"); cls != nil {
-					u.assignedTyp = lastName(cls, s.lang, s.src)
+				if cls := firstChildOfTypes(rhs, s.lang, "name", "qualified_name", "relative_name"); cls != nil {
+					u.assignedTyp = phpTypeRef{name: lastName(cls, s.lang, s.src)}
+					if s.sc != nil {
+						u.assignedTyp.qual, _ = s.sc.resolveClass(cls, s.lang, s.src)
+					}
 					u.assignedAt = parent.EndByte()
 					return
 				}
@@ -199,19 +216,19 @@ func (s *phpUseScan) scan(node, parent *ts.Node, idx int) {
 }
 
 // phpFunctionTypeEnv builds the receiver-type environment for a function or
-// method declaration. props are the enclosing class's typed properties (nil
-// for free functions).
-func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, props map[string]string) *phpTypeEnv {
+// method declaration. sc is the lexical scope the function is declared in; props
+// are the enclosing class's typed properties (nil for free functions).
+func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, sc *nameScope, props map[string]phpTypeRef) *phpTypeEnv {
 	env := &phpTypeEnv{vars: make(map[string]phpVarType), props: props}
 	body := childByType(fn, lang, "compound_statement")
 	if body == nil {
 		return env
 	}
-	sc := &phpUseScan{lang: lang, src: src, uses: make(map[string]*phpVarUse)}
+	scan := &phpUseScan{lang: lang, src: src, sc: sc, uses: make(map[string]*phpVarUse)}
 	for i := 0; i < body.ChildCount(); i++ {
-		sc.scan(body.Child(i), body, i)
+		scan.scan(body.Child(i), body, i)
 	}
-	if sc.poisonAll {
+	if scan.poisonAll {
 		return &phpTypeEnv{props: props}
 	}
 
@@ -232,16 +249,16 @@ func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, props map[st
 			if p.Type(lang) != "simple_parameter" || childByType(p, lang, "reference_modifier") != nil {
 				continue
 			}
-			typ := phpTypeOf(p, lang, src)
-			if u := sc.uses[name]; typ != "" && (u == nil || (u.assignments == 0 && !u.poisoned)) {
+			typ := phpTypeOf(p, sc, lang, src)
+			if u := scan.uses[name]; typ.name != "" && (u == nil || (u.assignments == 0 && !u.poisoned)) {
 				env.vars[name] = phpVarType{typ: typ}
 			}
 		}
 	}
 
 	// Single `$x = new T()` assignment.
-	for name, u := range sc.uses {
-		if params[name] || u.poisoned || u.assignments != 1 || u.assignedTyp == "" {
+	for name, u := range scan.uses {
+		if params[name] || u.poisoned || u.assignments != 1 || u.assignedTyp.name == "" {
 			continue
 		}
 		env.vars[name] = phpVarType{typ: u.assignedTyp, from: u.assignedAt}
@@ -250,23 +267,24 @@ func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, props map[st
 }
 
 // receiverType returns the proven declared type of a member-call receiver
-// node used at byte offset at, or "".
-func (env *phpTypeEnv) receiverType(recv *ts.Node, at uint32, lang *ts.Language, src []byte) string {
+// node used at byte offset at — the type name as written and its FQN — or "", "".
+func (env *phpTypeEnv) receiverType(recv *ts.Node, at uint32, lang *ts.Language, src []byte) (name, qual string) {
 	if env == nil || recv == nil {
-		return ""
+		return "", ""
 	}
 	switch recv.Type(lang) {
 	case "variable_name":
 		if v, ok := env.vars[phpVarName(recv, lang, src)]; ok && at >= v.from {
-			return v.typ
+			return v.typ.name, v.typ.qual
 		}
 	case "member_access_expression":
 		// $this->prop (one step only).
 		if recv.ChildCount() > 0 && phpVarName(recv.Child(0), lang, src) == "this" {
 			if prop := childByType(recv, lang, "name"); prop != nil {
-				return env.props[prop.Text(src)]
+				t := env.props[prop.Text(src)]
+				return t.name, t.qual
 			}
 		}
 	}
-	return ""
+	return "", ""
 }
