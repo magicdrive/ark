@@ -377,7 +377,7 @@ func packageScore(p PackageEntry) int {
 		// Tests come after the code they exercise, however large.
 		score -= 300
 		// testdata directories are fixture-only; exclude from default map view.
-		if strings.Contains(p.Path, "testdata") {
+		if isTestDataDir(p.Path) {
 			score -= 1000
 		}
 	}
@@ -406,18 +406,15 @@ func fileLang(idx *index.RepositoryIndex, fid source.FileID) string {
 	return ""
 }
 
-func isTestFileID(fid string) bool {
-	name := filepath.Base(fid)
-	return testfiles.IsTestFile(fid) ||
-		strings.HasSuffix(name, "_test.go") ||
-		strings.HasSuffix(name, "_test.ts") ||
-		strings.HasSuffix(name, "_test.js") ||
-		strings.HasPrefix(name, "test_")
-}
+func isTestFileID(fid string) bool { return testfiles.IsTestFile(fid) }
+
+// isTestDataDir reports whether package directory dir is (or is under) a
+// testdata directory.
+func isTestDataDir(dir string) bool { return testfiles.IsTestData(dir + "/x") }
 
 func isTestPackage(pkgPath string, files []source.FileID) bool {
 	// testdata directories are fixture data only — treat as test.
-	if strings.Contains(pkgPath, "testdata") {
+	if isTestDataDir(pkgPath) {
 		return true
 	}
 	// Only mark as a test package when every file is a test file.

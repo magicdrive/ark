@@ -17,7 +17,7 @@ func RelationsToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_relations",
-			Description: "Get everything a symbol calls, uses or reads and everything that does so to it, with reference kind (call, construction, type_use, read, ...), confidence and evidence. Ambiguous references appear as candidate relations (a deterministic sample of at most 10 per direction; candidateCallers / candidateCallees give the totals). unattributed counts references into or out of the symbol that are not resolved graph edges (0 means complete)",
+			Description: "Get everything a symbol calls, uses or reads and everything that does so to it, with reference kind (call, construction, type_use, read, ...), confidence and evidence. Ambiguous references appear as candidate relations, one per symbol and reference kind with its reference count (a deterministic sample of at most 10 per direction; candidateCallers / candidateCallees count the symbols, candidateCallerRelations / candidateCalleeRelations the relations). unattributed counts references into or out of the symbol that are not resolved graph edges (0 means complete)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -57,6 +57,10 @@ type relationEntry struct {
 	// is not one symbol: Qualified is that code's name, which no symbol of
 	// File carries or several do. Never attributed to one of them.
 	SourceUnidentified bool `json:"sourceUnidentified,omitempty"`
+	// References, on a candidate relation, is the number of candidate
+	// references it stands for (same symbol, same kind); Evidence is the
+	// first one's.
+	References int `json:"references,omitempty"`
 }
 
 // relationsResult is the get_relations result, in three layers:
@@ -65,8 +69,12 @@ type relationEntry struct {
 //     uniquely resolved references without graph semantics (read, write);
 //   - candidate relations (confidence "candidate"): references that name the
 //     symbol among several possible targets, or name several possible targets
-//     from it — at most index.MaxCandidateSources per direction, chosen
-//     deterministically; CandidateCallers / CandidateCallees count them all;
+//     from it — one per other symbol and reference kind, with the number of
+//     references it stands for, at most index.MaxCandidateSources per
+//     direction, chosen deterministically. CandidateCallers / CandidateCallees
+//     count the distinct symbols, CandidateCallerRelations /
+//     CandidateCalleeRelations the distinct relations: more relations than
+//     listed means some were left out;
 //   - relations marked sourceUnidentified: references into the symbol from
 //     enclosing code that is no one symbol (resolved ones all listed,
 //     candidate ones sampled like the rest);
@@ -81,9 +89,12 @@ type relationsResult struct {
 	Relations        []relationEntry `json:"relations"`
 	CandidateCallers int             `json:"candidateCallers,omitempty"`
 	CandidateCallees int             `json:"candidateCallees,omitempty"`
-	Unattributed     int             `json:"unattributed"`
-	Total            int             `json:"total,omitempty"`
-	Truncated        bool            `json:"truncated,omitempty"`
+	// Distinct candidate relations (symbol + reference kind) per direction.
+	CandidateCallerRelations int  `json:"candidateCallerRelations,omitempty"`
+	CandidateCalleeRelations int  `json:"candidateCalleeRelations,omitempty"`
+	Unattributed             int  `json:"unattributed"`
+	Total                    int  `json:"total,omitempty"`
+	Truncated                bool `json:"truncated,omitempty"`
 }
 
 func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResult, error) {
@@ -131,11 +142,13 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 		return ambiguousTargetResult(symName, tl.Candidates), nil
 	}
 	target := tl.Symbol
-	relations, candidateCallers, candidateCallees := relationsOf(idx, target)
+	relations, totals := relationsOf(idx, target)
 	out := relationsResult{
-		Symbol:           symName,
-		CandidateCallers: candidateCallers,
-		CandidateCallees: candidateCallees,
+		Symbol:                   symName,
+		CandidateCallers:         totals.callers,
+		CandidateCallees:         totals.callees,
+		CandidateCallerRelations: totals.callerRelations,
+		CandidateCalleeRelations: totals.calleeRelations,
 	}
 	incoming, outgoing := idx.Unattributed(target.ID)
 	out.Unattributed = incoming + outgoing
@@ -152,20 +165,26 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 	return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
 }
 
+// candidateTotals counts a symbol's candidate relations: distinct symbols
+// (sources) and distinct relations, per direction.
+type candidateTotals struct {
+	callers, callees, callerRelations, calleeRelations int
+}
+
 // relationsOf returns target's relations in deterministic order and the
-// totals of its candidate callers and callees.
-func relationsOf(idx *index.RepositoryIndex, target symbol.Symbol) ([]relationEntry, int, int) {
+// totals of its candidate relations.
+func relationsOf(idx *index.RepositoryIndex, target symbol.Symbol) ([]relationEntry, candidateTotals) {
 	relations := []relationEntry{}
 	seen := make(map[relationEntry]bool)
 	// add records the relation between the target and other: other calls the
 	// target (called_by) or the target calls other (calls).
-	add := func(direction string, other symbol.SymbolID, kind reference.ReferenceKind, conf resolver.Confidence, ev string) {
+	add := func(direction string, other symbol.SymbolID, kind reference.ReferenceKind, conf resolver.Confidence, ev string, refs int) {
 		sym, ok := idx.GetSymbol(other)
 		if !ok {
 			return
 		}
 		e := relationEntry{Direction: direction, Name: sym.Name, Qualified: sym.Qualified, File: string(sym.Location.File),
-			Kind: string(kind), Confidence: conf.String(), Evidence: ev}
+			Kind: string(kind), Confidence: conf.String(), Evidence: ev, References: refs}
 		if direction == "called_by" {
 			e.Name = target.Name
 		}
@@ -186,31 +205,31 @@ func relationsOf(idx *index.RepositoryIndex, target symbol.Symbol) ([]relationEn
 	for _, rev := range idx.GetCallers(target.ID) {
 		for _, fwd := range idx.GetCallees(rev.To) {
 			if fwd.To == target.ID {
-				add("called_by", fwd.From, edgeRefKind(fwd), fwd.Confidence, first(fwd.Evidence))
+				add("called_by", fwd.From, edgeRefKind(fwd), fwd.Confidence, first(fwd.Evidence), 0)
 			}
 		}
 	}
 	for _, fwd := range idx.GetCallees(target.ID) {
-		add("calls", fwd.To, edgeRefKind(fwd), fwd.Confidence, first(fwd.Evidence))
+		add("calls", fwd.To, edgeRefKind(fwd), fwd.Confidence, first(fwd.Evidence), 0)
 	}
 	// Resolved relations without graph semantics (read, write, ...).
 	for _, r := range idx.NonEdgeRelationsTo(target.ID) {
-		add("called_by", r.Source, r.Kind, r.Confidence, first(r.Evidence))
+		add("called_by", r.Source, r.Kind, r.Confidence, first(r.Evidence), 0)
 	}
 	for _, r := range idx.NonEdgeRelationsFrom(target.ID) {
-		add("calls", r.Target, r.Kind, r.Confidence, first(r.Evidence))
+		add("calls", r.Target, r.Kind, r.Confidence, first(r.Evidence), 0)
 	}
 	// Candidate relations: ambiguity is evidence, in both directions.
 	callers, callees := idx.CandidateCallerSample(target.ID), idx.CandidateCalleeSample(target.ID)
 	neIn, neOut := idx.NonEdgeCandidates(target.ID)
 	for _, s := range []index.CandidateSample{callers, neIn} {
 		for _, r := range s.Relations {
-			add("called_by", r.Symbol, r.Kind, r.Confidence, r.Evidence.Detail)
+			add("called_by", r.Symbol, r.Kind, r.Confidence, r.Evidence.Detail, r.References)
 		}
 	}
 	for _, s := range []index.CandidateSample{callees, neOut} {
 		for _, r := range s.Relations {
-			add("calls", r.Symbol, r.Kind, r.Confidence, r.Evidence.Detail)
+			add("calls", r.Symbol, r.Kind, r.Confidence, r.Evidence.Detail, r.References)
 		}
 	}
 
@@ -220,7 +239,7 @@ func relationsOf(idx *index.RepositoryIndex, target symbol.Symbol) ([]relationEn
 	for _, list := range [][]index.UnidentifiedSourceRelation{unid.Resolved, unid.Candidates} {
 		for _, r := range list {
 			e := relationEntry{Direction: "called_by", Name: target.Name, Qualified: r.Container, File: string(r.File),
-				Kind: string(r.Kind), Confidence: r.Confidence.String(), Evidence: r.Evidence.Detail, SourceUnidentified: true}
+				Kind: string(r.Kind), Confidence: r.Confidence.String(), Evidence: r.Evidence.Detail, SourceUnidentified: true, References: r.References}
 			if !seen[e] {
 				seen[e] = true
 				relations = append(relations, e)
@@ -252,7 +271,12 @@ func relationsOf(idx *index.RepositoryIndex, target symbol.Symbol) ([]relationEn
 		return a.Evidence < b.Evidence
 	})
 
-	return relations, callers.Total + neIn.Total + unid.CandidatesTotal, callees.Total + neOut.Total
+	return relations, candidateTotals{
+		callers:         callers.Total + neIn.Total + unid.CandidatesTotal,
+		callees:         callees.Total + neOut.Total,
+		callerRelations: callers.RelationsTotal + neIn.RelationsTotal + unid.CandidateRelationsTotal,
+		calleeRelations: callees.RelationsTotal + neOut.RelationsTotal,
+	}
 }
 
 // edgeRefKind is the reference kind an edge was built from, or its graph kind

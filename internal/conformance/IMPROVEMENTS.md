@@ -18,7 +18,7 @@ Status measured against providers: go, typescript, tsx, javascript, python, php.
 | Q3 | Class/container member methods extracted as symbols | ✓ (receiver) | **✓** | **✓** | ✗ | ✗ | **✓** |
 | Q4 | `SymbolDraft.Parent` populated for nested symbols | ✗ | **✓** | **✓** | ✗ | ✗ | **✓** |
 | Q5 | MCP index/relations handle `.tsx` (registry-wide) | n/a | n/a | ✅ CLOSED | n/a | n/a | n/a |
-| Q6 | `IncludeTests` recognises the language's test files | ✓ | ✓ | ✓ | ✗ | ✓ | ✗ (deferred) |
+| Q6 | `IncludeTests` recognises the language's test files | ✓ | ✓ | ✓ | partial (`.js` only) | ✓ | ✅ CLOSED (Phase 6) |
 
 ### Q3 / Q4 — PHP status (PHP-3)
 
@@ -36,17 +36,34 @@ project): class / interface members are first-class symbols with
 `Qualified = Class.member`, `Parent = Class`, `Receiver = Class`; a get/set
 pair is one `KindProperty` symbol. Q1/Q2 remain open for TS/TSX.
 
-### Q6 — `IncludeTests` test-file detection for PHP (deferred, architecture-blocked)
+### Q6 — test-file detection: CLOSED for PHP (Phase 6)
 
-`isTestFile` (`internal/context/engine.go`) recognises Go (`_test.go`),
-TS/TSX/JS (`.test.*`/`.spec.*`) and Python (`test_*`/`*_test.py`) test files by
-path, but has **no PHP entry**, so `IncludeTests=false` is a no-op for PHP
-(frozen by `TestContext_IncludeTestsNoOpForPHP`). A correct, non-hacky fix needs
-test-file classification metadata on the Language Descriptor plumbed into the
-Context Engine — a Domain IR + Context API change that falls under the PHP-8
-STOP conditions (certification is not an architecture-redesign phase). Deferred
-to a dedicated, language-neutral test-detection consolidation. No PHP-specific
-string check was added to the generic Context Engine.
+Resolved by a language-neutral test classifier, `internal/testfiles`, the
+single authority on "is this file a test?" for the Context Engine
+(`IncludeTests`), impact analysis, the repository map, structural search
+(`excludeTests`) and the skill analyzer — no consumer keeps naming rules of its
+own (cross-consumer contract tests in each package, over the shared paths of
+`internal/testfiles/testfilestest`). Conventions, by file name and directory
+only:
+
+- Go `*_test.go`; TypeScript/TSX `*.test.ts(x)`, `*.spec.ts(x)`; JavaScript
+  `*.test.js`, `*.spec.js`; Python `test_*.py`, `*_test.py`;
+- PHP `FooTest.php` (PHPUnit; a class named `Test` is not a test) and any file
+  under a `tests/`, `Tests/` or `test/` directory.
+
+Fixture data under a `testdata/` directory is a separate question,
+`testfiles.IsTestData`, asked by the consumers that leave fixtures out
+(impact, repository map, search).
+
+PHP now takes part in the `IncludeTests` contract: a test caller is left out
+of the Context unless `IncludeTests` is set, and stays a caller in the graph
+and its completeness (`TestContext_IncludeTestsPHP`,
+`TestTestCallers_SameContractAcrossLanguages`). The earlier freeze
+`TestContext_IncludeTestsNoOpForPHP` was replaced.
+
+Still open: JavaScript test files with the `.jsx`, `.mjs` and `.cjs`
+extensions, and conventions of particular runners (e.g. Deno's
+`foo_test.ts`), are not recognised.
 
 ## Q1 — Partial extraction from broken source
 
@@ -136,9 +153,9 @@ noted above.
 - Context: typed relation reason labels (`extends`/`implements`/`uses_trait`) via `EdgeKind`; type-dependency path hardened to exact-name + unique (no ambiguous/prefix fabrication).
 
 ### Deferred (precision / future architecture — not correctness bugs)
-- **Resolver**: `Import.Path ↔ Symbol.Qualified` semantic-identity resolution; alias precision; namespace-aware resolution; `ReferenceKind × SymbolKind` compatibility; inherited-member and trait-member lookup (needs relation-aware resolution — mind Resolver↔Graph ordering); no type inference.
+- **Resolver**: `ReferenceKind × SymbolKind` compatibility; no general type inference (receiver types come only from declarations: parameters, constructor-injected properties). Delivered since: qualified identity (namespace / `use` / alias aware), constructor-injection receiver evidence (Phase 4), and structural inherited-member and trait-member lookup — own → traits → nearest parent → interfaces, stopping at unknown participants (Phase 5).
 - **Context**: unify the type-dependency path onto resolver-validated graph edges; reverse typed-relation context (`extended_by` / `implemented_by` / `trait_used_by`); relation-aware ranking weights (current scoring is sufficient on measured scenarios).
-- **Test detection**: Q6 above (Descriptor-driven, language-neutral).
+- **Test detection**: closed — Q6 above (language-neutral `internal/testfiles`).
 - **Framework awareness** (Laravel/Symfony/Doctrine/PHPUnit): out of scope — a future Framework Evidence Provider, not PHP language support.
 
 These are honest degradations (Candidate/Unresolved/omitted), never false Exact/Strong or fabricated edges.

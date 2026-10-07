@@ -117,3 +117,34 @@ func impactSection(text, header string) string {
 	}
 	return rest
 }
+
+// Names that look like tests but follow no convention of their language are
+// production code for every consumer alike: the Context keeps them as callers
+// without includeTests, and impact lists them as direct dependents.
+func TestTestCallers_TrickyNegativesAgree(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"app/Policy.php":     "<?php\nnamespace App;\nclass Policy { public function allowed() { return true; } }\n",
+		"app/audit_test.php": "<?php\nnamespace App;\nclass Audit { public function run(Policy $p) { return $p->allowed(); } }\n",
+		"app/Test.php":       "<?php\nnamespace App;\nclass Test { public function run(Policy $p) { return $p->allowed(); } }\n",
+		"src/policy.ts":      "export function allowed() { return true; }\n",
+		"src/audit_test.ts":  "import { allowed } from \"./policy\";\nexport function audit() { return allowed(); }\n",
+	})
+	h := NewToolsHandler(root, nil)
+	for target, files := range map[string][]string{
+		`App\Policy.allowed`: {"app/audit_test.php", "app/Test.php"},
+		"allowed":            {"src/audit_test.ts"},
+	} {
+		ctx, _ := callText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": target})
+		imp, _ := callText(t, h, "analyze_change_impact", map[string]interface{}{"path": ".", "symbol": target})
+		direct, tests := impactSection(imp, "Direct dependents (callers):"), impactSection(imp, "Tests:")
+		for _, f := range files {
+			if !strings.Contains(ctx, "### "+f) {
+				t.Errorf("%s: context dropped production caller %s:\n%s", target, f, ctx)
+			}
+			if !strings.Contains(direct, f) || strings.Contains(tests, f) {
+				t.Errorf("%s: impact does not list %s as a direct dependent:\n%s", target, f, imp)
+			}
+		}
+	}
+}

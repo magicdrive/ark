@@ -1,7 +1,17 @@
 // Package testfiles recognises test files by the static, repository-visible
 // conventions of each supported language — file names and directory layout
-// only; no test-runner configuration is read or executed. It is the one place
-// the Context Engine, impact analysis and the repository map share.
+// only; no test-runner configuration is read or executed. It is the single
+// authority on "is this file a test?" for every consumer: the Context Engine,
+// impact analysis, the repository map, structural search and the skill
+// analyzer. No consumer adds naming rules of its own.
+//
+// Two questions, two classifiers:
+//
+//	IsTestFile  a test file (or test support code a language keeps with its
+//	            tests) — test callers, test packages, includeTests;
+//	IsTestData  a file under a testdata directory: fixture input read by tests,
+//	            not code of the repository — consumers that leave fixtures out
+//	            (impact, the repository map, search's excludeTests) ask both.
 package testfiles
 
 import (
@@ -44,6 +54,19 @@ func IsTestFile(path string) bool {
 			case "tests", "Tests", "test":
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// IsTestData reports whether the repository-relative path lies under a
+// directory named testdata (the Go toolchain's fixture convention, used by
+// other ecosystems too). The name must be a whole path component.
+func IsTestData(path string) bool {
+	dirs := strings.Split(filepath.ToSlash(path), "/")
+	for _, d := range dirs[:len(dirs)-1] {
+		if d == "testdata" {
+			return true
 		}
 	}
 	return false

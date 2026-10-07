@@ -658,8 +658,8 @@ Parse → Symbols → References → Resolution → Graph → Context。
 
 チェックマークは、canonical Language Registry がその言語の **認定サポートレベル**
 として表明している段階を示します（`get_language_support` が実行時に報告）。PHP の
-`get_context` 経路は実装済みで専用の context-quality テストもありますが、namespace/
-import・継承/trait メンバ解決など resolver の精度を意図的に保守的に保っているため、
+`get_context` 経路は実装済みで専用の context-quality テストもありますが、関数・定数名や
+framework の dispatch など resolver の精度を意図的に保守的に保っているため、
 PHP は **Graph** レベルで表明しています。過大表明を避けるため Context 列は未チェック
 のままにしています。
 
@@ -714,13 +714,17 @@ class 定数 read、型参照）、**typed relation**（`extends` / `implements`
 動的・曖昧な構文については **不確実性をそのまま保持**します。
 
 **既知の制限（設計上の意図）**：動的呼び出し・動的生成（`$obj->$m()`、`new $c()`）は
-推測しません。変数レシーバの型推論は行いません。Composer / PSR-4 / autoload 解決は
+推測しません。レシーバの型は宣言（型付き引数、constructor injection された property）
+からのみ得て、代入からの型推論は行いません。Composer / PSR-4 / autoload 解決は
 ありません。class 名はファイル自身の `namespace` / `use` / `use … as` / 完全修飾
 構文から確定し、リポジトリ内の宣言と完全一致で照合します（リポジトリに宣言のない
 class、例えば vendor の class は `Unresolved` のままで、同名のリポジトリ内 class には
-決して結び付けません。複数宣言されている名前は `Candidate` です）。継承・trait
-メンバ解決、関数・定数名、`self` / `static` / `parent` は保守的（捏造せず honest な
-`Candidate` / `Unresolved`）です。framework（Laravel/Symfony 等）セマンティクスは
+決して結び付けません。複数宣言されている名前は `Candidate` です）。継承・trait の
+メンバ（`self::` / `static::` / `parent::` を含む）は、リポジトリ内で宣言された型だけを
+たどって構造的に解決します（自身の宣言 → trait → 直近の親 → interface）。参加者が
+リポジトリ外または曖昧なとき、trait adaptation（`insteadof` / `as`）がそのメンバを
+指すとき、親の private メンバのときは、捏造せず honest な `Candidate` / `Unresolved`
+で止まります。関数・定数名は保守的です。framework（Laravel/Symfony 等）セマンティクスは
 扱いません。Ark は **純粋な静的解析**のみを行い、リポジトリのコード・Composer・PHP
 ツールを一切実行しません。
 

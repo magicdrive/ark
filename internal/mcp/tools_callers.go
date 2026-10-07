@@ -15,7 +15,7 @@ func CallersToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_callers",
-			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete); candidates lists possible callers from ambiguous references (a deterministic sample of at most 10; candidatesTotal counts them all)",
+			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -47,7 +47,7 @@ func CallersToolDefinitions() []Tool {
 		},
 		{
 			Name:        "get_callees",
-			Description: "Find symbols called by a given symbol, using the repository index. unattributed counts its references whose target could not be resolved (0 means the callee list is complete); candidates lists possible callees of its ambiguous references (a deterministic sample of at most 10; candidatesTotal counts them all)",
+			Description: "Find symbols called by a given symbol, using the repository index. unattributed counts its references whose target could not be resolved (0 means the callee list is complete); candidates lists possible callees of its ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -93,9 +93,11 @@ type edgeEntry struct {
 // empty Edges list is a true zero (see index.Completeness). Total and
 // Truncated appear only when Edges was cut at maxResults. Candidates lists
 // possible callers (get_callers) or callees (get_callees) from ambiguous
-// references — never edges — not already among Edges: a deterministic sample
-// of at most index.MaxCandidateSources; CandidatesTotal counts every distinct
-// symbol in the queried direction's candidate relations.
+// references — never edges — not already among Edges: one per symbol and
+// reference kind, with the number of references it stands for, from a
+// deterministic sample of at most index.MaxCandidateSources relations.
+// CandidatesTotal counts every distinct symbol in the queried direction's
+// candidate relations, CandidateRelationsTotal every distinct relation.
 type callersResult struct {
 	Symbol          string           `json:"symbol"`
 	Edges           []edgeEntry      `json:"edges"`
@@ -104,6 +106,10 @@ type callersResult struct {
 	Truncated       bool             `json:"truncated,omitempty"`
 	Candidates      []candidateEntry `json:"candidates,omitempty"`
 	CandidatesTotal int              `json:"candidatesTotal,omitempty"`
+	// CandidateRelationsTotal counts distinct candidate relations (symbol +
+	// reference kind); more than the relations behind Candidates means some
+	// were left out.
+	CandidateRelationsTotal int `json:"candidateRelationsTotal,omitempty"`
 }
 
 // candidateEntry is a possible caller or callee: one end of a reference whose
@@ -115,6 +121,7 @@ type candidateEntry struct {
 	Kind       string `json:"kind,omitempty"`
 	Confidence string `json:"confidence"`
 	Evidence   string `json:"evidence,omitempty"`
+	References int    `json:"references,omitempty"` // candidate references it stands for
 }
 
 func (h *ToolsHandler) getCallers(args map[string]interface{}) (*CallToolResult, error) {
@@ -245,6 +252,7 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 	}
 	out.Candidates = candidateEntries(idx, sample, edges)
 	out.CandidatesTotal = sample.Total
+	out.CandidateRelationsTotal = sample.RelationsTotal
 	if len(edges) > maxResults {
 		out.Total = len(edges)
 		out.Truncated = true
@@ -289,6 +297,7 @@ func candidateEntries(idx *index.RepositoryIndex, sample index.CandidateSample, 
 			Kind:       string(r.Kind),
 			Confidence: r.Confidence.String(),
 			Evidence:   r.Evidence.Detail,
+			References: r.References,
 		})
 	}
 	sort.Slice(out, func(i, j int) bool {

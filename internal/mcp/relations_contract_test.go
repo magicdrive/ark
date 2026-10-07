@@ -46,10 +46,12 @@ class Svc
 }
 
 type relationsOut struct {
-	Relations        []relationEntry `json:"relations"`
-	CandidateCallers int             `json:"candidateCallers"`
-	CandidateCallees int             `json:"candidateCallees"`
-	Unattributed     int             `json:"unattributed"`
+	Relations                []relationEntry `json:"relations"`
+	CandidateCallers         int             `json:"candidateCallers"`
+	CandidateCallees         int             `json:"candidateCallees"`
+	CandidateCallerRelations int             `json:"candidateCallerRelations"`
+	CandidateCalleeRelations int             `json:"candidateCalleeRelations"`
+	Unattributed             int             `json:"unattributed"`
 }
 
 func relationsFor(t *testing.T, h *ToolsHandler, symbol string) relationsOut {
@@ -178,7 +180,7 @@ func TestRelations_CandidateSampleBounded(t *testing.T) {
 	h := NewToolsHandler(root, nil)
 
 	in := relationsFor(t, h, `App\P.ping`)
-	if len(in.Relations) != index.MaxCandidateSources || in.CandidateCallers != 12 {
+	if len(in.Relations) != index.MaxCandidateSources || in.CandidateCallers != 12 || in.CandidateCallerRelations != 12 {
 		t.Errorf("P.ping: %d relations, candidateCallers %d; want %d of 12", len(in.Relations), in.CandidateCallers, index.MaxCandidateSources)
 	}
 	// The first sources in resolution order (files sorted): C00 … C09.
@@ -188,7 +190,7 @@ func TestRelations_CandidateSampleBounded(t *testing.T) {
 		}
 	}
 	out := relationsFor(t, h, `App\T.fan`)
-	if len(out.Relations) != index.MaxCandidateSources || out.CandidateCallees != 24 || out.Unattributed != 12 {
+	if len(out.Relations) != index.MaxCandidateSources || out.CandidateCallees != 24 || out.CandidateCalleeRelations != 24 || out.Unattributed != 12 {
 		t.Errorf("T.fan: %d relations, candidateCallees %d, unattributed %d; want %d of 24, 12", len(out.Relations), out.CandidateCallees, out.Unattributed, index.MaxCandidateSources)
 	}
 	callers, _, _ := callGraphTool(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": `App\P.ping`})
@@ -209,5 +211,65 @@ func TestRelations_CandidateSampleBounded(t *testing.T) {
 		if again, _ := callText(t, NewToolsHandler(root, nil), "get_relations", map[string]interface{}{"path": ".", "symbol": `App\T.fan`}); again != first {
 			t.Fatal("candidate sample is not deterministic")
 		}
+	}
+}
+
+// Candidate relations are identified by symbol and reference kind: `new Foo()`
+// and `Foo()` are two relations with each Foo, repeated references one
+// relation with a reference count. The totals count distinct symbols and
+// distinct relations, so nothing collapses unseen.
+func TestRelations_CandidateRelationIdentity(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"a.js":   "export class Foo {}\n",
+		"b.js":   "export class Foo {}\n",
+		"use.js": "export function useIt() {\n  const f = new Foo();\n  Foo();\n  Foo();\n}\n",
+	})
+	h := NewToolsHandler(root, nil)
+	text, isErr := callText(t, h, "get_relations", map[string]interface{}{"path": ".", "symbol": "useIt"})
+	if isErr {
+		t.Fatal(text)
+	}
+	var out struct {
+		Relations                []relationEntry `json:"relations"`
+		CandidateCallees         int             `json:"candidateCallees"`
+		CandidateCalleeRelations int             `json:"candidateCalleeRelations"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, r := range out.Relations {
+		got = append(got, fmt.Sprintf("%s %s %s %s refs=%d", r.Direction, r.File, r.Kind, r.Confidence, r.References))
+	}
+	want := []string{
+		"calls a.js call candidate refs=2",
+		"calls a.js construction candidate refs=1",
+		"calls b.js call candidate refs=2",
+		"calls b.js construction candidate refs=1",
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("relations:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+	}
+	if out.CandidateCallees != 2 || out.CandidateCalleeRelations != 4 {
+		t.Errorf("candidateCallees=%d candidateCalleeRelations=%d, want 2 symbols, 4 relations", out.CandidateCallees, out.CandidateCalleeRelations)
+	}
+	// get_callees lists the same relations and totals.
+	ct, _ := callText(t, h, "get_callees", map[string]interface{}{"path": ".", "symbol": "useIt"})
+	var callees struct {
+		Edges                   []edgeEntry      `json:"edges"`
+		Candidates              []candidateEntry `json:"candidates"`
+		CandidatesTotal         int              `json:"candidatesTotal"`
+		CandidateRelationsTotal int              `json:"candidateRelationsTotal"`
+	}
+	if err := json.Unmarshal([]byte(ct), &callees); err != nil {
+		t.Fatal(err)
+	}
+	if len(callees.Candidates) != 4 || callees.CandidatesTotal != 2 || callees.CandidateRelationsTotal != 4 {
+		t.Errorf("get_callees: %d candidates, candidatesTotal %d, candidateRelationsTotal %d; want 4, 2, 4:\n%s", len(callees.Candidates), callees.CandidatesTotal, callees.CandidateRelationsTotal, ct)
+	}
+	// Candidates stay candidates: never edges.
+	if len(callees.Edges) != 0 {
+		t.Errorf("candidate relations became edges: %v", callees.Edges)
 	}
 }

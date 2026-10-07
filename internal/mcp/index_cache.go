@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -27,13 +28,29 @@ import (
 // maxDepth, maxTokens, format, filePattern, ...) is part of the key: those
 // options only read the index.
 //
+// A build reads the sources one after another; it is not an atomic snapshot of
+// the filesystem. Sources changing while it runs can leave it with a mixture
+// (an old file and a new one) that matches no repository state. So a build is
+// published only once a fingerprint taken after it finished equals the
+// fingerprint of what it read; otherwise that generation is discarded and the
+// waiters build again. A request whose sources keep changing gives up after
+// maxStaleGenerations discarded generations, and its context ends it at any
+// time. Start times are never evidence of freshness: only a fingerprint walk
+// that began after a request arrived makes an index current for that request.
+//
 // Concurrent requests for the same key share one build (single-flight); builds
 // for different keys run in parallel. A build that fails or panics is never
 // published. A waiter that gives up (its context ends) leaves the shared build
 // running for the others. At most maxIndexes completed indexes are retained,
 // least recently used first out; an entry being built is never evicted.
 
-const maxIndexes = 3
+const (
+	maxIndexes          = 3
+	maxStaleGenerations = 3
+)
+
+// errStaleGeneration marks a build whose sources changed while it ran.
+var errStaleGeneration = errors.New("sources changed while the index was built")
 
 // indexKey identifies what an index is built over and how.
 type indexKey struct {
@@ -42,11 +59,11 @@ type indexKey struct {
 }
 
 type indexEntry struct {
-	done    chan struct{} // closed when the build ends
-	started time.Time
-	idx     *index.RepositoryIndex
-	err     error
-	used    uint64 // LRU clock value of the last use
+	done     chan struct{} // closed when the build ends
+	verified time.Time     // when the post-build fingerprint walk began
+	idx      *index.RepositoryIndex
+	err      error
+	used     uint64 // LRU clock value of the last use
 }
 
 type indexCache struct {
@@ -84,11 +101,15 @@ func newIndexCache(providers []language.Provider, build func(ctx context.Context
 func (c *indexCache) get(ctx context.Context, canonicalRoot string) (*index.RepositoryIndex, error) {
 	key := indexKey{root: canonicalRoot, config: c.config}
 	requested := time.Now()
+	stale := 0
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		c.mu.Lock()
 		e := c.entries[key]
 		if e == nil {
-			e = &indexEntry{done: make(chan struct{}), started: time.Now()}
+			e = &indexEntry{done: make(chan struct{})}
 			c.entries[key] = e
 			c.builds++
 			c.mu.Unlock()
@@ -102,12 +123,19 @@ func (c *indexCache) get(ctx context.Context, canonicalRoot string) (*index.Repo
 		case <-ctx.Done():
 			return nil, ctx.Err()
 		}
+		if errors.Is(e.err, errStaleGeneration) {
+			// Discarded by its own verification: build again, boundedly.
+			if stale++; stale >= maxStaleGenerations {
+				return nil, fmt.Errorf("indexing %s: sources kept changing during %d builds; retry when they settle", canonicalRoot, stale)
+			}
+			continue
+		}
 		if e.err != nil {
 			return nil, e.err
 		}
-		// A build that started after this request arrived read the sources
-		// as they were at or after that moment: current by construction.
-		if !e.started.Before(requested) {
+		// Verified by a fingerprint walk that began after this request
+		// arrived: current for this request.
+		if !e.verified.Before(requested) {
 			c.touch(e)
 			return e.idx, nil
 		}
@@ -133,7 +161,8 @@ func (c *indexCache) get(ctx context.Context, canonicalRoot string) (*index.Repo
 	}
 }
 
-// run builds e. It is detached from every requester's context so that one
+// run builds e and verifies it against the sources as they are once the build
+// has finished. It is detached from every requester's context so that one
 // waiter giving up does not abort the build the others wait for.
 func (c *indexCache) run(key indexKey, e *indexEntry) {
 	defer func() {
@@ -147,7 +176,10 @@ func (c *indexCache) run(key indexKey, e *indexEntry) {
 			}
 			c.mu.Lock()
 			if c.entries[key] == e {
-				delete(c.entries, key) // never publish a failed build
+				delete(c.entries, key) // never publish a failed or stale build
+				if errors.Is(e.err, errStaleGeneration) {
+					c.rebuilds++
+				}
 			}
 			c.mu.Unlock()
 		} else {
@@ -159,6 +191,19 @@ func (c *indexCache) run(key indexKey, e *indexEntry) {
 		}
 	}()
 	e.idx, e.err = c.build(context.Background(), key.root)
+	if e.err != nil || e.idx == nil {
+		return
+	}
+	verified := time.Now()
+	fp, err := c.fingerprint(context.Background(), key.root)
+	switch {
+	case err != nil:
+		e.idx, e.err = nil, err
+	case fp != e.idx.Fingerprint():
+		e.idx, e.err = nil, errStaleGeneration
+	default:
+		e.verified = verified
+	}
 }
 
 func (c *indexCache) touch(e *indexEntry) {

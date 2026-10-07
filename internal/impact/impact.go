@@ -3,7 +3,6 @@ package impact
 import (
 	"context"
 	"sort"
-	"strings"
 
 	"github.com/magicdrive/ark/internal/graph"
 	"github.com/magicdrive/ark/internal/index"
@@ -201,13 +200,10 @@ func Analyze(
 	return result, nil
 }
 
+// isTestFile reports whether path is a test file or test fixture data; both
+// are classified by internal/testfiles alone.
 func isTestFile(path string) bool {
-	return testfiles.IsTestFile(path) ||
-		strings.HasSuffix(path, "_test.go") ||
-		strings.Contains(path, "_test.") ||
-		strings.HasPrefix(path, "test_") ||
-		strings.Contains(path, "/testdata/") ||
-		strings.Contains(path, "testdata/")
+	return testfiles.IsTestFile(path) || testfiles.IsTestData(path)
 }
 
 // categoryOrder defines display/sort priority.

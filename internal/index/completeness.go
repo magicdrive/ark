@@ -116,11 +116,7 @@ func (c *Completeness) Outgoing(id symbol.SymbolID) int { return c.out[id] }
 // CandidateSources returns up to MaxCandidateSources symbols containing a
 // candidate (non-unique) reference to id, ordered by SymbolID.
 func (c *Completeness) CandidateSources(id symbol.SymbolID) []symbol.SymbolID {
-	var out []symbol.SymbolID
-	for _, r := range candidateSample(c.samples.in[id]).Relations {
-		out = append(out, r.Symbol)
-	}
-	return out
+	return candidateSymbols(c.samples.in[id])
 }
 
 // CandidateCallerSample returns the candidate relations into id: possible

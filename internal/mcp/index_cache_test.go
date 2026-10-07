@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -13,6 +15,9 @@ import (
 	"time"
 
 	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/php"
+	"github.com/magicdrive/ark/internal/source"
 )
 
 // Repository index reuse: one build serves every request while the sources are
@@ -438,5 +443,109 @@ func TestIndexReuse_Deterministic(t *testing.T) {
 	}
 	if builds, _, _, _ := cacheStats(h2); builds != 1 {
 		t.Errorf("concurrent same-key requests built %d indexes, want 1", builds)
+	}
+}
+
+// pausingProvider wraps a provider and, the first time it extracts pauseAt,
+// reports that the build has read that file and waits until released. A test
+// can thereby change sources at a precise point of a build, without sleeps.
+type pausingProvider struct {
+	language.Provider
+	pauseAt string
+	once    sync.Once
+	reached chan struct{}
+	release chan struct{}
+}
+
+func (p *pausingProvider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
+	if string(file) == p.pauseAt {
+		p.once.Do(func() {
+			close(p.reached)
+			<-p.release
+		})
+	}
+	return p.Provider.Extract(ctx, file, src)
+}
+
+// A build reads sources one after another, so sources changing during a build
+// can leave it with a mixture no repository state ever had (old a.php + new
+// b.php). Such a generation must never be returned as current: the index is
+// published only after a fingerprint taken once the build has finished
+// matches what it read.
+func TestIndexCache_MidBuildChangeIsNeverPublished(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"a.php": "<?php\nclass OldA { public function f() {} }\n",
+		"b.php": "<?php\nclass OldB { public function g() {} }\n",
+	})
+	prov := &pausingProvider{Provider: php.NewProvider(), pauseAt: "a.php", reached: make(chan struct{}), release: make(chan struct{})}
+	providers := []language.Provider{prov}
+	c := newIndexCache(providers, func(ctx context.Context, root string) (*index.RepositoryIndex, error) {
+		return index.New(ctx, root, providers)
+	})
+
+	type result struct {
+		idx *index.RepositoryIndex
+		err error
+	}
+	results := make(chan result, 2)
+	for i := 0; i < 2; i++ { // two waiters share the build
+		go func() {
+			idx, err := c.get(context.Background(), root)
+			results <- result{idx, err}
+		}()
+	}
+	<-prov.reached // the build has read a.php (old content) and is paused
+	writeTree(t, root, map[string]string{
+		"a.php": "<?php\nclass NewA { public function f() {} }\n",
+		"b.php": "<?php\nclass NewB { public function g() {} }\n",
+	})
+	close(prov.release) // the build goes on to read the new b.php
+
+	for i := 0; i < 2; i++ {
+		r := <-results
+		if r.err != nil {
+			t.Fatal(r.err)
+		}
+		var classes []string
+		for _, f := range r.idx.Files() {
+			for _, s := range r.idx.SymbolsByFile(f) {
+				if s.Kind == "class" {
+					classes = append(classes, s.Name)
+				}
+			}
+		}
+		sort.Strings(classes)
+		if !reflect.DeepEqual(classes, []string{"NewA", "NewB"}) {
+			t.Errorf("waiter %d got classes %v: a generation built across a source change was returned as current", i, classes)
+		}
+	}
+	builds, _, rebuilds, entries := c.stats()
+	if builds != 2 || rebuilds != 1 || entries != 1 {
+		t.Errorf("builds=%d rebuilds=%d entries=%d, want 2 builds (one discarded) and 1 entry", builds, rebuilds, entries)
+	}
+}
+
+// Sources that never stop changing do not keep a request rebuilding forever:
+// it gives up with an error after a bounded number of discarded generations,
+// and its context still ends it at any time.
+func TestIndexCache_ContinuousChangeIsBounded(t *testing.T) {
+	idx := testIndex(t, "")
+	var n int32
+	c := newIndexCache(nil, func(context.Context, string) (*index.RepositoryIndex, error) { return idx, nil })
+	c.fingerprint = func(context.Context, string) (string, error) {
+		return fmt.Sprintf("changed-%d", atomic.AddInt32(&n, 1)), nil // never what was built
+	}
+	if _, err := c.get(context.Background(), "/r"); err == nil || !strings.Contains(err.Error(), "kept changing") {
+		t.Fatalf("err = %v, want a bounded give-up", err)
+	}
+	builds, _, _, entries := c.stats()
+	if builds != maxStaleGenerations || entries != 0 {
+		t.Errorf("builds=%d entries=%d, want %d builds and nothing published", builds, entries, maxStaleGenerations)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := c.get(ctx, "/r"); !errors.Is(err, context.Canceled) {
+		t.Errorf("cancelled request: %v", err)
 	}
 }
