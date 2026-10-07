@@ -28,10 +28,14 @@ func phpProviders() []language.Provider { return []language.Provider{php.NewProv
 func phpScenarios() []contextquality.Scenario {
 	return []contextquality.Scenario{
 		{
-			// A resolved (Exact) caller is context; a candidate caller is not.
+			// Resolved callers are context — a typed property (PHP 7.4) and a
+			// constructor-injected untyped property (Laravel 6); a candidate
+			// caller (property reassigned elsewhere) is not.
 			Name: "callers", TargetQualified: `App\Services\LoginScreenPolicy.showsSsoButton`, Depth: 2, MaxTokens: 8000,
-			Required:   []string{`App\Services\LoginScreenPolicy.showsSsoButton`, `App\Http\TypedController.show`},
-			Irrelevant: []string{`App\Http\LoginController.showLoginForm`, `App\Models\Clinic.showsSsoButton`, `App\Http\LoginController`},
+			Required: []string{
+				`App\Services\LoginScreenPolicy.showsSsoButton`, `App\Http\TypedController.show`, `App\Http\LoginController.showLoginForm`,
+			},
+			Irrelevant: []string{`App\Http\LegacyController.render`, `App\Models\Clinic.showsSsoButton`, `App\Http\LoginController`},
 		},
 		{
 			Name: "inheritance", Task: "Understand UserService's inherited structure",
@@ -318,7 +322,7 @@ func TestContext_CandidateCallerIsCompletenessOnly(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, sel := range res.Selected {
-		if strings.Contains(sel.Qualified, "LoginController") {
+		if strings.Contains(sel.Qualified, "LegacyController") {
 			t.Errorf("candidate caller %s (%s) entered the context", sel.Qualified, sel.Reason)
 		}
 	}

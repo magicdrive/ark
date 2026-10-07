@@ -45,7 +45,10 @@ type Reference struct {
 	// evidence.
 	NameQualified         string
 	ReceiverTypeQualified string
-	IsCall                bool
+	// ConfidenceCap bounds the confidence of this reference's resolution (see
+	// language.ReferenceDraft.ConfidenceCap); "" when unbounded.
+	ConfidenceCap string
+	IsCall        bool
 }
 
 // NewReferenceID returns a deterministic ID derived from

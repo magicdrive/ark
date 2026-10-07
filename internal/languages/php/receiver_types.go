@@ -33,6 +33,10 @@ type phpVarType struct {
 type phpTypeRef struct {
 	name string
 	qual string
+	// capped marks evidence that identifies the type but cannot exclude
+	// writes by code outside the class (see ctor_properties.go): references
+	// through it are capped at Strong.
+	capped bool
 }
 
 // phpTypeEnv is the proven receiver-type environment of one function body.
@@ -85,10 +89,20 @@ func phpVarName(n *ts.Node, lang *ts.Language, src []byte) string {
 	return childText(n, lang, src, "name")
 }
 
-// phpClassPropertyTypes indexes typed instance properties of a class body,
-// including promoted constructor properties.
-func phpClassPropertyTypes(body *ts.Node, lang *ts.Language, src []byte, sc *nameScope) map[string]phpTypeRef {
+// phpClassPropertyTypes indexes the proven instance property types of a class
+// body: typed properties, promoted constructor properties and — for an
+// untyped property — constructor-proven types (ctor_properties.go). A declared
+// type always wins: PHP enforces it on every write. class is the declaring
+// node (class, trait, interface, enum).
+func phpClassPropertyTypes(class, body *ts.Node, lang *ts.Language, src []byte, sc *nameScope) map[string]phpTypeRef {
 	props := make(map[string]phpTypeRef)
+	defer func() {
+		for name, typ := range phpCtorPropertyTypes(class, body, lang, src, sc) {
+			if _, typed := props[name]; !typed {
+				props[name] = typ
+			}
+		}
+	}()
 	for i := 0; i < body.ChildCount(); i++ {
 		member := body.Child(i)
 		switch member.Type(lang) {
@@ -266,25 +280,25 @@ func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, sc *nameScop
 	return env
 }
 
-// receiverType returns the proven declared type of a member-call receiver
-// node used at byte offset at — the type name as written and its FQN — or "", "".
-func (env *phpTypeEnv) receiverType(recv *ts.Node, at uint32, lang *ts.Language, src []byte) (name, qual string) {
+// receiverType returns the proven type of a member-call receiver node used at
+// byte offset at — the type name as written, its FQN and whether the evidence
+// is capped — or the zero value.
+func (env *phpTypeEnv) receiverType(recv *ts.Node, at uint32, lang *ts.Language, src []byte) phpTypeRef {
 	if env == nil || recv == nil {
-		return "", ""
+		return phpTypeRef{}
 	}
 	switch recv.Type(lang) {
 	case "variable_name":
 		if v, ok := env.vars[phpVarName(recv, lang, src)]; ok && at >= v.from {
-			return v.typ.name, v.typ.qual
+			return v.typ
 		}
 	case "member_access_expression":
 		// $this->prop (one step only).
 		if recv.ChildCount() > 0 && phpVarName(recv.Child(0), lang, src) == "this" {
 			if prop := childByType(recv, lang, "name"); prop != nil {
-				t := env.props[prop.Text(src)]
-				return t.name, t.qual
+				return env.props[prop.Text(src)]
 			}
 		}
 	}
-	return "", ""
+	return phpTypeRef{}
 }

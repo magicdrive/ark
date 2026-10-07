@@ -4,8 +4,9 @@ namespace App\Http;
 
 use App\Services\LoginScreenPolicy;
 
-// Laravel 6 style untyped property: the call is only a candidate (it could be
-// Clinic::showsSsoButton as far as the index can prove), so it is no edge.
+// Laravel 6 style untyped property injected by the constructor and never
+// written elsewhere: the constructor parameter type proves the receiver, so the
+// call resolves exactly (private property, no trait).
 class LoginController
 {
     private $policy;

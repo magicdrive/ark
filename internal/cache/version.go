@@ -10,7 +10,8 @@ package cache
 // and were added without a schema bump: entries written before they existed
 // decode with them empty, which is exactly what a provider that does not emit
 // them produces. A provider that starts emitting them changes its own output
-// and must bump its Provider.CacheVersion (PHP: "php-7").
+// and must bump its Provider.CacheVersion (PHP: "php-7"). ReferenceDraft.
+// ConfidenceCap follows the same rule (PHP: "php-8").
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

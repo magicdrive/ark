@@ -119,6 +119,27 @@ func (r *Resolver) Resolve() []Resolution {
 // R1 and R2 are authoritative: when they cannot resolve, the reference is
 // Unresolved — they never fall back to name heuristics.
 func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resolution {
+	return applyConfidenceCap(r.resolveReference(ref, fi), ref)
+}
+
+// applyConfidenceCap lowers res to the provider's ConfidenceCap. It only ever
+// lowers: a resolution already at or below the cap is returned unchanged, so a
+// cap can never promote a Candidate or an Unresolved reference.
+func applyConfidenceCap(res Resolution, ref reference.Reference) Resolution {
+	if ref.ConfidenceCap == "" {
+		return res
+	}
+	limit := ConfidenceCandidate // unknown caps fail safe
+	if ref.ConfidenceCap == ConfidenceStrong.String() {
+		limit = ConfidenceStrong
+	}
+	return capConfidence(res, limit, ResolutionEvidence{
+		Kind:   EvidenceConfidenceCap,
+		Detail: fmt.Sprintf("the reference's evidence permits at most %s", limit),
+	})
+}
+
+func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resolution {
 	res := Resolution{
 		ReferenceID:   ref.ID,
 		ReferenceName: ref.Name,

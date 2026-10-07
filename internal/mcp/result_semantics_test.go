@@ -33,7 +33,8 @@ class Clinic
     public function showsSsoButton() { return false; }
 }
 `,
-		// Laravel 6 style: untyped property → the call is a Candidate.
+		// Laravel 6 style: untyped property injected by the constructor → the
+		// constructor parameter type proves the receiver (Exact, private).
 		"app/Http/LoginController.php": `<?php
 namespace App\Http;
 
@@ -44,6 +45,21 @@ class LoginController
     private $policy;
     public function __construct(LoginScreenPolicy $policy) { $this->policy = $policy; }
     public function showLoginForm() { return $this->policy->showsSsoButton(); }
+}
+`,
+		// The property is reassigned outside the constructor → no evidence: the
+		// call is a Candidate.
+		"app/Http/LegacyController.php": `<?php
+namespace App\Http;
+
+use App\Services\LoginScreenPolicy;
+
+class LegacyController
+{
+    private $policy;
+    public function __construct(LoginScreenPolicy $policy) { $this->policy = $policy; }
+    public function swap($policy) { $this->policy = $policy; }
+    public function render() { return $this->policy->showsSsoButton(); }
 }
 `,
 		// Typed property → an Exact edge.
@@ -246,19 +262,20 @@ func TestGetCallers_ResultSemantics(t *testing.T) {
 		{name: "true zero", symbol: "LoginScreenPolicy.unused", wantEdges: []string{}, wantUnattributed: 0, wantCandidates: []string{}},
 		{name: "exact + candidate", symbol: "LoginScreenPolicy.showsSsoButton",
 			wantEdges: []string{
+				`App\Http\LoginController.showLoginForm [exact]`,
 				`App\Http\TypedController.show [exact]`,
 				`App\Services\LoginScreenPolicy.isSsoOnly [exact]`,
 			},
 			wantUnattributed: 1,
-			wantCandidates:   []string{`App\Http\LoginController.showLoginForm [candidate]`}},
+			wantCandidates:   []string{`App\Http\LegacyController.render [candidate]`}},
 		{name: "candidate only", symbol: "Clinic.showsSsoButton", wantEdges: []string{}, wantUnattributed: 1,
-			wantCandidates: []string{`App\Http\LoginController.showLoginForm [candidate]`}},
+			wantCandidates: []string{`App\Http\LegacyController.render [candidate]`}},
 		{name: "unresolved same-name only", symbol: "Base.common", wantEdges: []string{}, wantUnattributed: 1, wantCandidates: []string{}},
 		{name: "outside-repository same name is not unattributed", symbol: `App\Models\Request.input`,
 			wantEdges: []string{}, wantUnattributed: 0, wantCandidates: []string{}},
 		{name: "sourceless reference counts", symbol: `App\Services\LoginScreenPolicy`, maxResults: 1,
-			wantEdges: []string{`App\Http\LoginController.__construct [exact]`}, wantUnattributed: 1, wantCandidates: []string{},
-			wantTruncated: true, wantTotal: 3},
+			wantEdges: []string{`App\Http\LegacyController.__construct [exact]`}, wantUnattributed: 1, wantCandidates: []string{},
+			wantTruncated: true, wantTotal: 4},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -312,9 +329,10 @@ func TestGetCallees_ResultSemantics(t *testing.T) {
 		wantEdges        []string
 		wantUnattributed int
 	}{
-		{symbol: "LoginController.showLoginForm", wantEdges: []string{}, wantUnattributed: 1}, // candidate call
-		{symbol: "Child.run", wantEdges: []string{}, wantUnattributed: 1},                     // unresolved inherited call
-		{symbol: "VendorUser.handle", wantEdges: []string{}, wantUnattributed: 0},             // outside the repository: known
+		{symbol: "LegacyController.render", wantEdges: []string{}, wantUnattributed: 1}, // candidate call
+		{symbol: "LoginController.showLoginForm", wantEdges: []string{`App\Services\LoginScreenPolicy.showsSsoButton [exact]`}, wantUnattributed: 0},
+		{symbol: "Child.run", wantEdges: []string{}, wantUnattributed: 1},         // unresolved inherited call
+		{symbol: "VendorUser.handle", wantEdges: []string{}, wantUnattributed: 0}, // outside the repository: known
 		{symbol: "TypedController.show", wantEdges: []string{`App\Services\LoginScreenPolicy.showsSsoButton [exact]`}, wantUnattributed: 0},
 		{symbol: "LoginScreenPolicy.unused", wantEdges: []string{}, wantUnattributed: 0},
 	}
@@ -346,8 +364,8 @@ func TestGetRelations_ResultSemantics(t *testing.T) {
 		t.Errorf("unresolved only: want relations [] and unattributed 1:\n%s", text)
 	}
 	out, text, _ = callGraphTool(t, dir, "get_relations", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton", "maxResults": float64(1)})
-	if len(out.Relations) != 1 || !out.Truncated || out.Total != 3 || *out.Unattributed != 1 {
-		t.Errorf("truncated: want 1 of 3 relations, unattributed 1:\n%s", text)
+	if len(out.Relations) != 1 || !out.Truncated || out.Total != 4 || *out.Unattributed != 1 {
+		t.Errorf("truncated: want 1 of 4 relations, unattributed 1:\n%s", text)
 	}
 	if _, text, isErr := callGraphTool(t, dir, "get_relations", map[string]interface{}{"path": ".", "symbol": "DefinitelyDoesNotExist"}); !isErr {
 		t.Errorf("not found must be an error:\n%s", text)
@@ -359,9 +377,10 @@ func TestAnalyzeChangeImpact_DefiniteAndPossible(t *testing.T) {
 	res, text := callAt(t, dir, "analyze_change_impact", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton"})
 	mustOK(t, res, "analyze_change_impact", text)
 	definite, possible := impactDefiniteAndPossible(text)
-	contains(t, "definite", definite, `App\Http\TypedController.show`, `App\Services\LoginScreenPolicy.isSsoOnly`, "Unattributed references: 1")
-	excludes(t, "definite", definite, "LoginController", "app/Http/LoginController.php")
-	contains(t, "possible", possible, `App\Http\LoginController.showLoginForm`, "[candidate]")
+	contains(t, "definite", definite, `App\Http\TypedController.show`, `App\Services\LoginScreenPolicy.isSsoOnly`,
+		`App\Http\LoginController.showLoginForm`, "Unattributed references: 1")
+	excludes(t, "definite", definite, "LegacyController", "app/Http/LegacyController.php")
+	contains(t, "possible", possible, `App\Http\LegacyController.render`, "[candidate]")
 
 	res, text = callAt(t, dir, "analyze_change_impact", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton", "format": "json"})
 	mustOK(t, res, "analyze_change_impact(json)", text)
@@ -380,12 +399,12 @@ func TestAnalyzeChangeImpact_DefiniteAndPossible(t *testing.T) {
 		t.Errorf("json unattributed = %v, want 1", out.Unattributed)
 	}
 	for _, e := range out.Entries {
-		if strings.Contains(e.Symbol, "LoginController") && e.Category != "possible_dependent" {
+		if strings.Contains(e.Symbol, "LegacyController") && e.Category != "possible_dependent" {
 			t.Errorf("candidate caller promoted to %s", e.Category)
 		}
 	}
 	for _, f := range out.AffectedFiles {
-		if strings.Contains(f, "LoginController") {
+		if strings.Contains(f, "LegacyController") {
 			t.Errorf("possible dependent's file listed as affected: %v", out.AffectedFiles)
 		}
 	}
@@ -493,8 +512,9 @@ func TestGetContext_CallersAndCompleteness(t *testing.T) {
 	contains(t, "get_context", text,
 		"Symbol: App\\Http\\TypedController.show\nReason: caller\nConfidence: exact",
 		"Symbol: App\\Services\\LoginScreenPolicy.isSsoOnly\nReason: caller\nConfidence: exact",
+		"Symbol: App\\Http\\LoginController.showLoginForm\nReason: caller\nConfidence: exact",
 		"unattributed: 1 callers, 0 callees")
-	excludes(t, "get_context", text, "LoginController", "Clinic")
+	excludes(t, "get_context", text, "LegacyController", "Clinic")
 
 	res, text = callAt(t, dir, "get_context", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.unused"})
 	mustOK(t, res, "get_context(zero)", text)
@@ -503,4 +523,67 @@ func TestGetContext_CallersAndCompleteness(t *testing.T) {
 	res, text = callAt(t, dir, "get_context", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton", "format": "json"})
 	mustOK(t, res, "get_context(json)", text)
 	contains(t, "get_context(json)", text, `"UnattributedCallers": 1`, `"reason": "caller"`)
+}
+
+// Phase 4 core acceptance, through the MCP surface: a Laravel 6 constructor-
+// injected protected property makes the call a Strong graph edge, so the
+// caller is a resolved caller, nothing is left unattributed, and the Context
+// Engine includes it as an ordinary caller — with no context-side change.
+func TestPHPCtorInjection_CallerReachesContext(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"app/Services/LoginScreenPolicy.php": `<?php
+namespace App\Services;
+
+class LoginScreenPolicy
+{
+    public function showsSsoButton()
+    {
+        return true;
+    }
+}
+`,
+		"app/Models/Clinic.php": "<?php\nnamespace App\\Models;\n\nclass Clinic\n{\n    public function showsSsoButton() { return false; }\n}\n",
+		"app/Http/Controllers/LoginController.php": `<?php
+namespace App\Http\Controllers;
+
+use App\Services\LoginScreenPolicy;
+
+class LoginController
+{
+    protected $loginScreenPolicy;
+
+    public function __construct(LoginScreenPolicy $loginScreenPolicy)
+    {
+        $this->loginScreenPolicy = $loginScreenPolicy;
+    }
+
+    public function showLoginForm()
+    {
+        return $this->loginScreenPolicy->showsSsoButton();
+    }
+}
+`,
+	})
+	out, text, isErr := callGraphTool(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton"})
+	if isErr {
+		t.Fatalf("unexpected error:\n%s", text)
+	}
+	if got, want := edgeTargets(out.Edges), []string{`App\Http\Controllers\LoginController.showLoginForm [strong]`}; !reflect.DeepEqual(got, want) {
+		t.Errorf("edges = %v, want %v", got, want)
+	}
+	if *out.Unattributed != 0 || len(out.Candidates) != 0 {
+		t.Errorf("want nothing unattributed, got %d %v", *out.Unattributed, out.Candidates)
+	}
+	if out, _, _ := callGraphTool(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": "Clinic.showsSsoButton"}); len(out.Edges) != 0 || *out.Unattributed != 0 {
+		t.Errorf("the same-named Clinic method must be untouched: %+v", out)
+	}
+
+	res, text := callAt(t, root, "get_context", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton", "maxTokens": float64(4000)})
+	mustOK(t, res, "get_context", text)
+	contains(t, "get_context", text,
+		"Symbol: App\\Http\\Controllers\\LoginController.showLoginForm\nReason: caller\nConfidence: strong",
+		"return $this->loginScreenPolicy->showsSsoButton();",
+		"unattributed: 0 callers, 0 callees")
+	excludes(t, "get_context", text, "protected $loginScreenPolicy", "Clinic")
 }
