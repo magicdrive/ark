@@ -15,6 +15,11 @@ func GenerateIntegratedGitIgnore(allowGitignore bool, root string, additionallyF
 			return err
 		}
 		if d.IsDir() {
+			// Repository metadata (.git) and Ark's own cache (.ark) hold no
+			// ignore files that apply to repository content.
+			if path != absRoot && (d.Name() == ".git" || d.Name() == ".ark") {
+				return filepath.SkipDir
+			}
 			gitignore := filepath.Join(path, ".gitignore")
 			arkignore := filepath.Join(path, ".arkignore")
 			if _, err := os.Stat(gitignore); allowGitignore && err == nil {

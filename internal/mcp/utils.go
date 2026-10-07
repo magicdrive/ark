@@ -9,11 +9,27 @@ import (
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
+	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/secrets"
 )
 
-// GenerateDirectoryTreeJSON wraps core.GenerateTreeJSONString
-func GenerateDirectoryTreeJSON(path string) (string, error) {
+// skipMetadata reports whether a walk entry below root is repository metadata
+// (core.IsMetadataDirName) and, if so, the value the walk function returns. The
+// walk root itself is never skipped: an explicitly requested path is honoured.
+func skipMetadata(root, current string, info os.FileInfo) (bool, error) {
+	if current == root || !core.IsMetadataDirName(info.Name()) {
+		return false, nil
+	}
+	if info.IsDir() {
+		return true, filepath.SkipDir
+	}
+	return true, nil
+}
+
+// GenerateDirectoryTreeJSON wraps core.GenerateTreeJSONString. ignore is the
+// repository's ignore rule (rooted at the repository root, not the process
+// working directory); nil applies none.
+func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore) (string, error) {
 	// Create a temporary option with default values
 	opt := &commandline.Option{
 		WorkingDir:                      ".",
@@ -36,9 +52,10 @@ func GenerateDirectoryTreeJSON(path string) (string, error) {
 		AdditionallyIgnoreRuleFilenames: "",
 	}
 
-	if err := opt.Normalize(); err != nil {
+	if err := opt.NormalizeFileFilters(); err != nil {
 		return "", err
 	}
+	opt.GitIgnoreRule = ignore
 
 	allowedFileMap := map[string]bool{}
 	jsonStr, _, err := core.GenerateTreeJSONString(path, allowedFileMap, opt)
@@ -90,10 +107,13 @@ func ListFilteredFiles(path string, opt *commandline.Option) ([]string, error) {
 		if err != nil {
 			return nil // Skip errors
 		}
+		if skip, err := skipMetadata(path, currentPath, info); skip {
+			return err
+		}
 
 		// Skip directories
 		if info.IsDir() {
-			if !core.CanBoaded(opt, currentPath) {
+			if !core.CanEnterDir(opt, currentPath) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -151,10 +171,13 @@ func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *comman
 		if count >= maxResults {
 			return fmt.Errorf("max results reached")
 		}
+		if skip, err := skipMetadata(path, currentPath, info); skip {
+			return err
+		}
 
 		// Skip directories
 		if info.IsDir() {
-			if !core.CanBoaded(opt, currentPath) {
+			if !core.CanEnterDir(opt, currentPath) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -323,9 +346,12 @@ func GetProjectStats(path string, opt *commandline.Option) (map[string]interface
 		if err != nil {
 			return nil // Skip errors
 		}
+		if skip, err := skipMetadata(path, currentPath, info); skip {
+			return err
+		}
 
 		if info.IsDir() {
-			if !core.CanBoaded(opt, currentPath) {
+			if !core.CanEnterDir(opt, currentPath) {
 				return filepath.SkipDir
 			}
 			if currentPath != path { // Don't count root directory

@@ -79,7 +79,7 @@ func SyntaxToolDefinitions() []Tool {
 					},
 					"maxResults": map[string]interface{}{
 						"type":        "integer",
-						"description": "Maximum number of results",
+						"description": "Maximum number of results. When more symbols match, the first maxResults (in path order) are returned with truncated: true",
 						"default":     50,
 					},
 				},
@@ -244,8 +244,14 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		}
 	}
 
+	// Matches are collected in walk order (filepath.Walk visits entries in
+	// lexical order) and symbol order within a file, so results are
+	// deterministic. The walk stops at the first match beyond maxResults: that
+	// match is not returned, but proves the result was truncated. Without it
+	// the walk covered every file and the result is complete.
 	var matches []syntax.SymbolMatch
 	resultCount := 0
+	truncated := false
 	errDone := fmt.Errorf("done")
 
 	var statsScanned, statsSkipped, statsParseErr int
@@ -254,8 +260,11 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		if err != nil {
 			return nil
 		}
-		if resultCount >= maxResults {
+		if truncated {
 			return errDone
+		}
+		if skip, err := skipMetadata(fullPath, filePath, info); skip {
+			return err
 		}
 		if info.IsDir() {
 			return nil
@@ -296,10 +305,6 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		relPath, _ := filepath.Rel(h.rootDir, filePath)
 
 		for _, sym := range symbols {
-			if resultCount >= maxResults {
-				break
-			}
-
 			// Kind filter
 			if kindFilter != "" && string(sym.Kind) != kindFilter {
 				continue
@@ -307,6 +312,10 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 
 			// Pattern match
 			if regex.MatchString(sym.Name) {
+				if resultCount >= maxResults {
+					truncated = true
+					break
+				}
 				matches = append(matches, syntax.SymbolMatch{
 					Path:   relPath,
 					Symbol: sym,
@@ -334,12 +343,16 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		Query   string               `json:"query"`
 		Matches []syntax.SymbolMatch `json:"matches"`
 		Stats   searchStats          `json:"stats"`
-		Message string               `json:"message,omitempty"`
+		// Truncated reports that more matches exist beyond Matches: the search
+		// stopped at maxResults. False means Matches is every match.
+		Truncated bool   `json:"truncated"`
+		Message   string `json:"message,omitempty"`
 	}
 
 	result := searchResult{
-		Query:   pattern,
-		Matches: matches,
+		Query:     pattern,
+		Matches:   matches,
+		Truncated: truncated,
 		Stats: searchStats{
 			FilesScanned: statsScanned,
 			FilesSkipped: statsSkipped,

@@ -47,7 +47,7 @@ func generateTreeJSON(path string, allowedFileMap map[string]bool, opt *commandl
 		}
 
 		fullPath := filepath.Join(path, file.Name())
-		if IsUnderGitDir(file.Name()) {
+		if IsMetadataDirName(file.Name()) {
 			continue
 		}
 		if !CanBoaded(opt, fullPath) {

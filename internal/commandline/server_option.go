@@ -116,6 +116,9 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 	}
 
 	generalOpt := &Option{
+		// Ignore rules belong to the served repository, not to the directory
+		// the server process happened to be started from.
+		WorkingDir:                      *rootDirOpt,
 		ScanBufferValue:                 *scanBufferValueOpt,
 		MaskSecretsFlagValue:            *maskSecretsFlagOpt,
 		AllowGitignoreFlagValue:         *allowGitignoreFlagOpt,
