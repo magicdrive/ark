@@ -84,10 +84,12 @@ abstract class Base
     protected function common() { return 1; }
 }
 `,
+		// Its parent is a vendor class (not indexed): where `common` is declared
+		// is unknown, so the call stays Unresolved — possibly Base::common.
 		"app/Services/Child.php": `<?php
 namespace App\Services;
 
-class Child extends Base
+class Child extends \Vendor\Framework\Base
 {
     public function run() { return $this->common(); }
 }
@@ -331,7 +333,7 @@ func TestGetCallees_ResultSemantics(t *testing.T) {
 	}{
 		{symbol: "LegacyController.render", wantEdges: []string{}, wantUnattributed: 1}, // candidate call
 		{symbol: "LoginController.showLoginForm", wantEdges: []string{`App\Services\LoginScreenPolicy.showsSsoButton [exact]`}, wantUnattributed: 0},
-		{symbol: "Child.run", wantEdges: []string{}, wantUnattributed: 1},         // unresolved inherited call
+		{symbol: "Child.run", wantEdges: []string{}, wantUnattributed: 1},         // unresolved: vendor parent
 		{symbol: "VendorUser.handle", wantEdges: []string{}, wantUnattributed: 0}, // outside the repository: known
 		{symbol: "TypedController.show", wantEdges: []string{`App\Services\LoginScreenPolicy.showsSsoButton [exact]`}, wantUnattributed: 0},
 		{symbol: "LoginScreenPolicy.unused", wantEdges: []string{}, wantUnattributed: 0},
@@ -586,4 +588,35 @@ class LoginController
 		"return $this->loginScreenPolicy->showsSsoButton();",
 		"unattributed: 0 callers, 0 callees")
 	excludes(t, "get_context", text, "protected $loginScreenPolicy", "Clinic")
+}
+
+// Phase 5 core acceptance, through the MCP surface: a call to an inherited
+// member resolves to the parent's declaration, so the caller is a resolved
+// caller, nothing is unattributed, and the Context Engine includes it.
+func TestPHPInheritedMember_CallerReachesContext(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"app/ParentService.php": "<?php\nnamespace App;\n\nclass ParentService\n{\n    public function inheritedMethod()\n    {\n        return true;\n    }\n}\n",
+		"app/ChildService.php":  "<?php\nnamespace App;\n\nclass ChildService extends ParentService\n{\n    public function run()\n    {\n        return $this->inheritedMethod();\n    }\n}\n",
+		"app/Unrelated.php":     "<?php\nnamespace App;\n\nclass Unrelated\n{\n    public function inheritedMethod() { return false; }\n}\n",
+	})
+	out, text, isErr := callGraphTool(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": "ParentService.inheritedMethod"})
+	if isErr {
+		t.Fatalf("unexpected error:\n%s", text)
+	}
+	if got, want := edgeTargets(out.Edges), []string{`App\ChildService.run [exact]`}; !reflect.DeepEqual(got, want) {
+		t.Errorf("edges = %v, want %v", got, want)
+	}
+	if *out.Unattributed != 0 {
+		t.Errorf("unattributed = %d, want 0", *out.Unattributed)
+	}
+	if out, _, _ := callGraphTool(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": "Unrelated.inheritedMethod"}); len(out.Edges) != 0 || *out.Unattributed != 0 {
+		t.Errorf("the same-named Unrelated method must be untouched: %+v", out)
+	}
+	res, text := callAt(t, root, "get_context", map[string]interface{}{"path": ".", "symbol": "ParentService.inheritedMethod", "maxTokens": float64(4000)})
+	mustOK(t, res, "get_context", text)
+	contains(t, "get_context", text,
+		"Symbol: App\\ChildService.run\nReason: caller\nConfidence: exact",
+		"unattributed: 0 callers, 0 callees")
+	excludes(t, "get_context", text, "Unrelated")
 }

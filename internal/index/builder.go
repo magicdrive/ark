@@ -110,6 +110,8 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			Receiver:  sd.Receiver,
 			Signature: sd.Signature,
 			Exported:  sd.Exported,
+
+			Visibility: sd.Visibility,
 		}
 		if sd.Parent != "" {
 			sym.Parent = symbol.NewSymbolID(lang, string(fileID), symbol.KindUnknown, sd.Parent)

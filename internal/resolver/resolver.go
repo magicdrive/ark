@@ -55,6 +55,10 @@ type Resolver struct {
 	// Lookup indexes for the name-based stages (see lookup.go). They return
 	// exactly the symbols the corresponding full scans would, in a fixed order,
 	// so they change the cost of a stage and never its outcome.
+	// structural indexes type declarations' qualified relations for member
+	// lookup through supertypes and traits (see inheritance.go).
+	structural structuralIndex
+
 	members    map[string][]*symbol.Symbol // Name → symbols with Qualified and Receiver
 	suffixes   map[string][]*symbol.Symbol // text after any "." in Qualified → symbols
 	dirSymbols map[string]map[string][]dirSymbol

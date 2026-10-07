@@ -37,10 +37,12 @@ type refCollector struct {
 	class *classScope
 }
 
-// classScope is the lexical identity of the enclosing class.
+// classScope is the lexical identity of the enclosing class and of the class
+// it extends ("" when it extends none or the name has no single identity).
 type classScope struct {
-	qual, bare string
-	final      bool
+	qual, bare             string
+	final                  bool
+	parentQual, parentBare string
 }
 
 func (c *refCollector) add(nameNode *ts.Node, name string, kind reference.ReferenceKind, container, receiver string, isCall bool) {
@@ -174,6 +176,12 @@ func (c *refCollector) walkMembers(class, body *ts.Node, classQual, classBare st
 	c.class = nil
 	if class.Type(c.lang) == "class_declaration" {
 		c.class = &classScope{qual: classQual, bare: classBare, final: childByType(class, c.lang, "final_modifier") != nil}
+		if base := childByType(class, c.lang, "base_clause"); base != nil {
+			if p := firstChildOfTypes(base, c.lang, "name", "qualified_name", "relative_name"); p != nil {
+				c.class.parentBare = lastName(p, c.lang, c.src)
+				c.class.parentQual, _ = c.scope.resolveClass(p, c.lang, c.src)
+			}
+		}
 	}
 	defer func() { c.class = outer }()
 	for i := 0; i < body.ChildCount(); i++ {
@@ -200,6 +208,8 @@ func (c *refCollector) walkMembers(class, body *ts.Node, classQual, classBare st
 				switch g.Type(c.lang) {
 				case "name", "qualified_name", "relative_name":
 					c.addClassName(g, g, reference.KindUsesTrait, classQual)
+				case "use_list":
+					c.emitTraitAdaptations(g, classQual)
 				}
 			}
 		}
@@ -322,6 +332,11 @@ func (c *refCollector) emitMemberCall(node *ts.Node, container, selfClass string
 	var typ phpTypeRef
 	if phpVarName(recv, c.lang, c.src) == "this" {
 		receiver = selfClass
+		// Inside a class body $this is an instance of that class (in a trait
+		// it is the using class, which is not known here).
+		if c.class != nil {
+			typ.qual = c.class.qual
+		}
 	} else {
 		typ = env.receiverType(recv, node.StartByte(), c.lang, c.src)
 	}
@@ -418,23 +433,38 @@ func (c *refCollector) scopeAndMember(node *ts.Node) (receiver string, scope, me
 	return receiver, scope, member, relative
 }
 
-// addRelativeMemberAccess emits `self::m` / `static::m` inside a class body as
-// a member access on the enclosing class: self is the lexically enclosing
-// class, so its identity is exact. static is the class of the call at run
-// time — the enclosing class or a subclass that may override m — so unless the
-// class is final the reference is capped at Strong. parent (an inheritance
-// lookup) and relative scopes outside a class are not handled: it reports
-// false and the caller emits the access as before.
+// addRelativeMemberAccess emits `self::m` / `static::m` / `parent::m` inside a
+// class body as a member access on a known class: self is the lexically
+// enclosing class, so its identity is exact; parent is the class it extends.
+// static is the class of the call at run time — the enclosing class or a
+// subclass that may override m — so unless the class is final the reference is
+// capped at Strong. Where the member is declared (the class, a trait, an
+// ancestor) is the resolver's member lookup. Relative scopes outside a class
+// (or parent:: without a known parent) are not handled: it reports false and
+// the caller emits the access as before.
 func (c *refCollector) addRelativeMemberAccess(member *ts.Node, relative string, kind reference.ReferenceKind, container string, isCall bool) bool {
-	if c.class == nil || (relative != "self" && relative != "static") {
+	if c.class == nil {
+		return false
+	}
+	recv, qual := c.class.bare, c.class.qual
+	switch relative {
+	case "self", "static":
+	case "parent":
+		// parent:: starts the member lookup at the extended class, whatever
+		// the enclosing class declares.
+		if c.class.parentQual == "" {
+			return false
+		}
+		recv, qual = c.class.parentBare, c.class.parentQual
+	default:
 		return false
 	}
 	d := language.ReferenceDraft{
 		Name:                  member.Text(c.src),
 		Kind:                  string(kind),
 		Container:             container,
-		ReceiverExpr:          c.class.bare,
-		ReceiverTypeQualified: c.class.qual,
+		ReceiverExpr:          recv,
+		ReceiverTypeQualified: qual,
 		IsCall:                isCall,
 	}
 	if relative == "static" && !c.class.final {
@@ -485,4 +515,40 @@ func firstChildOfTypes(node *ts.Node, lang *ts.Language, types ...string) *ts.No
 		}
 	}
 	return nil
+}
+
+// emitTraitAdaptations records every member name mentioned in a trait
+// adaptation block (`use A, B { A::foo insteadof B; foo as bar; }`): the
+// method being adapted and any alias. They tell member lookup that, for these
+// names, the class's imported members are not simply its traits' members.
+func (c *refCollector) emitTraitAdaptations(list *ts.Node, classQual string) {
+	for i := 0; i < list.ChildCount(); i++ {
+		clause := list.Child(i)
+		switch clause.Type(c.lang) {
+		case "use_instead_of_clause", "use_as_clause":
+		default:
+			continue
+		}
+		for j := 0; j < clause.ChildCount(); j++ {
+			part := clause.Child(j)
+			var name *ts.Node
+			switch part.Type(c.lang) {
+			case "class_constant_access_expression":
+				_, _, name, _ = c.scopeAndMember(part) // Trait::method
+			case "name":
+				name = part // a bare method name, an alias or an excluded trait
+			}
+			if name == nil {
+				continue
+			}
+			if clause.Type(c.lang) == "use_instead_of_clause" && part.Type(c.lang) == "name" {
+				continue // the excluded trait, not a member
+			}
+			c.addDraft(name, language.ReferenceDraft{
+				Name:      name.Text(c.src),
+				Kind:      string(reference.KindTraitAdaptation),
+				Container: classQual,
+			})
+		}
+	}
 }

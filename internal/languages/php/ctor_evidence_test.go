@@ -333,10 +333,10 @@ func TestRelativeScopes(t *testing.T) {
 		if got := callerEdge(t, idx, `App\C.helper`, `App\C.viaStatic`); got != tc.wantStatic {
 			t.Errorf("%s: static:: got %q, want %s", tc.head, got, tc.wantStatic)
 		}
-		// Inherited members are an inheritance lookup (Phase 5): no edge yet.
+		// parent:: and self:: reach the member the parent declares.
 		for _, caller := range []string{`App\C.viaParent`, `App\C.selfInherited`} {
-			if got := callerEdge(t, idx, `App\Base.inherited`, caller); got != "" {
-				t.Errorf("%s: %s reached an inherited member (%s)", tc.head, caller, got)
+			if got := callerEdge(t, idx, `App\Base.inherited`, caller); got != "exact" {
+				t.Errorf("%s: %s: got %q, want exact", tc.head, caller, got)
 			}
 		}
 	}

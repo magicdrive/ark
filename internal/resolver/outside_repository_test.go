@@ -32,6 +32,14 @@ class Child extends Base
     public function missing() { return nowhere(); }
 }
 `,
+		"app/VendorChild.php": `<?php
+namespace App;
+
+class VendorChild extends \Vendor\Base
+{
+    public function inherited() { return $this->common(); }
+}
+`,
 		"src/use.ts": "import { get } from \"axios\";\nimport * as ax from \"axios\";\n\nexport function f() {\n  get();\n  ax.post();\n}\n",
 	}
 	for p, c := range files {
@@ -62,10 +70,11 @@ class Child extends Base
 		{`App\Child.vendorStatic`, "capture", resolver.ConfidenceUnresolved, true}, // static scope not declared
 		{`App\Child.vendorNew`, "Request", resolver.ConfidenceUnresolved, true},    // class name not declared
 		{`App\Child.localTyped`, "input", resolver.ConfidenceExact, false},
-		{`App\Child.inherited`, "common", resolver.ConfidenceUnresolved, false}, // repository type, member not on it
-		{`App\Child.missing`, "nowhere", resolver.ConfidenceUnresolved, false},  // no evidence at all
-		{"f", "get", resolver.ConfidenceUnresolved, true},                       // external named binding
-		{"f", "post", resolver.ConfidenceUnresolved, true},                      // external namespace binding
+		{`App\Child.inherited`, "common", resolver.ConfidenceExact, false},            // inherited from App\Base
+		{`App\VendorChild.inherited`, "common", resolver.ConfidenceUnresolved, false}, // repository type, member on an unknown parent
+		{`App\Child.missing`, "nowhere", resolver.ConfidenceUnresolved, false},        // no evidence at all
+		{"f", "get", resolver.ConfidenceUnresolved, true},                             // external named binding
+		{"f", "post", resolver.ConfidenceUnresolved, true},                            // external namespace binding
 	}
 	for _, tc := range cases {
 		res, ok := got[key{tc.container, tc.name}]

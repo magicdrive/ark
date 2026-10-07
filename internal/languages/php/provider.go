@@ -42,7 +42,7 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-8" }
+func (p *Provider) CacheVersion() string { return "php-9" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
@@ -250,6 +250,8 @@ func appendMethod(node *ts.Node, lang *ts.Language, src []byte, file source.File
 		Parent:    containerQual,
 		Receiver:  containerName,
 		Exported:  visibilityExported(node, lang, src),
+
+		Visibility: visibilityOf(node, lang, src),
 	})
 
 	// Constructor property promotion: promoted parameters are class properties.
@@ -275,6 +277,8 @@ func appendMethod(node *ts.Node, lang *ts.Language, src []byte, file source.File
 				Parent:    containerQual,
 				Receiver:  containerName,
 				Exported:  visibilityExported(param, lang, src),
+
+				Visibility: visibilityOf(param, lang, src),
 			})
 		}
 	}
@@ -302,6 +306,8 @@ func appendProperties(node *ts.Node, lang *ts.Language, src []byte, file source.
 			Parent:    containerQual,
 			Receiver:  containerName,
 			Exported:  exported,
+
+			Visibility: visibilityOf(node, lang, src),
 		})
 	}
 }
@@ -332,6 +338,7 @@ func appendConstElements(node *ts.Node, lang *ts.Language, src []byte, file sour
 			d.Qualified = containerQual + "." + name
 			d.Parent = containerQual
 			d.Receiver = containerName
+			d.Visibility = visibilityOf(node, lang, src)
 		} else {
 			d.Qualified = qualify(ns, name)
 		}
@@ -355,6 +362,8 @@ func appendEnumCase(node *ts.Node, lang *ts.Language, src []byte, file source.Fi
 		Parent:    containerQual,
 		Receiver:  containerName,
 		Exported:  true, // enum cases are always publicly accessible
+
+		Visibility: "public",
 	})
 }
 
@@ -363,6 +372,15 @@ func appendEnumCase(node *ts.Node, lang *ts.Language, src []byte, file source.Fi
 func visibilityExported(node *ts.Node, lang *ts.Language, src []byte) bool {
 	v := childText(node, lang, src, "visibility_modifier")
 	return v == "" || v == "public"
+}
+
+// visibilityOf returns a member's declared visibility; an omitted modifier is
+// PHP's default, public.
+func visibilityOf(node *ts.Node, lang *ts.Language, src []byte) string {
+	if v := childText(node, lang, src, "visibility_modifier"); v != "" {
+		return v
+	}
+	return "public"
 }
 
 // variableName returns the bare name (no leading "$") of the variable_name

@@ -42,6 +42,12 @@ type SymbolDraft struct {
 	Receiver  string // method receiver type name
 	Signature string
 	Exported  bool
+
+	// Visibility is the member's declared access level when the language has
+	// one ("private", "protected", "public"); "" when not applicable. A
+	// private member is not inherited: member lookup through a supertype
+	// never reaches it.
+	Visibility string `json:",omitempty"`
 }
 
 // ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.

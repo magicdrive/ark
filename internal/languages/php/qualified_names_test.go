@@ -259,9 +259,9 @@ class Foo { public static function make() {} }`
 
 // Relative class names are not lexical identities and carry none.
 // self:: and static:: inside a class denote the enclosing class (static:: is
-// capped at Strong by the provider: a subclass may override the member).
-// parent:: needs an inheritance lookup and `new static` names no class: they
-// carry no identity.
+// capped at Strong by the provider: a subclass may override the member);
+// parent:: denotes the extended class. Where the member is declared is the
+// resolver's lookup. `new static` names no class: no identity.
 func TestQualifiedNames_RelativeScopes(t *testing.T) {
 	wantIdents(t, `<?php
 namespace App;
@@ -271,7 +271,7 @@ class C extends P {
 		`inheritance P name=App\P`,
 		`call a recv=C rtype=App\C`,
 		`call b recv=C rtype=App\C`,
-		`call c`,
+		`call c recv=P rtype=App\P`,
 		`construction static`,
 	)
 	// In a trait, self/static denote the using class: no identity.
@@ -365,7 +365,7 @@ class C { public function m() { Foo::a(); new Foo(); } }`) {
 // The provider now emits qualified identity evidence, which changes its cached
 // output: entries written as php-6 lack it and must not be reused.
 func TestCacheVersionCoversQualifiedIdentity(t *testing.T) {
-	if got := NewProvider().CacheVersion(); got != "php-8" {
-		t.Errorf("CacheVersion = %q, want php-8 (php-6 entries carry no qualified identity, php-7 no constructor property evidence or confidence caps)", got)
+	if got := NewProvider().CacheVersion(); got != "php-9" {
+		t.Errorf("CacheVersion = %q, want php-9 (php-6 entries carry no qualified identity, php-7 no constructor property evidence or confidence caps, php-8 no $this/parent:: identity, member visibility or trait adaptations)", got)
 	}
 }
