@@ -69,6 +69,11 @@ type Result struct {
 	SelectedCount   int
 	TotalCandidates int
 	Truncated       int
+
+	// UnattributedCallers / UnattributedCallees are the context's completeness
+	// signal (context.Stats): target references that are not graph edges.
+	UnattributedCallers int
+	UnattributedCallees int
 }
 
 // Evaluate builds an index over root with the given providers, runs the Context
@@ -116,6 +121,9 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 		TotalCandidates: res.Stats.TotalCandidates,
 		Truncated:       res.Stats.TruncatedItems,
 		TargetTruncated: res.Stats.TargetTruncated,
+
+		UnattributedCallers: res.Stats.UnattributedCallers,
+		UnattributedCallees: res.Stats.UnattributedCallees,
 	}
 
 	selectedSet := make(map[string]bool, len(res.Items))

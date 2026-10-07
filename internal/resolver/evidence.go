@@ -30,6 +30,9 @@ const (
 	// authoritative: when it applies no proximity, uniqueness or suffix
 	// heuristic is consulted, whatever the outcome.
 	EvidenceQualifiedIdentity EvidenceKind = "qualified_identity"
+	// EvidenceConfidenceCap: the provider bounded the reference's confidence
+	// (reference.Reference.ConfidenceCap); the resolution was lowered to it.
+	EvidenceConfidenceCap EvidenceKind = "confidence_cap"
 )
 
 // ResolutionEvidence records why a particular candidate was matched.

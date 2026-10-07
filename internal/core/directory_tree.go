@@ -27,7 +27,7 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 
 		fullPath := filepath.Join(path, file.Name())
 
-		if IsUnderGitDir(file.Name()) {
+		if IsMetadataDirName(file.Name()) {
 			continue
 		}
 

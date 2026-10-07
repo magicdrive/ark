@@ -107,10 +107,7 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 	// targets — ambiguity returns candidate evidence instead.
 	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
 	if !tl.Found {
-		msg := fmt.Sprintf("symbol %q not found in %s", symName, path)
-		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: msg}},
-		}, nil
+		return targetNotFoundResult(symName, path), nil
 	}
 	if tl.Ambiguous {
 		return ambiguousTargetResult(symName, tl.Candidates), nil

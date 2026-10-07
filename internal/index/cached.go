@@ -2,11 +2,6 @@ package index
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
-	"strings"
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/language"
@@ -23,52 +18,24 @@ var ArkVersion = "0.1.0"
 // On any cache read error the file is re-extracted (cache-miss semantics).
 // Panic is never used for cache failures.
 func NewWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*RepositoryIndex, error) {
-	if info, err := os.Stat(root); err != nil {
-		return nil, fmt.Errorf("index: root %q: %w", root, err)
-	} else if !info.IsDir() {
-		return nil, fmt.Errorf("index: root %q is not a directory", root)
-	}
-
-	extMap := make(map[string]language.Provider)
-	for _, p := range providers {
-		for _, ext := range p.Extensions() {
-			extMap[ext] = p
-		}
+	if err := checkRoot(root); err != nil {
+		return nil, err
 	}
 
 	b := newBuilder()
+	digest := newSourceDigest(providers)
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return nil
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if d.IsDir() {
-			if SkipDirName(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(path))
-		prov, ok := extMap[ext]
-		if !ok {
-			return nil
-		}
-
-		src, err := os.ReadFile(path)
-		if err != nil {
+	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
+		digest.add(relPath, src, readErr)
+		if readErr != nil {
 			b.addDiagnostic(language.Diagnostic{
 				Severity: language.SeverityWarning,
-				Message:  "read error: " + err.Error(),
+				Message:  "read error: " + readErr.Error(),
 			})
 			b.stats.Skipped++
-			return nil
+			return
 		}
 
-		relPath, _ := filepath.Rel(root, path)
 		fileID := source.FileID(relPath)
 		cacheKey := cache.NewCacheKey(relPath, src, ArkVersion, prov.CacheVersion())
 
@@ -83,7 +50,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 				Exports:      cached.Exports,
 				ModuleScoped: cached.ModuleScoped,
 			})
-			return nil
+			return
 		}
 
 		// Cache miss — extract and store.
@@ -94,7 +61,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 				Message:  path + ": extraction error: " + err.Error(),
 			})
 			b.stats.Skipped++
-			return nil
+			return
 		}
 		b.addDiagnostics(extraction.Diagnostics)
 
@@ -113,7 +80,6 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 			Exports:      extraction.Exports,
 			ModuleScoped: extraction.ModuleScoped,
 		})
-		return nil
 	})
 
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
@@ -124,5 +90,6 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 	}
 
 	b.resolve()
+	b.fingerprint = digest.sum()
 	return b.freeze(), nil
 }

@@ -95,6 +95,15 @@
       "must_not_prioritize": ["UnrelatedService"]
     },
     {
+      "name": "caller-of-repository-save",
+      "target_name": "Save",
+      "target_file": "repository.go",
+      "budget": 4000,
+      "must_include": ["UserRepository.Save", "UserService.Create"],
+      "should_include": ["User"],
+      "must_not_prioritize": ["UnrelatedService"]
+    },
+    {
       "name": "in-memory-store-constructor",
       "target_name": "NewInMemoryStore",
       "target_file": "store.go",

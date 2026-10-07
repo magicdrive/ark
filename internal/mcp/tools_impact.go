@@ -89,9 +89,7 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 	// first candidate: a false target produces a plausible but wrong report.
 	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
 	if !tl.Found {
-		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: fmt.Sprintf("symbol %q not found in %s", symName, path)}},
-		}, nil
+		return targetNotFoundResult(symName, path), nil
 	}
 	if tl.Ambiguous {
 		return ambiguousTargetResult(symName, tl.Candidates), nil
@@ -106,9 +104,7 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 		}, nil
 	}
 	if result == nil {
-		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: fmt.Sprintf("symbol %q not found in index", symName)}},
-		}, nil
+		return targetNotFoundResult(symName, path), nil
 	}
 
 	var text string

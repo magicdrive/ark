@@ -199,15 +199,9 @@ func GeneralOptParse(args []string) (int, *Option, error) {
 func (cr *Option) Normalize() error {
 	var errorMessages = []string{}
 
-	if cr.IncludeExt != "" {
-		cr.IncludeExtList = common.CommaSeparated2StringList(cr.IncludeExt)
-	}
-	if cr.ExcludeExt != "" {
-		cr.ExcludeExtList = common.CommaSeparated2StringList(cr.ExcludeExt)
-	}
-	if cr.ExcludeDir != "" {
-		cr.ExcludeDirList = common.CommaSeparated2StringList(cr.ExcludeDir)
-	}
+	// File selection: extension/directory lists, the ignore-dotfile switch and
+	// the include/exclude regexps.
+	errorMessages = append(errorMessages, cr.normalizeFileFilters()...)
 
 	// scan-buffer
 	if err := cr.ScanBuffer.Set(cr.ScanBufferValue); err != nil {
@@ -224,11 +218,6 @@ func (cr *Option) Normalize() error {
 	if err := cr.AllowGitignoreFlag.Set(cr.AllowGitignoreFlagValue); err != nil {
 		allowGitignoreValid = false
 		errorMessages = append(errorMessages, fmt.Sprintf("--allow-gitignore %s", err.Error()))
-	}
-
-	// ignore-dotfile
-	if err := cr.IgnoreDotFileFlag.Set(cr.IgnoreDotFileFlagValue); err != nil {
-		errorMessages = append(errorMessages, fmt.Sprintf("--ignore-dotfile %s", err.Error()))
 	}
 
 	// with-line-number
@@ -292,40 +281,56 @@ func (cr *Option) Normalize() error {
 		cr.GitIgnoreRule, _ = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
 	}
 
-	// compile regexp
-	if cr.PatternRegexpString != "" {
-		re, err := regexp.Compile(cr.PatternRegexpString)
-		if err != nil {
-			e := fmt.Errorf("failed to compile pattern-regexp: %w", err)
-			errorMessages = append(errorMessages, e.Error())
-		} else {
-			cr.PatternRegexp = re
-		}
-	}
-
-	if cr.ExcludeDirRegexpString != "" {
-		re, err := regexp.Compile(cr.ExcludeDirRegexpString)
-		if err != nil {
-			e := fmt.Errorf("failed to compile exclude-dir-regexp: %w", err)
-			errorMessages = append(errorMessages, e.Error())
-		} else {
-			cr.ExcludeDirRegexp = re
-		}
-	}
-
-	if cr.ExcludeFileRegexpString != "" {
-		re, err := regexp.Compile(cr.ExcludeFileRegexpString)
-		if err != nil {
-			e := fmt.Errorf("failed to compile exclude-file-regexp: %w", err)
-			errorMessages = append(errorMessages, e.Error())
-		} else {
-			cr.ExcludeFileRegexp = re
-		}
-	}
-
 	if len(errorMessages) == 0 {
 		return nil
 	} else {
 		return errors.New(strings.Join(errorMessages, "\n"))
 	}
+}
+
+// NormalizeFileFilters recomputes the file-selection state derived from the raw
+// option values: the extension and directory lists, the ignore-dotfile switch
+// and the compiled include/exclude regexps. A caller that changes any of those
+// raw values on a copy of a normalized Option (e.g. per MCP request) must call
+// it before the copy is used. It never touches repository-dependent state such
+// as GitIgnoreRule.
+func (cr *Option) NormalizeFileFilters() error {
+	if msgs := cr.normalizeFileFilters(); len(msgs) > 0 {
+		return errors.New(strings.Join(msgs, "\n"))
+	}
+	return nil
+}
+
+func (cr *Option) normalizeFileFilters() []string {
+	var errorMessages []string
+
+	cr.IncludeExtList = common.CommaSeparated2StringList(cr.IncludeExt)
+	cr.ExcludeExtList = common.CommaSeparated2StringList(cr.ExcludeExt)
+	cr.ExcludeDirList = common.CommaSeparated2StringList(cr.ExcludeDir)
+
+	// ignore-dotfile
+	if err := cr.IgnoreDotFileFlag.Set(cr.IgnoreDotFileFlagValue); err != nil {
+		errorMessages = append(errorMessages, fmt.Sprintf("--ignore-dotfile %s", err.Error()))
+	}
+
+	// compile regexp
+	var err error
+	if cr.PatternRegexp, err = compileOptional(cr.PatternRegexpString); err != nil {
+		errorMessages = append(errorMessages, fmt.Errorf("failed to compile pattern-regexp: %w", err).Error())
+	}
+	if cr.ExcludeDirRegexp, err = compileOptional(cr.ExcludeDirRegexpString); err != nil {
+		errorMessages = append(errorMessages, fmt.Errorf("failed to compile exclude-dir-regexp: %w", err).Error())
+	}
+	if cr.ExcludeFileRegexp, err = compileOptional(cr.ExcludeFileRegexpString); err != nil {
+		errorMessages = append(errorMessages, fmt.Errorf("failed to compile exclude-file-regexp: %w", err).Error())
+	}
+	return errorMessages
+}
+
+// compileOptional compiles pattern, or returns nil for an empty pattern.
+func compileOptional(pattern string) (*regexp.Regexp, error) {
+	if pattern == "" {
+		return nil, nil
+	}
+	return regexp.Compile(pattern)
 }

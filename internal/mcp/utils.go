@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -9,11 +10,27 @@ import (
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
+	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/secrets"
 )
 
-// GenerateDirectoryTreeJSON wraps core.GenerateTreeJSONString
-func GenerateDirectoryTreeJSON(path string) (string, error) {
+// skipMetadata reports whether a walk entry below root is repository metadata
+// (core.IsMetadataDirName) and, if so, the value the walk function returns. The
+// walk root itself is never skipped: an explicitly requested path is honoured.
+func skipMetadata(root, current string, info os.FileInfo) (bool, error) {
+	if current == root || !core.IsMetadataDirName(info.Name()) {
+		return false, nil
+	}
+	if info.IsDir() {
+		return true, filepath.SkipDir
+	}
+	return true, nil
+}
+
+// GenerateDirectoryTreeJSON wraps core.GenerateTreeJSONString. ignore is the
+// repository's ignore rule (rooted at the repository root, not the process
+// working directory); nil applies none.
+func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore) (string, error) {
 	// Create a temporary option with default values
 	opt := &commandline.Option{
 		WorkingDir:                      ".",
@@ -36,13 +53,107 @@ func GenerateDirectoryTreeJSON(path string) (string, error) {
 		AdditionallyIgnoreRuleFilenames: "",
 	}
 
-	if err := opt.Normalize(); err != nil {
+	if err := opt.NormalizeFileFilters(); err != nil {
 		return "", err
 	}
+	opt.GitIgnoreRule = ignore
 
 	allowedFileMap := map[string]bool{}
 	jsonStr, _, err := core.GenerateTreeJSONString(path, allowedFileMap, opt)
 	return jsonStr, err
+}
+
+// treeLimits bounds a directory tree: maxDepth > 0 lists directories at that
+// depth (the root's children are depth 1) without their contents, marking
+// them truncated; excludeDirs names directories never listed — a bare name
+// matches a path component, a name with "/" a path relative to the tree root.
+type treeLimits struct {
+	maxDepth    int
+	excludeDirs []string
+}
+
+func (l treeLimits) none() bool { return l.maxDepth <= 0 && len(l.excludeDirs) == 0 }
+
+func (l treeLimits) excluded(rel, name string) bool {
+	for _, x := range l.excludeDirs {
+		if strings.Contains(x, "/") {
+			if rel == x {
+				return true
+			}
+		} else if name == x {
+			return true
+		}
+	}
+	return false
+}
+
+// boundedTreeEntry is core.TreeEntry plus the truncation mark.
+type boundedTreeEntry struct {
+	Name      string              `json:"name"`
+	Type      string              `json:"type"`
+	Children  []*boundedTreeEntry `json:"children,omitempty"`
+	Truncated bool                `json:"truncated,omitempty"`
+}
+
+// GenerateBoundedDirectoryTreeJSON is GenerateDirectoryTreeJSON with limits.
+// Without limits it is exactly GenerateDirectoryTreeJSON; with them it walks
+// the same entries in the same order under the same filters, stopping at the
+// limits instead of filtering afterwards.
+func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore, limits treeLimits) (string, error) {
+	if limits.none() {
+		return GenerateDirectoryTreeJSON(path, ignore)
+	}
+	opt := &commandline.Option{AllowGitignoreFlagValue: "on", IgnoreDotFileFlagValue: "off"}
+	if err := opt.NormalizeFileFilters(); err != nil {
+		return "", err
+	}
+	opt.GitIgnoreRule = ignore
+	tree, err := boundedTree(path, "", 0, opt, limits)
+	if err != nil {
+		return "", err
+	}
+	b, err := json.Marshal(tree)
+	return string(b), err
+}
+
+func boundedTree(path, rel string, depth int, opt *commandline.Option, limits treeLimits) (*boundedTreeEntry, error) {
+	files, err := os.ReadDir(path)
+	if err != nil {
+		return nil, err
+	}
+	core.ApplySort(files)
+	node := &boundedTreeEntry{Name: filepath.Base(path), Type: "directory"}
+	for _, file := range files {
+		if opt.IgnoreDotFileFlag.Bool() && core.IsHiddenFile(file.Name()) {
+			continue
+		}
+		fullPath := filepath.Join(path, file.Name())
+		if core.IsMetadataDirName(file.Name()) || !core.CanBoaded(opt, fullPath) {
+			continue
+		}
+		childRel := file.Name()
+		if rel != "" {
+			childRel = rel + "/" + file.Name()
+		}
+		if !file.IsDir() {
+			node.Children = append(node.Children, &boundedTreeEntry{Name: file.Name(), Type: "file"})
+			continue
+		}
+		if limits.excluded(childRel, file.Name()) {
+			continue
+		}
+		if limits.maxDepth > 0 && depth+1 >= limits.maxDepth {
+			entries, _ := os.ReadDir(fullPath)
+			node.Children = append(node.Children, &boundedTreeEntry{Name: file.Name(), Type: "directory", Truncated: len(entries) > 0})
+			continue
+		}
+		child, err := boundedTree(fullPath, childRel, depth+1, opt, limits)
+		if err != nil {
+			continue
+		}
+		node.Children = append(node.Children, child)
+	}
+	return node, nil
 }
 
 // ReadAndProcessFile reads a file and applies processing options
@@ -90,10 +201,13 @@ func ListFilteredFiles(path string, opt *commandline.Option) ([]string, error) {
 		if err != nil {
 			return nil // Skip errors
 		}
+		if skip, err := skipMetadata(path, currentPath, info); skip {
+			return err
+		}
 
 		// Skip directories
 		if info.IsDir() {
-			if !core.CanBoaded(opt, currentPath) {
+			if !core.CanEnterDir(opt, currentPath) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -151,10 +265,13 @@ func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *comman
 		if count >= maxResults {
 			return fmt.Errorf("max results reached")
 		}
+		if skip, err := skipMetadata(path, currentPath, info); skip {
+			return err
+		}
 
 		// Skip directories
 		if info.IsDir() {
-			if !core.CanBoaded(opt, currentPath) {
+			if !core.CanEnterDir(opt, currentPath) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -323,9 +440,12 @@ func GetProjectStats(path string, opt *commandline.Option) (map[string]interface
 		if err != nil {
 			return nil // Skip errors
 		}
+		if skip, err := skipMetadata(path, currentPath, info); skip {
+			return err
+		}
 
 		if info.IsDir() {
-			if !core.CanBoaded(opt, currentPath) {
+			if !core.CanEnterDir(opt, currentPath) {
 				return filepath.SkipDir
 			}
 			if currentPath != path { // Don't count root directory

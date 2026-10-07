@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,11 +120,14 @@ func TestMCP_TS_Workflow(t *testing.T) {
 	contains(t, "get_callees", text, `"to": "`+userSave+`"`, `"to": "User"`)
 	excludes(t, "get_callees", text, orderSave)
 
-	// get_callers: typed callers only; the untyped receiver is not a caller.
+	// get_callers: typed callers only; the untyped receiver is not a caller —
+	// it is reported as a possible (candidate) caller, never as an edge.
 	res, text = callAt(t, dir, "get_callers", map[string]interface{}{"path": ".", "symbol": userSave})
 	mustOK(t, res, "get_callers", text)
 	contains(t, "get_callers", text, `"to": "UserService.create"`, `"to": "typedHandler"`)
-	excludes(t, "get_callers", text, "untypedHandler")
+	edges, cands := callersEdgesAndCandidates(t, text)
+	excludes(t, "get_callers edges", edges, "untypedHandler")
+	contains(t, "get_callers candidates", cands, `"untypedHandler"`, `"confidence": "candidate"`)
 
 	// get_context: required context present, unrelated / same-name absent.
 	res, text = callAt(t, dir, "get_context", map[string]interface{}{"path": ".", "symbol": "UserService.create"})
@@ -135,7 +139,12 @@ func TestMCP_TS_Workflow(t *testing.T) {
 	res, text = callAt(t, dir, "analyze_change_impact", map[string]interface{}{"path": ".", "symbol": userSave})
 	mustOK(t, res, "analyze_change_impact", text)
 	contains(t, "analyze_change_impact", text, "UserService.create", "typedHandler")
-	excludes(t, "analyze_change_impact", text, "untypedHandler", "OrderRepository")
+	excludes(t, "analyze_change_impact", text, "OrderRepository")
+	// The untyped receiver is a possible dependent only: never a definite one,
+	// (its file is affected anyway, through the definite typedHandler).
+	definite, possible := impactDefiniteAndPossible(text)
+	excludes(t, "analyze_change_impact definite", definite, "untypedHandler")
+	contains(t, "analyze_change_impact possible", possible, "untypedHandler", "[candidate]")
 
 	// get_repository_map / search_code
 	res, text = callAt(t, dir, "get_repository_map", map[string]interface{}{"path": "."})
@@ -161,7 +170,8 @@ func TestMCP_TS_AmbiguousNamesAreRejected(t *testing.T) {
 	// A qualified name disambiguates.
 	res, text := callAt(t, dir, "get_callers", map[string]interface{}{"path": ".", "symbol": "OrderRepository.save"})
 	mustOK(t, res, "get_callers(qualified)", text)
-	excludes(t, "get_callers(qualified)", text, "typedHandler", "UserService.create")
+	edges, _ := callersEdgesAndCandidates(t, text)
+	excludes(t, "get_callers(qualified) edges", edges, "typedHandler", "UserService.create")
 }
 
 func TestMCP_GetSymbol_AmbiguousInFile(t *testing.T) {
@@ -231,4 +241,35 @@ func TestMCP_GetRelations_SkipsNodeModulesAndHiddenDirs(t *testing.T) {
 		t.Fatalf("node_modules / hidden / vendor duplicates must not make main ambiguous:\n%s", text)
 	}
 	contains(t, "get_relations", text, `"qualified": "helper"`)
+}
+
+// callersEdgesAndCandidates splits a get_callers / get_callees result into the
+// JSON of its resolved edges and of its candidate (possible) callers.
+func callersEdgesAndCandidates(t *testing.T, text string) (edges, candidates string) {
+	t.Helper()
+	var out struct {
+		Edges      json.RawMessage `json:"edges"`
+		Candidates json.RawMessage `json:"candidates"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatalf("callers result is not JSON: %v\n%s", err, text)
+	}
+	return string(out.Edges), string(out.Candidates)
+}
+
+// impactDefiniteAndPossible splits analyze_change_impact text output into the
+// definite part (every section except possible dependents, affected files
+// included) and the possible-dependents section.
+func impactDefiniteAndPossible(text string) (definite, possible string) {
+	const head = "Possible dependents (low confidence):\n"
+	i := strings.Index(text, head)
+	if i < 0 {
+		return text, ""
+	}
+	rest := text[i+len(head):]
+	j := strings.Index(rest, "\n\n")
+	if j < 0 {
+		j = len(rest)
+	}
+	return text[:i] + rest[j:], rest[:j]
 }

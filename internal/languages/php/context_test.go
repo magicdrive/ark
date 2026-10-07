@@ -28,6 +28,16 @@ func phpProviders() []language.Provider { return []language.Provider{php.NewProv
 func phpScenarios() []contextquality.Scenario {
 	return []contextquality.Scenario{
 		{
+			// Resolved callers are context — a typed property (PHP 7.4) and a
+			// constructor-injected untyped property (Laravel 6); a candidate
+			// caller (property reassigned elsewhere) is not.
+			Name: "callers", TargetQualified: `App\Services\LoginScreenPolicy.showsSsoButton`, Depth: 2, MaxTokens: 8000,
+			Required: []string{
+				`App\Services\LoginScreenPolicy.showsSsoButton`, `App\Http\TypedController.show`, `App\Http\LoginController.showLoginForm`,
+			},
+			Irrelevant: []string{`App\Http\LegacyController.render`, `App\Models\Clinic.showsSsoButton`, `App\Http\LoginController`},
+		},
+		{
 			Name: "inheritance", Task: "Understand UserService's inherited structure",
 			TargetQualified: "UserService", Depth: 2, MaxTokens: 8000,
 			Required: []string{"UserService", "BaseService"},
@@ -229,24 +239,50 @@ func TestContext_TargetOverBudget(t *testing.T) {
 	}
 }
 
-// TestContext_IncludeTestsNoOpForPHP documents that PHP currently has NO entry
-// in the generic test-file detector (isTestFile), so IncludeTests is a no-op
-// for PHP. We intentionally do NOT add a PHP-specific test heuristic (that is a
-// separate, generic concern). This test freezes the current honest behavior.
-func TestContext_IncludeTestsNoOpForPHP(t *testing.T) {
-	base := contextquality.Scenario{Name: "include_tests", TargetQualified: "ServiceTest.testRun", Depth: 2, MaxTokens: 8000}
+// TestContext_IncludeTestsPHP: PHP test files (FooTest.php, files under
+// tests/) follow the same Context contract as every language — a test caller is
+// left out unless IncludeTests is set — while the graph keeps it as a caller.
+func TestContext_IncludeTestsPHP(t *testing.T) {
+	base := contextquality.Scenario{Name: "include_tests", TargetQualified: "Service.run", Depth: 2, MaxTokens: 8000}
 	withTests := base
 	withTests.IncludeTests = true
-	a, err := contextquality.Evaluate(ctxDir("include_tests"), phpProviders(), base)
+	selected := func(sc contextquality.Scenario) map[string]string {
+		res, err := contextquality.Evaluate(ctxDir("include_tests"), phpProviders(), sc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[string]string{}
+		for _, s := range res.Selected {
+			out[s.Qualified] = s.Reason
+		}
+		return out
+	}
+	without, with := selected(base), selected(withTests)
+	if without["Controller.handle"] != "caller" || with["Controller.handle"] != "caller" {
+		t.Errorf("production caller missing: without=%v with=%v", without, with)
+	}
+	if _, ok := without["ServiceTest.testRun"]; ok {
+		t.Errorf("IncludeTests=false selected the test caller: %v", without)
+	}
+	if with["ServiceTest.testRun"] != "caller" {
+		t.Errorf("IncludeTests=true dropped the test caller: %v", with)
+	}
+
+	idx, err := index.New(context.Background(), ctxDir("include_tests"), phpProviders())
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := contextquality.Evaluate(ctxDir("include_tests"), phpProviders(), withTests)
-	if err != nil {
-		t.Fatal(err)
+	run := idx.FindSymbolsByQualified("Service.run")
+	if len(run) != 1 {
+		t.Fatalf("Service.run: %v", run)
 	}
-	if len(a.Selected) != len(b.Selected) {
-		t.Errorf("IncludeTests changed PHP context (%d vs %d); PHP has no test-file detection, so it should be a no-op", len(a.Selected), len(b.Selected))
+	callers := map[string]bool{}
+	for _, e := range idx.GetCallers(run[0].ID) {
+		s, _ := idx.GetSymbol(e.To)
+		callers[s.Qualified] = true
+	}
+	if in, _ := idx.Unattributed(run[0].ID); !callers["Controller.handle"] || !callers["ServiceTest.testRun"] || in != 0 {
+		t.Errorf("graph callers %v (unattributed %d): both callers must stay in the graph", callers, in)
 	}
 }
 
@@ -298,5 +334,25 @@ func TestContextBaseline(t *testing.T) {
 		for i, sel := range res.Selected {
 			fmt.Printf("   [%d] %-28s reason=%-16s tokens=%d\n", i, sel.Qualified, sel.Reason, sel.Tokens)
 		}
+	}
+}
+
+// A candidate caller (untyped receiver) never becomes context; the context
+// reports it through its completeness signal instead.
+func TestContext_CandidateCallerIsCompletenessOnly(t *testing.T) {
+	s := contextquality.Scenario{
+		Name: "callers", TargetQualified: `App\Services\LoginScreenPolicy.showsSsoButton`, Depth: 2, MaxTokens: 8000,
+	}
+	res, err := contextquality.Evaluate(ctxDir("callers"), phpProviders(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sel := range res.Selected {
+		if strings.Contains(sel.Qualified, "LegacyController") {
+			t.Errorf("candidate caller %s (%s) entered the context", sel.Qualified, sel.Reason)
+		}
+	}
+	if res.UnattributedCallers != 1 {
+		t.Errorf("UnattributedCallers = %d, want 1 (the candidate call)", res.UnattributedCallers)
 	}
 }

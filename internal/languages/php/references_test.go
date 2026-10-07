@@ -47,7 +47,7 @@ class S {
 		"save":   {kind: "call", container: "App\\S.m", receiver: "S", call: true},      // $this → class bare
 		"flush":  {kind: "call", container: "App\\S.m", receiver: "$other", call: true}, // other var → verbatim (untyped, R4)
 		"create": {kind: "call", container: "App\\S.m", receiver: "User", call: true},   // static receiver
-		"make":   {kind: "call", container: "App\\S.m", receiver: "", call: true},       // self:: → empty
+		"make":   {kind: "call", container: "App\\S.m", receiver: "S", call: true},      // self:: → enclosing class
 	}
 	for name, want := range cases {
 		if got, ok := m[name]; !ok {

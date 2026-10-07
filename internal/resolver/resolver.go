@@ -51,6 +51,17 @@ type Resolver struct {
 	// identities pay nothing for it.
 	qualOnce  sync.Once
 	qualified map[langQualified][]symbol.Symbol
+
+	// Lookup indexes for the name-based stages (see lookup.go). They return
+	// exactly the symbols the corresponding full scans would, in a fixed order,
+	// so they change the cost of a stage and never its outcome.
+	// structural indexes type declarations' qualified relations for member
+	// lookup through supertypes and traits (see inheritance.go).
+	structural structuralIndex
+
+	members    map[string][]*symbol.Symbol // Name → symbols with Qualified and Receiver
+	suffixes   map[string][]*symbol.Symbol // text after any "." in Qualified → symbols
+	dirSymbols map[string]map[string][]dirSymbol
 }
 
 // New builds a Resolver from a set of file indexes.
@@ -74,6 +85,7 @@ func New(files []FileIndex) *Resolver {
 			}
 		}
 	}
+	r.buildLookupIndexes()
 	return r
 }
 
@@ -111,6 +123,27 @@ func (r *Resolver) Resolve() []Resolution {
 // R1 and R2 are authoritative: when they cannot resolve, the reference is
 // Unresolved — they never fall back to name heuristics.
 func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resolution {
+	return applyConfidenceCap(r.resolveReference(ref, fi), ref)
+}
+
+// applyConfidenceCap lowers res to the provider's ConfidenceCap. It only ever
+// lowers: a resolution already at or below the cap is returned unchanged, so a
+// cap can never promote a Candidate or an Unresolved reference.
+func applyConfidenceCap(res Resolution, ref reference.Reference) Resolution {
+	if ref.ConfidenceCap == "" {
+		return res
+	}
+	limit := ConfidenceCandidate // unknown caps fail safe
+	if ref.ConfidenceCap == ConfidenceStrong.String() {
+		limit = ConfidenceStrong
+	}
+	return capConfidence(res, limit, ResolutionEvidence{
+		Kind:   EvidenceConfidenceCap,
+		Detail: fmt.Sprintf("the reference's evidence permits at most %s", limit),
+	})
+}
+
+func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resolution {
 	res := Resolution{
 		ReferenceID:   ref.ID,
 		ReferenceName: ref.Name,
@@ -363,17 +396,13 @@ func (r *Resolver) importMatch(ref reference.Reference, fi FileIndex) []symbol.S
 // As a heuristic without a type system, we search for symbols named "ReceiverType.Name"
 // where ReceiverType is any type containing the receiver expression as a suffix.
 func (r *Resolver) receiverMatch(ref reference.Reference, _ FileIndex) []symbol.Symbol {
-	target := ref.Name
 	var out []symbol.Symbol
-	for _, sym := range r.byQualified {
-		for _, s := range sym {
-			if s.Name == target && s.Receiver != "" {
-				// Accept if receiver type name contains the receiver expr (case-insensitive heuristic).
-				if strings.EqualFold(s.Receiver, ref.ReceiverExpr) ||
-					strings.HasSuffix(strings.ToLower(s.Receiver), strings.ToLower(ref.ReceiverExpr)) {
-					out = append(out, s)
-				}
-			}
+	// r.members holds exactly the qualified, receiver-attached symbols per name.
+	for _, s := range r.members[ref.Name] {
+		// Accept if receiver type name contains the receiver expr (case-insensitive heuristic).
+		if strings.EqualFold(s.Receiver, ref.ReceiverExpr) ||
+			strings.HasSuffix(strings.ToLower(s.Receiver), strings.ToLower(ref.ReceiverExpr)) {
+			out = append(out, *s)
 		}
 	}
 	return out
@@ -381,19 +410,10 @@ func (r *Resolver) receiverMatch(ref reference.Reference, _ FileIndex) []symbol.
 
 // samePackageMatch finds symbols by name in files sharing the same directory.
 func (r *Resolver) samePackageMatch(ref reference.Reference, fi FileIndex) []symbol.Symbol {
-	dir := filepath.Dir(string(fi.FileID))
 	var out []symbol.Symbol
-	for _, f := range r.files {
-		if string(f.FileID) == string(fi.FileID) {
-			continue
-		}
-		if filepath.Dir(string(f.FileID)) != dir {
-			continue
-		}
-		for _, sym := range f.Symbols {
-			if sym.Name == ref.Name {
-				out = append(out, sym)
-			}
+	for _, ds := range r.dirSymbols[filepath.Dir(string(fi.FileID))][ref.Name] {
+		if ds.file != fi.FileID {
+			out = append(out, *ds.sym)
 		}
 	}
 	return out
@@ -402,10 +422,8 @@ func (r *Resolver) samePackageMatch(ref reference.Reference, fi FileIndex) []sym
 // byNameSuffix finds symbols where ref.Name matches the suffix of a qualified name.
 func (r *Resolver) byNameSuffix(name string) []symbol.Symbol {
 	var out []symbol.Symbol
-	for q, syms := range r.byQualified {
-		if strings.HasSuffix(q, "."+name) {
-			out = append(out, syms...)
-		}
+	for _, s := range r.suffixes[name] {
+		out = append(out, *s)
 	}
 	return out
 }

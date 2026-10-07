@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/magicdrive/ark/internal/testfiles"
 )
 
 func (a *Analyzer) detectBuildCommands() []BuildCommand {
@@ -96,10 +98,11 @@ func (a *Analyzer) hasTests() bool {
 		if err != nil || info.IsDir() {
 			return nil
 		}
-		name := filepath.Base(path)
-		if strings.HasSuffix(name, "_test.go") || strings.HasSuffix(name, ".test.js") ||
-			strings.HasSuffix(name, ".test.ts") || strings.HasSuffix(name, "_test.py") ||
-			strings.HasPrefix(name, "test_") {
+		rel, err := filepath.Rel(a.rootDir, path)
+		if err != nil {
+			return nil
+		}
+		if testfiles.IsTestFile(rel) {
 			hasTest = true
 			return filepath.SkipAll
 		}

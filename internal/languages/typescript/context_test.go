@@ -103,6 +103,16 @@ func tsCases() []cqCase {
 			Required:   []string{"build", userDom + "#User"},
 			Irrelevant: []string{"Order", "UserRepository"},
 		}},
+		{name: "J callers of a repository method", root: "cq_ts", Scenario: contextquality.Scenario{
+			// Who must be checked when UserRepository.save changes: the typed
+			// callers (graph edges). The untyped receiver is only a candidate
+			// caller and the same-name OrderRepository.save is unrelated.
+			Name: "J", TargetQualified: "UserRepository.save", Depth: 2, MaxTokens: 4000,
+			Required: []string{userRepo + "#UserRepository.save", "UserService.create", "typedHandler"},
+			Irrelevant: []string{
+				"untypedHandler", orderRepo + "#OrderRepository.save", "OrderService.create", "UnrelatedService",
+			},
+		}},
 		{name: "external import is not a repository dependency", root: "cq_ts", Scenario: contextquality.Scenario{
 			// `User` comes from "some-package"; the repository's own `User`
 			// class merely shares the name and must not be pulled in.
@@ -147,8 +157,18 @@ func tsxCases() []cqCase {
 		}},
 		{name: "F3 component props type", root: "cq_tsx", Scenario: contextquality.Scenario{
 			Name: "F3", TargetQualified: "UserCard", TargetFile: "src/components/UserCard.tsx", Depth: 1, MaxTokens: 4000,
-			Required:   []string{"src/components/UserCard.tsx#UserCard", "UserCardProps"},
-			Irrelevant: []string{"src/legacy/UserCard.tsx#UserCard", "UserPage"},
+			Required: []string{"src/components/UserCard.tsx#UserCard", "UserCardProps"},
+			// UserPage renders <UserCard/>: a resolved caller, useful when the
+			// props change but not required to understand them.
+			Optional:   []string{"UserPage"},
+			Irrelevant: []string{"src/legacy/UserCard.tsx#UserCard"},
+		}},
+		{name: "I TSX caller of a component", root: "cq_tsx", Scenario: contextquality.Scenario{
+			// Changing a component means updating where it is rendered: the
+			// resolved caller is required; the same-name legacy component is not.
+			Name: "I", TargetQualified: "UserCard", TargetFile: "src/components/UserCard.tsx", Depth: 1, MaxTokens: 4000,
+			Required:   []string{"src/components/UserCard.tsx#UserCard", "UserPage"},
+			Irrelevant: []string{"src/legacy/UserCard.tsx#UserCard", "Unrelated"},
 		}},
 	}
 }

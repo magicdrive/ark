@@ -13,6 +13,7 @@ import (
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/testfiles"
 )
 
 // Engine builds context results from a RepositoryIndex.
@@ -51,6 +52,7 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 	if !ok {
 		return &Result{Stats: Stats{BudgetTokens: req.MaxTokens}}, nil
 	}
+	unattributedCallers, unattributedCallees := e.idx.Unattributed(target.ID)
 
 	// Collect candidates.
 	candidates := e.collectCandidates(target, req)
@@ -149,6 +151,9 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 			BudgetTokens:    req.MaxTokens,
 			TruncatedItems:  truncated,
 			TargetTruncated: targetTruncated,
+
+			UnattributedCallers: unattributedCallers,
+			UnattributedCallees: unattributedCallees,
 		},
 	}, nil
 }
@@ -211,9 +216,13 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 	// ambiguity, import and module-scope evidence (e.g. pulling in a repository
 	// class that merely shares its name with an externally imported type).
 
-	// Direct callers (lower priority).
+	// Direct callers (lower priority). GetCallers returns the reverse edges
+	// stored for target: From is the target itself and To is the caller (see
+	// index.EdgeCalledBy), so the caller is edge.To. Only graph edges are used
+	// — unique Strong/Exact resolutions; candidate callers are possible
+	// callers, not context, and are reported through Stats instead.
 	for _, edge := range e.idx.GetCallers(target.ID) {
-		if sym, ok := e.idx.GetSymbol(edge.From); ok {
+		if sym, ok := e.idx.GetSymbol(edge.To); ok {
 			add(sym, "caller", edge.Confidence, 1)
 		}
 	}
@@ -239,24 +248,9 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 	return result
 }
 
-// isTestFile reports whether the given repo-relative path is a test file.
-func isTestFile(path string) bool {
-	if strings.HasSuffix(path, "_test.go") {
-		return true
-	}
-	for _, suf := range []string{".test.ts", ".spec.ts", ".test.tsx", ".spec.tsx", ".test.js", ".spec.js"} {
-		if strings.HasSuffix(path, suf) {
-			return true
-		}
-	}
-	if strings.HasSuffix(path, ".py") {
-		base := path[strings.LastIndex(path, "/")+1:]
-		if strings.HasPrefix(base, "test_") || strings.HasSuffix(strings.TrimSuffix(base, ".py"), "_test") {
-			return true
-		}
-	}
-	return false
-}
+// isTestFile reports whether the given repo-relative path is a test file by
+// its language's conventions (internal/testfiles).
+func isTestFile(path string) bool { return testfiles.IsTestFile(path) }
 
 // readSourceLines reads lines [startLine, endLine] (1-based, inclusive) from a file.
 func readSourceLines(root string, fileID source.FileID, startLine, endLine uint32) (string, error) {

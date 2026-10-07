@@ -662,8 +662,8 @@ A checkmark means the canonical Language Registry advertises that level as the
 language's certified support level; `get_language_support` reports it at runtime.
 PHP's `get_context` path is implemented and covered by dedicated context-quality
 tests, but PHP is advertised at **Graph** level because several resolver
-precision areas (inherited and trait member resolution, function and constant
-names) remain intentionally conservative — so the Context cell is left unchecked rather than
+precision areas (function and constant names, framework dispatch) remain
+intentionally conservative — so the Context cell is left unchecked rather than
 overstating certification.
 
 #### TypeScript / TSX — static code intelligence
@@ -723,15 +723,21 @@ symbol graph and agent-oriented context — while **preserving uncertainty** for
 dynamic or ambiguous constructs.
 
 **Known limitations (by design):** dynamic calls / construction (`$obj->$m()`,
-`new $c()`) are not guessed; variable receivers are not type-inferred; there is
+`new $c()`) are not guessed; a receiver's type comes only from a declaration
+(a typed parameter, a constructor-injected property) — never from inference
+over assignments; there is
 no Composer / PSR-4 / autoload resolution; class names are resolved from the
 file's own `namespace` / `use` / `use … as` / fully-qualified syntax by exact
 identity match (a class that is not declared in the repository, e.g. a vendor
 class, stays `Unresolved` and is never matched to a same-named repository class;
-a name declared more than once is a `Candidate`); inherited/trait member
-resolution, function and constant names, and `self` / `static` / `parent` remain
-intentionally conservative (honest `Candidate` / `Unresolved` rather than a
-fabricated answer); no framework (Laravel/Symfony/…) semantics.
+a name declared more than once is a `Candidate`); inherited and trait members
+(including `self::` / `static::` / `parent::`) are resolved structurally — own
+declaration → traits → nearest parent → interfaces — through repository-declared
+types only, stopping at an honest `Candidate` / `Unresolved` when a participant
+is outside the repository or ambiguous, a trait adaptation (`insteadof` / `as`)
+names the member, or the member is private to a supertype; function and
+constant names remain intentionally conservative; no framework
+(Laravel/Symfony/…) semantics.
 Ark performs **pure static analysis** and never executes repository code,
 Composer, or any PHP tooling.
 

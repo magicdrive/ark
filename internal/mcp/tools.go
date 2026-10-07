@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/magicdrive/ark/internal/cache"
@@ -14,6 +15,7 @@ import (
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages"
+	"github.com/magicdrive/ark/internal/libgitignore"
 )
 
 // ToolsHandler handles all MCP tools
@@ -25,14 +27,24 @@ type ToolsHandler struct {
 	rootDir    string
 	opt        *commandline.Option
 	cacheStore cache.Store // nil → NopStore
+
+	// ignore holds the repository's ignore rules, rooted at rootDir: [0] with
+	// .gitignore files disabled (.arkignore only), [1] with them enabled.
+	// They depend only on the repository's ignore files — never on the
+	// process working directory or a request — and are rebuilt when those
+	// files change.
+	ignoreMu sync.Mutex
+	ignore   [2]ignoreState
+
+	// indexes reuses completed repository indexes across requests (see
+	// index_cache.go); created on first use.
+	indexOnce sync.Once
+	indexes   *indexCache
 }
 
 // NewToolsHandler creates a new tools handler.
 func NewToolsHandler(rootDir string, opt *commandline.Option) *ToolsHandler {
-	return &ToolsHandler{
-		rootDir: rootDir,
-		opt:     opt,
-	}
+	return NewToolsHandlerWithCache(rootDir, opt, nil)
 }
 
 // NewToolsHandlerWithCache creates a ToolsHandler that persists extraction
@@ -45,6 +57,105 @@ func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cac
 	}
 }
 
+// ignoreState is a built ignore rule and the fingerprint of the ignore files it
+// was built from.
+type ignoreState struct {
+	fingerprint string
+	rule        *libgitignore.GitIgnore
+}
+
+func ignoreSlot(allowGitignore bool) int {
+	if allowGitignore {
+		return 1
+	}
+	return 0
+}
+
+// ignoreRule returns the repository's current ignore rule rooted at h.rootDir,
+// rebuilt whenever an ignore file was added, removed or edited. A rule that
+// cannot be built (e.g. an unreadable directory) is nil — no ignoring —
+// exactly as Option.Normalize treats it.
+func (h *ToolsHandler) ignoreRule(allowGitignore bool) *libgitignore.GitIgnore {
+	var extra []string
+	if h.opt != nil {
+		extra = h.opt.AdditionallyIgnoreRuleFilenameList
+	}
+	fp, err := libgitignore.IgnoreFilesFingerprint(h.rootDir, extra)
+	i := ignoreSlot(allowGitignore)
+	h.ignoreMu.Lock()
+	defer h.ignoreMu.Unlock()
+	if err == nil && h.ignore[i].fingerprint == fp && fp != "" {
+		return h.ignore[i].rule
+	}
+	rule, _ := libgitignore.GenerateIntegratedGitIgnore(allowGitignore, h.rootDir, extra)
+	if err != nil {
+		fp = "" // never reuse a rule whose inputs could not be identified
+	}
+	h.ignore[i] = ignoreState{fingerprint: fp, rule: rule}
+	return rule
+}
+
+// fileToolOption returns a per-request copy of the server's file-selection
+// options with the request's overrides applied and every derived field
+// (extension/directory lists, regexps, switches, ignore rule) recomputed from
+// them. An invalid override (e.g. a regexp that does not compile) is an error:
+// a request that cannot be honoured must not look like an empty result.
+func (h *ToolsHandler) fileToolOption(args map[string]interface{}) (*commandline.Option, error) {
+	var opt commandline.Option
+	if h.opt != nil {
+		opt = *h.opt
+	}
+	if opt.AllowGitignoreFlagValue == "" {
+		opt.AllowGitignoreFlagValue = "on"
+	}
+	if opt.IgnoreDotFileFlagValue == "" {
+		opt.IgnoreDotFileFlagValue = "off"
+	}
+	for key, dst := range map[string]*string{
+		"includeExt":       &opt.IncludeExt,
+		"excludeExt":       &opt.ExcludeExt,
+		"excludeDir":       &opt.ExcludeDir,
+		"patternRegex":     &opt.PatternRegexpString,
+		"excludeFileRegex": &opt.ExcludeFileRegexpString,
+		"excludeDirRegex":  &opt.ExcludeDirRegexpString,
+	} {
+		if v, ok := args[key].(string); ok {
+			*dst = v
+		}
+	}
+	for key, dst := range map[string]*string{
+		"ignoreDotfiles": &opt.IgnoreDotFileFlagValue,
+		"allowGitignore": &opt.AllowGitignoreFlagValue,
+	} {
+		if v, ok := args[key].(bool); ok {
+			*dst = "off"
+			if v {
+				*dst = "on"
+			}
+		}
+	}
+	if v, ok := args["skipNonUTF8"].(bool); ok {
+		opt.SkipNonUTF8Flag = v
+	}
+	if err := opt.NormalizeFileFilters(); err != nil {
+		return nil, err
+	}
+	if err := opt.AllowGitignoreFlag.Set(opt.AllowGitignoreFlagValue); err != nil {
+		return nil, fmt.Errorf("allowGitignore %w", err)
+	}
+	opt.GitIgnoreRule = h.ignoreRule(opt.AllowGitignoreFlag.Bool())
+	return &opt, nil
+}
+
+// fileToolOptionError is the tool result for an option set that cannot be
+// honoured.
+func fileToolOptionError(err error) *CallToolResult {
+	return &CallToolResult{
+		Content: []Content{{Type: "text", Text: fmt.Sprintf("Invalid options: %v", err)}},
+		IsError: true,
+	}
+}
+
 // defaultProviders returns the providers used for repository indexing and
 // relation queries: the full canonical language registry. Every MCP
 // intelligence tool now dispatches through the same registry.
@@ -54,13 +165,56 @@ func defaultProviders() []language.Provider {
 
 // buildIndex constructs a RepositoryIndex for fullPath, using the cache store
 // when available.
+//
+// The index is built over the canonical form of fullPath (absolute, symlinks
+// resolved), which must still lie inside the canonical server root, and is
+// shared with every other request for the same directory while its sources
+// are unchanged.
 func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.RepositoryIndex, error) {
-	providers := defaultProviders()
-	store := h.cacheStore
-	if store == nil {
-		store = cache.NopStore{}
+	canonical, err := h.canonicalDir(fullPath)
+	if err != nil {
+		return nil, err
 	}
-	return index.NewWithCache(ctx, fullPath, providers, store)
+	h.indexOnce.Do(func() {
+		providers := defaultProviders()
+		store := h.cacheStore
+		if store == nil {
+			store = cache.NopStore{}
+		}
+		h.indexes = newIndexCache(providers, func(ctx context.Context, root string) (*index.RepositoryIndex, error) {
+			return index.NewWithCache(ctx, root, providers, store)
+		})
+	})
+	return h.indexes.get(ctx, canonical)
+}
+
+// canonicalDir returns the absolute, symlink-free form of dir, refusing a
+// directory that resolves outside the (equally canonical) server root.
+func (h *ToolsHandler) canonicalDir(dir string) (string, error) {
+	canonical, err := canonicalPath(dir)
+	if err != nil {
+		return "", err
+	}
+	root, err := canonicalPath(h.rootDir)
+	if err != nil {
+		return "", err
+	}
+	if rel, err := filepath.Rel(root, canonical); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q resolves outside the server root %q", dir, h.rootDir)
+	}
+	return canonical, nil
+}
+
+func canonicalPath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", fmt.Errorf("index: root %q: %w", p, err)
+	}
+	return resolved, nil
 }
 
 // ListTools returns all available tools
@@ -68,13 +222,21 @@ func (h *ToolsHandler) ListTools() []Tool {
 	tools := []Tool{
 		{
 			Name:        "get_directory_tree",
-			Description: "Get directory tree structure as JSON",
+			Description: "Get directory tree structure as JSON. For a large repository, bound it with maxDepth and excludeDirs",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"path": map[string]interface{}{
 						"type":        "string",
 						"description": "Directory path to scan",
+					},
+					"maxDepth": map[string]interface{}{
+						"type":        "integer",
+						"description": "List directories at most this deep (1 = the path's direct children); deeper directories are listed without contents and marked truncated. 0 or absent = unlimited",
+					},
+					"excludeDirs": map[string]interface{}{
+						"type":        "string",
+						"description": "Comma-separated directories to omit: a name (matches that path component anywhere, e.g. vendor) or a path relative to the tree root (e.g. storage/framework)",
 					},
 				},
 				"required": []string{"path"},
@@ -355,7 +517,18 @@ func (h *ToolsHandler) getDirectoryTree(args map[string]interface{}) (*CallToolR
 			IsError: true,
 		}, nil
 	}
-	tree, err := GenerateDirectoryTreeJSON(fullPath)
+	var limits treeLimits
+	if v, ok := args["maxDepth"].(float64); ok && v > 0 {
+		limits.maxDepth = int(v)
+	}
+	if v, ok := args["excludeDirs"].(string); ok {
+		for _, d := range strings.Split(v, ",") {
+			if d = strings.Trim(filepath.ToSlash(strings.TrimSpace(d)), "/"); d != "" {
+				limits.excludeDirs = append(limits.excludeDirs, filepath.ToSlash(filepath.Clean(d)))
+			}
+		}
+	}
+	tree, err := GenerateBoundedDirectoryTreeJSON(fullPath, h.ignoreRule(true), limits)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -429,45 +602,12 @@ func (h *ToolsHandler) listFiles(args map[string]interface{}) (*CallToolResult, 
 		}, nil
 	}
 
-	// Create option based on parameters
-	opt := *h.opt // Copy base options
-	if includeExt, ok := args["includeExt"].(string); ok {
-		opt.IncludeExt = includeExt
-	}
-	if excludeExt, ok := args["excludeExt"].(string); ok {
-		opt.ExcludeExt = excludeExt
-	}
-	if excludeDir, ok := args["excludeDir"].(string); ok {
-		opt.ExcludeDir = excludeDir
-	}
-	if patternRegex, ok := args["patternRegex"].(string); ok {
-		opt.PatternRegexpString = patternRegex
-	}
-	if excludeFileRegex, ok := args["excludeFileRegex"].(string); ok {
-		opt.ExcludeFileRegexpString = excludeFileRegex
-	}
-	if excludeDirRegex, ok := args["excludeDirRegex"].(string); ok {
-		opt.ExcludeDirRegexpString = excludeDirRegex
-	}
-	if ignoreDotfiles, ok := args["ignoreDotfiles"].(bool); ok {
-		if ignoreDotfiles {
-			opt.IgnoreDotFileFlagValue = "on"
-		} else {
-			opt.IgnoreDotFileFlagValue = "off"
-		}
-	}
-	if allowGitignore, ok := args["allowGitignore"].(bool); ok {
-		if allowGitignore {
-			opt.AllowGitignoreFlagValue = "on"
-		} else {
-			opt.AllowGitignoreFlagValue = "off"
-		}
-	}
-	if skipNonUTF8, ok := args["skipNonUTF8"].(bool); ok {
-		opt.SkipNonUTF8Flag = skipNonUTF8
+	opt, err := h.fileToolOption(args)
+	if err != nil {
+		return fileToolOptionError(err), nil
 	}
 
-	files, err := ListFilteredFiles(fullPath, &opt)
+	files, err := ListFilteredFiles(fullPath, opt)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -509,33 +649,12 @@ func (h *ToolsHandler) searchInFiles(args map[string]interface{}) (*CallToolResu
 		maxResults = int(val)
 	}
 
-	// Create option based on parameters
-	opt := *h.opt // Copy base options
-	if includeExt, ok := args["includeExt"].(string); ok {
-		opt.IncludeExt = includeExt
-	}
-	if excludeExt, ok := args["excludeExt"].(string); ok {
-		opt.ExcludeExt = excludeExt
-	}
-	if excludeDir, ok := args["excludeDir"].(string); ok {
-		opt.ExcludeDir = excludeDir
-	}
-	if ignoreDotfiles, ok := args["ignoreDotfiles"].(bool); ok {
-		if ignoreDotfiles {
-			opt.IgnoreDotFileFlagValue = "on"
-		} else {
-			opt.IgnoreDotFileFlagValue = "off"
-		}
-	}
-	if allowGitignore, ok := args["allowGitignore"].(bool); ok {
-		if allowGitignore {
-			opt.AllowGitignoreFlagValue = "on"
-		} else {
-			opt.AllowGitignoreFlagValue = "off"
-		}
+	opt, err := h.fileToolOption(args)
+	if err != nil {
+		return fileToolOptionError(err), nil
 	}
 
-	results, err := SearchInFiles(fullPath, query, isRegex, maxResults, &opt)
+	results, err := SearchInFiles(fullPath, query, isRegex, maxResults, opt)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -609,24 +728,12 @@ func (h *ToolsHandler) getProjectStats(args map[string]interface{}) (*CallToolRe
 		}, nil
 	}
 
-	// Create option based on parameters
-	opt := *h.opt // Copy base options
-	if ignoreDotfiles, ok := args["ignoreDotfiles"].(bool); ok {
-		if ignoreDotfiles {
-			opt.IgnoreDotFileFlagValue = "on"
-		} else {
-			opt.IgnoreDotFileFlagValue = "off"
-		}
-	}
-	if allowGitignore, ok := args["allowGitignore"].(bool); ok {
-		if allowGitignore {
-			opt.AllowGitignoreFlagValue = "on"
-		} else {
-			opt.AllowGitignoreFlagValue = "off"
-		}
+	opt, err := h.fileToolOption(args)
+	if err != nil {
+		return fileToolOptionError(err), nil
 	}
 
-	stats, err := GetProjectStats(fullPath, &opt)
+	stats, err := GetProjectStats(fullPath, opt)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},

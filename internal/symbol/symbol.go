@@ -52,6 +52,10 @@ type Symbol struct {
 	Receiver  string // method receiver type name
 	Signature string // optional human-readable signature
 	Exported  bool
+	// Visibility is the declared member access level ("private", "protected",
+	// "public") for languages that have one; "" otherwise (see
+	// language.SymbolDraft.Visibility).
+	Visibility string `json:",omitempty"`
 }
 
 // NewSymbolID returns a deterministic ID derived from (lang, repoRelPath, kind, qualified).

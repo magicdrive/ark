@@ -36,6 +36,15 @@ type builder struct {
 	// for resolution
 	resolverFiles []resolver.FileIndex
 
+	// completeness records references that do not become edges; built in
+	// resolve().
+	completeness *Completeness
+	nonEdge      *nonEdgeRelations
+	unidentified *unidentifiedSources
+
+	// fingerprint identifies the index's inputs (see sourceDigest).
+	fingerprint string
+
 	// containers caches (file, qualified) → distinct symbol IDs for container
 	// identification; built lazily during resolve().
 	containers map[source.FileID]map[string][]symbol.SymbolID
@@ -106,6 +115,8 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			Receiver:  sd.Receiver,
 			Signature: sd.Signature,
 			Exported:  sd.Exported,
+
+			Visibility: sd.Visibility,
 		}
 		if sd.Parent != "" {
 			sym.Parent = symbol.NewSymbolID(lang, string(fileID), symbol.KindUnknown, sd.Parent)
@@ -130,6 +141,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 
 			NameQualified:         rd.NameQualified,
 			ReceiverTypeQualified: rd.ReceiverTypeQualified,
+			ConfidenceCap:         rd.ConfidenceCap,
 			IsCall:                rd.IsCall,
 		})
 	}
@@ -165,67 +177,59 @@ func (b *builder) resolve() {
 	r := resolver.New(b.resolverFiles)
 	resolutions := r.Resolve()
 
-	// Build lookup: referenceID → (file, container qualified name, kind)
+	// Build lookup: referenceID → (file, reference)
 	type refMeta struct {
-		file          source.FileID
-		containerQual string
-		kind          reference.ReferenceKind
+		file source.FileID
+		ref  *reference.Reference
 	}
 	refMetaMap := make(map[reference.ReferenceID]refMeta)
-	for _, fi := range b.resolverFiles {
-		for _, ref := range fi.References {
-			refMetaMap[ref.ID] = refMeta{file: fi.FileID, containerQual: ref.Container, kind: ref.Kind}
+	for i := range b.resolverFiles {
+		fi := &b.resolverFiles[i]
+		for j := range fi.References {
+			refMetaMap[fi.References[j].ID] = refMeta{file: fi.FileID, ref: &fi.References[j]}
 		}
 	}
 
+	b.completeness = NewCompleteness(b.symbolsByName)
+	b.nonEdge = newNonEdgeRelations()
+	b.unidentified = newUnidentifiedSources()
 	for _, res := range resolutions {
-		// Only create a graph edge when resolution is unambiguous.
-		if !res.HasUniqueTarget() {
-			continue
-		}
-		best := res.Candidates[0]
-		meta := refMetaMap[res.ReferenceID]
-
-		if meta.containerQual == "" {
-			continue
-		}
-
-		// The container is identified by (file, qualified) — never by a
-		// repository-global qualified name, which may be declared in many files.
-		containerID, ok := b.containerSymbol(meta.file, meta.containerQual)
+		meta, ok := refMetaMap[res.ReferenceID]
 		if !ok {
 			continue
 		}
+		// The container is identified by (file, qualified) — never by a
+		// repository-global qualified name, which may be declared in many files.
+		containerID, hasContainer := b.containerSymbol(meta.file, meta.ref.Container)
 
-		var kind EdgeKind
-		switch meta.kind {
-		case reference.KindCall:
-			kind = EdgeCalls
-		case reference.KindConstruction:
-			// Construction is modelled as a call-like edge. This is an explicit
-			// decision, NOT a default fallback: `new T()` depends on T much like
-			// a call. (Preserves pre-D4 behavior that relied on the old default.)
-			kind = EdgeCalls
-		case reference.KindTypeUse:
-			kind = EdgeUsesType
-		case reference.KindImport:
-			kind = EdgeImports
-		case reference.KindInheritance:
-			kind = EdgeExtends
-		case reference.KindImplements:
-			kind = EdgeImplements
-		case reference.KindUsesTrait:
-			kind = EdgeUsesTrait
-		default:
-			// Never fabricate graph semantics for an unmapped ReferenceKind
-			// (e.g. read/write/unknown or any future kind). Skip the edge.
+		// Record what the graph will not show: references that may involve a
+		// symbol but do not become an edge (see completeness.go).
+		b.completeness.Observe(*meta.ref, res, containerID, hasContainer)
+		if !hasContainer {
+			b.unidentified.observe(meta.file, *meta.ref, res)
+		}
+
+		kind, ok := edgeKindFor(meta.ref.Kind)
+		if !ok {
+			// No graph semantics (read, write, ...): kept as a non-edge
+			// relation, never an edge, never counted by completeness.
+			if hasContainer {
+				b.nonEdge.observe(*meta.ref, res, containerID)
+			}
 			continue
 		}
+		// Only create a graph edge when resolution is unambiguous and the
+		// container is identified.
+		if !res.HasUniqueTarget() || !hasContainer {
+			continue
+		}
+		best := res.Candidates[0]
 
 		edge := GraphEdge{
 			From:       containerID,
 			To:         best.SymbolID,
 			Kind:       kind,
+			RefKind:    meta.ref.Kind,
 			Confidence: res.Confidence,
 			Evidence:   res.Evidence,
 		}
@@ -236,6 +240,7 @@ func (b *builder) resolve() {
 			From:       best.SymbolID,
 			To:         containerID,
 			Kind:       EdgeCalledBy,
+			RefKind:    meta.ref.Kind,
 			Confidence: res.Confidence,
 			Evidence:   res.Evidence,
 		}
@@ -246,8 +251,8 @@ func (b *builder) resolve() {
 		b.referencesByTarget[best.SymbolID] = append(b.referencesByTarget[best.SymbolID], reference.Reference{
 			ID:        res.ReferenceID,
 			Name:      res.ReferenceName,
-			Kind:      meta.kind,
-			Container: meta.containerQual,
+			Kind:      meta.ref.Kind,
+			Container: meta.ref.Container,
 		})
 	}
 
@@ -312,6 +317,16 @@ func (b *builder) freeze() *RepositoryIndex {
 		b.symbolsByFile[fid] = sl
 	}
 
+	if b.completeness != nil {
+		b.completeness.seal()
+	}
+	if b.nonEdge != nil {
+		b.nonEdge.candidates.seal()
+	}
+	if b.unidentified != nil {
+		b.unidentified.seal()
+	}
+
 	// Deduplicate and sort graph edges.
 	for id := range b.callsFrom {
 		b.callsFrom[id] = dedupeEdges(b.callsFrom[id])
@@ -331,6 +346,10 @@ func (b *builder) freeze() *RepositoryIndex {
 		referencesByTarget:    b.referencesByTarget,
 		callsFrom:             b.callsFrom,
 		callsTo:               b.callsTo,
+		completeness:          b.completeness,
+		nonEdge:               b.nonEdge,
+		unidentified:          b.unidentified,
+		fingerprint:           b.fingerprint,
 		files:                 files,
 		diagnostics:           b.diagnostics,
 		stats:                 b.stats,
@@ -395,4 +414,27 @@ func dedupeEdges(edges []GraphEdge) []GraphEdge {
 	}
 	sortEdges(out)
 	return out
+}
+
+// edgeKindFor maps a reference kind to the graph edge it forms. Construction is
+// modelled as a call-like edge — an explicit decision, NOT a default fallback:
+// `new T()` depends on T much like a call (this preserves the pre-D4 behaviour
+// that relied on the old default). Every other kind (read/write/unknown or any
+// future kind) has no graph semantics and never forms an edge.
+func edgeKindFor(k reference.ReferenceKind) (EdgeKind, bool) {
+	switch k {
+	case reference.KindCall, reference.KindConstruction:
+		return EdgeCalls, true
+	case reference.KindTypeUse:
+		return EdgeUsesType, true
+	case reference.KindImport:
+		return EdgeImports, true
+	case reference.KindInheritance:
+		return EdgeExtends, true
+	case reference.KindImplements:
+		return EdgeImplements, true
+	case reference.KindUsesTrait:
+		return EdgeUsesTrait, true
+	}
+	return "", false
 }

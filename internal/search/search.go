@@ -9,6 +9,7 @@ import (
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/testfiles"
 )
 
 // MatchKind identifies whether a Match wraps a Symbol or a Reference.
@@ -135,14 +136,8 @@ func matchesFile(fileID, lang string, q Query, _ *index.RepositoryIndex) bool {
 	if q.FilePattern != "" && !strings.Contains(lower, strings.ToLower(q.FilePattern)) {
 		return false
 	}
-	if q.ExcludeTest {
-		if strings.HasSuffix(fileID, "_test.go") ||
-			strings.Contains(fileID, "_test.") ||
-			strings.HasPrefix(fileID, "test_") ||
-			strings.Contains(lower, "/testdata/") ||
-			strings.HasPrefix(lower, "testdata/") {
-			return false
-		}
+	if q.ExcludeTest && (testfiles.IsTestFile(fileID) || testfiles.IsTestData(fileID)) {
+		return false
 	}
 	if q.ExcludeGenerated {
 		if strings.Contains(lower, "generated") ||

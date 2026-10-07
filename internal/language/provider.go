@@ -42,6 +42,12 @@ type SymbolDraft struct {
 	Receiver  string // method receiver type name
 	Signature string
 	Exported  bool
+
+	// Visibility is the member's declared access level when the language has
+	// one ("private", "protected", "public"); "" when not applicable. A
+	// private member is not inherited: member lookup through a supertype
+	// never reaches it.
+	Visibility string `json:",omitempty"`
 }
 
 // ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.
@@ -81,6 +87,15 @@ type ReferenceDraft struct {
 	// identifies the type only; looking up Name among that type's members is
 	// the resolver's job.
 	ReceiverTypeQualified string `json:",omitempty"`
+
+	// ConfidenceCap bounds how strongly the resolver may claim this
+	// reference's target: "" (no bound), "strong" or "candidate". A provider
+	// sets it when its evidence identifies WHICH target but cannot exclude
+	// every alternative — e.g. a receiver type proven only from the code of
+	// one class, while other code may also write the receiver. The resolver
+	// applies it only downwards, min(resolved, cap); it never raises a
+	// resolution. Any other non-empty value is treated as "candidate".
+	ConfidenceCap string `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

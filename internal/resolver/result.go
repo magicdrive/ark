@@ -25,6 +25,14 @@ type Resolution struct {
 	Candidates    []Candidate
 	Confidence    Confidence
 	Evidence      []ResolutionEvidence
+
+	// OutsideRepository is set on an Unresolved resolution whose authoritative
+	// evidence — a qualified identity, a declared receiver type or an import
+	// binding — places the referent outside the repository's declarations: an
+	// external type or module, or a binding with no repository target. Such a
+	// reference cannot denote any same-named repository symbol. It is metadata
+	// only; it never changes candidates, confidence or evidence.
+	OutsideRepository bool
 }
 
 // HasUniqueTarget reports whether this resolution has exactly one candidate at

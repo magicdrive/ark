@@ -3,7 +3,6 @@ package impact
 import (
 	"context"
 	"sort"
-	"strings"
 
 	"github.com/magicdrive/ark/internal/graph"
 	"github.com/magicdrive/ark/internal/index"
@@ -12,6 +11,7 @@ import (
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/testfiles"
 )
 
 // Category classifies an impacted symbol's relationship to the target.
@@ -46,9 +46,13 @@ type ImpactEntry struct {
 type ImpactResult struct {
 	Target        symbol.Symbol
 	Entries       []ImpactEntry   // sorted: category priority then SymbolID
-	AffectedFiles []source.FileID // deduplicated, sorted
+	AffectedFiles []source.FileID // deduplicated, sorted; definite impacts only
 	Unresolved    []reference.Reference
-	Diagnostics   []language.Diagnostic
+	// Unattributed is the number of references that may target the symbol but
+	// are not resolved edges (index.RepositoryIndex.Unattributed, incoming).
+	// 0 means the dependent list is complete as far as the index can tell.
+	Unattributed int
+	Diagnostics  []language.Diagnostic
 }
 
 // Analyze returns the likely impact of changing targetID.
@@ -129,6 +133,26 @@ func Analyze(
 		})
 	}
 
+	// Possible direct callers: symbols whose reference to the target is
+	// ambiguous (Candidate). They are never definite impacts.
+	for _, symID := range idx.CandidateCallers(targetID) {
+		if seen[symID] {
+			continue
+		}
+		sym, ok := idx.GetSymbol(symID)
+		if !ok {
+			continue
+		}
+		seen[symID] = true
+		result.Entries = append(result.Entries, ImpactEntry{
+			Symbol:     sym,
+			Category:   CategoryPossibleDependent,
+			Confidence: resolver.ConfidenceCandidate,
+			Distance:   1,
+		})
+	}
+	result.Unattributed, _ = idx.Unattributed(targetID)
+
 	// Transitive callers (depth > 1).
 	// TransitiveCallers returns EdgeCalledBy edges: From=callee, To=caller.
 	if maxDepth > 1 {
@@ -176,12 +200,10 @@ func Analyze(
 	return result, nil
 }
 
+// isTestFile reports whether path is a test file or test fixture data; both
+// are classified by internal/testfiles alone.
 func isTestFile(path string) bool {
-	return strings.HasSuffix(path, "_test.go") ||
-		strings.Contains(path, "_test.") ||
-		strings.HasPrefix(path, "test_") ||
-		strings.Contains(path, "/testdata/") ||
-		strings.Contains(path, "testdata/")
+	return testfiles.IsTestFile(path) || testfiles.IsTestData(path)
 }
 
 // categoryOrder defines display/sort priority.
@@ -211,6 +233,9 @@ func sortEntries(entries []ImpactEntry) {
 func affectedFiles(target symbol.Symbol, entries []ImpactEntry) []source.FileID {
 	seen := map[source.FileID]bool{target.Location.File: true}
 	for _, e := range entries {
+		if e.Category == CategoryPossibleDependent {
+			continue // possible, not affected
+		}
 		seen[e.Symbol.Location.File] = true
 	}
 	out := make([]source.FileID, 0, len(seen))

@@ -15,16 +15,20 @@ type ReferenceID string
 type ReferenceKind string
 
 const (
-	KindRead         ReferenceKind = "read"
-	KindWrite        ReferenceKind = "write"
-	KindCall         ReferenceKind = "call"
-	KindTypeUse      ReferenceKind = "type_use"
-	KindInheritance  ReferenceKind = "inheritance"
-	KindImplements   ReferenceKind = "implementation"
-	KindUsesTrait    ReferenceKind = "uses_trait"
-	KindImport       ReferenceKind = "import"
-	KindConstruction ReferenceKind = "construction"
-	KindUnknown      ReferenceKind = "unknown"
+	KindRead        ReferenceKind = "read"
+	KindWrite       ReferenceKind = "write"
+	KindCall        ReferenceKind = "call"
+	KindTypeUse     ReferenceKind = "type_use"
+	KindInheritance ReferenceKind = "inheritance"
+	KindImplements  ReferenceKind = "implementation"
+	KindUsesTrait   ReferenceKind = "uses_trait"
+	// KindTraitAdaptation names a member mentioned in a trait adaptation
+	// (PHP `A::foo insteadof B;`, `foo as bar;`): the class's set of members
+	// with that name is not simply the union of its traits'. It forms no edge.
+	KindTraitAdaptation ReferenceKind = "trait_adaptation"
+	KindImport          ReferenceKind = "import"
+	KindConstruction    ReferenceKind = "construction"
+	KindUnknown         ReferenceKind = "unknown"
 )
 
 // Reference is a syntactic use of a name in source code.
@@ -45,7 +49,10 @@ type Reference struct {
 	// evidence.
 	NameQualified         string
 	ReceiverTypeQualified string
-	IsCall                bool
+	// ConfidenceCap bounds the confidence of this reference's resolution (see
+	// language.ReferenceDraft.ConfidenceCap); "" when unbounded.
+	ConfidenceCap string
+	IsCall        bool
 }
 
 // NewReferenceID returns a deterministic ID derived from

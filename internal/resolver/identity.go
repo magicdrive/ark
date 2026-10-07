@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -73,11 +74,28 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		if len(types) == 0 {
 			return noQualifiedDeclaration(res, detail)
 		}
+		// Several declarations share the identity, but the reference is
+		// written inside one of them: that one is the receiver's type (e.g.
+		// a class referring to itself through $this or self).
+		if len(types) > 1 {
+			if enclosing := enclosingDeclaration(types, ref); enclosing != nil {
+				types = []symbol.Symbol{*enclosing}
+			}
+		}
 		conf := ConfidenceExact
 		if len(types) > 1 {
 			conf = ConfidenceCandidate
 		}
-		return r.memberResolution(res, ref, types, conf, EvidenceQualifiedIdentity, detail)
+		own := r.memberResolution(res, ref, types, conf, EvidenceQualifiedIdentity, detail)
+		if len(own.Candidates) > 0 {
+			return own
+		}
+		// Not declared by the type itself: the nearest structural declaration
+		// (traits, supertypes) — or nothing (inheritance.go).
+		if inherited, ok := r.inheritedResolution(res, ref, types, conf, detail); ok {
+			return inherited
+		}
+		return own
 	}
 
 	types := r.typeDecls(ref.Language, ref.NameQualified)
@@ -98,5 +116,27 @@ func noQualifiedDeclaration(res Resolution, detail string) Resolution {
 		Kind:   EvidenceQualifiedIdentity,
 		Detail: detail + " is not declared in the repository",
 	}}
+	res.OutsideRepository = true
 	return res
+}
+
+// enclosingDeclaration returns the one declaration among types that lexically
+// contains ref — same file, and ref's container is the declaration or one of
+// its members — or nil when none or several do.
+func enclosingDeclaration(types []symbol.Symbol, ref reference.Reference) *symbol.Symbol {
+	var found *symbol.Symbol
+	for i := range types {
+		t := &types[i]
+		if t.Location.File != ref.Location.File {
+			continue
+		}
+		if ref.Container != t.Qualified && !strings.HasPrefix(ref.Container, t.Qualified+".") {
+			continue
+		}
+		if found != nil {
+			return nil
+		}
+		found = t
+	}
+	return found
 }
