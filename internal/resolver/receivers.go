@@ -195,6 +195,7 @@ func (r *Resolver) resolveViaReceiverType(res Resolution, ref reference.Referenc
 	detail := fmt.Sprintf("receiver %q declared as %q", ref.ReceiverExpr, ref.ReceiverType)
 	if len(types) == 0 {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceReceiverType, Detail: detail + "; type not resolved in repository"}}
+		res.OutsideRepository = true
 		return res
 	}
 	return r.memberResolution(res, ref, types, conf, EvidenceReceiverType, detail)
@@ -235,6 +236,7 @@ func (r *Resolver) resolveViaReceiverBinding(res Resolution, ref reference.Refer
 	}
 	if len(members) == 0 {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceModuleBinding, Detail: detail + fmt.Sprintf("; %q not resolved", ref.Name)}}
+		res.OutsideRepository = true
 		return res
 	}
 	if nsHits.ambiguous || len(nsHits.targets) > 1 {
@@ -257,6 +259,7 @@ func (r *Resolver) resolveViaBinding(res Resolution, ref reference.Reference, fi
 	syms := br.symbolTargets()
 	if len(syms) == 0 {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceModuleBinding, Detail: detail + "; no repository target"}}
+		res.OutsideRepository = true
 		return res
 	}
 	conf := ConfidenceExact

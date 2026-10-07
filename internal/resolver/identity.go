@@ -98,5 +98,6 @@ func noQualifiedDeclaration(res Resolution, detail string) Resolution {
 		Kind:   EvidenceQualifiedIdentity,
 		Detail: detail + " is not declared in the repository",
 	}}
+	res.OutsideRepository = true
 	return res
 }

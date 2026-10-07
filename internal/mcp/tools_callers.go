@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -15,7 +16,7 @@ func CallersToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_callers",
-			Description: "Find symbols that call a given symbol, using the repository index",
+			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete); candidates lists possible callers from ambiguous references",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -47,7 +48,7 @@ func CallersToolDefinitions() []Tool {
 		},
 		{
 			Name:        "get_callees",
-			Description: "Find symbols called by a given symbol, using the repository index",
+			Description: "Find symbols called by a given symbol, using the repository index. unattributed counts its references whose target could not be resolved (0 means the callee list is complete)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -88,9 +89,26 @@ type edgeEntry struct {
 	Evidence   string `json:"evidence,omitempty"`
 }
 
+// callersResult is the get_callers / get_callees result. Unattributed is always
+// present: 0 means the graph is complete for the queried direction, so an
+// empty Edges list is a true zero (see index.Completeness). Total and
+// Truncated appear only when Edges was cut at maxResults; Candidates (callers
+// only) lists possible callers whose references are ambiguous — never edges.
 type callersResult struct {
-	Symbol string      `json:"symbol"`
-	Edges  []edgeEntry `json:"edges"`
+	Symbol       string           `json:"symbol"`
+	Edges        []edgeEntry      `json:"edges"`
+	Unattributed int              `json:"unattributed"`
+	Total        int              `json:"total,omitempty"`
+	Truncated    bool             `json:"truncated,omitempty"`
+	Candidates   []candidateEntry `json:"candidates,omitempty"`
+}
+
+// candidateEntry is a possible caller: a symbol containing a reference whose
+// resolution lists the target among several (or capped) candidates.
+type candidateEntry struct {
+	Symbol     string `json:"symbol"`
+	File       string `json:"file"`
+	Confidence string `json:"confidence"`
 }
 
 func (h *ToolsHandler) getCallers(args map[string]interface{}) (*CallToolResult, error) {
@@ -119,7 +137,7 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		maxDepth = int(v)
 	}
 	maxResults := 50
-	if v, ok := args["maxResults"].(float64); ok {
+	if v, ok := args["maxResults"].(float64); ok && v > 0 {
 		maxResults = int(v)
 	}
 
@@ -143,9 +161,7 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 	// Multiple matches never merge: return deterministic candidate evidence.
 	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
 	if !tl.Found {
-		out := callersResult{Symbol: symName, Edges: []edgeEntry{}}
-		b, _ := json.MarshalIndent(out, "", "  ")
-		return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
+		return targetNotFoundResult(symName, path), nil
 	}
 	if tl.Ambiguous {
 		return ambiguousTargetResult(symName, tl.Candidates), nil
@@ -211,17 +227,61 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		}
 		return edges[i].Kind < edges[j].Kind
 	})
+	out := callersResult{Symbol: symName}
+	incoming, outgoing := idx.Unattributed(tl.Symbol.ID)
+	if callers {
+		out.Unattributed = incoming
+		out.Candidates = candidateCallers(idx, tl.Symbol.ID, edges)
+	} else {
+		out.Unattributed = outgoing
+	}
 	if len(edges) > maxResults {
+		out.Total = len(edges)
+		out.Truncated = true
 		edges = edges[:maxResults]
 	}
 	if edges == nil {
 		edges = []edgeEntry{}
 	}
-
-	out := callersResult{Symbol: symName, Edges: edges}
+	out.Edges = edges
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return nil, err
 	}
 	return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
+}
+
+// candidateCallers lists the index's candidate callers of id that are not
+// already resolved callers in edges, ordered by qualified name then file.
+func candidateCallers(idx *index.RepositoryIndex, id symbol.SymbolID, edges []edgeEntry) []candidateEntry {
+	resolved := make(map[string]bool, len(edges))
+	for _, e := range edges {
+		resolved[e.To] = true
+	}
+	var out []candidateEntry
+	for _, sid := range idx.CandidateCallers(id) {
+		sym, ok := idx.GetSymbol(sid)
+		if !ok {
+			continue
+		}
+		name := string(sid)
+		if sym.Qualified != "" {
+			name = sym.Qualified
+		}
+		if resolved[name] {
+			continue
+		}
+		out = append(out, candidateEntry{
+			Symbol:     name,
+			File:       string(sym.Location.File),
+			Confidence: resolver.ConfidenceCandidate.String(),
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Symbol != out[j].Symbol {
+			return out[i].Symbol < out[j].Symbol
+		}
+		return out[i].File < out[j].File
+	})
+	return out
 }

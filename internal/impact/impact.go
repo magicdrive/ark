@@ -46,9 +46,13 @@ type ImpactEntry struct {
 type ImpactResult struct {
 	Target        symbol.Symbol
 	Entries       []ImpactEntry   // sorted: category priority then SymbolID
-	AffectedFiles []source.FileID // deduplicated, sorted
+	AffectedFiles []source.FileID // deduplicated, sorted; definite impacts only
 	Unresolved    []reference.Reference
-	Diagnostics   []language.Diagnostic
+	// Unattributed is the number of references that may target the symbol but
+	// are not resolved edges (index.RepositoryIndex.Unattributed, incoming).
+	// 0 means the dependent list is complete as far as the index can tell.
+	Unattributed int
+	Diagnostics  []language.Diagnostic
 }
 
 // Analyze returns the likely impact of changing targetID.
@@ -128,6 +132,26 @@ func Analyze(
 			Distance:   1,
 		})
 	}
+
+	// Possible direct callers: symbols whose reference to the target is
+	// ambiguous (Candidate). They are never definite impacts.
+	for _, symID := range idx.CandidateCallers(targetID) {
+		if seen[symID] {
+			continue
+		}
+		sym, ok := idx.GetSymbol(symID)
+		if !ok {
+			continue
+		}
+		seen[symID] = true
+		result.Entries = append(result.Entries, ImpactEntry{
+			Symbol:     sym,
+			Category:   CategoryPossibleDependent,
+			Confidence: resolver.ConfidenceCandidate,
+			Distance:   1,
+		})
+	}
+	result.Unattributed, _ = idx.Unattributed(targetID)
 
 	// Transitive callers (depth > 1).
 	// TransitiveCallers returns EdgeCalledBy edges: From=callee, To=caller.
@@ -211,6 +235,9 @@ func sortEntries(entries []ImpactEntry) {
 func affectedFiles(target symbol.Symbol, entries []ImpactEntry) []source.FileID {
 	seen := map[source.FileID]bool{target.Location.File: true}
 	for _, e := range entries {
+		if e.Category == CategoryPossibleDependent {
+			continue // possible, not affected
+		}
 		seen[e.Symbol.Location.File] = true
 	}
 	out := make([]source.FileID, 0, len(seen))

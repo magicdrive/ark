@@ -69,6 +69,9 @@ type RepositoryIndex struct {
 	callsFrom map[symbol.SymbolID][]GraphEdge // from → callees
 	callsTo   map[symbol.SymbolID][]GraphEdge // to   → callers (pre-built for GetCallers)
 
+	// completeness: references that may involve a symbol but are no edge.
+	completeness *Completeness
+
 	// --- meta ---
 	files       []source.FileID // sorted
 	diagnostics []language.Diagnostic
@@ -248,6 +251,27 @@ func (idx *RepositoryIndex) GetCallees(id symbol.SymbolID) []GraphEdge {
 // The returned Evidence slices are copies; callers may modify them freely.
 func (idx *RepositoryIndex) GetCallers(id symbol.SymbolID) []GraphEdge {
 	return copyEdges(idx.callsTo[id])
+}
+
+// Unattributed returns, for id, the number of incoming references that may
+// target it and the number of its own outgoing references whose target is
+// unknown — neither of which is a graph edge (see Completeness). Zero means
+// the graph is complete for that direction.
+func (idx *RepositoryIndex) Unattributed(id symbol.SymbolID) (incoming, outgoing int) {
+	if idx.completeness == nil {
+		return 0, 0
+	}
+	return idx.completeness.Incoming(id), idx.completeness.Outgoing(id)
+}
+
+// CandidateCallers returns up to MaxCandidateSources symbols that contain a
+// candidate (ambiguous or capped) reference to id, ordered by SymbolID. They
+// are possible callers only: never graph edges.
+func (idx *RepositoryIndex) CandidateCallers(id symbol.SymbolID) []symbol.SymbolID {
+	if idx.completeness == nil {
+		return nil
+	}
+	return idx.completeness.CandidateSources(id)
 }
 
 // GetRelatedSymbols returns all edges (callers + callees + type uses) touching id.

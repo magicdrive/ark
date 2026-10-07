@@ -48,6 +48,8 @@ func Format(r *ImpactResult) string {
 	writeSection(CategoryTransitiveDependent, "Transitive dependents")
 	writeSection(CategoryPossibleDependent, "Possible dependents (low confidence)")
 
+	fmt.Fprintf(&b, "Unattributed references: %d\n\n", r.Unattributed)
+
 	fmt.Fprintf(&b, "Affected files (%d):\n", len(r.AffectedFiles))
 	for _, f := range r.AffectedFiles {
 		fmt.Fprintf(&b, "  %s\n", f)
@@ -83,6 +85,7 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 		Entries         []entry  `json:"entries"`
 		AffectedFiles   []string `json:"affected_files"`
 		UnresolvedCount int      `json:"unresolved_count"`
+		Unattributed    int      `json:"unattributed"`
 	}
 
 	o := out{
@@ -90,6 +93,7 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 		TargetFile:      string(r.Target.Location.File),
 		TargetLine:      r.Target.Location.Range.Start.Line,
 		UnresolvedCount: len(r.Unresolved),
+		Unattributed:    r.Unattributed,
 	}
 	for _, e := range r.Entries {
 		o.Entries = append(o.Entries, entry{

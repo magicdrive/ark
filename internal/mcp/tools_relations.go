@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -60,9 +61,17 @@ type relationEntry struct {
 	Evidence   string `json:"evidence,omitempty"`
 }
 
+// relationsResult is the get_relations result. Unattributed counts the
+// references into or out of the symbol that are not resolved (Strong+) edges —
+// candidate relations listed above included — so 0 means the relations are
+// complete (see index.Completeness). Total and Truncated appear only when
+// Relations was cut at maxResults.
 type relationsResult struct {
-	Symbol    string          `json:"symbol"`
-	Relations []relationEntry `json:"relations"`
+	Symbol       string          `json:"symbol"`
+	Relations    []relationEntry `json:"relations"`
+	Unattributed int             `json:"unattributed"`
+	Total        int             `json:"total,omitempty"`
+	Truncated    bool            `json:"truncated,omitempty"`
 }
 
 func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResult, error) {
@@ -75,7 +84,7 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 		return nil, fmt.Errorf("symbol parameter is required")
 	}
 	maxResults := 50
-	if v, ok := args["maxResults"].(float64); ok {
+	if v, ok := args["maxResults"].(float64); ok && v > 0 {
 		maxResults = int(v)
 	}
 	filePattern := ""
@@ -108,9 +117,7 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 	// must NOT merge their relations into one answer — return ambiguity instead.
 	tl := resolveTarget(targetCandidatesFromFileIndexes(fileIndexes, symName), filePattern)
 	if !tl.Found {
-		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: fmt.Sprintf("symbol %q not found in %s", symName, path)}},
-		}, nil
+		return targetNotFoundResult(symName, path), nil
 	}
 	if tl.Ambiguous {
 		return ambiguousTargetResult(symName, tl.Candidates), nil
@@ -206,11 +213,18 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 		}
 		return relations[i].Qualified < relations[j].Qualified
 	})
+	out := relationsResult{Symbol: symName}
+	c := relationsCompleteness(fileIndexes, resolutions, locate)
+	out.Unattributed = c.Incoming(tl.Symbol.ID) + c.Outgoing(tl.Symbol.ID)
 	if len(relations) > maxResults {
+		out.Total = len(relations)
+		out.Truncated = true
 		relations = relations[:maxResults]
 	}
-
-	out := relationsResult{Symbol: symName, Relations: relations}
+	if relations == nil {
+		relations = []relationEntry{}
+	}
+	out.Relations = relations
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return nil, err
@@ -283,4 +297,38 @@ func newRefLocator(files []resolver.FileIndex) refLocator {
 		}
 	}
 	return m
+}
+
+// relationsCompleteness applies index.Completeness to get_relations' own
+// resolutions, with the same container identification as repository indexing
+// (a container is the single symbol of its file carrying the qualified name).
+func relationsCompleteness(files []resolver.FileIndex, resolutions []resolver.Resolution, locate refLocator) *index.Completeness {
+	byName := make(map[string][]symbol.Symbol)
+	containers := make(map[source.FileID]map[string][]symbol.SymbolID)
+	for _, fi := range files {
+		byQual := make(map[string][]symbol.SymbolID)
+		for _, s := range fi.Symbols {
+			byName[s.Name] = append(byName[s.Name], s)
+			if !slices.Contains(byQual[s.Qualified], s.ID) {
+				byQual[s.Qualified] = append(byQual[s.Qualified], s.ID)
+			}
+		}
+		containers[fi.FileID] = byQual
+	}
+	c := index.NewCompleteness(byName)
+	for _, res := range resolutions {
+		loc, ok := locate[res.ReferenceID]
+		if !ok {
+			continue
+		}
+		var src symbol.SymbolID
+		hasSrc := false
+		if loc.ref.Container != "" {
+			if ids := containers[loc.file][loc.ref.Container]; len(ids) == 1 {
+				src, hasSrc = ids[0], true
+			}
+		}
+		c.Observe(*loc.ref, res, src, hasSrc)
+	}
+	return c
 }
