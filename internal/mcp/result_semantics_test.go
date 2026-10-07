@@ -483,3 +483,24 @@ func TestTargetLookup_AmbiguityIsBounded(t *testing.T) {
 		t.Errorf("ambiguity output is not stable")
 	}
 }
+
+// get_context carries resolved callers as context and candidate callers only as
+// the completeness count.
+func TestGetContext_CallersAndCompleteness(t *testing.T) {
+	dir := phpSemanticsRepo(t)
+	res, text := callAt(t, dir, "get_context", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton", "maxTokens": float64(4000)})
+	mustOK(t, res, "get_context", text)
+	contains(t, "get_context", text,
+		"Symbol: App\\Http\\TypedController.show\nReason: caller\nConfidence: exact",
+		"Symbol: App\\Services\\LoginScreenPolicy.isSsoOnly\nReason: caller\nConfidence: exact",
+		"unattributed: 1 callers, 0 callees")
+	excludes(t, "get_context", text, "LoginController", "Clinic")
+
+	res, text = callAt(t, dir, "get_context", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.unused"})
+	mustOK(t, res, "get_context(zero)", text)
+	contains(t, "get_context(zero)", text, "unattributed: 0 callers, 0 callees")
+
+	res, text = callAt(t, dir, "get_context", map[string]interface{}{"path": ".", "symbol": "LoginScreenPolicy.showsSsoButton", "format": "json"})
+	mustOK(t, res, "get_context(json)", text)
+	contains(t, "get_context(json)", text, `"UnattributedCallers": 1`, `"reason": "caller"`)
+}

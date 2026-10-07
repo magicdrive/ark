@@ -32,9 +32,10 @@ func Format(result *Result) string {
 		sb.WriteString("\n")
 	}
 
-	fmt.Fprintf(&sb, "\n--- stats: %d/%d items, ~%d tokens (budget %d) ---\n",
+	fmt.Fprintf(&sb, "\n--- stats: %d/%d items, ~%d tokens (budget %d), unattributed: %d callers, %d callees ---\n",
 		result.Stats.SelectedItems, result.Stats.TotalCandidates,
-		result.Stats.EstimatedTokens, result.Stats.BudgetTokens)
+		result.Stats.EstimatedTokens, result.Stats.BudgetTokens,
+		result.Stats.UnattributedCallers, result.Stats.UnattributedCallees)
 
 	return sb.String()
 }

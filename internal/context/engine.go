@@ -51,6 +51,7 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 	if !ok {
 		return &Result{Stats: Stats{BudgetTokens: req.MaxTokens}}, nil
 	}
+	unattributedCallers, unattributedCallees := e.idx.Unattributed(target.ID)
 
 	// Collect candidates.
 	candidates := e.collectCandidates(target, req)
@@ -149,6 +150,9 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 			BudgetTokens:    req.MaxTokens,
 			TruncatedItems:  truncated,
 			TargetTruncated: targetTruncated,
+
+			UnattributedCallers: unattributedCallers,
+			UnattributedCallees: unattributedCallees,
 		},
 	}, nil
 }
@@ -211,9 +215,13 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 	// ambiguity, import and module-scope evidence (e.g. pulling in a repository
 	// class that merely shares its name with an externally imported type).
 
-	// Direct callers (lower priority).
+	// Direct callers (lower priority). GetCallers returns the reverse edges
+	// stored for target: From is the target itself and To is the caller (see
+	// index.EdgeCalledBy), so the caller is edge.To. Only graph edges are used
+	// — unique Strong/Exact resolutions; candidate callers are possible
+	// callers, not context, and are reported through Stats instead.
 	for _, edge := range e.idx.GetCallers(target.ID) {
-		if sym, ok := e.idx.GetSymbol(edge.From); ok {
+		if sym, ok := e.idx.GetSymbol(edge.To); ok {
 			add(sym, "caller", edge.Confidence, 1)
 		}
 	}

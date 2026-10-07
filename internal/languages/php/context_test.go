@@ -28,6 +28,12 @@ func phpProviders() []language.Provider { return []language.Provider{php.NewProv
 func phpScenarios() []contextquality.Scenario {
 	return []contextquality.Scenario{
 		{
+			// A resolved (Exact) caller is context; a candidate caller is not.
+			Name: "callers", TargetQualified: `App\Services\LoginScreenPolicy.showsSsoButton`, Depth: 2, MaxTokens: 8000,
+			Required:   []string{`App\Services\LoginScreenPolicy.showsSsoButton`, `App\Http\TypedController.show`},
+			Irrelevant: []string{`App\Http\LoginController.showLoginForm`, `App\Models\Clinic.showsSsoButton`, `App\Http\LoginController`},
+		},
+		{
 			Name: "inheritance", Task: "Understand UserService's inherited structure",
 			TargetQualified: "UserService", Depth: 2, MaxTokens: 8000,
 			Required: []string{"UserService", "BaseService"},
@@ -298,5 +304,25 @@ func TestContextBaseline(t *testing.T) {
 		for i, sel := range res.Selected {
 			fmt.Printf("   [%d] %-28s reason=%-16s tokens=%d\n", i, sel.Qualified, sel.Reason, sel.Tokens)
 		}
+	}
+}
+
+// A candidate caller (untyped receiver) never becomes context; the context
+// reports it through its completeness signal instead.
+func TestContext_CandidateCallerIsCompletenessOnly(t *testing.T) {
+	s := contextquality.Scenario{
+		Name: "callers", TargetQualified: `App\Services\LoginScreenPolicy.showsSsoButton`, Depth: 2, MaxTokens: 8000,
+	}
+	res, err := contextquality.Evaluate(ctxDir("callers"), phpProviders(), s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sel := range res.Selected {
+		if strings.Contains(sel.Qualified, "LoginController") {
+			t.Errorf("candidate caller %s (%s) entered the context", sel.Qualified, sel.Reason)
+		}
+	}
+	if res.UnattributedCallers != 1 {
+		t.Errorf("UnattributedCallers = %d, want 1 (the candidate call)", res.UnattributedCallers)
 	}
 }

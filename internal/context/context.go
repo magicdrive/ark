@@ -35,6 +35,14 @@ type Stats struct {
 	BudgetTokens    int
 	TruncatedItems  int  // candidates dropped due to budget
 	TargetTruncated bool // true when the target's source exceeded the budget
+
+	// UnattributedCallers / UnattributedCallees are the target's incoming and
+	// outgoing references that are not graph edges (index.RepositoryIndex.
+	// Unattributed): callers or callees the context may be missing because
+	// they could not be resolved. 0 means the graph is complete for that
+	// direction; it does not mean every caller fit in the budget.
+	UnattributedCallers int
+	UnattributedCallees int
 }
 
 // Result holds the items selected within budget plus metadata.
