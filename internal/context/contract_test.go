@@ -8,6 +8,7 @@ import (
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
+	"github.com/magicdrive/ark/internal/symbol"
 
 	arkctx "github.com/magicdrive/ark/internal/context"
 )
@@ -80,55 +81,69 @@ func TestTargetTruncatedFlagSet(t *testing.T) {
 
 // ── IncludeTests contract ─────────────────────────────────────────────────────
 
-// TestIncludeTests_False verifies test symbols are excluded when IncludeTests=false.
-func TestIncludeTests_False(t *testing.T) {
-	idx, dir := buildCtxIndex(t)
-	syms := idx.FindSymbols("greet")
-	if len(syms) == 0 {
-		t.Skip("greet not found in fixture")
+// ValidateUser has a production caller (UserService.Create, service.go) and
+// test callers (user_test.go).
+func validateUserTarget(t *testing.T, idx *index.RepositoryIndex) symbol.SymbolID {
+	t.Helper()
+	syms := idx.FindSymbolsByQualified("ValidateUser")
+	if len(syms) != 1 {
+		t.Fatalf("ValidateUser: %d symbols in the fixture, want 1", len(syms))
 	}
+	return syms[0].ID
+}
 
-	eng := arkctx.New(idx, dir)
-	result, err := eng.Build(context.Background(), arkctx.Request{
-		Target:       syms[0].ID,
+func callerFiles(t *testing.T, includeTests bool) map[string]bool {
+	t.Helper()
+	idx, dir := buildCtxIndex(t)
+	result, err := arkctx.New(idx, dir).Build(context.Background(), arkctx.Request{
+		Target:       validateUserTarget(t, idx),
 		MaxTokens:    8000,
 		MaxDepth:     2,
-		IncludeTests: false,
+		IncludeTests: includeTests,
 	})
 	if err != nil {
 		t.Fatalf("Build: %v", err)
 	}
+	files := map[string]bool{}
 	for _, item := range result.Items {
-		if item.Reason == "target" {
-			continue // target is always included
+		if item.Reason == "caller" {
+			files[string(item.Symbol.Location.File)] = true
 		}
-		if isTestFile(string(item.Symbol.Location.File)) {
-			t.Errorf("test file included when IncludeTests=false: %s", item.Symbol.Location.File)
+	}
+	return files
+}
+
+// TestIncludeTests_False verifies test callers are excluded when
+// IncludeTests=false, and production callers are kept.
+func TestIncludeTests_False(t *testing.T) {
+	files := callerFiles(t, false)
+	if !files["service.go"] {
+		t.Errorf("production caller missing: %v", files)
+	}
+	for f := range files {
+		if isTestFile(f) {
+			t.Errorf("test file included when IncludeTests=false: %s", f)
 		}
 	}
 }
 
-// TestIncludeTests_True verifies that test symbols CAN be included when IncludeTests=true.
-// (They may not be present in every fixture, so this test is advisory.)
+// TestIncludeTests_True verifies test callers are included when
+// IncludeTests=true, alongside production callers — and that the graph keeps
+// them either way (the filter is the Context's alone).
 func TestIncludeTests_True(t *testing.T) {
-	idx, dir := buildCtxIndex(t)
-	syms := idx.FindSymbols("greet")
-	if len(syms) == 0 {
-		t.Skip("greet not found in fixture")
+	files := callerFiles(t, true)
+	if !files["service.go"] || !files["user_test.go"] {
+		t.Errorf("callers with IncludeTests=true: %v, want service.go and user_test.go", files)
 	}
-
-	eng := arkctx.New(idx, dir)
-	result, err := eng.Build(context.Background(), arkctx.Request{
-		Target:       syms[0].ID,
-		MaxTokens:    8000,
-		MaxDepth:     2,
-		IncludeTests: true,
-	})
-	if err != nil {
-		t.Fatalf("Build: %v", err)
+	idx, _ := buildCtxIndex(t)
+	graphFiles := map[string]bool{}
+	for _, e := range idx.GetCallers(validateUserTarget(t, idx)) {
+		s, _ := idx.GetSymbol(e.To)
+		graphFiles[string(s.Location.File)] = true
 	}
-	// Just verify Build doesn't panic/error with IncludeTests=true.
-	_ = result
+	if !graphFiles["user_test.go"] {
+		t.Errorf("graph lost the test caller: %v", graphFiles)
+	}
 }
 
 // ── Token budget contract ─────────────────────────────────────────────────────

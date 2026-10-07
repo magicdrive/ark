@@ -1,8 +1,6 @@
 package index
 
 import (
-	"sort"
-
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -37,12 +35,14 @@ type Completeness struct {
 	byName  map[string][]symbol.Symbol
 	in      map[symbol.SymbolID]int
 	out     map[symbol.SymbolID]int
-	sources map[symbol.SymbolID][]symbol.SymbolID
+	samples samples // candidate relations of graph-edge kinds, both directions
 }
 
-// MaxCandidateSources bounds the candidate callers kept per symbol. The kept
-// sources are the first distinct ones in resolution order (files sorted,
-// references in source order); Incoming always counts all of them.
+// MaxCandidateSources bounds every candidate sample (see relations.go): the
+// candidate callers kept per symbol, the candidate callees kept per symbol. The
+// kept symbols are the first distinct ones in resolution order (files sorted,
+// references in source order); the sample's Total, and Incoming / Outgoing,
+// always count all of them.
 const MaxCandidateSources = 10
 
 // NewCompleteness returns an empty Completeness that matches unresolved
@@ -52,7 +52,7 @@ func NewCompleteness(byName map[string][]symbol.Symbol) *Completeness {
 		byName:  byName,
 		in:      make(map[symbol.SymbolID]int),
 		out:     make(map[symbol.SymbolID]int),
-		sources: make(map[symbol.SymbolID][]symbol.SymbolID),
+		samples: newSamples(),
 	}
 }
 
@@ -98,26 +98,13 @@ func (c *Completeness) Observe(ref reference.Reference, res resolver.Resolution,
 	}
 	for _, t := range targets {
 		c.in[t]++
-		if candidate && hasSource {
-			c.addSource(t, source)
-		}
+	}
+	if candidate && hasSource {
+		c.samples.observe(source, ref.Kind, res)
 	}
 	if hasSource {
 		c.out[source]++
 	}
-}
-
-func (c *Completeness) addSource(target, source symbol.SymbolID) {
-	cur := c.sources[target]
-	if len(cur) >= MaxCandidateSources {
-		return
-	}
-	for _, s := range cur {
-		if s == source {
-			return
-		}
-	}
-	c.sources[target] = append(cur, source)
 }
 
 // Incoming returns the number of references unattributed with respect to id.
@@ -129,7 +116,24 @@ func (c *Completeness) Outgoing(id symbol.SymbolID) int { return c.out[id] }
 // CandidateSources returns up to MaxCandidateSources symbols containing a
 // candidate (non-unique) reference to id, ordered by SymbolID.
 func (c *Completeness) CandidateSources(id symbol.SymbolID) []symbol.SymbolID {
-	out := append([]symbol.SymbolID(nil), c.sources[id]...)
-	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	var out []symbol.SymbolID
+	for _, r := range candidateSample(c.samples.in[id]).Relations {
+		out = append(out, r.Symbol)
+	}
 	return out
 }
+
+// CandidateCallerSample returns the candidate relations into id: possible
+// callers, at most MaxCandidateSources, and how many there are in all.
+func (c *Completeness) CandidateCallerSample(id symbol.SymbolID) CandidateSample {
+	return candidateSample(c.samples.in[id])
+}
+
+// CandidateCalleeSample returns the candidate relations out of id: possible
+// callees, at most MaxCandidateSources, and how many there are in all.
+func (c *Completeness) CandidateCalleeSample(id symbol.SymbolID) CandidateSample {
+	return candidateSample(c.samples.out[id])
+}
+
+// seal drops build-time bookkeeping; the Completeness is read-only afterwards.
+func (c *Completeness) seal() { c.samples.seal() }

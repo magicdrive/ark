@@ -13,7 +13,7 @@ func RepomapToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_repository_map",
-			Description: "Get a compact logical representation of the repository structure for LLM orientation",
+			Description: "Start here in an unfamiliar repository: a ranked overview of its packages and their key types and functions",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{

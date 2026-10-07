@@ -39,6 +39,11 @@ type builder struct {
 	// completeness records references that do not become edges; built in
 	// resolve().
 	completeness *Completeness
+	nonEdge      *nonEdgeRelations
+	unidentified *unidentifiedSources
+
+	// fingerprint identifies the index's inputs (see sourceDigest).
+	fingerprint string
 
 	// containers caches (file, qualified) → distinct symbol IDs for container
 	// identification; built lazily during resolve().
@@ -186,6 +191,8 @@ func (b *builder) resolve() {
 	}
 
 	b.completeness = NewCompleteness(b.symbolsByName)
+	b.nonEdge = newNonEdgeRelations()
+	b.unidentified = newUnidentifiedSources()
 	for _, res := range resolutions {
 		meta, ok := refMetaMap[res.ReferenceID]
 		if !ok {
@@ -198,14 +205,22 @@ func (b *builder) resolve() {
 		// Record what the graph will not show: references that may involve a
 		// symbol but do not become an edge (see completeness.go).
 		b.completeness.Observe(*meta.ref, res, containerID, hasContainer)
-
-		// Only create a graph edge when resolution is unambiguous, the
-		// container is identified and the reference kind has graph semantics.
-		if !res.HasUniqueTarget() || !hasContainer {
-			continue
+		if !hasContainer {
+			b.unidentified.observe(meta.file, *meta.ref, res)
 		}
+
 		kind, ok := edgeKindFor(meta.ref.Kind)
 		if !ok {
+			// No graph semantics (read, write, ...): kept as a non-edge
+			// relation, never an edge, never counted by completeness.
+			if hasContainer {
+				b.nonEdge.observe(*meta.ref, res, containerID)
+			}
+			continue
+		}
+		// Only create a graph edge when resolution is unambiguous and the
+		// container is identified.
+		if !res.HasUniqueTarget() || !hasContainer {
 			continue
 		}
 		best := res.Candidates[0]
@@ -214,6 +229,7 @@ func (b *builder) resolve() {
 			From:       containerID,
 			To:         best.SymbolID,
 			Kind:       kind,
+			RefKind:    meta.ref.Kind,
 			Confidence: res.Confidence,
 			Evidence:   res.Evidence,
 		}
@@ -224,6 +240,7 @@ func (b *builder) resolve() {
 			From:       best.SymbolID,
 			To:         containerID,
 			Kind:       EdgeCalledBy,
+			RefKind:    meta.ref.Kind,
 			Confidence: res.Confidence,
 			Evidence:   res.Evidence,
 		}
@@ -300,6 +317,16 @@ func (b *builder) freeze() *RepositoryIndex {
 		b.symbolsByFile[fid] = sl
 	}
 
+	if b.completeness != nil {
+		b.completeness.seal()
+	}
+	if b.nonEdge != nil {
+		b.nonEdge.candidates.seal()
+	}
+	if b.unidentified != nil {
+		b.unidentified.seal()
+	}
+
 	// Deduplicate and sort graph edges.
 	for id := range b.callsFrom {
 		b.callsFrom[id] = dedupeEdges(b.callsFrom[id])
@@ -320,6 +347,9 @@ func (b *builder) freeze() *RepositoryIndex {
 		callsFrom:             b.callsFrom,
 		callsTo:               b.callsTo,
 		completeness:          b.completeness,
+		nonEdge:               b.nonEdge,
+		unidentified:          b.unidentified,
+		fingerprint:           b.fingerprint,
 		files:                 files,
 		diagnostics:           b.diagnostics,
 		stats:                 b.stats,

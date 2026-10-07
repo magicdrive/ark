@@ -12,6 +12,7 @@ import (
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/testfiles"
 )
 
 // Category classifies an impacted symbol's relationship to the target.
@@ -201,7 +202,8 @@ func Analyze(
 }
 
 func isTestFile(path string) bool {
-	return strings.HasSuffix(path, "_test.go") ||
+	return testfiles.IsTestFile(path) ||
+		strings.HasSuffix(path, "_test.go") ||
 		strings.Contains(path, "_test.") ||
 		strings.HasPrefix(path, "test_") ||
 		strings.Contains(path, "/testdata/") ||

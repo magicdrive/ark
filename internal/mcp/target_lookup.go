@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/index"
-	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -45,34 +44,6 @@ func targetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []symbol
 				}
 			}
 		})
-}
-
-// targetCandidatesFromFileIndexes applies the same policy over
-// resolver.FileIndex symbols (used by get_relations, which builds FileIndexes
-// rather than a RepositoryIndex).
-func targetCandidatesFromFileIndexes(files []resolver.FileIndex, name string) []symbol.Symbol {
-	all := func(yield func(symbol.Symbol)) {
-		for _, fi := range files {
-			for _, s := range fi.Symbols {
-				yield(s)
-			}
-		}
-	}
-	matching := func(match func(symbol.Symbol) bool) []symbol.Symbol {
-		var out []symbol.Symbol
-		all(func(s symbol.Symbol) {
-			if match(s) {
-				out = append(out, s)
-			}
-		})
-		return out
-	}
-	return lookupTargetCandidates(name,
-		func(q string) []symbol.Symbol {
-			return matching(func(s symbol.Symbol) bool { return s.Qualified == q })
-		},
-		func(n string) []symbol.Symbol { return matching(func(s symbol.Symbol) bool { return s.Name == n }) },
-		all)
 }
 
 // lookupTargetCandidates resolves a user-supplied target name to candidate

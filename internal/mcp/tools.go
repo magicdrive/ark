@@ -28,12 +28,18 @@ type ToolsHandler struct {
 	opt        *commandline.Option
 	cacheStore cache.Store // nil → NopStore
 
-	// ignore holds the repository's ignore rules, rooted at rootDir, built on
-	// first use: [0] with .gitignore files disabled (.arkignore only), [1]
-	// with them enabled. They depend only on the repository, never on the
-	// process working directory or on a request.
-	ignoreOnce [2]sync.Once
-	ignore     [2]*libgitignore.GitIgnore
+	// ignore holds the repository's ignore rules, rooted at rootDir: [0] with
+	// .gitignore files disabled (.arkignore only), [1] with them enabled.
+	// They depend only on the repository's ignore files — never on the
+	// process working directory or a request — and are rebuilt when those
+	// files change.
+	ignoreMu sync.Mutex
+	ignore   [2]ignoreState
+
+	// indexes reuses completed repository indexes across requests (see
+	// index_cache.go); created on first use.
+	indexOnce sync.Once
+	indexes   *indexCache
 }
 
 // NewToolsHandler creates a new tools handler.
@@ -44,20 +50,18 @@ func NewToolsHandler(rootDir string, opt *commandline.Option) *ToolsHandler {
 // NewToolsHandlerWithCache creates a ToolsHandler that persists extraction
 // results in store. Pass cache.NopStore{} to disable caching.
 func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cache.Store) *ToolsHandler {
-	h := &ToolsHandler{
+	return &ToolsHandler{
 		rootDir:    rootDir,
 		opt:        opt,
 		cacheStore: store,
 	}
-	// Reuse the option's ignore rule when it was already built for this
-	// repository root, so the tree is not walked twice at startup.
-	if opt != nil && opt.GitIgnoreRule != nil && opt.GitIgnoreRule.Root == libgitignore.ToAbsDir(rootDir) {
-		if v := opt.AllowGitignoreFlagValue; v == "on" || v == "off" {
-			i := ignoreSlot(v == "on")
-			h.ignoreOnce[i].Do(func() { h.ignore[i] = opt.GitIgnoreRule })
-		}
-	}
-	return h
+}
+
+// ignoreState is a built ignore rule and the fingerprint of the ignore files it
+// was built from.
+type ignoreState struct {
+	fingerprint string
+	rule        *libgitignore.GitIgnore
 }
 
 func ignoreSlot(allowGitignore bool) int {
@@ -67,19 +71,28 @@ func ignoreSlot(allowGitignore bool) int {
 	return 0
 }
 
-// ignoreRule returns the repository's ignore rule rooted at h.rootDir. A rule
-// that cannot be built (e.g. an unreadable directory) is nil — no ignoring —
+// ignoreRule returns the repository's current ignore rule rooted at h.rootDir,
+// rebuilt whenever an ignore file was added, removed or edited. A rule that
+// cannot be built (e.g. an unreadable directory) is nil — no ignoring —
 // exactly as Option.Normalize treats it.
 func (h *ToolsHandler) ignoreRule(allowGitignore bool) *libgitignore.GitIgnore {
+	var extra []string
+	if h.opt != nil {
+		extra = h.opt.AdditionallyIgnoreRuleFilenameList
+	}
+	fp, err := libgitignore.IgnoreFilesFingerprint(h.rootDir, extra)
 	i := ignoreSlot(allowGitignore)
-	h.ignoreOnce[i].Do(func() {
-		var extra []string
-		if h.opt != nil {
-			extra = h.opt.AdditionallyIgnoreRuleFilenameList
-		}
-		h.ignore[i], _ = libgitignore.GenerateIntegratedGitIgnore(allowGitignore, h.rootDir, extra)
-	})
-	return h.ignore[i]
+	h.ignoreMu.Lock()
+	defer h.ignoreMu.Unlock()
+	if err == nil && h.ignore[i].fingerprint == fp && fp != "" {
+		return h.ignore[i].rule
+	}
+	rule, _ := libgitignore.GenerateIntegratedGitIgnore(allowGitignore, h.rootDir, extra)
+	if err != nil {
+		fp = "" // never reuse a rule whose inputs could not be identified
+	}
+	h.ignore[i] = ignoreState{fingerprint: fp, rule: rule}
+	return rule
 }
 
 // fileToolOption returns a per-request copy of the server's file-selection
@@ -152,13 +165,56 @@ func defaultProviders() []language.Provider {
 
 // buildIndex constructs a RepositoryIndex for fullPath, using the cache store
 // when available.
+//
+// The index is built over the canonical form of fullPath (absolute, symlinks
+// resolved), which must still lie inside the canonical server root, and is
+// shared with every other request for the same directory while its sources
+// are unchanged.
 func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.RepositoryIndex, error) {
-	providers := defaultProviders()
-	store := h.cacheStore
-	if store == nil {
-		store = cache.NopStore{}
+	canonical, err := h.canonicalDir(fullPath)
+	if err != nil {
+		return nil, err
 	}
-	return index.NewWithCache(ctx, fullPath, providers, store)
+	h.indexOnce.Do(func() {
+		providers := defaultProviders()
+		store := h.cacheStore
+		if store == nil {
+			store = cache.NopStore{}
+		}
+		h.indexes = newIndexCache(providers, func(ctx context.Context, root string) (*index.RepositoryIndex, error) {
+			return index.NewWithCache(ctx, root, providers, store)
+		})
+	})
+	return h.indexes.get(ctx, canonical)
+}
+
+// canonicalDir returns the absolute, symlink-free form of dir, refusing a
+// directory that resolves outside the (equally canonical) server root.
+func (h *ToolsHandler) canonicalDir(dir string) (string, error) {
+	canonical, err := canonicalPath(dir)
+	if err != nil {
+		return "", err
+	}
+	root, err := canonicalPath(h.rootDir)
+	if err != nil {
+		return "", err
+	}
+	if rel, err := filepath.Rel(root, canonical); err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q resolves outside the server root %q", dir, h.rootDir)
+	}
+	return canonical, nil
+}
+
+func canonicalPath(p string) (string, error) {
+	abs, err := filepath.Abs(p)
+	if err != nil {
+		return "", err
+	}
+	resolved, err := filepath.EvalSymlinks(abs)
+	if err != nil {
+		return "", fmt.Errorf("index: root %q: %w", p, err)
+	}
+	return resolved, nil
 }
 
 // ListTools returns all available tools
@@ -166,13 +222,21 @@ func (h *ToolsHandler) ListTools() []Tool {
 	tools := []Tool{
 		{
 			Name:        "get_directory_tree",
-			Description: "Get directory tree structure as JSON",
+			Description: "Get directory tree structure as JSON. For a large repository, bound it with maxDepth and excludeDirs",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
 					"path": map[string]interface{}{
 						"type":        "string",
 						"description": "Directory path to scan",
+					},
+					"maxDepth": map[string]interface{}{
+						"type":        "integer",
+						"description": "List directories at most this deep (1 = the path's direct children); deeper directories are listed without contents and marked truncated. 0 or absent = unlimited",
+					},
+					"excludeDirs": map[string]interface{}{
+						"type":        "string",
+						"description": "Comma-separated directories to omit: a name (matches that path component anywhere, e.g. vendor) or a path relative to the tree root (e.g. storage/framework)",
 					},
 				},
 				"required": []string{"path"},
@@ -453,7 +517,18 @@ func (h *ToolsHandler) getDirectoryTree(args map[string]interface{}) (*CallToolR
 			IsError: true,
 		}, nil
 	}
-	tree, err := GenerateDirectoryTreeJSON(fullPath, h.ignoreRule(true))
+	var limits treeLimits
+	if v, ok := args["maxDepth"].(float64); ok && v > 0 {
+		limits.maxDepth = int(v)
+	}
+	if v, ok := args["excludeDirs"].(string); ok {
+		for _, d := range strings.Split(v, ",") {
+			if d = strings.Trim(filepath.ToSlash(strings.TrimSpace(d)), "/"); d != "" {
+				limits.excludeDirs = append(limits.excludeDirs, filepath.ToSlash(filepath.Clean(d)))
+			}
+		}
+	}
+	tree, err := GenerateBoundedDirectoryTreeJSON(fullPath, h.ignoreRule(true), limits)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},

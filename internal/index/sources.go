@@ -1,0 +1,109 @@
+package index
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"hash"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/magicdrive/ark/internal/language"
+)
+
+// walkSources visits, in lexical (filepath.WalkDir) order, every file an index
+// built over root reads: files with a provider extension, outside skipped
+// directories (SkipDirName). visit receives the file's content, or the error
+// reading it. Building an index and fingerprinting its sources use this one
+// walk, so they always see the same set of files.
+func walkSources(ctx context.Context, root string, providers []language.Provider,
+	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) error {
+	extMap := make(map[string]language.Provider)
+	for _, p := range providers {
+		for _, ext := range p.Extensions() {
+			extMap[ext] = p
+		}
+	}
+	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return nil // skip unreadable dirs
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if d.IsDir() {
+			if SkipDirName(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		prov, ok := extMap[strings.ToLower(filepath.Ext(path))]
+		if !ok {
+			return nil
+		}
+		src, err := os.ReadFile(path)
+		relPath, _ := filepath.Rel(root, path)
+		visit(path, relPath, prov, src, err)
+		return nil
+	})
+}
+
+// sourceDigest accumulates the fingerprint of an index's inputs: the provider
+// configuration and, in walk order, each source file's path and content (or
+// the fact that it could not be read). An index is a deterministic function of
+// exactly these inputs, so two equal fingerprints denote the same index.
+type sourceDigest struct{ h hash.Hash }
+
+func newSourceDigest(providers []language.Provider) *sourceDigest {
+	d := &sourceDigest{h: sha256.New()}
+	fmt.Fprintf(d.h, "ark %s\n", ArkVersion)
+	for _, p := range providers {
+		fmt.Fprintf(d.h, "provider %s %s %s\n", p.Language(), p.CacheVersion(), strings.Join(p.Extensions(), ","))
+	}
+	return d
+}
+
+func (d *sourceDigest) add(rel string, src []byte, readErr error) {
+	if readErr != nil {
+		fmt.Fprintf(d.h, "file %q unreadable\n", rel)
+		return
+	}
+	sum := sha256.Sum256(src)
+	fmt.Fprintf(d.h, "file %q %x\n", rel, sum)
+}
+
+func (d *sourceDigest) sum() string { return hex.EncodeToString(d.h.Sum(nil)) }
+
+// SourceFingerprint returns the fingerprint an index built now over root with
+// providers would carry (RepositoryIndex.Fingerprint). It reads every source
+// file — content, not metadata, decides freshness — but parses nothing.
+func SourceFingerprint(ctx context.Context, root string, providers []language.Provider) (string, error) {
+	if err := checkRoot(root); err != nil {
+		return "", err
+	}
+	d := newSourceDigest(providers)
+	err := walkSources(ctx, root, providers, func(_, rel string, _ language.Provider, src []byte, readErr error) {
+		d.add(rel, src, readErr)
+	})
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if err != nil {
+		return "", err
+	}
+	return d.sum(), nil
+}
+
+func checkRoot(root string) error {
+	info, err := os.Stat(root)
+	if err != nil {
+		return fmt.Errorf("index: root %q: %w", root, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("index: root %q is not a directory", root)
+	}
+	return nil
+}

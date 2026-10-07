@@ -2,10 +2,6 @@ package index
 
 import (
 	"context"
-	"fmt"
-	"io/fs"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
@@ -33,9 +29,13 @@ const (
 
 // GraphEdge is a directed relationship between two symbols with confidence.
 type GraphEdge struct {
-	From       symbol.SymbolID
-	To         symbol.SymbolID
-	Kind       EdgeKind
+	From symbol.SymbolID
+	To   symbol.SymbolID
+	Kind EdgeKind
+	// RefKind is the kind of the reference the edge was built from (call,
+	// construction, type_use, ...; the first one when several references
+	// merge into one edge). Kind is its graph meaning.
+	RefKind    reference.ReferenceKind
 	Confidence resolver.Confidence
 	Evidence   []resolver.ResolutionEvidence
 }
@@ -72,6 +72,15 @@ type RepositoryIndex struct {
 	// completeness: references that may involve a symbol but are no edge.
 	completeness *Completeness
 
+	// nonEdge: resolved relations of reference kinds without graph semantics.
+	nonEdge *nonEdgeRelations
+
+	// unidentified: relations into a symbol from code that is no one symbol.
+	unidentified *unidentifiedSources
+
+	// fingerprint identifies the inputs the index was built from.
+	fingerprint string
+
 	// --- meta ---
 	files       []source.FileID // sorted
 	diagnostics []language.Diagnostic
@@ -82,53 +91,24 @@ type RepositoryIndex struct {
 // references, and builds an immutable index. Partial failures are recorded
 // in Diagnostics rather than aborting the build.
 func New(ctx context.Context, root string, providers []language.Provider) (*RepositoryIndex, error) {
-	if info, err := os.Stat(root); err != nil {
-		return nil, fmt.Errorf("index: root %q: %w", root, err)
-	} else if !info.IsDir() {
-		return nil, fmt.Errorf("index: root %q is not a directory", root)
-	}
-
-	// Build extension → provider map.
-	extMap := make(map[string]language.Provider)
-	for _, p := range providers {
-		for _, ext := range p.Extensions() {
-			extMap[ext] = p
-		}
+	if err := checkRoot(root); err != nil {
+		return nil, err
 	}
 
 	b := newBuilder()
+	digest := newSourceDigest(providers)
 
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return nil // skip unreadable dirs
-		}
-		if ctx.Err() != nil {
-			return ctx.Err()
-		}
-		if d.IsDir() {
-			if SkipDirName(d.Name()) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-
-		ext := strings.ToLower(filepath.Ext(path))
-		prov, ok := extMap[ext]
-		if !ok {
-			return nil
-		}
-
-		src, err := os.ReadFile(path)
-		if err != nil {
+	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
+		digest.add(relPath, src, readErr)
+		if readErr != nil {
 			b.addDiagnostic(language.Diagnostic{
 				Severity: language.SeverityWarning,
-				Message:  "read error: " + err.Error(),
+				Message:  "read error: " + readErr.Error(),
 			})
 			b.stats.Skipped++
-			return nil
+			return
 		}
 
-		relPath, _ := filepath.Rel(root, path)
 		fileID := source.FileID(relPath)
 
 		extraction, err := prov.Extract(ctx, fileID, src)
@@ -138,13 +118,12 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 				Message:  path + ": extraction error: " + err.Error(),
 			})
 			b.stats.Skipped++
-			return nil
+			return
 		}
 		b.addDiagnostics(extraction.Diagnostics)
 
 		lang := string(prov.Language())
 		b.ingestExtraction(fileID, lang, extraction)
-		return nil
 	})
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		// walkDir errors other than context are soft.
@@ -154,6 +133,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 	}
 
 	b.resolve()
+	b.fingerprint = digest.sum()
 	return b.freeze(), nil
 }
 
@@ -253,6 +233,12 @@ func (idx *RepositoryIndex) GetCallers(id symbol.SymbolID) []GraphEdge {
 	return copyEdges(idx.callsTo[id])
 }
 
+// Fingerprint identifies the inputs the index was built from — provider
+// configuration and every source file's path and content — exactly as
+// SourceFingerprint computes them. Equal fingerprints mean an index built now
+// would be identical, so the index is still current.
+func (idx *RepositoryIndex) Fingerprint() string { return idx.fingerprint }
+
 // Unattributed returns, for id, the number of incoming references that may
 // target it and the number of its own outgoing references whose target is
 // unknown — neither of which is a graph edge (see Completeness). Zero means
@@ -272,6 +258,64 @@ func (idx *RepositoryIndex) CandidateCallers(id symbol.SymbolID) []symbol.Symbol
 		return nil
 	}
 	return idx.completeness.CandidateSources(id)
+}
+
+// CandidateCallerSample returns the candidate relations into id — possible
+// callers from ambiguous references, with reference kind, confidence and
+// evidence — at most MaxCandidateSources of them, and their total. Never edges.
+func (idx *RepositoryIndex) CandidateCallerSample(id symbol.SymbolID) CandidateSample {
+	if idx.completeness == nil {
+		return CandidateSample{}
+	}
+	return idx.completeness.CandidateCallerSample(id)
+}
+
+// CandidateCalleeSample returns the candidate relations out of id — possible
+// callees of its ambiguous references — at most MaxCandidateSources of them,
+// and their total. Never edges.
+func (idx *RepositoryIndex) CandidateCalleeSample(id symbol.SymbolID) CandidateSample {
+	if idx.completeness == nil {
+		return CandidateSample{}
+	}
+	return idx.completeness.CandidateCalleeSample(id)
+}
+
+// NonEdgeRelationsFrom returns the uniquely resolved references inside id of a
+// kind without graph semantics (read, write, ...). They are not graph edges.
+func (idx *RepositoryIndex) NonEdgeRelationsFrom(id symbol.SymbolID) []NonEdgeRelation {
+	if idx.nonEdge == nil {
+		return nil
+	}
+	return copyNonEdge(idx.nonEdge.from[id])
+}
+
+// NonEdgeRelationsTo returns the uniquely resolved references to id of a kind
+// without graph semantics. They are not graph edges.
+func (idx *RepositoryIndex) NonEdgeRelationsTo(id symbol.SymbolID) []NonEdgeRelation {
+	if idx.nonEdge == nil {
+		return nil
+	}
+	return copyNonEdge(idx.nonEdge.to[id])
+}
+
+// NonEdgeCandidates returns the candidate relations of references without
+// graph semantics into id (incoming) and out of id (outgoing).
+func (idx *RepositoryIndex) NonEdgeCandidates(id symbol.SymbolID) (incoming, outgoing CandidateSample) {
+	if idx.nonEdge == nil {
+		return CandidateSample{}, CandidateSample{}
+	}
+	return candidateSample(idx.nonEdge.candidates.in[id]), candidateSample(idx.nonEdge.candidates.out[id])
+}
+
+// UnidentifiedSources returns the relations into id from enclosing code that
+// is not one identified symbol (see relations.go): all resolved ones and a
+// bounded sample of the candidate ones. They are never edges; Completeness
+// counts those of graph kinds as unattributed.
+func (idx *RepositoryIndex) UnidentifiedSources(id symbol.SymbolID) UnidentifiedSourceSample {
+	if idx.unidentified == nil {
+		return UnidentifiedSourceSample{}
+	}
+	return idx.unidentified.sample(id)
 }
 
 // GetRelatedSymbols returns all edges (callers + callees + type uses) touching id.

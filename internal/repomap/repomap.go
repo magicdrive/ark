@@ -2,6 +2,7 @@ package repomap
 
 import (
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -10,6 +11,7 @@ import (
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/testfiles"
 )
 
 // DetailLevel controls how much information appears in the map.
@@ -64,6 +66,8 @@ type PackageEntry struct {
 	IsVendor           bool
 	InboundPackageRefs int // number of other packages that import this one
 	rawSymbolCount     int // total exported symbols before MaxSymbols trim
+	surface            int // kind-weighted size of the package's API (see symbolWeight)
+	inbound            int // graph edges into the package's listed symbols
 	fileCount          int
 }
 
@@ -183,6 +187,10 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 			return symEntries[i].Name < symEntries[j].Name
 		})
 		entry.rawSymbolCount = len(symEntries)
+		for _, se := range symEntries {
+			entry.surface += symbolWeight(se.Kind)
+			entry.inbound += se.InboundEdges
+		}
 		if len(symEntries) > opts.MaxSymbols {
 			symEntries = symEntries[:opts.MaxSymbols]
 		}
@@ -284,7 +292,7 @@ func (m *RepositoryMap) Format() string {
 		}
 		fmt.Fprintf(&sb, "%s%s\n", label, tags)
 		for _, sym := range pkg.Symbols {
-			fmt.Fprintf(&sb, "  %s\n", sym.Name)
+			fmt.Fprintf(&sb, "  %s\n", sym.label())
 		}
 	}
 
@@ -318,6 +326,18 @@ func scoreSymbol(se SymbolEntry, pkg PackageEntry) int {
 	}
 	score += se.InboundEdges * 10
 	score += se.OutboundEdges * 5
+	// Structure first: types and functions orient a reader; members follow
+	// their type; constructors and data members are least telling.
+	switch se.Kind {
+	case symbol.KindClass, symbol.KindInterface, symbol.KindTrait, symbol.KindEnum, symbol.KindStruct:
+		score += 30
+	case symbol.KindFunction:
+		score += 15
+	case symbol.KindConstructor:
+		score -= 40
+	case symbol.KindConstant, symbol.KindProperty, symbol.KindVariable:
+		score -= 15
+	}
 	if pkg.IsGenerated {
 		score -= 20
 	}
@@ -327,24 +347,47 @@ func scoreSymbol(se SymbolEntry, pkg PackageEntry) int {
 	return score
 }
 
+// symbolWeight is a symbol's contribution to its package's surface, in
+// quarters: types count most, data members least.
+func symbolWeight(k symbol.SymbolKind) int {
+	switch k {
+	case symbol.KindClass, symbol.KindInterface, symbol.KindTrait, symbol.KindEnum, symbol.KindStruct:
+		return 12
+	case symbol.KindFunction:
+		return 8
+	case symbol.KindMethod:
+		return 4
+	case symbol.KindConstant, symbol.KindProperty, symbol.KindVariable:
+		return 1
+	}
+	return 2
+}
+
 func packageScore(p PackageEntry) int {
 	score := 0
 	if p.IsEntry {
-		score += 200
+		// Where execution starts orients a reader before anything else; it
+		// outweighs the size and centrality terms below.
+		score += 500
 	}
 	if p.IsVendor || p.IsGenerated {
 		score -= 100
 	}
 	if p.IsTest {
-		score -= 30
+		// Tests come after the code they exercise, however large.
+		score -= 300
 		// testdata directories are fixture-only; exclude from default map view.
 		if strings.Contains(p.Path, "testdata") {
 			score -= 1000
 		}
 	}
-	// Use the raw (pre-trim) count so packages with many symbols aren't
-	// artificially capped at MaxSymbols (typically 10) before scoring.
-	score += p.rawSymbolCount * 2
+	// Size counts, sublinearly and by kind (see symbolWeight), so that one
+	// package with hundreds of members or constants does not outrank every
+	// smaller package that defines the repository's structure.
+	score += int(40 * math.Log2(1+float64(p.surface)/4))
+	// Code the rest of the repository depends on is central: graph edges into
+	// the package's symbols (sublinearly).
+	score += int(25 * math.Log2(1+float64(p.inbound)))
 	// Packages that are imported by many others are semantically central.
 	// Weight this more heavily than raw symbol count so core packages
 	// (e.g. internal/index, internal/symbol) rank above utility packages
@@ -365,7 +408,8 @@ func fileLang(idx *index.RepositoryIndex, fid source.FileID) string {
 
 func isTestFileID(fid string) bool {
 	name := filepath.Base(fid)
-	return strings.HasSuffix(name, "_test.go") ||
+	return testfiles.IsTestFile(fid) ||
+		strings.HasSuffix(name, "_test.go") ||
 		strings.HasSuffix(name, "_test.ts") ||
 		strings.HasSuffix(name, "_test.js") ||
 		strings.HasPrefix(name, "test_")
@@ -382,11 +426,7 @@ func isTestPackage(pkgPath string, files []source.FileID) bool {
 		return false
 	}
 	for _, f := range files {
-		name := filepath.Base(string(f))
-		if !strings.HasSuffix(name, "_test.go") &&
-			!strings.HasSuffix(name, "_test.ts") &&
-			!strings.HasSuffix(name, "_test.js") &&
-			!strings.HasPrefix(name, "test_") {
+		if !isTestFileID(string(f)) {
 			return false
 		}
 	}
@@ -463,4 +503,17 @@ func formatLangSummary(langs map[string]int) string {
 		parts = append(parts, p.k)
 	}
 	return strings.Join(parts, ", ")
+}
+
+// label is how a symbol is listed: a member with its type (Type.member),
+// without the namespace or module path the qualified name may carry.
+func (se SymbolEntry) label() string {
+	q := se.Qualified
+	if q == "" {
+		return se.Name
+	}
+	if i := strings.LastIndexAny(q, `\/`); i >= 0 {
+		q = q[i+1:]
+	}
+	return q
 }

@@ -330,8 +330,10 @@ func TestGetCallees_ResultSemantics(t *testing.T) {
 		symbol           string
 		wantEdges        []string
 		wantUnattributed int
+		wantCandidates   []string // possible callees: ambiguity is evidence
 	}{
-		{symbol: "LegacyController.render", wantEdges: []string{}, wantUnattributed: 1}, // candidate call
+		{symbol: "LegacyController.render", wantEdges: []string{}, wantUnattributed: 1, // candidate call
+			wantCandidates: []string{`App\Models\Clinic.showsSsoButton call`, `App\Services\LoginScreenPolicy.showsSsoButton call`}},
 		{symbol: "LoginController.showLoginForm", wantEdges: []string{`App\Services\LoginScreenPolicy.showsSsoButton [exact]`}, wantUnattributed: 0},
 		{symbol: "Child.run", wantEdges: []string{}, wantUnattributed: 1},         // unresolved: vendor parent
 		{symbol: "VendorUser.handle", wantEdges: []string{}, wantUnattributed: 0}, // outside the repository: known
@@ -349,8 +351,15 @@ func TestGetCallees_ResultSemantics(t *testing.T) {
 		if *out.Unattributed != tc.wantUnattributed {
 			t.Errorf("%s: unattributed = %d, want %d", tc.symbol, *out.Unattributed, tc.wantUnattributed)
 		}
-		if len(out.Candidates) != 0 {
-			t.Errorf("%s: callees carry no candidate callers: %v", tc.symbol, out.Candidates)
+		var cands []string
+		for _, c := range out.Candidates {
+			if c.Confidence != "candidate" || c.Evidence == "" {
+				t.Errorf("%s: candidate callee %v lacks candidate confidence or evidence", tc.symbol, c)
+			}
+			cands = append(cands, c.Symbol+" "+c.Kind)
+		}
+		if len(cands) != len(tc.wantCandidates) || (len(cands) > 0 && !reflect.DeepEqual(cands, tc.wantCandidates)) {
+			t.Errorf("%s: candidate callees = %v, want %v", tc.symbol, cands, tc.wantCandidates)
 		}
 	}
 }
