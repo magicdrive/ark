@@ -1,6 +1,8 @@
 package php
 
 import (
+	"strings"
+
 	ts "github.com/odvcencio/gotreesitter"
 )
 
@@ -13,18 +15,42 @@ import (
 //   - a typed parameter (`Repo $r`, `?Repo $r`) that is never written in the
 //     function body;
 //   - a variable assigned exactly once in the function body, by
-//     `$r = new Repo(...)`, used after that assignment.
+//     `$r = new Repo(...)`, where the assignment is a whole statement
+//     directly in a `{ ... }` block (the function body, or a block of an if,
+//     loop, try, ...), and only for uses after it within that same block.
+//     Statements of a block run in order (the function uses no goto), so the
+//     assignment has run before every such use, in the same pass through the
+//     block: it dominates them. Uses outside the block — after an if or a
+//     loop, in another branch — are not dominated and get no evidence, and an
+//     assignment that is not a block statement (in a condition, a match arm,
+//     an unbraced branch, a switch case, a nested expression) is no evidence
+//     at all. That a use reached without the assignment would read an
+//     undefined variable (null, which cannot dispatch) is not relied on.
+//
+// Class-string evidence (phpTypeEnv.classStringType) is the same rule for a
+// variable assigned exactly once by `$c = Repo::class`: `new $c(...)` then
+// constructs Repo and `$c::m()` is a static access on Repo.
 //
 // Every other occurrence of the variable must be a receiver position
-// (`$r->m()`, `$r->p`); any other use (argument, reassignment, foreach/list,
+// (`$r->m()`, `$r->p`) or, for any variable, a class position (`new $c`,
+// `$c::m()`, `$c::K`) — reading a variable as a class cannot rebind it; any
+// other use (argument, reassignment, foreach/list,
 // by-reference, global/static, closure `use`, ...) poisons the variable,
-// because it might be rebound. Dynamic scope features (variable variables,
-// extract/parse_str/eval, include/require) poison the whole function.
+// because it might be rebound. Variables that code outside the function, or
+// the engine itself, can bind are never evidence: superglobals and
+// $http_response_header / $php_errormsg. Dynamic scope features (variable
+// variables, extract / parse_str / mb_parse_str / eval in any case or
+// qualification, a string assert(), include/require) and goto poison the
+// whole function.
 // Closure bodies get no evidence at all (separate variable scope).
 
 type phpVarType struct {
-	typ  phpTypeRef
-	from uint32 // evidence applies to uses at or after this byte offset
+	typ   phpTypeRef
+	from  uint32 // evidence applies to uses at or after this byte offset
+	until uint32 // ... and before this one (0: no bound)
+	// classString: the variable holds the class-string of typ (`$c =
+	// T::class`), not an instance of it.
+	classString bool
 }
 
 // phpTypeRef is a proven class type: the name as written (its last segment) and
@@ -150,6 +176,8 @@ type phpVarUse struct {
 	assignments int
 	assignedTyp phpTypeRef
 	assignedAt  uint32
+	blockEnd    uint32 // end of the block the assignment is a statement of
+	classString bool   // assignedTyp comes from `T::class`
 	poisoned    bool
 }
 
@@ -159,6 +187,77 @@ type phpUseScan struct {
 	sc        *nameScope
 	uses      map[string]*phpVarUse
 	poisonAll bool
+	// blockStmt maps the start byte of each assignment expression that is a
+	// whole statement directly in a block to the end byte of that block (see
+	// the header); only they can be evidence. Empty when the scan is used for
+	// poisonAll only.
+	blockStmt map[uint32]uint32
+}
+
+// collectBlockAssignments records in out every assignment statement of a
+// `{ ... }` block under n (n included), within one variable scope: nested
+// functions, methods and classes are not entered. Closures are: their blocks
+// are their own, and no use outside a closure lies inside one of them.
+func collectBlockAssignments(n *ts.Node, lang *ts.Language, out map[uint32]uint32) {
+	switch n.Type(lang) {
+	case "function_definition", "method_declaration", "anonymous_class", "class_declaration":
+		return
+	case "compound_statement":
+		for i := 0; i < n.ChildCount(); i++ {
+			if stmt := n.Child(i); stmt.Type(lang) == "expression_statement" && stmt.ChildCount() > 0 {
+				if asg := stmt.Child(0); asg.Type(lang) == "assignment_expression" {
+					out[asg.StartByte()] = n.EndByte()
+				}
+			}
+		}
+	}
+	for i := 0; i < n.ChildCount(); i++ {
+		collectBlockAssignments(n.Child(i), lang, out)
+	}
+}
+
+// phpEngineBoundVars are variables that hold a value without an assignment in
+// the function body: superglobals (any code may write them) and variables the
+// engine creates in the local scope.
+var phpEngineBoundVars = map[string]bool{
+	"GLOBALS": true, "_SERVER": true, "_GET": true, "_POST": true, "_FILES": true,
+	"_COOKIE": true, "_SESSION": true, "_REQUEST": true, "_ENV": true,
+	"http_response_header": true, "php_errormsg": true,
+}
+
+// phpScopeFunctions read or write the caller's local variables by name.
+var phpScopeFunctions = map[string]bool{"extract": true, "parse_str": true, "mb_parse_str": true, "eval": true}
+
+// isScopeFeatureCall reports whether a function call may bind local variables
+// of the calling function: a scope function under any case or namespace
+// qualification (an unqualified call falls back to the global function), or
+// assert() with a string, which PHP 7 evaluates as code.
+func (s *phpUseScan) isScopeFeatureCall(call *ts.Node) bool {
+	callee := firstChildOfTypes(call, s.lang, "name", "qualified_name", "relative_name")
+	if callee == nil {
+		return false
+	}
+	name := strings.ToLower(lastName(callee, s.lang, s.src))
+	if phpScopeFunctions[name] {
+		return true
+	}
+	if name != "assert" {
+		return false
+	}
+	args := childByType(call, s.lang, "arguments")
+	if args == nil {
+		return false
+	}
+	arg := childByType(args, s.lang, "argument")
+	if arg == nil || arg.ChildCount() == 0 {
+		return false
+	}
+	switch arg.Child(arg.ChildCount() - 1).Type(s.lang) {
+	case "name", "integer", "float", "boolean", "null", "binary_expression",
+		"function_call_expression", "member_call_expression", "scoped_call_expression", "unary_op_expression":
+		return false
+	}
+	return true // a string, or an expression that may be one
 }
 
 func (s *phpUseScan) use(name string) *phpVarUse {
@@ -168,6 +267,18 @@ func (s *phpUseScan) use(name string) *phpVarUse {
 		s.uses[name] = u
 	}
 	return u
+}
+
+// isClassPosition reports whether a child at idx of a node of type parentType
+// is used as a class: `new $c(...)`, `$c::m()`, `$c::K`, `$c::$p`.
+func isClassPosition(parentType string, idx int) bool {
+	switch parentType {
+	case "object_creation_expression":
+		return idx == 1
+	case "scoped_call_expression", "class_constant_access_expression", "scoped_property_access_expression":
+		return idx == 0
+	}
+	return false
 }
 
 func isReceiverPosition(parentType string) bool {
@@ -185,11 +296,10 @@ func (s *phpUseScan) scan(node, parent *ts.Node, idx int) {
 	case "function_definition", "method_declaration", "anonymous_class", "class_declaration":
 		return // separate scopes
 	case "dynamic_variable_name", "include_expression", "include_once_expression",
-		"require_expression", "require_once_expression":
+		"require_expression", "require_once_expression", "goto_statement":
 		s.poisonAll = true
 	case "function_call_expression":
-		switch childText(node, s.lang, s.src, "name") {
-		case "extract", "parse_str", "eval":
+		if s.isScopeFeatureCall(node) {
 			s.poisonAll = true
 		}
 	case "variable_name":
@@ -202,12 +312,23 @@ func (s *phpUseScan) scan(node, parent *ts.Node, idx int) {
 			pt = parent.Type(s.lang)
 		}
 		u := s.use(name)
+		if phpEngineBoundVars[name] {
+			u.poisoned = true
+		}
 		switch {
 		case pt == "assignment_expression" && idx == 0:
 			u.assignments++
+			end, ok := s.blockStmt[parent.StartByte()]
+			if !ok {
+				u.poisoned = true // not a block statement: a write, not evidence
+				return
+			}
+			u.blockEnd = end
 			rhs := parent.Child(parent.ChildCount() - 1)
 			if rhs != nil && rhs.Type(s.lang) == "object_creation_expression" {
-				if cls := firstChildOfTypes(rhs, s.lang, "name", "qualified_name", "relative_name"); cls != nil {
+				// `new self/static/parent` names no class here (the
+				// enclosing class is not known to the scan): no evidence.
+				if cls := firstChildOfTypes(rhs, s.lang, "name", "qualified_name", "relative_name"); cls != nil && !isRelativeType(lastName(cls, s.lang, s.src)) {
 					u.assignedTyp = phpTypeRef{name: lastName(cls, s.lang, s.src)}
 					if s.sc != nil {
 						u.assignedTyp.qual, _ = s.sc.resolveClass(cls, s.lang, s.src)
@@ -216,9 +337,14 @@ func (s *phpUseScan) scan(node, parent *ts.Node, idx int) {
 					return
 				}
 			}
+			if typ, ok := s.classStringLiteral(rhs); ok {
+				u.assignedTyp, u.classString = typ, true
+				u.assignedAt = parent.EndByte()
+				return
+			}
 			u.poisoned = true
-		case isReceiverPosition(pt) && idx == 0:
-			// read-only receiver use
+		case isReceiverPosition(pt) && idx == 0, isClassPosition(pt, idx):
+			// read-only receiver or class use
 		default:
 			u.poisoned = true
 		}
@@ -227,6 +353,31 @@ func (s *phpUseScan) scan(node, parent *ts.Node, idx int) {
 	for i := 0; i < node.ChildCount(); i++ {
 		s.scan(node.Child(i), node, i)
 	}
+}
+
+// classStringLiteral reports whether n is `Name::class` for a class name (not
+// self/static/parent) and returns that class.
+func (s *phpUseScan) classStringLiteral(n *ts.Node) (phpTypeRef, bool) {
+	if n == nil || n.Type(s.lang) != "class_constant_access_expression" || n.ChildCount() != 3 {
+		return phpTypeRef{}, false
+	}
+	cls, member := n.Child(0), n.Child(2)
+	switch cls.Type(s.lang) {
+	case "name", "qualified_name":
+	default:
+		return phpTypeRef{}, false
+	}
+	if member.Type(s.lang) != "name" || member.Text(s.src) != "class" {
+		return phpTypeRef{}, false
+	}
+	typ := phpTypeRef{name: lastName(cls, s.lang, s.src)}
+	if isRelativeType(typ.name) {
+		return phpTypeRef{}, false
+	}
+	if s.sc != nil {
+		typ.qual, _ = s.sc.resolveClass(cls, s.lang, s.src)
+	}
+	return typ, true
 }
 
 // phpFunctionTypeEnv builds the receiver-type environment for a function or
@@ -238,7 +389,8 @@ func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, sc *nameScop
 	if body == nil {
 		return env
 	}
-	scan := &phpUseScan{lang: lang, src: src, sc: sc, uses: make(map[string]*phpVarUse)}
+	scan := &phpUseScan{lang: lang, src: src, sc: sc, uses: make(map[string]*phpVarUse), blockStmt: make(map[uint32]uint32)}
+	collectBlockAssignments(body, lang, scan.blockStmt)
 	for i := 0; i < body.ChildCount(); i++ {
 		scan.scan(body.Child(i), body, i)
 	}
@@ -264,18 +416,18 @@ func phpFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, sc *nameScop
 				continue
 			}
 			typ := phpTypeOf(p, sc, lang, src)
-			if u := scan.uses[name]; typ.name != "" && (u == nil || (u.assignments == 0 && !u.poisoned)) {
+			if u := scan.uses[name]; typ.name != "" && !phpEngineBoundVars[name] && (u == nil || (u.assignments == 0 && !u.poisoned)) {
 				env.vars[name] = phpVarType{typ: typ}
 			}
 		}
 	}
 
-	// Single `$x = new T()` assignment.
+	// Single `$x = new T()` / `$c = T::class` assignment.
 	for name, u := range scan.uses {
 		if params[name] || u.poisoned || u.assignments != 1 || u.assignedTyp.name == "" {
 			continue
 		}
-		env.vars[name] = phpVarType{typ: u.assignedTyp, from: u.assignedAt}
+		env.vars[name] = phpVarType{typ: u.assignedTyp, from: u.assignedAt, until: u.blockEnd, classString: u.classString}
 	}
 	return env
 }
@@ -289,7 +441,7 @@ func (env *phpTypeEnv) receiverType(recv *ts.Node, at uint32, lang *ts.Language,
 	}
 	switch recv.Type(lang) {
 	case "variable_name":
-		if v, ok := env.vars[phpVarName(recv, lang, src)]; ok && at >= v.from {
+		if v, ok := env.vars[phpVarName(recv, lang, src)]; ok && v.covers(at) && !v.classString {
 			return v.typ
 		}
 	case "member_access_expression":
@@ -301,4 +453,22 @@ func (env *phpTypeEnv) receiverType(recv *ts.Node, at uint32, lang *ts.Language,
 		}
 	}
 	return phpTypeRef{}
+}
+
+// classStringType returns the class a variable used in a class position (`new
+// $c`, `$c::m()`) at byte offset at is proven to name — the variable holds
+// exactly one `T::class` (see the header) — or the zero value.
+func (env *phpTypeEnv) classStringType(n *ts.Node, at uint32, lang *ts.Language, src []byte) phpTypeRef {
+	if env == nil || n == nil || n.Type(lang) != "variable_name" {
+		return phpTypeRef{}
+	}
+	if v, ok := env.vars[phpVarName(n, lang, src)]; ok && v.covers(at) && v.classString {
+		return v.typ
+	}
+	return phpTypeRef{}
+}
+
+// covers reports whether the evidence applies to a use at byte offset at.
+func (v phpVarType) covers(at uint32) bool {
+	return at >= v.from && (v.until == 0 || at < v.until)
 }

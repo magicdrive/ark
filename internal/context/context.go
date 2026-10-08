@@ -43,6 +43,14 @@ type Stats struct {
 	// direction; it does not mean every caller fit in the budget.
 	UnattributedCallers int
 	UnattributedCallees int
+
+	// UnresolvedCallees / OutsideCallees are the target's other outgoing
+	// references that are no edge (index.RepositoryIndex.UnresolvedOutgoing):
+	// ones no repository symbol can be the target of, and ones proven to refer
+	// outside the repository. They cannot be missing context items, but with
+	// UnattributedCallees they say whether every observed callee is shown.
+	UnresolvedCallees int
+	OutsideCallees    int
 }
 
 // Result holds the items selected within budget plus metadata.

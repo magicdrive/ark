@@ -55,14 +55,19 @@ func Format(r *ImpactResult) string {
 		fmt.Fprintf(&b, "  %s\n", f)
 	}
 
-	if len(r.Unresolved) > 0 {
-		fmt.Fprintf(&b, "\nUnresolved references (%d):\n", len(r.Unresolved))
-		for _, ref := range r.Unresolved {
-			fmt.Fprintf(&b, "  %q at %s:%d  (no candidates found)\n",
-				ref.Name,
-				ref.Location.File,
-				ref.Location.Range.Start.Line)
+	un := r.UnresolvedCallees
+	fmt.Fprintf(&b, "\nUnresolved outgoing references: %d unresolved, %d outside repository\n",
+		un.Unresolved, un.OutsideRepository)
+	for _, ref := range un.References {
+		recv := ""
+		if ref.ReceiverExpr != "" {
+			recv = ", receiver " + ref.ReceiverExpr
 		}
+		fmt.Fprintf(&b, "  %q (%s) at %s:%d  [%s%s]\n",
+			ref.Name, ref.Kind, ref.Location.File, ref.Location.Range.Start.Line, ref.Reason, recv)
+	}
+	if un.Truncated() {
+		fmt.Fprintf(&b, "  ... and %d more\n", un.Total-len(un.References))
 	}
 
 	return b.String()
@@ -78,22 +83,40 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 		Confidence string `json:"confidence"`
 		Distance   int    `json:"distance"`
 	}
+	type unresolvedRef struct {
+		Name     string `json:"name"`
+		Kind     string `json:"kind"`
+		Receiver string `json:"receiver,omitempty"`
+		File     string `json:"file"`
+		Line     uint32 `json:"line"`
+		Reason   string `json:"reason"`
+	}
 	type out struct {
-		Target          string   `json:"target"`
-		TargetFile      string   `json:"target_file"`
-		TargetLine      uint32   `json:"target_line"`
-		Entries         []entry  `json:"entries"`
-		AffectedFiles   []string `json:"affected_files"`
-		UnresolvedCount int      `json:"unresolved_count"`
-		Unattributed    int      `json:"unattributed"`
+		Target        string   `json:"target"`
+		TargetFile    string   `json:"target_file"`
+		TargetLine    uint32   `json:"target_line"`
+		Entries       []entry  `json:"entries"`
+		AffectedFiles []string `json:"affected_files"`
+		Unattributed  int      `json:"unattributed"`
+		// The target's outgoing references with no candidate
+		// (index.UnresolvedSample): unresolved_count those no repository
+		// symbol can be the target of, outside_repository_count those proven
+		// external; unresolved_references the first of all of them.
+		UnresolvedCount           int             `json:"unresolved_count"`
+		OutsideRepositoryCount    int             `json:"outside_repository_count"`
+		UnresolvedReferences      []unresolvedRef `json:"unresolved_references,omitempty"`
+		UnresolvedReferencesTotal int             `json:"unresolved_references_total,omitempty"`
 	}
 
 	o := out{
-		Target:          r.Target.Qualified,
-		TargetFile:      string(r.Target.Location.File),
-		TargetLine:      r.Target.Location.Range.Start.Line,
-		UnresolvedCount: len(r.Unresolved),
-		Unattributed:    r.Unattributed,
+		Target:       r.Target.Qualified,
+		TargetFile:   string(r.Target.Location.File),
+		TargetLine:   r.Target.Location.Range.Start.Line,
+		Unattributed: r.Unattributed,
+
+		UnresolvedCount:           r.UnresolvedCallees.Unresolved,
+		OutsideRepositoryCount:    r.UnresolvedCallees.OutsideRepository,
+		UnresolvedReferencesTotal: r.UnresolvedCallees.Total,
 	}
 	for _, e := range r.Entries {
 		o.Entries = append(o.Entries, entry{
@@ -103,6 +126,16 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 			Category:   string(e.Category),
 			Confidence: e.Confidence.String(),
 			Distance:   e.Distance,
+		})
+	}
+	for _, ref := range r.UnresolvedCallees.References {
+		o.UnresolvedReferences = append(o.UnresolvedReferences, unresolvedRef{
+			Name:     ref.Name,
+			Kind:     string(ref.Kind),
+			Receiver: ref.ReceiverExpr,
+			File:     string(ref.Location.File),
+			Line:     ref.Location.Range.Start.Line,
+			Reason:   string(ref.Reason),
 		})
 	}
 	for _, f := range r.AffectedFiles {

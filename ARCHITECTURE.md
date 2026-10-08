@@ -25,7 +25,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `ConfidenceCap`; bindings, exports, `ModuleScoped`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `ConfidenceCap`, `Dynamic`; bindings, exports, `ModuleScoped`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
@@ -66,7 +66,7 @@ untyped receiver, module scope, unknown participant) only lower it.
 | Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
 | Candidate | Plausible targets (one or several), kept as evidence. | Which one, or whether another unseen target exists. | **never** |
 | Unresolved | No candidate. | The target. This is a correct, sound answer — not a gap to fill. | never |
-| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding) places the referent outside the repository's declarations. | — | never; and it is *known*, so it is not counted as unattributed |
+| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding) places the referent outside the repository's declarations. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
 
 Strong is a closed-world claim ("the only `X` here"). That is why module-scoped
 files cap proximity/uniqueness at Candidate and why `OutsideRepository`
@@ -130,10 +130,28 @@ improvement and is not.
 6. **Unknown is not empty.** An empty caller list is a true zero only when the
    graph is complete for that symbol. Completeness counts references that may
    involve a symbol without being its edge (candidate, unresolved same-name,
-   sourceless); every graph result reports it (`unattributed`).
+   sourceless); every graph result reports it (`unattributed`). Its
+   population is the repository's declarations: `unattributed: 0` means no
+   *repository* symbol is missing from the edges, not that nothing else is
+   called. So every observed edge-kind reference inside a symbol is exactly
+   one of: edge, unattributed, **unresolved** (no candidate, not proven
+   external, and no indexed symbol can be its target — an external, built-in
+   or run-time computed name, or a declaration the provider does not extract)
+   or **outside repository**. The last two are reported for the symbol's
+   outgoing direction (`unresolved`, `outsideRepository`, a bounded
+   `unresolvedReferences` sample) and never attributed to any symbol: they
+   cannot be anyone's caller. A call whose name is computed at run time is
+   observed as a `Dynamic` reference (Unresolved by construction) where the
+   provider sees the syntax. Syntax a provider does not observe is in no
+   count; no output claims to bound it (provider gap Q7).
    Authority: `index/completeness.go`. Tests: `TestCompleteness_Rules`,
-   `TestGetCallers_ResultSemantics`, `TestGetContext_CallersAndCompleteness`.
-   Danger: dropping the count when it is 0 or "noisy".
+   `TestCompleteness_OutgoingPartition`, `TestDynamicName_NeverResolves`,
+   `TestGetCallers_ResultSemantics`, `TestGetContext_CallersAndCompleteness`,
+   `TestUnresolved_FieldCase_MakeWithIsReported`, `TestUnresolved_CrossLanguage`.
+   Danger: dropping the count when it is 0 or "noisy"; adding unresolved
+   references to `unattributed` (or to a caller's count) to "be safe" —
+   that attributes a reference to symbols it cannot denote; resolving a
+   `Dynamic` name by its display text.
 
 7. **Truncation is evidence.** Every bounded output says it was cut
    (`total`/`truncated`, `TargetTruncated`, `TruncatedItems`), and bounded
@@ -177,7 +195,9 @@ Authority: `mcp/index_cache.go` (header comment), `index/sources.go`,
 - The target is resolved unambiguously or the call returns candidates
   (§3.1); the target is always included, even over budget (`TargetTruncated`).
 - Items come **only from graph edges** (Strong/Exact). Candidate callers and
-  callees are never context; they surface only as `Unattributed*` counts.
+  callees are never context; they surface only as `Unattributed*` counts
+  (and outgoing references with no target as `UnresolvedCallees` /
+  `OutsideCallees`).
   Type dependencies arrive as `uses_type` edges; the engine never searches
   names itself (`context/engine.go`, `collectCandidates`).
 - Test files are excluded unless `IncludeTests`, via `internal/testfiles`;
@@ -223,9 +243,18 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
   config-independent lexical subset (`language.ModuleCandidate`); `tsconfig`,
   Composer/PSR-4 and `package.json` are not interpreted.
 - Guessing dynamic dispatch (`$obj->$m()`, `new $c()`, `a[k]()`): Unresolved
-  or Candidate by design.
+  or Candidate by design. A provider may prove the one class a variable holds
+  (`$c = Foo::class; new $c()`) from the same local rules as receiver types.
+- Following class-strings into a consumer: `Foo::class` is a type use of
+  `Foo`. Passing it to a container or factory (`make(Foo::class)`) is a call
+  to that function, never a call to, or construction of, `Foo` or the class
+  a binding would substitute.
 - Inference results passed as proof: `ReceiverType` / `NameQualified` carry
-  proven evidence only. Any future inference must arrive as capped provider
+  proven evidence only. Without control-flow analysis, a provider's local
+  evidence comes only from an assignment that syntactically dominates the use
+  (PHP: a whole statement of a `{ ... }` block, for uses after it in that
+  block) and from no variable that code outside the function can bind;
+  "earlier in the source" is not dominance. Tests: `TestFlowSoundness_*`. Any future inference must arrive as capped provider
   evidence, never as resolver guessing.
 
 **Not implemented yet** (may be added if the invariants above still hold):

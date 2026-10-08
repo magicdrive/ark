@@ -717,15 +717,24 @@ Ark statically extracts PHP **symbols** (namespaces, classes, interfaces,
 traits, enums, functions, constants, methods, constructors, properties,
 class constants, enum cases, promoted properties), **imports** (plain / aliased
 / grouped / function / const `use`), **references** (function / static /
-instance / `$this` calls, construction, class-constant reads, type references),
+instance / nullsafe / `$this` calls, construction including `new self` /
+`new parent`, class-constant reads, type references and `Foo::class`
+class-strings),
 and **typed relations** (`extends` / `implements` / trait `use`) into a typed
 symbol graph and agent-oriented context — while **preserving uncertainty** for
 dynamic or ambiguous constructs.
 
 **Known limitations (by design):** dynamic calls / construction (`$obj->$m()`,
-`new $c()`) are not guessed; a receiver's type comes only from a declaration
-(a typed parameter, a constructor-injected property) — never from inference
-over assignments; there is
+`$fn()`, `new $c()`) are not guessed — they are reported as unresolved
+references of the calling symbol (`get_callees` `unresolved`), and only
+`$c = Foo::class; new $c()` with `$c` never rebound resolves; a class-string
+passed to a container (`$this->container->make(Foo::class)`) is a type use of
+`Foo`, never a call to or construction of `Foo` or of whatever a binding
+substitutes; a receiver's type comes only from a declaration
+(a typed parameter, a constructor-injected property) or from a single
+`$x = new T()` / `$c = T::class` statement whose block contains the use — an
+assignment inside a branch, loop, `try` or condition and used after it is not
+evidence; there is
 no Composer / PSR-4 / autoload resolution; class names are resolved from the
 file's own `namespace` / `use` / `use … as` / fully-qualified syntax by exact
 identity match (a class that is not declared in the repository, e.g. a vendor

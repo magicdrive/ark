@@ -96,6 +96,17 @@ type ReferenceDraft struct {
 	// applies it only downwards, min(resolved, cap); it never raises a
 	// resolution. Any other non-empty value is treated as "candidate".
 	ConfidenceCap string `json:",omitempty"`
+
+	// Dynamic marks a reference whose name is computed at run time — the
+	// language's syntax fixes that something is called or constructed here,
+	// but not which name (PHP `$obj->$m()`, `$fn()`, `new $cls()`; JavaScript
+	// `obj[k]()`). Name is then the name expression as written, for display
+	// only. The resolver never matches it against declarations: the reference
+	// is observed but Unresolved, and completeness reports it as an
+	// unresolved reference of its container. A provider sets it only when the
+	// syntax itself is a call/construction; it never sets it to hide a name
+	// it could have extracted.
+	Dynamic bool `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

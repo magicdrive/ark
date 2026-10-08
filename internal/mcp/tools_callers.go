@@ -47,7 +47,7 @@ func CallersToolDefinitions() []Tool {
 		},
 		{
 			Name:        "get_callees",
-			Description: "Find symbols called by a given symbol, using the repository index. unattributed counts its references whose target could not be resolved (0 means the callee list is complete); candidates lists possible callees of its ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations)",
+			Description: "Find symbols called by a given symbol, using the repository index. Every call/construction/type reference observed in the symbol is exactly one of: an edge; unattributed (may be a repository symbol but is not a resolved edge); unresolved (no repository symbol can be its target and none is proven: an external, built-in or run-time computed name); outsideRepository (proven to refer outside the repository). unattributed 0 means no callee in the repository is missing from edges; unattributed, unresolved and outsideRepository all 0 means every observed reference is an edge. unresolvedReferences lists the references with no candidate at all (first 10 in source order, unresolvedReferencesTotal counts them; reason unattributed, unresolved, dynamic_name or outside_repository). Syntax Ark does not observe as a reference is in no count; candidates lists possible callees of its ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -110,6 +110,43 @@ type callersResult struct {
 	// reference kind); more than the relations behind Candidates means some
 	// were left out.
 	CandidateRelationsTotal int `json:"candidateRelationsTotal,omitempty"`
+
+	// get_callees only (absent from get_callers): the queried symbol's
+	// observed references that are no edge and no unattributed reference —
+	// Unresolved (no repository symbol can be the target, none proven) and
+	// OutsideRepository (proven external) — and a sample of every reference
+	// resolving to no candidate (index.UnresolvedSample). Always present for
+	// get_callees, so 0 is a known zero.
+	Unresolved                *int                 `json:"unresolved,omitempty"`
+	OutsideRepository         *int                 `json:"outsideRepository,omitempty"`
+	UnresolvedReferences      []unresolvedRefEntry `json:"unresolvedReferences,omitempty"`
+	UnresolvedReferencesTotal int                  `json:"unresolvedReferencesTotal,omitempty"`
+}
+
+// unresolvedRefEntry is one observed reference that resolves to no candidate.
+// Reason says which count holds it (index.UnresolvedReason).
+type unresolvedRefEntry struct {
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Receiver string `json:"receiver,omitempty"`
+	File     string `json:"file"`
+	Line     uint32 `json:"line"`
+	Reason   string `json:"reason"`
+}
+
+func unresolvedRefEntries(s index.UnresolvedSample) []unresolvedRefEntry {
+	var out []unresolvedRefEntry
+	for _, r := range s.References {
+		out = append(out, unresolvedRefEntry{
+			Name:     r.Name,
+			Kind:     string(r.Kind),
+			Receiver: r.ReceiverExpr,
+			File:     string(r.Location.File),
+			Line:     r.Location.Range.Start.Line,
+			Reason:   string(r.Reason),
+		})
+	}
+	return out
 }
 
 // candidateEntry is a possible caller or callee: one end of a reference whose
@@ -249,6 +286,11 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 	} else {
 		out.Unattributed = outgoing
 		sample = idx.CandidateCalleeSample(tl.Symbol.ID)
+		un := idx.UnresolvedOutgoing(tl.Symbol.ID)
+		out.Unresolved = &un.Unresolved
+		out.OutsideRepository = &un.OutsideRepository
+		out.UnresolvedReferences = unresolvedRefEntries(un)
+		out.UnresolvedReferencesTotal = un.Total
 	}
 	out.Candidates = candidateEntries(idx, sample, edges)
 	out.CandidatesTotal = sample.Total

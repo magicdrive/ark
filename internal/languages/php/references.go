@@ -1,6 +1,9 @@
 package php
 
 import (
+	"strings"
+	"unicode/utf8"
+
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
@@ -294,14 +297,14 @@ func (c *refCollector) walkBody(node *ts.Node, container, selfClass string, env 
 		env = nil
 	case "function_call_expression":
 		c.emitFunctionCall(node, container)
-	case "member_call_expression":
+	case "member_call_expression", "nullsafe_member_call_expression":
 		c.emitMemberCall(node, container, selfClass, env)
 	case "scoped_call_expression":
-		c.emitScopedCall(node, container)
+		c.emitScopedCall(node, container, env)
 	case "object_creation_expression":
-		c.emitConstruction(node, container)
+		c.emitConstruction(node, container, env)
 	case "class_constant_access_expression":
-		c.emitConstAccess(node, container)
+		c.emitConstAccess(node, container, env)
 	}
 	for i := 0; i < node.ChildCount(); i++ {
 		c.walkBody(node.Child(i), container, selfClass, env)
@@ -311,18 +314,59 @@ func (c *refCollector) walkBody(node *ts.Node, container, selfClass string, env 
 func (c *refCollector) emitFunctionCall(node *ts.Node, container string) {
 	callee := firstChildOfTypes(node, c.lang, "name", "qualified_name")
 	if callee == nil {
-		return // dynamic callee (e.g. $fn()) — not fabricated
+		// $fn(), $arr[0](), (fn() => 1)(): a call whose callee is computed.
+		if first := node.Child(0); first != nil && first.Type(c.lang) != "arguments" && first.Type(c.lang) != "relative_name" {
+			c.addDynamic(first, first, reference.KindCall, container, "")
+		}
+		return
 	}
 	c.add(callee, lastName(callee, c.lang, c.src), reference.KindCall, container, "", true)
 }
 
-func (c *refCollector) emitMemberCall(node *ts.Node, container, selfClass string, env *phpTypeEnv) {
-	method := childByType(node, c.lang, "name")
-	if method == nil {
-		return // dynamic method (e.g. $obj->$m()) — not fabricated
+// maxDynamicNameLen bounds the display text of a Dynamic reference's name.
+const maxDynamicNameLen = 64
+
+// addDynamic emits a call or construction whose name is computed at run time
+// (language.ReferenceDraft.Dynamic): the syntax proves the call exists, the
+// name expression (text of nameNode, shortened) is display text only. loc is
+// the node whose position is the reference's.
+func (c *refCollector) addDynamic(loc, nameNode *ts.Node, kind reference.ReferenceKind, container, receiver string) {
+	if hasErrorChild(nameNode.Parent()) || nameNode.HasError() {
+		return // a parse the grammar recovered from: no call is proven
 	}
+	name := strings.Join(strings.Fields(nameNode.Text(c.src)), " ")
+	if len(name) > maxDynamicNameLen {
+		cut := maxDynamicNameLen
+		for cut > 0 && !utf8.RuneStart(name[cut]) {
+			cut--
+		}
+		name = name[:cut] + "…"
+	}
+	c.addDraft(loc, language.ReferenceDraft{
+		Name:         name,
+		Kind:         string(kind),
+		Container:    container,
+		ReceiverExpr: receiver,
+		IsCall:       kind == reference.KindCall,
+		Dynamic:      true,
+	})
+}
+
+func (c *refCollector) emitMemberCall(node *ts.Node, container, selfClass string, env *phpTypeEnv) {
 	recv := node.Child(0)
 	if recv == nil {
+		return
+	}
+	method := childByType(node, c.lang, "name")
+	if method == nil {
+		// $obj->$m(), $obj->{$expr}(): the method name is computed.
+		if dyn := memberNameExpr(node, c.lang); dyn != nil {
+			receiver := recv.Text(c.src)
+			if phpVarName(recv, c.lang, c.src) == "this" {
+				receiver = selfClass
+			}
+			c.addDynamic(dyn, dyn, reference.KindCall, container, receiver)
+		}
 		return
 	}
 	// `$this` is the enclosing class (an explicit type receiver). Every other
@@ -355,10 +399,20 @@ func (c *refCollector) emitMemberCall(node *ts.Node, container, selfClass string
 	c.addDraft(method, d)
 }
 
-func (c *refCollector) emitScopedCall(node *ts.Node, container string) {
+func (c *refCollector) emitScopedCall(node *ts.Node, container string, env *phpTypeEnv) {
+	if c.emitExpressionScoped(node, reference.KindCall, container, env) {
+		return
+	}
 	scope, scopeNode, member, rel := c.scopeAndMember(node)
 	if member == nil {
-		return // dynamic member — not fabricated
+		// Foo::$m(), Foo::{'m'}(): the member name is computed.
+		if dyn := memberNameExpr(node, c.lang); dyn != nil {
+			if scope == "" {
+				scope = rel
+			}
+			c.addDynamic(dyn, dyn, reference.KindCall, container, scope)
+		}
+		return
 	}
 	if c.addRelativeMemberAccess(member, rel, reference.KindCall, container, true) {
 		return
@@ -386,17 +440,157 @@ func (c *refCollector) addMemberAccess(member *ts.Node, scope string, scopeNode 
 	})
 }
 
-func (c *refCollector) emitConstruction(node *ts.Node, container string) {
+func (c *refCollector) emitConstruction(node *ts.Node, container string, env *phpTypeEnv) {
+	if childByType(node, c.lang, "anonymous_class") != nil {
+		return // `new class {...}`: the class is declared right here
+	}
 	cls := firstChildOfTypes(node, c.lang, "name", "qualified_name", "relative_name")
 	if cls == nil {
-		return // `new $cls()` or `new self()` — not fabricated
+		// `new $cls()`, `new ($expr)`: the class is computed — unless $cls is
+		// a variable proven to hold one class-string (receiver_types.go).
+		expr := node.Child(1)
+		if expr == nil || expr.Type(c.lang) == "arguments" {
+			return
+		}
+		if typ := env.classStringType(expr, node.StartByte(), c.lang, c.src); typ.qual != "" {
+			c.addDraft(expr, language.ReferenceDraft{
+				Name:          typ.name,
+				Kind:          string(reference.KindConstruction),
+				Container:     container,
+				NameQualified: typ.qual,
+			})
+			return
+		}
+		c.addDynamic(expr, expr, reference.KindConstruction, container, "")
+		return
+	}
+	if cls.Type(c.lang) == "name" && isRelativeType(cls.Text(c.src)) {
+		c.emitRelativeConstruction(cls, container)
+		return
 	}
 	c.addClassName(cls, cls, reference.KindConstruction, container)
 }
 
-func (c *refCollector) emitConstAccess(node *ts.Node, container string) {
+// emitRelativeConstruction emits `new self` / `new static` / `new parent`
+// inside a class body as a construction of the class it denotes: self is the
+// enclosing class, parent the class it extends (both exact). static is the
+// class of the call at run time: any subclass that merely inherits the
+// calling method constructs itself, not the enclosing class, so `new static`
+// names a class only when the enclosing class is final (then it is self).
+// Elsewhere (traits, free code) the class is not lexically known; the name is
+// emitted as written and names no class.
+func (c *refCollector) emitRelativeConstruction(cls *ts.Node, container string) {
+	rel := cls.Text(c.src)
+	d := language.ReferenceDraft{Kind: string(reference.KindConstruction), Container: container}
+	if c.class != nil {
+		switch {
+		case rel == "self", rel == "static" && c.class.final:
+			d.Name, d.NameQualified = c.class.bare, c.class.qual
+		case rel == "parent":
+			d.Name, d.NameQualified = c.class.parentBare, c.class.parentQual
+		}
+	}
+	if d.NameQualified == "" {
+		d.Name = rel
+	}
+	c.addDraft(cls, d)
+}
+
+// emitExpressionScoped handles a scoped access whose scope is an expression
+// (`$cls::m()`, `$cls::CONST`) rather than a class name. With a variable proven
+// to hold one class-string the scope is that class; otherwise the member name
+// is still fixed and the access is emitted with the expression as an untyped
+// receiver. It reports false when the scope is a class name.
+func (c *refCollector) emitExpressionScoped(node *ts.Node, kind reference.ReferenceKind, container string, env *phpTypeEnv) bool {
+	scope := node.Child(0)
+	if scope == nil {
+		return false
+	}
+	switch scope.Type(c.lang) {
+	case "name", "qualified_name", "relative_name", "relative_scope":
+		return false
+	case "variable_name", "member_access_expression", "nullsafe_member_access_expression",
+		"scoped_property_access_expression", "subscript_expression", "parenthesized_expression",
+		"function_call_expression", "member_call_expression", "scoped_call_expression":
+	default:
+		return true // not an expression a class can come from (e.g. error recovery)
+	}
+	if hasErrorChild(node) {
+		return true
+	}
+	member := memberNameExpr(node, c.lang)
+	if member == nil {
+		return true
+	}
+	isCall := kind == reference.KindCall
+	if member.Type(c.lang) != "name" {
+		if isCall {
+			c.addDynamic(member, member, kind, container, scope.Text(c.src))
+		}
+		return true
+	}
+	if member.Text(c.src) == "class" {
+		return true // $obj::class: the run-time class of a value
+	}
+	d := language.ReferenceDraft{
+		Name:         member.Text(c.src),
+		Kind:         string(kind),
+		Container:    container,
+		ReceiverExpr: scope.Text(c.src),
+		IsCall:       isCall,
+	}
+	if typ := env.classStringType(scope, node.StartByte(), c.lang, c.src); typ.qual != "" {
+		d.ReceiverExpr, d.ReceiverTypeQualified = typ.name, typ.qual
+	}
+	c.addDraft(member, d)
+	return true
+}
+
+// hasErrorChild reports whether a direct child of n is an error or missing
+// node: the grammar recovered from broken syntax there, so the node's shape
+// proves nothing.
+func hasErrorChild(n *ts.Node) bool {
+	if n == nil {
+		return false
+	}
+	for i := 0; i < n.ChildCount(); i++ {
+		if ch := n.Child(i); ch.IsError() || ch.IsMissing() {
+			return true
+		}
+	}
+	return false
+}
+
+// memberNameExpr returns the member-name part of a member or scoped access:
+// the node after the `->`, `?->` or `::` token (a name, a variable, or the
+// expression inside `{...}`), or nil.
+func memberNameExpr(node *ts.Node, lang *ts.Language) *ts.Node {
+	for i := 0; i+1 < node.ChildCount(); i++ {
+		switch node.Child(i).Type(lang) {
+		case "->", "?->", "::":
+			next := node.Child(i + 1)
+			if next.Type(lang) == "{" && i+2 < node.ChildCount() {
+				next = node.Child(i + 2)
+			}
+			if next.Type(lang) == "arguments" {
+				return nil
+			}
+			return next
+		}
+	}
+	return nil
+}
+
+func (c *refCollector) emitConstAccess(node *ts.Node, container string, env *phpTypeEnv) {
+	if c.emitExpressionScoped(node, reference.KindRead, container, env) {
+		return
+	}
 	scope, scopeNode, member, rel := c.scopeAndMember(node)
 	if member == nil {
+		return
+	}
+	if member.Text(c.src) == "class" {
+		c.emitClassString(scopeNode, member, rel, container)
 		return
 	}
 	if c.addRelativeMemberAccess(member, rel, reference.KindRead, container, false) {
@@ -404,6 +598,30 @@ func (c *refCollector) emitConstAccess(node *ts.Node, container string) {
 	}
 	// Class constant / enum case access is a read, not a call.
 	c.addMemberAccess(member, scope, scopeNode, reference.KindRead, container, false)
+}
+
+// emitClassString emits `Foo::class` — a compile-time string naming the class
+// Foo, resolved by the same lexical rules as any class name — as a type use of
+// that class. It names the class; it neither calls nor constructs it, so what
+// a consumer (a container, a factory) later does with the string is not this
+// reference. `self::class` names the enclosing class; static::class and
+// parent::class are not emitted (static is a run-time class; parent::class is
+// a name only).
+func (c *refCollector) emitClassString(scopeNode, member *ts.Node, rel, container string) {
+	switch {
+	case scopeNode != nil:
+		if isRelativeType(lastName(scopeNode, c.lang, c.src)) {
+			return
+		}
+		c.addClassName(scopeNode, scopeNode, reference.KindTypeUse, container)
+	case rel == "self" && c.class != nil:
+		c.addDraft(member, language.ReferenceDraft{
+			Name:          c.class.bare,
+			Kind:          string(reference.KindTypeUse),
+			Container:     container,
+			NameQualified: c.class.qual,
+		})
+	}
 }
 
 // scopeAndMember parses a scoped_call_expression or

@@ -110,7 +110,9 @@ func (r *Resolver) Resolve() []Resolution {
 
 // ResolveReference resolves a single reference within its file context.
 //
-// A reference carrying a provider-determined qualified identity is resolved by
+// A Dynamic reference (its name is computed at run time) is Unresolved before
+// any rule is consulted: its Name is display text, and matching it against
+// declarations would be guessing. A reference carrying a provider-determined qualified identity is resolved by
 // R0 (identity.go) and by nothing else. Otherwise a reference with a receiver is
 // classified (R1–R4):
 //
@@ -148,6 +150,10 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 		ReferenceID:   ref.ID,
 		ReferenceName: ref.Name,
 		Confidence:    ConfidenceUnresolved,
+	}
+	if ref.Dynamic {
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceDynamicName, Detail: "the name is computed at run time"}}
+		return res
 	}
 	// R0: a provider-determined qualified identity is authoritative and is
 	// resolved before — and instead of — every other rule below.

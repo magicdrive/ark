@@ -7,7 +7,6 @@ import (
 	"github.com/magicdrive/ark/internal/graph"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -47,7 +46,10 @@ type ImpactResult struct {
 	Target        symbol.Symbol
 	Entries       []ImpactEntry   // sorted: category priority then SymbolID
 	AffectedFiles []source.FileID // deduplicated, sorted; definite impacts only
-	Unresolved    []reference.Reference
+	// UnresolvedCallees describes the target's own outgoing references that
+	// resolve to no candidate (index.RepositoryIndex.UnresolvedOutgoing): its
+	// dependencies the report cannot name.
+	UnresolvedCallees index.UnresolvedSample
 	// Unattributed is the number of references that may target the symbol but
 	// are not resolved edges (index.RepositoryIndex.Unattributed, incoming).
 	// 0 means the dependent list is complete as far as the index can tell.
@@ -186,13 +188,7 @@ func Analyze(
 		}
 	}
 
-	// Unresolved references targeting this symbol.
-	// Skip references with empty location — they are indexing artifacts, not real usages.
-	for _, ref := range idx.ReferencesByTarget(targetID) {
-		if ref.Name != "" && ref.Location.File != "" {
-			result.Unresolved = append(result.Unresolved, ref)
-		}
-	}
+	result.UnresolvedCallees = idx.UnresolvedOutgoing(targetID)
 
 	sortEntries(result.Entries)
 	result.AffectedFiles = affectedFiles(target, result.Entries)
