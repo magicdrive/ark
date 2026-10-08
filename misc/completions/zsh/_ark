@@ -58,14 +58,14 @@ subcommands=(
 )
 
 syntax_opts=(
-  '--lang:Language:(go typescript tsx javascript python php)'
+  '--lang:Language:(go typescript tsx javascript python php terraform)'
   '--format:Output format:(text json)'
   '-h[Show help]'
   '--help[Show help]'
 )
 
 symbol_opts=(
-  '--lang:Language:(go typescript tsx javascript python php)'
+  '--lang:Language:(go typescript tsx javascript python php terraform)'
   '--format:Output format:(text json)'
   '-h[Show help]'
   '--help[Show help]'

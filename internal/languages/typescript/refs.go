@@ -68,9 +68,41 @@ func (e *extractor) walk(n *ts.Node, sc scope) {
 		e.call(n, sc)
 	case "new_expression":
 		e.construction(n, sc)
+	case "binary_expression":
+		e.misparsedGenericCall(n, sc)
 	case "type_identifier":
-		if name := e.text(n); !sc.tparams[name] { // type parameters are declarations, not uses
+		// Type parameters are declarations, not uses; `bigint` is a keyword
+		// the grammar reads as a type name.
+		if name := e.text(n); !sc.tparams[name] && name != "bigint" {
 			e.addRef(n, name, string(reference.KindTypeUse), sc.container, "", "", false)
+		}
+		return
+	case "function_type", "constructor_type", "call_signature", "construct_signature",
+		"method_signature", "abstract_method_signature":
+		// Their own type parameters scope over them.
+		sc.tparams = unionSet(sc.tparams, e.typeParamNames(n))
+	case "index_signature":
+		// `[K in T]: V` declares K over the whole signature.
+		for i := range n.NamedChildCount() {
+			if c := n.NamedChild(i); e.typ(c) == "mapped_type_clause" {
+				if nm := e.field(c, "name"); nm != nil {
+					sc.tparams = unionSet(sc.tparams, []string{e.text(nm)})
+				}
+			}
+		}
+	case "mapped_type_clause":
+		e.walkChildren(n, sc, "name")
+		return
+	case "conditional_type":
+		// `A extends ... infer U ... ? X : Y` declares U (over-approximated
+		// to the whole conditional type: a name is only ever dropped).
+		var infers []string
+		e.inferNames(n, &infers)
+		sc.tparams = unionSet(sc.tparams, infers)
+	case "infer_type":
+		// `infer U [extends C]`: U is a declaration; walk the constraint.
+		for i := 1; i < int(n.NamedChildCount()); i++ {
+			e.walk(n.NamedChild(i), sc)
 		}
 		return
 	case "nested_type_identifier":
@@ -91,6 +123,7 @@ func (e *extractor) walk(n *ts.Node, sc scope) {
 		e.walkChildren(n, sc, "name")
 		return
 	case "interface_declaration", "type_alias_declaration", "type_parameter", "enum_declaration":
+		sc.tparams = unionSet(sc.tparams, e.typeParamNames(n))
 		e.walkChildren(n, sc, "name")
 		return
 	case "ambient_declaration", "function_signature", "import_statement", "export_statement":
@@ -98,6 +131,16 @@ func (e *extractor) walk(n *ts.Node, sc scope) {
 	}
 	for i := range n.ChildCount() {
 		e.walk(n.Child(i), sc)
+	}
+}
+
+// inferNames collects the names `infer` declares under n.
+func (e *extractor) inferNames(n *ts.Node, out *[]string) {
+	if e.typ(n) == "infer_type" && n.NamedChildCount() > 0 {
+		*out = append(*out, e.text(n.NamedChild(0)))
+	}
+	for i := range n.NamedChildCount() {
+		e.inferNames(n.NamedChild(i), out)
 	}
 }
 

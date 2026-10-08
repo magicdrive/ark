@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/language"
@@ -88,6 +89,29 @@ func FuzzModuleSpec(f *testing.F) {
 		}
 		if errs := language.ValidateModuleBindings(ex); len(errs) > 0 {
 			t.Fatalf("importer=%q spec=%q: %v (candidates %v)", importer, spec, errs, fmt.Sprint(m.Candidates))
+		}
+	})
+}
+
+// FuzzTypeArgParser: the recovery's type grammar terminates on any input,
+// never reads past it and reports references inside what it consumed.
+func FuzzTypeArgParser(f *testing.F) {
+	for _, s := range []string{"<A>", "<a.b<C[]>, 'x', -1>", "<{ a: A }>", "</* x", "<\xff>", "<\"\\x4\">"} {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, s string) {
+		p := &typeArgParser{src: []byte(s)}
+		ok := p.typeArgs()
+		if p.pos < 0 || p.pos > len(s) {
+			t.Fatalf("position %d outside %d bytes", p.pos, len(s))
+		}
+		for _, r := range p.refs {
+			if !ok {
+				break
+			}
+			if int(r.start) > p.pos || int(r.end) > p.pos || r.start > r.end || !strings.HasSuffix(s[r.start:r.end], r.name) {
+				t.Fatalf("reference %+v outside the consumed text %q", r, s[:p.pos])
+			}
 		}
 	})
 }

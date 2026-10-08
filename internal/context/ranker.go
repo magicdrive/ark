@@ -26,10 +26,10 @@ func (DefaultRanker) Rank(c candidate, sourceLen int) Score {
 	switch c.reason {
 	case "target":
 		bd["target"] = 100
-	case "direct callee", "extends", "implements", "uses_trait":
-		// Typed structural relations are scored exactly like a direct callee
-		// (confidence-tiered); only the reason label differs, so ordering is
-		// unchanged relative to pre-PHP-7 behavior.
+	case "direct callee", "extends", "implements", "uses_trait", "references", "depends_on":
+		// Typed structural relations and dependency edges are scored exactly
+		// like a direct callee (confidence-tiered); only the reason label
+		// differs, so ordering is unchanged relative to pre-PHP-7 behavior.
 		switch c.confidence {
 		case resolver.ConfidenceExact:
 			bd["direct_callee_exact"] = 40

@@ -32,7 +32,7 @@ func SyntaxOptParse(args []string) (int, *SyntaxOption, error) {
 	fs := flag.NewFlagSet("syntax", flag.ExitOnError)
 
 	// --lang
-	langOpt := fs.String("lang", "", "Specify language (go, typescript, tsx, javascript, python, php).")
+	langOpt := fs.String("lang", "", "Specify language (go, typescript, tsx, javascript, python, php, terraform).")
 
 	// --format
 	formatOpt := fs.String("format", "text", "Specify output format.")
@@ -94,7 +94,7 @@ func SymbolOptParse(args []string) (int, *SymbolOption, error) {
 	fs := flag.NewFlagSet("symbol", flag.ExitOnError)
 
 	// --lang
-	langOpt := fs.String("lang", "", "Specify language (go, typescript, tsx, javascript, python, php).")
+	langOpt := fs.String("lang", "", "Specify language (go, typescript, tsx, javascript, python, php, terraform).")
 
 	// --format
 	formatOpt := fs.String("format", "text", "Specify output format.")

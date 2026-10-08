@@ -5,29 +5,51 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: read
+
 jobs:
-  # TEST
-  test:
+  # QUALITY GATES: exactly the CI of every push to main — tests, race,
+  # staticcheck, fuzz smoke and the TypeScript compiler differential.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  # RELEASE SMOKE: the configuration, and the artifacts it builds, before any
+  # of them is published.
+  release-smoke:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
 
-      - name: Install dependencies
-        run: go mod download
+      - name: Check GoReleaser configuration
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          distribution: goreleaser
+          version: '~> v1'
+          args: check
 
-      - name: Run tests
-        run: make test
+      - name: Build snapshot artifacts (nothing is published)
+        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+        with:
+          distribution: goreleaser
+          version: '~> v1'
+          args: release --snapshot --clean --skip=publish
 
-  # RELEASE
+      - name: Verify artifacts and run the release smoke test
+        run: .github/release/verify-dist.sh dist
+
+  # RELEASE: only when every gate above passed.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: test
+    needs: [ci, release-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -49,4 +71,3 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
-

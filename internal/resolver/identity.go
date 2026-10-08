@@ -42,16 +42,19 @@ type langQualified struct {
 	qualified string
 }
 
-// typeDecls returns the repository's type declarations named by (language,
-// qualified), in deterministic order. Only type-like symbols are indexed: this
-// lookup answers "which type is this identity?" and never matches a member,
-// function, constant or namespace that merely shares the string.
+// typeDecls returns the repository's declarations named by (language,
+// qualified), in deterministic order. Of a file whose names are scoped by
+// qualified identity alone (FileIndex.IdentityOnly) every declaration is
+// indexed: identity is the only way to reach it. Of every other file only
+// type-like symbols are: this lookup answers "which type is this identity?"
+// and never matches a member, function, constant or namespace that merely
+// shares the string.
 func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 	r.qualOnce.Do(func() {
 		r.qualified = make(map[langQualified][]symbol.Symbol)
 		for _, fi := range r.files {
 			for _, s := range fi.Symbols {
-				if s.Qualified == "" || !isTypeLike(s.Kind) {
+				if s.Qualified == "" || (!fi.IdentityOnly && !isTypeLike(s.Kind)) {
 					continue
 				}
 				k := langQualified{s.Language, s.Qualified}
@@ -74,7 +77,11 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		types := r.typeDecls(ref.Language, ref.ReceiverTypeQualified)
 		detail := fmt.Sprintf("receiver type %q", ref.ReceiverTypeQualified)
 		if len(types) == 0 {
-			return noQualifiedDeclaration(res, detail)
+			return noQualifiedDeclaration(res, ref, detail)
+		}
+		// The receiver declaration itself states where its members live.
+		if scoped, ok := r.memberScopeResolution(res, ref, types); ok {
+			return scoped
 		}
 		// Several declarations share the identity, but the reference is
 		// written inside one of them: that one is the receiver's type (e.g.
@@ -103,7 +110,7 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 	types := r.typeDecls(ref.Language, ref.NameQualified)
 	detail := fmt.Sprintf("%q", ref.NameQualified)
 	if len(types) == 0 {
-		return noQualifiedDeclaration(res, detail)
+		return noQualifiedDeclaration(res, ref, detail)
 	}
 	where := fmt.Sprintf("declared at %s", types[0].Location.File)
 	if len(types) > 1 {
@@ -113,13 +120,84 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 	return r.pickBest(res, types, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is "+where)
 }
 
-func noQualifiedDeclaration(res Resolution, detail string) Resolution {
+// noQualifiedDeclaration is the R0 answer when no declaration carries the
+// identity: outside the repository — unless the identity names a scope of
+// the repository itself (IdentityInRepository), where it is undeclared or
+// declared in syntax no provider extracts: Unresolved, and not external.
+func noQualifiedDeclaration(res Resolution, ref reference.Reference, detail string) Resolution {
 	res.Evidence = []ResolutionEvidence{{
 		Kind:   EvidenceQualifiedIdentity,
 		Detail: detail + " is not declared in the repository",
 	}}
-	res.OutsideRepository = true
+	res.OutsideRepository = !ref.IdentityInRepository
 	return res
+}
+
+// memberScopeResolution resolves a member — or, for a NamedArgument
+// reference, a parameter — through a receiver declaration that states where
+// they live (Symbol.MemberScope / ParameterScope / MembersOutside). It
+// reports false when no receiver declaration carries such a statement and the
+// reference is no named argument; the member is then looked up as under any
+// other receiver type. A named argument is never looked up as a member.
+// Several receiver declarations never pick one: the declarations their
+// statements name are Candidates.
+func (r *Resolver) memberScopeResolution(res Resolution, ref reference.Reference, types []symbol.Symbol) (Resolution, bool) {
+	scopeOf := func(t symbol.Symbol) string {
+		if ref.NamedArgument {
+			return t.ParameterScope
+		}
+		return t.MemberScope
+	}
+	what := "member"
+	if ref.NamedArgument {
+		what = "parameter"
+	}
+	stated := false
+	for _, t := range types {
+		stated = stated || scopeOf(t) != "" || t.MembersOutside
+	}
+	if !stated {
+		if !ref.NamedArgument {
+			return res, false
+		}
+		res.Evidence = []ResolutionEvidence{{
+			Kind:   EvidenceMemberScope,
+			Detail: fmt.Sprintf("%q states no parameters for argument %q", ref.ReceiverTypeQualified, ref.Name),
+		}}
+		return res, true
+	}
+	if len(types) == 1 && types[0].MembersOutside {
+		res.Evidence = []ResolutionEvidence{{
+			Kind:   EvidenceMemberScope,
+			Detail: fmt.Sprintf("the %ss of %q are declared outside the repository", what, types[0].Qualified),
+		}}
+		res.OutsideRepository = true
+		return res, true
+	}
+	var decls []symbol.Symbol
+	var target string
+	for _, t := range types {
+		if scopeOf(t) == "" {
+			continue
+		}
+		target = scopeOf(t) + ref.Name
+		decls = append(decls, r.typeDecls(ref.Language, target)...)
+	}
+	detail := fmt.Sprintf("%s %q of %q is %q", what, ref.Name, ref.ReceiverTypeQualified, target)
+	conf := ConfidenceExact
+	if len(types) > 1 {
+		detail = fmt.Sprintf("%s %q of %q, declared %d times", what, ref.Name, ref.ReceiverTypeQualified, len(types))
+		conf = ConfidenceCandidate
+	}
+	if len(decls) == 0 {
+		res.Evidence = []ResolutionEvidence{{
+			Kind:   EvidenceMemberScope,
+			Detail: detail + "; no such declaration in the repository",
+		}}
+		return res, true
+	}
+	sortSymbols(decls)
+	return r.pickBest(res, decls, conf, EvidenceMemberScope, detail), true
 }
 
 // enclosingDeclaration returns the one declaration among types that lexically

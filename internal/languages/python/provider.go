@@ -8,8 +8,10 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts symbols from Python source files.
@@ -19,19 +21,14 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "python" }
 func (p *Provider) Extensions() []string        { return []string{".py", ".pyw"} }
-func (p *Provider) CacheVersion() string        { return "1" }
+func (p *Provider) CacheVersion() string        { return "4" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PythonLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
-			Diagnostics: []language.Diagnostic{{
-				Severity: language.SeverityError,
-				Message:  "parse failed: " + err.Error(),
-				Location: source.Location{File: file},
-			}},
+			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},
 		}, nil
 	}
 	defer tree.Release()
@@ -39,7 +36,7 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 	root := tree.RootNode()
 	drafts := extractSymbols(root, lang, src, file)
 	refs, imports := extractReferences(root, lang, src, file)
-	return language.Extraction{Symbols: drafts, References: refs, Imports: imports}, nil
+	return language.Extraction{Symbols: drafts, References: refs, Imports: imports, Diagnostics: treediag.ParseErrors(root, lang, file)}, nil
 }
 
 func extractSymbols(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {

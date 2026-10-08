@@ -25,6 +25,13 @@ const (
 	EdgeExtends    EdgeKind = "extends"
 	EdgeImplements EdgeKind = "implements"
 	EdgeUsesTrait  EdgeKind = "uses_trait"
+	// Dependency edges of configuration languages (Terraform). EdgeReferences:
+	// From uses the value or configuration of To (an implicit dependency);
+	// EdgeDependsOn: From is explicitly ordered after To. Neither is a call.
+	// Forward-only like the typed relation edges; the reverse edge is the
+	// generic EdgeCalledBy, its RefKind keeping the meaning.
+	EdgeReferences EdgeKind = "references"
+	EdgeDependsOn  EdgeKind = "depends_on"
 )
 
 // GraphEdge is a directed relationship between two symbols with confidence.
@@ -101,10 +108,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
 		if readErr != nil {
-			b.addDiagnostic(language.Diagnostic{
-				Severity: language.SeverityWarning,
-				Message:  "read error: " + readErr.Error(),
-			})
+			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))
 			b.stats.Skipped++
 			return
 		}
@@ -113,10 +117,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 
 		extraction, err := prov.Extract(ctx, fileID, src)
 		if err != nil {
-			b.addDiagnostic(language.Diagnostic{
-				Severity: language.SeverityWarning,
-				Message:  path + ": extraction error: " + err.Error(),
-			})
+			b.addDiagnostic(fileFailure(relPath, language.DiagExtractionError, "extraction error", err))
 			b.stats.Skipped++
 			return
 		}
@@ -364,6 +365,36 @@ func (idx *RepositoryIndex) Diagnostics() []language.Diagnostic {
 	out := make([]language.Diagnostic, len(idx.diagnostics))
 	copy(out, idx.diagnostics)
 	return out
+}
+
+// DiagnosticSummary counts an index's diagnostics: the files they name and
+// their severities. It summarizes what the index reports; zero does not mean
+// that every file was fully analyzed (files of formats no provider handles
+// are not examined at all, and a provider may degrade without a
+// diagnostic).
+type DiagnosticSummary struct {
+	Files    int `json:"files"`
+	Errors   int `json:"errors"`
+	Warnings int `json:"warnings"`
+}
+
+// Empty reports whether the index has no diagnostic.
+func (s DiagnosticSummary) Empty() bool { return s.Errors == 0 && s.Warnings == 0 }
+
+// DiagnosticSummary returns the summary of the index's diagnostics.
+func (idx *RepositoryIndex) DiagnosticSummary() DiagnosticSummary {
+	var s DiagnosticSummary
+	files := make(map[source.FileID]bool)
+	for _, d := range idx.diagnostics {
+		if d.Severity == language.SeverityError {
+			s.Errors++
+		} else {
+			s.Warnings++
+		}
+		files[d.Location.File] = true
+	}
+	s.Files = len(files)
+	return s
 }
 
 // Stats returns aggregate statistics for the index.

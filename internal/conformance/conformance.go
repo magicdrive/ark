@@ -59,6 +59,7 @@ func RunContract(t *testing.T, p language.Provider, valid []Case) {
 				checkReferenceInvariants(t, ext)
 				checkImportInvariants(t, ext)
 				checkModuleBindingInvariants(t, ext)
+				checkNoErrorDiagnostics(t, ext)
 			})
 		}
 	})
@@ -90,6 +91,30 @@ func RunContract(t *testing.T, p language.Provider, valid []Case) {
 			})
 		}
 	})
+}
+
+// checkNoErrorDiagnostics: syntactically valid source yields no error
+// diagnostic — a diagnostic must mean something is not analyzed.
+func checkNoErrorDiagnostics(t *testing.T, ext language.Extraction) {
+	t.Helper()
+	for _, d := range ext.Diagnostics {
+		if d.Severity == language.SeverityError {
+			t.Errorf("valid source produced an error diagnostic: %+v", d)
+		}
+	}
+}
+
+// CheckBrokenSourceDiagnosed asserts that syntactically broken source yields
+// at least one error diagnostic naming the file: breakage is never silent.
+func CheckBrokenSourceDiagnosed(t *testing.T, p language.Provider, c Case) {
+	t.Helper()
+	ext := mustExtract(t, p, c)
+	for _, d := range ext.Diagnostics {
+		if d.Severity == language.SeverityError && string(d.Location.File) == c.File {
+			return
+		}
+	}
+	t.Errorf("broken source %q yielded no error diagnostic: %+v", c.Name, ext.Diagnostics)
 }
 
 func checkLanguageIdentity(t *testing.T, p language.Provider) {

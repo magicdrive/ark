@@ -143,8 +143,13 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 		})
 	}
 
+	var diags *index.DiagnosticSummary
+	if s := e.idx.DiagnosticSummary(); !s.Empty() {
+		diags = &s
+	}
 	return &Result{
-		Items: items,
+		IndexDiagnostics: diags,
+		Items:            items,
 		Stats: Stats{
 			TotalCandidates: totalCandidates,
 			SelectedItems:   len(items),
@@ -162,8 +167,8 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 }
 
 // reasonForEdge maps a graph EdgeKind to a context reason label. Typed relation
-// edges keep their semantic meaning; all other outgoing edges (calls, type use,
-// imports) remain the generic "direct callee". Language-neutral: it switches on
+// edges and dependency edges keep their semantic meaning; all other outgoing
+// edges (calls, type use, imports) remain the generic "direct callee". Language-neutral: it switches on
 // graph semantics, not on any provider's syntax.
 func reasonForEdge(k index.EdgeKind) string {
 	switch k {
@@ -173,9 +178,24 @@ func reasonForEdge(k index.EdgeKind) string {
 		return "implements"
 	case index.EdgeUsesTrait:
 		return "uses_trait"
+	case index.EdgeReferences:
+		return "references"
+	case index.EdgeDependsOn:
+		return "depends_on"
 	default:
 		return "direct callee"
 	}
+}
+
+// expandsTransitively reports whether a depth-1 item's own outgoing edges are
+// followed at depth 2: callees, and the dependencies of a configuration
+// declaration (what it references or depends on). Typed relations are not.
+func expandsTransitively(reason string) bool {
+	switch reason {
+	case "direct callee", "references", "depends_on":
+		return true
+	}
+	return false
 }
 
 // collectCandidates gathers symbols related to target up to req.MaxDepth.
@@ -235,7 +255,7 @@ func (e *Engine) collectCandidates(target symbol.Symbol, req Request) []candidat
 		// snapshot current set to avoid modifying while iterating
 		depth1 := make([]symbol.SymbolID, 0)
 		for _, c := range result {
-			if c.hopDepth == 1 && c.reason == "direct callee" {
+			if c.hopDepth == 1 && expandsTransitively(c.reason) {
 				depth1 = append(depth1, c.sym.ID)
 			}
 		}

@@ -25,7 +25,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `ConfidenceCap`, `Dynamic`; bindings, exports, `ModuleScoped`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
@@ -54,6 +54,37 @@ from depending on its semantics, so this boundary is kept by design review;
 tests verify the evidence contracts it relies on (the resolver's tests drive
 it with synthetic, provider-independent evidence).
 
+**Scope that a name match cannot see** (Terraform). A Terraform address is
+unique only within its module, and a module is a directory, so the provider
+qualifies every declaration and every reference with the module directory it
+derives from the file's own path — still one file, nothing else consulted.
+Three generic extensions carry it, and none names a language:
+`Extraction.IdentityOnly` (the file's symbols are reached only by qualified
+identity, R0; no name stage reaches them, and a reference of the file without
+identity is Unresolved), `ReferenceDraft.IdentityInRepository` (the identity
+names a repository scope: no declaration there is Unresolved, not
+`OutsideRepository`, and no other declaration can be its target), and
+`SymbolDraft.MemberScope` / `ParameterScope` / `MembersOutside` (a
+declaration states where its members and parameters live: a module call
+with a local `source` names the child module's outputs, and — for a
+reference marked `NamedArgument` — its input variables; a remote `source`
+places both outside the repository; a named argument is never looked up as
+a member). A module call
+is therefore a member scope, not an import binding and not a call: bindings are
+file-scoped and name files, while a module call is visible to the whole module
+directory and names a directory. Dependencies form their own edge kinds
+(`references`, `depends_on`), never `calls`. A module input argument is a
+reference from the call to the child's variable declaration — the interface
+it binds, like `module.x.out` to the output — so a change to the variable
+reaches every call that passes it; the value flowing from the argument into
+the child is not an edge (`TestInputBinding_*`). Authority:
+`languages/terraform/provider.go` (header), `resolver/identity.go`. Tests:
+`TestIdentityOnly_*`, `TestMemberScope_*`, `TestParameterScope_*`,
+`TestIsolation_OtherLanguagesAreUnaffected`,
+`TestGraph_NoEdgeCrossesAModuleBoundaryWithoutBinding`.
+Danger: resolving a Terraform address by name "when the module has no match" —
+`aws_vpc.main` of another module is a different resource.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -62,11 +93,11 @@ untyped receiver, module scope, unknown participant) only lower it.
 
 | Class | Known | Unknown | Graph edge |
 |---|---|---|---|
-| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding, qualified identity, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
+| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding, qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
 | Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
 | Candidate | Plausible targets (one or several), kept as evidence. | Which one, or whether another unseen target exists. | **never** |
 | Unresolved | No candidate. | The target. This is a correct, sound answer — not a gap to fill. | never |
-| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding) places the referent outside the repository's declarations. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
+| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding, a receiver whose members are declared outside) places the referent outside the repository's declarations. An identity that names a repository scope (`IdentityInRepository`) never does. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
 
 Strong is a closed-world claim ("the only `X` here"). That is why module-scoped
 files cap proximity/uniqueness at Candidate and why `OutsideRepository`
@@ -148,6 +179,9 @@ improvement and is not.
    `TestCompleteness_OutgoingPartition`, `TestDynamicName_NeverResolves`,
    `TestGetCallers_ResultSemantics`, `TestGetContext_CallersAndCompleteness`,
    `TestUnresolved_FieldCase_MakeWithIsReported`, `TestUnresolved_CrossLanguage`.
+   An unresolved reference with `IdentityInRepository` is never same-name
+   attributed: its identity already excludes every other declaration
+   (`TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed`).
    Danger: dropping the count when it is 0 or "noisy"; adding unresolved
    references to `unattributed` (or to a caller's count) to "be safe" —
    that attributes a reference to symbols it cannot denote; resolving a
@@ -159,6 +193,85 @@ improvement and is not.
    structural depth) that hits its bound contributes nothing, never a guess.
    Tests: `TestRelations_CandidateSampleBounded`, `TestFindSymbol_TruncationAndOrder`,
    `TestTargetTruncatedFlagSet`, `TestReExport_DepthBounded`, `TestReExport_CycleIsSafe`.
+
+**Diagnostics are what the index reports, not a completeness proof.** A
+diagnostic says Ark could not analyze part of a file (`parse_error`: the
+parser rejected a region, which is then not analyzed as written — the source
+itself may be valid, as grammars reject some valid code) or a whole file (unreadable or a provider failure:
+the file is skipped, never counted as indexed). It names the
+repository-relative file and never an OS path; its `Code` is set only by the
+producer that knows it (`treediag`, a provider, the index) and is otherwise
+unclassified — never inferred from the message. Graph tools add an
+`indexDiagnostics` summary only when there are diagnostics, and its absence
+claims nothing: files of formats no provider handles are not examined at
+all. Diagnostics are distinct from unresolved references (parsed, no known
+target) and from tool errors (`isError`). Every provider reports its
+parser's ERROR / MISSING nodes, and none on the contract's valid corpus
+(provider contract). Authority: `languages/internal/treediag/treediag.go`,
+`mcp/tools_diagnostics.go`. Tests: `TestDiagnostics_*`,
+`TestIndexFailureDiagnostics`, `TestNewWithCache_WarmKeepsDiagnostics`,
+`TestNewWithCache_DiagnosticsFollowContent`.
+Danger: reading "no diagnostics" or "unresolved: 0" as "everything was
+analyzed"; dropping a diagnostic from a warm cache.
+
+**One parse path, measured against the reference runtime.** Every provider
+and the syntax tools parse through `tsparse.Parse`: gotreesitter's
+production route, and — only when that tree has an error — its admission
+candidate route, then its forest route, each kept only if it has none.
+Differential testing against the reference Tree-sitter runtime (same grammar
+commits) is the evidence: the production route rejects some valid code (lost
+declarations, false `parse_error`) that the other routes parse identically
+to the reference, field names included, while switching routes everywhere
+changes more correct trees than it fixes. A tree without an error is a
+complete derivation by the grammar, so the fallback recovers a derivation
+and never invents one; when every route fails, the production tree and its
+diagnostics stand. Trees it does not return it releases. Authority:
+`tsparse/tsparse.go`. Tests: `TestParse_*` (the contract), `TestRoute_*`
+(gotreesitter v0.55.1 route behavior — the upgrade gate),
+`TestParserRecovery_PHPDestructuring`.
+Danger: switching the process-wide route "because it fixed a file", or
+dropping diagnostics instead of recovering the parse.
+
+**An error-free tree is not the language's reading of ambiguous syntax.**
+Where the grammar is ambiguous the parser may pick a derivation the language
+does not, with no error (differential testing: Go 33, TypeScript 37 files of
+the real corpora). The extractors therefore read those shapes by the
+language's own rules, whichever derivation the tree holds:
+
+- Go `f[x](...)` / `r.f[x](...)` / `T[X](v)` (generic call, conversion, or a
+  call of an element of a slice / array / map of functions): only what the
+  file proves decides — never the parser's choice of reading. A subscript or
+  callee that is a value (a local, a var / const of the file) makes it an
+  element call: no reference. A subscript that is a type (predeclared, a type
+  or type parameter in scope, type syntax, several subscripts), or a callee
+  that is a function / type of the file, makes it a call. Otherwise the
+  reference can denote only a function, method or type
+  (`ReferenceDraft.TargetKinds`): resolved to a variable or constant — an
+  element call after all — it is Unresolved. `T[X]{...}` constructs `T`. Tests:
+  `TestExtract_SubscriptedCallsFollowGoRules`,
+  `TestGraph_SubscriptedCallOfALocalIsNoEdge`,
+  `TestGraph_ElementCallsOfPackageValuesAreNoEdges`.
+- TypeScript `f<T>(x)` derived as the comparisons `(f < T) > (x)`: a call
+  when the text is type arguments followed by `(` — TypeScript's own rule,
+  checked with a type grammar narrower than TypeScript's (lexical rules,
+  reserved words and line-break rules included), so a comparison is never
+  made a call; `TestFidelity_TypeArgumentsMatchCompiler` checks every text it
+  accepts against the compiler (`languages/typescript/generic_call.go`). Type parameters of nested
+  signatures, mapped-type keys and `infer` names scope like type parameters
+  and are never type uses. Tests: `TestExtract_GenericCallReadAsComparison`,
+  `TestExtract_ComparisonsAreNotGenericCalls`,
+  `TestExtract_TypeScopedNamesAreNotTypeUses`,
+  `TestGraph_TypeScopedNamesAreNoEdgesToSameNamedTypes`.
+
+The independent oracles are the languages' own front ends:
+`TestFidelity_RepositoryReferencesMatchGoAST` (go/ast + go/types, this
+repository; `ARK_GO_FIDELITY_ROOTS` for others) and
+`TestFidelity_TypeScriptCompiler` with `TestFidelity_TypeArgumentsMatchCompiler`
+(the TypeScript compiler; opt-in locally via `ARK_TYPESCRIPT_MODULE`,
+required in CI: `.github/ts-oracle/run.sh` installs the pinned compiler and
+fails on a missing or wrong-version compiler, a skip or a mismatch — `make
+ts-oracle` runs it locally). Remaining gaps:
+`internal/conformance/IMPROVEMENTS.md`, Q8.
 
 ## 4. RepositoryIndex and index reuse
 
@@ -211,6 +324,22 @@ Tests: `context/contract_test.go`, `TestContext_CandidateCallerIsCompletenessOnl
 `TestContext_AmbiguousNoFabrication` (PHP), `internal/contextquality` scenarios.
 Danger: filling spare budget with candidates or name matches.
 
+**Impact traverses the graph, never names.** `analyze_change_impact` takes
+direct dependents and dependencies from the target's edges and transitive
+dependents from `graph.TransitiveCallerHops`. In both traversal directions the
+next symbol is `edge.To` (a reverse edge stores the caller in `To`); each symbol
+is reached once, the start never, breadth-first, and its distance is its real
+hop count. A transitive entry's confidence is that of its path — the weakest
+edge on it, never promoted; of several shortest paths the strongest is
+chosen (a longer path never shortens the distance). Its evidence is its own
+first hop only, never the path's evidence joined into one claim. Authority:
+`graph/graph.go` (`Hop`), `impact/impact.go` (`ImpactEntry`). Tests:
+`TestTraversal_*`, `TestPathConfidence_*`, `TestAnalyze_Transitive*`,
+`TestImpact_ThroughModuleOutputs`.
+Danger: choosing the next symbol by edge kind — it silently stops every
+transitive walk at depth 1; labelling a transitive dependent with the
+confidence of one edge of its path.
+
 ## 6. Determinism
 
 Contract: identical inputs give identical output — resolver order and
@@ -235,7 +364,9 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
 **Architectural non-goals** (changing these is a design decision, not a feature):
 
 - Executing anything from the analyzed repository — code, package managers,
-  compilers, configuration (`SECURITY.md`).
+  compilers, configuration (`SECURITY.md`) — or fetching what it refers to
+  (Terraform registry / Git modules, providers): a remote module's outputs
+  are `OutsideRepository`.
 - Framework runtime semantics (Laravel container, Symfony, Doctrine, ...)
   inside a language provider. If ever added, it is separate evidence, not
   PHP language support.

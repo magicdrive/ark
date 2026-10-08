@@ -18,12 +18,25 @@ const (
 	SeverityWarning DiagnosticSeverity = "warning"
 )
 
-// Diagnostic represents a problem encountered during extraction.
+// Diagnostic represents a problem encountered while indexing a file.
 type Diagnostic struct {
 	Severity DiagnosticSeverity
 	Message  string
 	Location source.Location
+
+	// Code is a stable classification set by whoever produced the
+	// diagnostic: the index for its own failures (DiagReadError,
+	// DiagExtractionError), a provider for what it states. "" means
+	// unclassified — never inferred from the message.
+	Code string `json:",omitempty"`
 }
+
+// Diagnostic codes of the index's own failures. With either, the file is not
+// indexed at all (IndexStats.Skipped).
+const (
+	DiagReadError       = "read_error"
+	DiagExtractionError = "extraction_error"
+)
 
 // SymbolDraft is the raw extraction result from a language provider before
 // SymbolIDs are assigned.
@@ -48,6 +61,32 @@ type SymbolDraft struct {
 	// private member is not inherited: member lookup through a supertype
 	// never reaches it.
 	Visibility string `json:",omitempty"`
+
+	// MemberScope is set when the language fixes, from this declaration's own
+	// text, which declarations its members denote: a member named N, reached
+	// through a receiver whose ReceiverTypeQualified is this symbol's
+	// Qualified, denotes exactly the declaration whose Qualified is
+	// MemberScope+N (plain concatenation; the provider includes any
+	// separator). Example: a Terraform module call whose source is a local
+	// path — its outputs are the child module's output declarations. ""
+	// means "no such evidence"; members are then looked up as usual.
+	MemberScope string `json:",omitempty"`
+
+	// ParameterScope is MemberScope's counterpart for named arguments: an
+	// argument named N that a reference passes through this declaration
+	// (ReferenceDraft.NamedArgument, its ReceiverTypeQualified this symbol's
+	// Qualified) denotes exactly the parameter declaration whose Qualified is
+	// ParameterScope+N. Example: a Terraform module call whose source is a
+	// local path — its arguments are the child module's input variables.
+	ParameterScope string `json:",omitempty"`
+
+	// MembersOutside states that the declarations this symbol's members and
+	// parameters denote are, by the language's rules, not part of the
+	// repository (a Terraform module call whose source is a registry or
+	// remote address). A member or argument reference through it is then
+	// OutsideRepository. Never set together with MemberScope or
+	// ParameterScope.
+	MembersOutside bool `json:",omitempty"`
 }
 
 // ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.
@@ -83,9 +122,11 @@ type ReferenceDraft struct {
 	// ReceiverTypeQualified is the qualified identity of the receiver's type,
 	// determined like NameQualified: for a value receiver, that of its proven
 	// ReceiverType; for static member access (`Type::member`), where the
-	// receiver expression is itself a type name, that of the named type. It
-	// identifies the type only; looking up Name among that type's members is
-	// the resolver's job.
+	// receiver expression is itself a type name, that of the named type; for
+	// a receiver that names a declaration stating its members' home
+	// (SymbolDraft.MemberScope, e.g. a Terraform module call), that of the
+	// declaration. It identifies the receiver only; looking up Name among its
+	// members is the resolver's job.
 	ReceiverTypeQualified string `json:",omitempty"`
 
 	// ConfidenceCap bounds how strongly the resolver may claim this
@@ -97,6 +138,16 @@ type ReferenceDraft struct {
 	// resolution. Any other non-empty value is treated as "candidate".
 	ConfidenceCap string `json:",omitempty"`
 
+	// TargetKinds, when set, are the only symbol kinds the reference can
+	// denote: the language's syntax fixes the kind but not the target (Go
+	// `f[x](...)` calls f only if f is a generic function or type; were it
+	// a variable, the call would be of one of its elements). The resolver
+	// removes candidates of any other kind — a resolution left with none is
+	// Unresolved — and never raises a confidence for it. It is a comma-separated
+	// list of symbol.SymbolKind values (a string keeps the draft comparable);
+	// empty means any.
+	TargetKinds string `json:",omitempty"`
+
 	// Dynamic marks a reference whose name is computed at run time — the
 	// language's syntax fixes that something is called or constructed here,
 	// but not which name (PHP `$obj->$m()`, `$fn()`, `new $cls()`; JavaScript
@@ -107,6 +158,22 @@ type ReferenceDraft struct {
 	// syntax itself is a call/construction; it never sets it to hide a name
 	// it could have extracted.
 	Dynamic bool `json:",omitempty"`
+
+	// IdentityInRepository qualifies NameQualified / ReceiverTypeQualified:
+	// the identity names a scope of the repository itself (Terraform: the
+	// module directory a reference is written in), so no declaration with
+	// that identity means the name is undeclared, or declared in syntax no
+	// provider extracts — Unresolved, never OutsideRepository — and no
+	// declaration with another identity can be its target, whatever its
+	// name. Without it a qualified identity with no declaration is taken to
+	// lie outside the repository.
+	IdentityInRepository bool `json:",omitempty"`
+
+	// NamedArgument marks a reference whose Name is a named argument passed
+	// to the declaration its ReceiverTypeQualified identifies: it denotes
+	// that declaration's parameter (SymbolDraft.ParameterScope), never one of
+	// its members. Without a stated parameter scope it is Unresolved.
+	NamedArgument bool `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.
@@ -215,6 +282,17 @@ type Extraction struct {
 	// evidence (a free name is capped at Candidate) and the legacy implicit
 	// ImportDraft alias match is not applied.
 	ModuleScoped bool
+
+	// IdentityOnly declares that the symbols of this file are denoted only by
+	// qualified identity (NameQualified / ReceiverTypeQualified, R0): no
+	// name-based resolution stage — same directory, import, receiver-name,
+	// unique name, qualified-name suffix — may resolve any reference to them.
+	// A provider sets it when its names are scoped by rules a name match
+	// cannot see (Terraform: an address is unique only within its module
+	// directory), so a reference of another file, or of another language,
+	// can never reach them by similarity. Conversely a reference of this file
+	// without qualified identity evidence is Unresolved.
+	IdentityOnly bool
 }
 
 // Provider extracts code intelligence from a single source file.

@@ -23,8 +23,9 @@ type extractor struct {
 	bindings []language.BindingDraft
 	exports  []language.ExportDraft
 
-	seen     map[string]bool // kind\x00qualified: one symbol per identity
-	isModule bool            // the file has an import or export (ES module)
+	seen       map[string]bool // kind\x00qualified: one symbol per identity
+	isModule   bool            // the file has an import or export (ES module)
+	lineStarts []uint32        // byte offsets of line starts, built on demand
 }
 
 func newExtractor(lang *ts.Language, src []byte, file source.FileID) *extractor {

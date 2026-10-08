@@ -7,6 +7,7 @@ symbol Broken kind=class qualified="Broken" parent="" receiver="" exported=true 
 ## exports
 export kind=local exported="Broken" local="Broken" except=[] type_only=false @broken.ts:1:1-5:26
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.ts:2:3-5:25
 
 # file: draft.ts
 ## symbols

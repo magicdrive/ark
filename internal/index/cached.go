@@ -28,10 +28,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
 		if readErr != nil {
-			b.addDiagnostic(language.Diagnostic{
-				Severity: language.SeverityWarning,
-				Message:  "read error: " + readErr.Error(),
-			})
+			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))
 			b.stats.Skipped++
 			return
 		}
@@ -41,6 +38,8 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 
 		// Try cache hit first.
 		if cached, hit, _ := store.Get(cacheKey); hit {
+			// A hit must yield the index a miss would: diagnostics included.
+			b.addDiagnostics(cached.Diagnostics)
 			b.ingestExtraction(fileID, cached.Language, language.Extraction{
 				Symbols:      cached.Symbols,
 				References:   cached.References,
@@ -49,6 +48,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 				Bindings:     cached.Bindings,
 				Exports:      cached.Exports,
 				ModuleScoped: cached.ModuleScoped,
+				IdentityOnly: cached.IdentityOnly,
 			})
 			return
 		}
@@ -56,10 +56,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 		// Cache miss — extract and store.
 		extraction, err := prov.Extract(ctx, fileID, src)
 		if err != nil {
-			b.addDiagnostic(language.Diagnostic{
-				Severity: language.SeverityWarning,
-				Message:  path + ": extraction error: " + err.Error(),
-			})
+			b.addDiagnostic(fileFailure(relPath, language.DiagExtractionError, "extraction error", err))
 			b.stats.Skipped++
 			return
 		}
@@ -79,6 +76,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 			Bindings:     extraction.Bindings,
 			Exports:      extraction.Exports,
 			ModuleScoped: extraction.ModuleScoped,
+			IdentityOnly: extraction.IdentityOnly,
 		})
 	})
 

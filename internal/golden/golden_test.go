@@ -16,6 +16,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/source"
 )
@@ -33,6 +34,7 @@ func allProviders() []language.Provider {
 		typescript.NewTSXProvider(),
 		javascript.NewProvider(),
 		python.NewProvider(),
+		terraform.NewProvider(),
 	}
 }
 
@@ -45,7 +47,13 @@ var baselineLanguages = []string{
 	"javascript",
 	"python",
 	"ts_semantics",
+	"terraform",
 }
+
+// completenessLanguages also freeze what the graph does not show
+// (golden.CompletenessSnapshot): for them the unresolved / outside /
+// candidate partition is part of the behavior under review.
+var completenessLanguages = []string{"terraform"}
 
 func testdataDir() string {
 	_, file, _, _ := runtime.Caller(0)
@@ -127,6 +135,22 @@ func TestIndexGolden(t *testing.T) {
 				t.Fatalf("index.New: %v", err)
 			}
 			compareGolden(t, filepath.Join(dir, lang+".index.golden"), golden.IndexSnapshot(idx))
+		})
+	}
+}
+
+// TestCompletenessGolden freezes the completeness partition of the
+// completenessLanguages fixtures.
+func TestCompletenessGolden(t *testing.T) {
+	for _, lang := range completenessLanguages {
+		lang := lang
+		t.Run(lang, func(t *testing.T) {
+			dir := filepath.Join(testdataDir(), lang)
+			idx, err := index.New(context.Background(), dir, allProviders())
+			if err != nil {
+				t.Fatalf("index.New: %v", err)
+			}
+			compareGolden(t, filepath.Join(dir, lang+".completeness.golden"), golden.CompletenessSnapshot(idx))
 		})
 	}
 }

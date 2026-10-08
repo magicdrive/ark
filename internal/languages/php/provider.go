@@ -29,8 +29,10 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts code intelligence from PHP source files.
@@ -42,19 +44,14 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-11" }
+func (p *Provider) CacheVersion() string { return "php-14" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
-			Diagnostics: []language.Diagnostic{{
-				Severity: language.SeverityError,
-				Message:  "parse failed: " + err.Error(),
-				Location: source.Location{File: file},
-			}},
+			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},
 		}, nil
 	}
 	defer tree.Release()
@@ -65,7 +62,7 @@ func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (l
 	// in global/shared state — so extraction is deterministic and reentrant.
 	extractContainer(tree.RootNode(), lang, src, file, "", &syms, &imports)
 	refs := extractReferences(tree.RootNode(), lang, src, file)
-	return language.Extraction{Symbols: syms, References: refs, Imports: imports}, nil
+	return language.Extraction{Symbols: syms, References: refs, Imports: imports, Diagnostics: treediag.ParseErrors(tree.RootNode(), lang, file)}, nil
 }
 
 // extractContainer walks the direct children of node (the program root, or a

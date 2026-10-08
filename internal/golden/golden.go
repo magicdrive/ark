@@ -36,8 +36,8 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	sort.Slice(syms, func(i, j int) bool { return symbolDraftLess(syms[i], syms[j]) })
 	b.WriteString("## symbols\n")
 	for _, s := range syms {
-		fmt.Fprintf(&b, "symbol %s kind=%s qualified=%q parent=%q receiver=%q exported=%t %s\n",
-			s.Name, s.Kind, s.Qualified, s.Parent, s.Receiver, s.Exported, loc(s.Location))
+		fmt.Fprintf(&b, "symbol %s kind=%s qualified=%q parent=%q receiver=%q exported=%t%s %s\n",
+			s.Name, s.Kind, s.Qualified, s.Parent, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside)+parameterScope(s.ParameterScope), loc(s.Location))
 	}
 
 	refs := slices.Clone(ext.References)
@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -66,7 +66,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 
 	b.WriteString("## diagnostics\n")
 	for _, d := range sortedDiagnostics(ext.Diagnostics) {
-		fmt.Fprintf(&b, "diag %s %q %s\n", d.Severity, d.Message, loc(d.Location))
+		fmt.Fprintf(&b, "diag %s%s %q %s\n", d.Severity, diagCode(d.Code), d.Message, loc(d.Location))
 	}
 
 	return b.String()
@@ -97,8 +97,8 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 	sort.Slice(syms, func(i, j int) bool { return symbolLess(syms[i], syms[j]) })
 	b.WriteString("## symbols\n")
 	for _, s := range syms {
-		fmt.Fprintf(&b, "symbol %s kind=%s lang=%s qualified=%q receiver=%q exported=%t %s\n",
-			s.Name, s.Kind, s.Language, s.Qualified, s.Receiver, s.Exported, loc(s.Location))
+		fmt.Fprintf(&b, "symbol %s kind=%s lang=%s qualified=%q receiver=%q exported=%t%s %s\n",
+			s.Name, s.Kind, s.Language, s.Qualified, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside)+parameterScope(s.ParameterScope), loc(s.Location))
 	}
 
 	// --- references (sorted by file order, then location) ---
@@ -108,7 +108,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -137,7 +137,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 	// --- diagnostics ---
 	b.WriteString("## diagnostics\n")
 	for _, d := range sortedDiagnostics(idx.Diagnostics()) {
-		fmt.Fprintf(&b, "diag %s %q %s\n", d.Severity, d.Message, loc(d.Location))
+		fmt.Fprintf(&b, "diag %s%s %q %s\n", d.Severity, diagCode(d.Code), d.Message, loc(d.Location))
 	}
 
 	return b.String()
@@ -281,11 +281,59 @@ func moduleSpec(m language.ModuleSpec) string {
 	return fmt.Sprintf("module=%q candidates=%s", m.Specifier, cands)
 }
 
+// memberScope renders a declaration's member-scope evidence; nothing when
+// absent, so snapshots of providers that never emit it are unaffected.
+func memberScope(scope string, outside bool) string {
+	switch {
+	case outside:
+		return " members=outside"
+	case scope != "":
+		return fmt.Sprintf(" member_scope=%q", scope)
+	}
+	return ""
+}
+
+// parameterScope / namedArgument render the parameter-scope evidence;
+// nothing when absent.
+func parameterScope(scope string) string {
+	if scope == "" {
+		return ""
+	}
+	return fmt.Sprintf(" parameter_scope=%q", scope)
+}
+
+func namedArgument(a bool) string {
+	if a {
+		return " named_argument=true"
+	}
+	return ""
+}
+
+// diagCode renders a diagnostic's code; nothing when unclassified, so
+// snapshots of providers that set none are unaffected.
+func diagCode(c string) string {
+	if c == "" {
+		return ""
+	}
+	return " code=" + c
+}
+
+// inRepository renders the IdentityInRepository qualifier; omitted when false.
+func inRepository(in bool) string {
+	if in {
+		return " identity_in_repository=true"
+	}
+	return ""
+}
+
 // writeModuleBindings serializes bindings / exports / module scope in source
 // order (providers emit them deterministically; order is part of the contract).
 func writeModuleBindings(b *strings.Builder, ext language.Extraction) {
 	if ext.ModuleScoped {
 		b.WriteString("## module_scoped\n")
+	}
+	if ext.IdentityOnly {
+		b.WriteString("## identity_only\n")
 	}
 	if len(ext.Bindings) > 0 {
 		b.WriteString("## bindings\n")
@@ -305,4 +353,37 @@ func writeModuleBindings(b *strings.Builder, ext language.Extraction) {
 				ed.Kind, ed.Exported, ed.Local, ed.Except, ed.TypeOnly, mod, loc(ed.Location))
 		}
 	}
+}
+
+// CompletenessSnapshot serializes, per symbol in file/line order, what the
+// graph does not show: unattributed incoming / outgoing counts, the outgoing
+// references with no candidate (with their reasons) and the candidate
+// relations. Symbols with nothing to report are omitted.
+func CompletenessSnapshot(idx *index.RepositoryIndex) string {
+	var b strings.Builder
+	syms := idx.FindSymbols("")
+	sort.Slice(syms, func(i, j int) bool { return symbolLess(syms[i], syms[j]) })
+	for _, s := range syms {
+		in, out := idx.Unattributed(s.ID)
+		un := idx.UnresolvedOutgoing(s.ID)
+		callers := idx.CandidateCallerSample(s.ID)
+		callees := idx.CandidateCalleeSample(s.ID)
+		if in == 0 && out == 0 && un.Total == 0 && callers.Total == 0 && callees.Total == 0 {
+			continue
+		}
+		fmt.Fprintf(&b, "symbol %s unattributed_in=%d unattributed_out=%d unresolved=%d outside=%d\n",
+			s.Qualified, in, out, un.Unresolved, un.OutsideRepository)
+		for _, r := range un.References {
+			fmt.Fprintf(&b, "  no_candidate %s kind=%s receiver=%q reason=%s %s\n", r.Name, r.Kind, r.ReceiverExpr, r.Reason, loc(r.Location))
+		}
+		for _, r := range callees.Relations {
+			to, _ := idx.GetSymbol(r.Symbol)
+			fmt.Fprintf(&b, "  candidate_callee %s kind=%s confidence=%s refs=%d\n", to.Qualified, r.Kind, r.Confidence, r.References)
+		}
+		for _, r := range callers.Relations {
+			from, _ := idx.GetSymbol(r.Symbol)
+			fmt.Fprintf(&b, "  candidate_caller %s kind=%s confidence=%s refs=%d\n", from.Qualified, r.Kind, r.Confidence, r.References)
+		}
+	}
+	return b.String()
 }

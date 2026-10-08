@@ -22,6 +22,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 )
 
@@ -49,6 +50,11 @@ func specList() []spec {
 		// import/namespace/inherited-member resolution precision is honestly
 		// limited vs a compiler; see README.md, "Language Support".
 		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelGraph},
+		// Terraform (.tf / .tfvars): declarations, address references,
+		// module-scoped resolution, local module outputs and the dependency
+		// graph (references / depends_on edges). Graph, not
+		// ContextQualityCertified: no context-quality benchmark covers it.
+		{terraform.NewProvider(), grammars.HclLanguage, language.SupportLevelGraph},
 	}
 }
 

@@ -41,3 +41,4 @@ edge UserService.create -calls-> Repository.find confidence=exact evidence=[rece
 edge UserService.create -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (service.ts ← "./user" → user.ts exports "User")]
 edge UserService.repo -calls-> Repository confidence=exact evidence=[module_binding:"Repository" bound by import (service.ts ← "./repository" → repository.ts exports "Repository")]
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.ts:2:3-5:25

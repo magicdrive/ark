@@ -3,6 +3,7 @@
 ## references
 ## imports
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.js:1:1-3:23
 
 # file: repository.js
 ## symbols

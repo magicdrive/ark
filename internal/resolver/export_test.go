@@ -30,7 +30,9 @@ func (r *Resolver) StageScans(ref reference.Reference, fi FileIndex) (recv, pkg,
 
 	dir := filepath.Dir(string(fi.FileID))
 	for _, f := range r.files {
-		if string(f.FileID) == string(fi.FileID) {
+		// Identity-only symbols are in no name-based stage (FileIndex.
+		// IdentityOnly).
+		if string(f.FileID) == string(fi.FileID) || f.IdentityOnly {
 			continue
 		}
 		if filepath.Dir(string(f.FileID)) != dir {

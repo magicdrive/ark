@@ -18,6 +18,7 @@ Ark answers one question: what code do I need to read to understand or safely mo
 | Symbols matching structural criteria (kind, name pattern, calls, type usage) | `search_code` |
 | A literal text or regular-expression match | `search_in_files` |
 | A file as a whole | `get_file_content` |
+| Which files Ark could not fully analyze (regions the parser rejected, unreadable files) | `get_diagnostics` |
 
 ### Choosing between them
 
@@ -33,6 +34,7 @@ Ark answers one question: what code do I need to read to understand or safely mo
 - When a symbol name matches several symbols, Ark reports the candidates. Narrow the query with a qualified name or a file filter; do not pick the first result.
 - Treat ambiguous, unresolved, heuristic or low-confidence results as evidence with uncertainty, not as established facts. Do not report a call, dependency or impact as certain when Ark did not establish it.
 - When the distinction matters (before a risky change, or when reporting findings), confirm in the source with `get_symbol`.
+- A result with `indexDiagnostics` comes from an index with diagnostics: code they cover (e.g. a region the parser rejected) is not analyzed, so "no callers" may be incomplete. List them with `get_diagnostics`. Zero diagnostics proves no completeness either: files of unsupported formats are never examined.
 
 ### Examples
 

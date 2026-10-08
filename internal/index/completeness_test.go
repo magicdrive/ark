@@ -253,3 +253,37 @@ func TestCompleteness_UnresolvedSampleBounded(t *testing.T) {
 		t.Fatalf("sourceless reference attributed: %+v", got)
 	}
 }
+
+// An unresolved reference whose qualified identity names a repository scope
+// (IdentityInRepository) is unresolved, and attributed to no same-name symbol:
+// the identity rules every other declaration out.
+func TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed(t *testing.T) {
+	byName := map[string][]symbol.Symbol{
+		"aws_vpc.main": {complSym("net/aws_vpc.main", "aws_vpc.main", "", "terraform")},
+	}
+	c := index.NewCompleteness(byName)
+	ref := complRef("aws_vpc.main", "", "terraform", reference.KindValueReference)
+	ref.NameQualified = "db/aws_vpc.main"
+	ref.IdentityInRepository = true
+	c.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "db/output.x", true)
+
+	if in := c.Incoming("net/aws_vpc.main"); in != 0 {
+		t.Errorf("another module's declaration got unattributed %d", in)
+	}
+	if out := c.Outgoing("db/output.x"); out != 0 {
+		t.Errorf("outgoing unattributed %d, want 0", out)
+	}
+	un := c.UnresolvedOutgoing("db/output.x")
+	if un.Unresolved != 1 || un.Total != 1 || un.References[0].Reason != index.UnresolvedUnknown {
+		t.Errorf("unresolved sample %+v", un)
+	}
+
+	// Without the qualifier the same observation is same-name attributed
+	// (unchanged rule).
+	c2 := index.NewCompleteness(byName)
+	ref.IdentityInRepository = false
+	c2.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "db/output.x", true)
+	if in := c2.Incoming("net/aws_vpc.main"); in != 1 {
+		t.Errorf("same-name rule changed: incoming %d", in)
+	}
+}

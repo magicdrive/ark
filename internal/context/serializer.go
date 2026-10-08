@@ -3,6 +3,7 @@ package context
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/magicdrive/ark/internal/index"
 	"strings"
 )
 
@@ -37,6 +38,10 @@ func Format(result *Result) string {
 		result.Stats.EstimatedTokens, result.Stats.BudgetTokens,
 		result.Stats.UnattributedCallers, result.Stats.UnattributedCallees,
 		result.Stats.UnresolvedCallees, result.Stats.OutsideCallees)
+	if d := result.IndexDiagnostics; d != nil {
+		fmt.Fprintf(&sb, "--- index diagnostics: %d file(s), %d error(s), %d warning(s); code lost to them is in no count above (get_diagnostics) ---\n",
+			d.Files, d.Errors, d.Warnings)
+	}
 
 	return sb.String()
 }
@@ -59,6 +64,8 @@ type jsonItem struct {
 type jsonResult struct {
 	Items []jsonItem `json:"items"`
 	Stats Stats      `json:"stats"`
+
+	IndexDiagnostics *index.DiagnosticSummary `json:"indexDiagnostics,omitempty"`
 }
 
 // FormatJSON serialises a Result as JSON.
@@ -68,8 +75,9 @@ func FormatJSON(result *Result) ([]byte, error) {
 	}
 
 	out := jsonResult{
-		Stats: result.Stats,
-		Items: make([]jsonItem, len(result.Items)),
+		Stats:            result.Stats,
+		IndexDiagnostics: result.IndexDiagnostics,
+		Items:            make([]jsonItem, len(result.Items)),
 	}
 	for i, item := range result.Items {
 		out.Items[i] = jsonItem{

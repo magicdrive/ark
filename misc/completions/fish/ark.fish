@@ -108,7 +108,7 @@ complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
 
 # ----- syntax options --------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from syntax' \
-        -l lang -d 'Language' -a 'go typescript tsx javascript python php'
+        -l lang -d 'Language' -a 'go typescript tsx javascript python php terraform'
 complete -c ark -n '__fish_seen_subcommand_from syntax' \
         -l format -d 'Output format' -a 'text json'
 complete -c ark -n '__fish_seen_subcommand_from syntax' \
@@ -116,7 +116,7 @@ complete -c ark -n '__fish_seen_subcommand_from syntax' \
 
 # ----- symbol options --------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from symbol' \
-        -l lang -d 'Language' -a 'go typescript tsx javascript python php'
+        -l lang -d 'Language' -a 'go typescript tsx javascript python php terraform'
 complete -c ark -n '__fish_seen_subcommand_from symbol' \
         -l format -d 'Output format' -a 'text json'
 complete -c ark -n '__fish_seen_subcommand_from symbol' \

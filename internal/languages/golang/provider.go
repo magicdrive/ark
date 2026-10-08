@@ -2,6 +2,7 @@ package golang
 
 import (
 	"context"
+	"strings"
 	"unicode"
 
 	"github.com/odvcencio/gotreesitter/grammars"
@@ -9,8 +10,10 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts symbols from Go source files.
@@ -21,19 +24,14 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "go-2" }
+func (p *Provider) CacheVersion() string        { return "go-6" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
-			Diagnostics: []language.Diagnostic{{
-				Severity: language.SeverityError,
-				Message:  "parse failed: " + err.Error(),
-				Location: source.Location{File: file},
-			}},
+			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},
 		}, nil
 	}
 	defer tree.Release()
@@ -41,7 +39,7 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 	root := tree.RootNode()
 	drafts := extractGoSymbols(root, lang, src, file)
 	refs, imports := extractGoReferences(root, lang, src, file)
-	return language.Extraction{Symbols: drafts, References: refs, Imports: imports}, nil
+	return language.Extraction{Symbols: drafts, References: refs, Imports: imports, Diagnostics: treediag.ParseErrors(root, lang, file)}, nil
 }
 
 func extractGoSymbols(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
@@ -86,10 +84,14 @@ func goFunction(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 
 func goMethod(node *ts.Node, lang *ts.Language, src []byte, file source.FileID) *language.SymbolDraft {
 	var name, receiver string
+	seenReceiver := false
 	for i := 0; i < node.ChildCount(); i++ {
 		child := node.Child(i)
 		t := child.Type(lang)
-		if t == "parameter_list" && receiver == "" {
+		if t == "parameter_list" && !seenReceiver {
+			// Only the first parameter list is the receiver; the next one
+			// holds the method's own parameters.
+			seenReceiver = true
 			receiver = goReceiverType(child, lang, src)
 		} else if (t == "field_identifier" || t == "identifier") && name == "" {
 			name = child.Text(src)
@@ -119,18 +121,29 @@ func goReceiverType(node *ts.Node, lang *ts.Language, src []byte) string {
 		child := node.Child(i)
 		if child.Type(lang) == "parameter_declaration" {
 			for j := 0; j < child.ChildCount(); j++ {
-				gc := child.Child(j)
-				switch gc.Type(lang) {
-				case "type_identifier":
-					return gc.Text(src)
-				case "pointer_type":
-					for k := 0; k < gc.ChildCount(); k++ {
-						ggc := gc.Child(k)
-						if ggc.Type(lang) == "type_identifier" {
-							return ggc.Text(src)
-						}
-					}
+				if name := goReceiverTypeName(child.Child(j), lang, src); name != "" {
+					return name
 				}
+			}
+		}
+	}
+	return ""
+}
+
+// goReceiverTypeName is the base type name of a receiver type: T, *T, T[P]
+// or *T[P].
+func goReceiverTypeName(n *ts.Node, lang *ts.Language, src []byte) string {
+	switch n.Type(lang) {
+	case "type_identifier":
+		return n.Text(src)
+	case "pointer_type", "generic_type":
+		for k := 0; k < n.ChildCount(); k++ {
+			c := n.Child(k)
+			switch c.Type(lang) {
+			case "type_identifier":
+				return c.Text(src)
+			case "generic_type":
+				return goReceiverTypeName(c, lang, src)
 			}
 		}
 	}
@@ -268,7 +281,7 @@ func isExported(name string) bool {
 
 // extractGoReferences walks the AST and collects syntactic references and imports.
 func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
-	c := &goRefCollector{lang: lang, src: src, file: file, fields: collectGoStructFields(root, lang, src)}
+	c := &goRefCollector{lang: lang, src: src, file: file, fields: collectGoStructFields(root, lang, src), values: goFileValues(root, lang, src)}
 	c.walk(root, "", nil)
 	return c.refs, c.imports
 }
@@ -279,7 +292,58 @@ type goRefCollector struct {
 	file    source.FileID
 	refs    []language.ReferenceDraft
 	imports []language.ImportDraft
-	fields  goStructFields // same-file struct field types (receiver evidence)
+	fields  goStructFields  // same-file struct field types (receiver evidence)
+	locals  map[string]int  // goDeclCounts of the enclosing function; nil outside
+	values  map[string]bool // package-level var / const names of this file
+}
+
+// goNamed returns the named children of n.
+func goNamed(n *ts.Node) []*ts.Node {
+	var out []*ts.Node
+	for i := 0; i < n.ChildCount(); i++ {
+		if ch := n.Child(i); ch.IsNamed() {
+			out = append(out, ch)
+		}
+	}
+	return out
+}
+
+// goFileValues collects the file's package-level var and const names.
+func goFileValues(root *ts.Node, lang *ts.Language, src []byte) map[string]bool {
+	out := map[string]bool{}
+	for i := 0; i < root.ChildCount(); i++ {
+		d := root.Child(i)
+		if t := d.Type(lang); t != "var_declaration" && t != "const_declaration" {
+			continue
+		}
+		var specs []*ts.Node
+		for j := 0; j < d.ChildCount(); j++ {
+			switch ch := d.Child(j); ch.Type(lang) {
+			case "var_spec", "const_spec":
+				specs = append(specs, ch)
+			case "var_spec_list":
+				specs = append(specs, namedChildren(ch, lang, "var_spec")...)
+			}
+		}
+		for _, spec := range specs {
+			for _, id := range namedChildren(spec, lang, "identifier") {
+				out[id.Text(src)] = true
+			}
+		}
+	}
+	return out
+}
+
+// walkFunction walks a function or method declaration as container.
+func (c *goRefCollector) walkFunction(node *ts.Node, container string) {
+	counts := make(map[string]int)
+	goDeclCounts(node, c.lang, c.src, counts)
+	env := goFunctionTypeEnv(node, c.lang, c.src, counts)
+	c.locals = counts
+	for i := 0; i < node.ChildCount(); i++ {
+		c.walk(node.Child(i), container, env)
+	}
+	c.locals = nil
 }
 
 // walk collects references. env carries the proven receiver types of the
@@ -289,10 +353,7 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 	switch t {
 	case "function_declaration":
 		name := childText(node, c.lang, c.src, "identifier")
-		fnEnv := goFunctionTypeEnv(node, c.lang, c.src)
-		for i := 0; i < node.ChildCount(); i++ {
-			c.walk(node.Child(i), name, fnEnv)
-		}
+		c.walkFunction(node, name)
 		return
 	case "method_declaration":
 		var name, recv string
@@ -309,17 +370,24 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 		if recv != "" {
 			qualified = recv + "." + name
 		}
-		fnEnv := goFunctionTypeEnv(node, c.lang, c.src)
-		for i := 0; i < node.ChildCount(); i++ {
-			c.walk(node.Child(i), qualified, fnEnv)
-		}
+		c.walkFunction(node, qualified)
 		return
 	case "import_declaration":
 		c.collectImports(node)
 		return // don't recurse into imports
+	case "func_literal":
+		if c.locals == nil {
+			// A function literal outside any function (a package-level
+			// initializer) declares its own locals.
+			c.locals = make(map[string]int)
+			goDeclCounts(node, c.lang, c.src, c.locals)
+			defer func() { c.locals = nil }()
+		}
 	case "call_expression":
 		c.collectCall(node, container, env)
 		// fall through to recurse for nested calls
+	case "type_conversion_expression":
+		c.collectGenericConversion(node, container, env)
 	case "composite_literal":
 		c.collectComposite(node, container)
 		// fall through to recurse
@@ -394,14 +462,112 @@ func goStringLiteralContent(node *ts.Node, lang *ts.Language, src []byte) string
 }
 
 func (c *goRefCollector) collectCall(node *ts.Node, container string, env goTypeEnv) {
-	// call_expression: first child = function expr, last child = argument_list
+	// call_expression: function expr, optional type_arguments, argument_list
 	if node.ChildCount() == 0 {
 		return
 	}
 	funcNode := node.Child(0)
+	var indices []*ts.Node
+	for i := 1; i < node.ChildCount(); i++ {
+		if ta := node.Child(i); ta.Type(c.lang) == "type_arguments" {
+			indices = append(indices, goNamed(ta)...)
+		}
+	}
+	if funcNode.Type(c.lang) == "index_expression" {
+		// f[x](...): the index may be a type argument.
+		var operand, index *ts.Node
+		for i := 0; i < funcNode.ChildCount(); i++ {
+			if ch := funcNode.Child(i); ch.IsNamed() {
+				if operand == nil {
+					operand = ch
+				} else {
+					index = ch
+				}
+			}
+		}
+		if operand == nil || index == nil || !goMayBeTypeArgument(index, c.lang) {
+			return
+		}
+		indices = append(indices, index)
+		funcNode = operand
+	}
 	name, recv := c.callNameFromExpr(funcNode)
 	if name == "" {
 		return
+	}
+	c.addCall(name, recv, funcNode, indices, container, env)
+}
+
+// collectGenericConversion collects T[X](v) and pkg.T(v) read as a
+// conversion: the call of a function or the conversion to a type — the
+// syntax cannot tell them apart, and Ark records a conversion T(v) written
+// as a call the same way.
+func (c *goRefCollector) collectGenericConversion(node *ts.Node, container string, env goTypeEnv) {
+	if node.ChildCount() == 0 {
+		return
+	}
+	base := node.Child(0)
+	var indices []*ts.Node
+	if base.Type(c.lang) == "generic_type" {
+		if base.ChildCount() == 0 {
+			return
+		}
+		for _, ta := range namedChildren(base, c.lang, "type_arguments") {
+			indices = append(indices, goNamed(ta)...)
+		}
+		if len(indices) == 0 {
+			return
+		}
+		base = base.Child(0)
+	}
+	var name, recv string
+	switch base.Type(c.lang) {
+	case "type_identifier":
+		name = base.Text(c.src)
+	case "qualified_type":
+		// pkg.T, or a value's member v.f the grammar read as a type.
+		for i := 0; i < base.ChildCount(); i++ {
+			switch ch := base.Child(i); ch.Type(c.lang) {
+			case "package_identifier":
+				recv = ch.Text(c.src)
+			case "type_identifier":
+				name = ch.Text(c.src)
+			}
+		}
+	}
+	if name == "" {
+		return
+	}
+	c.addCall(name, recv, base, indices, container, env)
+}
+
+// addCall records a call of name (on recv) at funcNode; indices are the
+// subscripts of a subscripted callee f[x](...), nil for a plain call.
+//
+// f[x](...) is a generic instantiation (or conversion) only if f denotes a
+// generic function, method or type; Go syntax cannot tell it from calling an
+// element of a slice, array or map of functions, and the parser's choice
+// between the two readings is no evidence. So:
+//   - a subscript that is a value (a local, a literal, a var / const of the
+//     file), or a callee that is one (a local, a var / const of the file):
+//     the call of an element, which names no declaration — not recorded,
+//     like any element call (fns[0](...));
+//   - otherwise the reference can denote only a function, method or type
+//     (ReferenceDraft.TargetKinds): resolved to one, it is that generic
+//     call; resolved to a variable or constant — an element call after all —
+//     it is Unresolved.
+func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices []*ts.Node, container string, env goTypeEnv) {
+	var kinds string
+	if len(indices) > 0 {
+		for _, ix := range indices {
+			if c.isValue(ix) {
+				return
+			}
+		}
+		if recv == "" && (c.locals[name] > 0 || c.values[name]) {
+			return
+		}
+		kinds = goGenericKinds
 	}
 	c.refs = append(c.refs, language.ReferenceDraft{
 		Name:         name,
@@ -411,7 +577,61 @@ func (c *goRefCollector) collectCall(node *ts.Node, container string, env goType
 		ReceiverExpr: recv,
 		ReceiverType: env.receiverType(recv, funcNode.StartByte(), c.fields),
 		IsCall:       true,
+		TargetKinds:  kinds,
 	})
+}
+
+// goGenericKinds are the declarations f in f[x](...) can be: a generic
+// function, method or type.
+var goGenericKinds = strings.Join([]string{string(symbol.KindFunction), string(symbol.KindMethod), string(symbol.KindType), string(symbol.KindStruct), string(symbol.KindInterface)}, ",")
+
+// isValue reports whether a subscript is certainly a value — then f[x] is
+// an element — by syntax and the file's declarations; a node type the parser
+// chose (type_identifier vs identifier) is no evidence. A name it cannot
+// place (a type, or a constant of another file) is not certainly a value.
+func (c *goRefCollector) isValue(n *ts.Node) bool {
+	named := goNamed(n)
+	switch n.Type(c.lang) {
+	case "type_elem", "parenthesized_type", "parenthesized_expression":
+		return len(named) == 1 && c.isValue(named[0])
+	case "identifier", "type_identifier":
+		nm := n.Text(c.src)
+		return c.locals[nm] > 0 || c.values[nm]
+	case "pointer_type":
+		return len(named) == 1 && c.isValue(named[0]) // *T, or *p of a value
+	case "unary_expression":
+		// *p, or the pointer type *T; any other operator makes a value.
+		if n.ChildCount() == 0 || n.Child(0).Type(c.lang) != "*" || len(named) != 1 {
+			return true
+		}
+		return c.isValue(named[0])
+	case "qualified_type", "selector_expression":
+		// pkg.T, pkg.Const, or a field of a value.
+		if len(named) > 0 {
+			op := named[0].Text(c.src)
+			return c.locals[op] > 0 || c.values[op]
+		}
+		return false
+	case "generic_type":
+		// G[X]: an instantiated type, or an element m[k] of a value m.
+		return len(named) > 0 && c.isValue(named[0])
+	case "slice_type", "array_type", "map_type", "channel_type", "function_type",
+		"struct_type", "interface_type", "negated_type", "implicit_length_array_type":
+		return false // type syntax no value expression has
+	}
+	return true // literals, calls, operators, ...: values
+}
+
+// goMayBeTypeArgument reports whether an index expression's index could be
+// a type argument (T, pkg.T, *T) rather than only a value.
+func goMayBeTypeArgument(n *ts.Node, lang *ts.Language) bool {
+	switch n.Type(lang) {
+	case "identifier", "type_identifier", "selector_expression", "qualified_type", "generic_type":
+		return true
+	case "unary_expression":
+		return n.ChildCount() > 0 && n.Child(0).Type(lang) == "*"
+	}
+	return false
 }
 
 func (c *goRefCollector) callNameFromExpr(node *ts.Node) (name, recv string) {
@@ -447,6 +667,10 @@ func (c *goRefCollector) collectComposite(node *ts.Node, container string) {
 		return
 	}
 	typeNode := node.Child(0)
+	if typeNode.Type(c.lang) == "generic_type" && typeNode.ChildCount() > 0 {
+		// T[X]{...} constructs T.
+		typeNode = typeNode.Child(0)
+	}
 	var name string
 	switch typeNode.Type(c.lang) {
 	case "type_identifier":

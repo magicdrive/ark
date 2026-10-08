@@ -5,6 +5,7 @@ symbol good kind=function qualified="good" parent="" receiver="" exported=true @
 ## references
 ## imports
 ## diagnostics
+diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.py:1:12-1:12
 
 # file: draft.py
 ## symbols

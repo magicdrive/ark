@@ -27,8 +27,17 @@ const (
 	// with that name is not simply the union of its traits'. It forms no edge.
 	KindTraitAdaptation ReferenceKind = "trait_adaptation"
 	KindImport          ReferenceKind = "import"
-	KindConstruction    ReferenceKind = "construction"
-	KindUnknown         ReferenceKind = "unknown"
+	// KindValueReference names another declaration whose value or
+	// configuration the enclosing declaration uses (Terraform: an expression
+	// `aws_vpc.main.id`, `var.region`, a `provider = aws.west`
+	// meta-argument). It is a dependency, not a call.
+	KindValueReference ReferenceKind = "value_reference"
+	// KindExplicitDependency names a declaration the enclosing one is
+	// explicitly ordered after without using its value (Terraform
+	// `depends_on`).
+	KindExplicitDependency ReferenceKind = "depends_on"
+	KindConstruction       ReferenceKind = "construction"
+	KindUnknown            ReferenceKind = "unknown"
 )
 
 // Reference is a syntactic use of a name in source code.
@@ -52,10 +61,19 @@ type Reference struct {
 	// ConfidenceCap bounds the confidence of this reference's resolution (see
 	// language.ReferenceDraft.ConfidenceCap); "" when unbounded.
 	ConfidenceCap string
+	// TargetKinds are the only symbol kinds the reference can denote (see
+	// language.ReferenceDraft.TargetKinds); empty when any.
+	TargetKinds string
 	// Dynamic marks a run-time computed name (see language.ReferenceDraft.
 	// Dynamic): Name is display text, never matched against declarations.
 	Dynamic bool
-	IsCall  bool
+	// IdentityInRepository qualifies the qualified identities (see
+	// language.ReferenceDraft.IdentityInRepository).
+	IdentityInRepository bool
+	// NamedArgument: Name is a named argument passed to the receiver (see
+	// language.ReferenceDraft.NamedArgument).
+	NamedArgument bool
+	IsCall        bool
 }
 
 // NewReferenceID returns a deterministic ID derived from

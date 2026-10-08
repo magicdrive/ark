@@ -455,6 +455,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 	tools = append(tools, ImpactToolDefinitions()...)
 	tools = append(tools, SearchToolDefinitions()...)
 	tools = append(tools, LanguageSupportToolDefinitions()...)
+	tools = append(tools, DiagnosticsToolDefinitions()...)
 	return tools
 }
 
@@ -499,6 +500,8 @@ func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (
 		return h.searchCode(arguments)
 	case "get_language_support":
 		return h.getLanguageSupport(arguments)
+	case "get_diagnostics":
+		return h.getDiagnostics(arguments)
 	default:
 		return nil, fmt.Errorf("unknown tool: %s", name)
 	}

@@ -10,6 +10,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/source"
 )
@@ -91,6 +92,20 @@ func fixtures() []providerFixture {
 			broken:  conformance.Case{Name: "broken", File: "broken.php", Source: []byte("<?php\nclass Broken { public function m( {\nfunction good() {}\n")},
 			dynamic: conformance.Case{Name: "dynamic", File: "dyn.php", Source: []byte("<?php\nfunction run($o, $m) { $o->$m(); }\n")},
 		},
+		{
+			name:     "terraform",
+			provider: terraform.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "main.tf", Source: []byte("variable \"region\" {}\nresource \"aws_vpc\" \"main\" { cidr_block = var.cidr }\noutput \"id\" { value = aws_vpc.main.id }\n")},
+				{Name: "module", File: "envs/prod/main.tf", Source: []byte("module \"net\" {\n  source = \"../../modules/net\"\n  cidr   = local.cidr\n}\nlocals { cidr = \"10.0.0.0/16\" }\noutput \"vpc\" { value = module.net.vpc_id }\n")},
+				{Name: "expressions", File: "x.tf", Source: []byte("resource \"a\" \"b\" {\n  count = 2\n  ids = [for s in data.c.d : s.id if s.ok]\n  t = \"${var.x}-${count.index}\"\n  depends_on = [a.c]\n  dynamic \"ingress\" {\n    for_each = var.rules\n    content { port = ingress.value }\n  }\n}\n")},
+				{Name: "tfvars", File: "terraform.tfvars", Source: []byte("region = \"eu-west-1\"\n")},
+			},
+			broken: conformance.Case{Name: "broken", File: "broken.tf", Source: []byte("resource \"a\" \"broken\" {\n  x = var.y +\n}\nresource \"a\" \"good\" {}\n")},
+			// Terraform has no call whose callee is computed at run time
+			// (function names are static built-ins); the honest count is 0.
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.tf", Source: []byte("locals { v = local.m[var.k] }\n")},
+		},
 	}
 }
 
@@ -101,6 +116,7 @@ func TestProviderContract(t *testing.T) {
 		f := f
 		t.Run(f.name, func(t *testing.T) {
 			conformance.RunContract(t, f.provider, f.valid)
+			conformance.CheckBrokenSourceDiagnosed(t, f.provider, f.broken)
 		})
 	}
 }
@@ -112,13 +128,13 @@ func TestQualityCandidates(t *testing.T) {
 	for _, f := range fixtures() {
 		f := f
 		t.Run(f.name, func(t *testing.T) {
-			// Q1/Q2: broken-source partial extraction & diagnostics.
+			// Q1: broken-source partial extraction (Q2, diagnostics, is part of
+			// the contract: CheckBrokenSourceDiagnosed).
 			ext, err := f.provider.Extract(context.Background(), source.FileID(f.broken.File), f.broken.Source)
 			if err != nil {
 				t.Logf("CANDIDATE broken-source: Extract returned error (%v)", err)
 			}
 			t.Logf("CANDIDATE Q1 partial-extraction: broken source yielded %d symbol(s) [target: recover the trailing valid declaration]", len(ext.Symbols))
-			t.Logf("CANDIDATE Q2 diagnostics: broken source yielded %d diagnostic(s) [target: >=1 diagnostic]", len(ext.Diagnostics))
 
 			// Q3/Q4: nested-member extraction over the valid corpus. Count
 			// symbols that look like members of a container (method receiver

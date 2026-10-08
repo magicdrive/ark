@@ -35,6 +35,16 @@ const (
 	KindConstant    SymbolKind = "constant"
 	KindParameter   SymbolKind = "parameter"
 	KindUnknown     SymbolKind = "unknown"
+
+	// Declarations of configuration languages (Terraform). A resource or data
+	// source is a declared infrastructure object, an output a value a module
+	// exposes to its callers, a configuration block a declaration of settings
+	// (Terraform's terraform/provider/check blocks). Input variables and local
+	// values are KindVariable, module calls KindModule.
+	KindResource      SymbolKind = "resource"
+	KindDataSource    SymbolKind = "data_source"
+	KindOutput        SymbolKind = "output"
+	KindConfiguration SymbolKind = "configuration"
 )
 
 // Symbol is the canonical domain representation of a code symbol.
@@ -56,6 +66,13 @@ type Symbol struct {
 	// "public") for languages that have one; "" otherwise (see
 	// language.SymbolDraft.Visibility).
 	Visibility string `json:",omitempty"`
+
+	// MemberScope / ParameterScope / MembersOutside state where the
+	// declarations this symbol's members and parameters denote live (see
+	// language.SymbolDraft.MemberScope).
+	MemberScope    string `json:",omitempty"`
+	ParameterScope string `json:",omitempty"`
+	MembersOutside bool   `json:",omitempty"`
 }
 
 // NewSymbolID returns a deterministic ID derived from (lang, repoRelPath, kind, qualified).

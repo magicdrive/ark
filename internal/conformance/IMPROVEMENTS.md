@@ -29,14 +29,33 @@ Probe (per language): a broken declaration followed by a valid one, e.g.
 Target: every provider recovers the trailing valid declaration. Today the
 Tree-sitter error node swallows the remainder for several grammars.
 
-## Q2 — Diagnostics on broken source
+## Q8 — Parser fidelity
 
-No provider emits a `language.Diagnostic` when the parse tree contains error
-nodes: breakage is silent, and the extraction simply has fewer symbols.
+gotreesitter is a reimplementation of the Tree-sitter runtime. Measured
+against the reference runtime with the same grammar commits (differential
+testing over real corpora), its trees differ in two ways:
 
-Target: at least one `SeverityWarning` diagnostic when the tree has errors.
-"Unknown is not empty" applies here too — silent degradation looks like a
-complete answer.
+- **with an error the reference does not report** — `tsparse` recovers
+  every such case of the measured corpora through its fallback routes; a
+  case no route parses would stay a `parse_error`.
+- **without any error** — an ambiguous construct derived differently (Go
+  `f[T](x)`, TypeScript `f<T>(x)`, `satisfies` / `as` targets). The Go and
+  TypeScript extractors read the shapes that carry references by the
+  languages' rules (ARCHITECTURE.md §3). Still open: TypeScript generic calls
+  whose type arguments contain function types, indexed access or computed
+  keys (`f<(a: T) => U>(x)`) are not recovered when misparsed — the call is
+  missing, never wrong (16 calls in zod).
+
+Target: references identical to the language front end on valid source.
+Measure with `TestFidelity_RepositoryReferencesMatchGoAST` /
+`TestFidelity_ExternalReferences` (Go) and `TestFidelity_TypeScriptCompiler`
+(TypeScript, opt-in). Whole-tree comparison with the reference runtime is
+not part of the test suite.
+
+Measured extractor gaps on valid TypeScript (zod; not parser defects):
+types in interface bodies and overload signatures, references inside
+string-named methods (`"~validate"() {}`) and `export` declarations nested in
+a `namespace` are not observed.
 
 ## Q3 — Member symbols (JavaScript, Python)
 
@@ -73,3 +92,10 @@ PHP `$o->$m()`.
 Target: exactly one Dynamic reference, with no name fabricated from the
 expression. Only a Dynamic reference is safe here: a guessed name would be
 matched against declarations.
+
+Terraform has no such syntax: function names are static built-ins and a
+computed index (`local.m[var.k]`) selects a value, not a declaration. Its
+probe has no computed-name call, so 0 is its correct count. Q3/Q4 do not
+apply to it either: Terraform declarations have no members (an attribute
+such as `.id` is not a declaration), and a check-scoped data source is its
+only symbol with `Parent`.

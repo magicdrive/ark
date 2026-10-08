@@ -3,6 +3,7 @@
 package context
 
 import (
+	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -58,6 +59,9 @@ type Result struct {
 	Items       []Item
 	Diagnostics []language.Diagnostic
 	Stats       Stats
+	// IndexDiagnostics summarizes the index's diagnostics when it has any
+	// (nil otherwise): code lost to them is in no count of Stats.
+	IndexDiagnostics *index.DiagnosticSummary
 }
 
 // candidate is an internal working type before source text is loaded.
