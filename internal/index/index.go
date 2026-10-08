@@ -250,6 +250,18 @@ func (idx *RepositoryIndex) Unattributed(id symbol.SymbolID) (incoming, outgoing
 	return idx.completeness.Incoming(id), idx.completeness.Outgoing(id)
 }
 
+// UnresolvedOutgoing describes the references inside id that resolve to no
+// candidate: the unresolved ones (the target is unknown and no indexed symbol
+// can be it), the ones proven outside the repository, and — by reason only —
+// the same-name ones already counted by Unattributed (see
+// Completeness and UnresolvedSample).
+func (idx *RepositoryIndex) UnresolvedOutgoing(id symbol.SymbolID) UnresolvedSample {
+	if idx.completeness == nil {
+		return UnresolvedSample{}
+	}
+	return idx.completeness.UnresolvedOutgoing(id)
+}
+
 // CandidateCallers returns up to MaxCandidateSources symbols that contain a
 // candidate (ambiguous or capped) reference to id, ordered by SymbolID. They
 // are possible callers only: never graph edges.

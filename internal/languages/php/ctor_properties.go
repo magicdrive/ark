@@ -36,7 +36,14 @@ import (
 //   - C writes no dynamic property name ($this->$n = …), and the constructor
 //     uses no dynamic scope feature (variable variables, extract, eval, …);
 //   - p is not declared static, and not declared with a type (a typed
-//     property is already proven by its declaration).
+//     property is already proven by its declaration);
+//   - p's value when the evidence assignment has not run — the constructor
+//     returned or threw before it, or a subclass constructor did not call
+//     this one — cannot dispatch a call: p is declared in C with no default,
+//     a null default or a scalar/array literal default. A default that names
+//     a constant (an enum case is an object) is no evidence. (An undeclared p
+//     may be declared by a supertype or trait outside this file; that is the
+//     unseen-code uncertainty the Strong cap below already states.)
 //
 // The evidence is exact only when no code outside C can write p: p is private
 // or protected in a final class, and C uses no trait (trait methods become
@@ -54,6 +61,7 @@ func phpCtorPropertyTypes(class, body *ts.Node, lang *ts.Language, src []byte, s
 	var ctor *ts.Node
 	declared := make(map[string]string) // property → visibility
 	static := make(map[string]bool)
+	objectDefault := make(map[string]bool) // default value may be an object
 	usesTrait := false
 	for i := 0; i < body.ChildCount(); i++ {
 		member := body.Child(i)
@@ -75,6 +83,7 @@ func phpCtorPropertyTypes(class, body *ts.Node, lang *ts.Language, src []byte, s
 					if name := phpVarName(childByType(el, lang, "variable_name"), lang, src); name != "" {
 						declared[name] = vis
 						static[name] = isStatic
+						objectDefault[name] = mayBeObjectDefault(el, lang)
 					}
 				}
 			}
@@ -182,7 +191,7 @@ func phpCtorPropertyTypes(class, body *ts.Node, lang *ts.Language, src []byte, s
 	out := make(map[string]phpTypeRef)
 	final := childByType(class, lang, "final_modifier") != nil
 	for prop, typ := range types {
-		if conflict[prop] || poisoned[prop] || static[prop] {
+		if conflict[prop] || poisoned[prop] || static[prop] || objectDefault[prop] {
 			continue
 		}
 		if param := ctorSourceParam(cbody, prop, evidence, lang, src); param != "" && rebound[param] {
@@ -194,6 +203,23 @@ func phpCtorPropertyTypes(class, body *ts.Node, lang *ts.Language, src []byte, s
 		out[prop] = typ
 	}
 	return out
+}
+
+// mayBeObjectDefault reports whether a property_element's default value could
+// be an object. Only literals are known not to be: a constant (global or
+// class) may hold an enum case.
+func mayBeObjectDefault(el *ts.Node, lang *ts.Language) bool {
+	for i := 0; i < el.ChildCount(); i++ {
+		switch el.Child(i).Type(lang) {
+		case "variable_name", "=", "null", "boolean", "integer", "float",
+			"string", "encapsed_string", "heredoc", "nowdoc", "unary_op_expression":
+		case "array_creation_expression":
+			// An array cannot dispatch a call, whatever it holds.
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 // ctorSourceParam returns the parameter assigned to $this->prop by an evidence

@@ -53,6 +53,7 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 		return &Result{Stats: Stats{BudgetTokens: req.MaxTokens}}, nil
 	}
 	unattributedCallers, unattributedCallees := e.idx.Unattributed(target.ID)
+	unresolved := e.idx.UnresolvedOutgoing(target.ID)
 
 	// Collect candidates.
 	candidates := e.collectCandidates(target, req)
@@ -154,6 +155,8 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 
 			UnattributedCallers: unattributedCallers,
 			UnattributedCallees: unattributedCallees,
+			UnresolvedCallees:   unresolved.Unresolved,
+			OutsideCallees:      unresolved.OutsideRepository,
 		},
 	}, nil
 }

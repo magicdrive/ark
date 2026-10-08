@@ -19,6 +19,7 @@ type providerFixture struct {
 	provider language.Provider
 	valid    []conformance.Case
 	broken   conformance.Case // a recoverable broken source (good decl after a broken one)
+	dynamic  conformance.Case // one call whose callee name is computed at run time (Q7)
 }
 
 func fixtures() []providerFixture {
@@ -31,7 +32,8 @@ func fixtures() []providerFixture {
 				{Name: "types_methods", File: "types.go", Source: []byte("package app\nimport \"fmt\"\ntype User struct{ ID int }\nfunc (u *User) Save() error { fmt.Println(u); return nil }\n")},
 				{Name: "calls", File: "calls.go", Source: []byte("package app\nfunc run() { Greet(); u := User{}; u.Save() }\n")},
 			},
-			broken: conformance.Case{Name: "broken", File: "broken.go", Source: []byte("package app\nfunc Broken( {\nfunc Good() {}\n")},
+			broken:  conformance.Case{Name: "broken", File: "broken.go", Source: []byte("package app\nfunc Broken( {\nfunc Good() {}\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.go", Source: []byte("package app\nfunc run(m map[string]func()) { m[\"k\"]() }\n")},
 		},
 		{
 			name:     "typescript",
@@ -42,7 +44,8 @@ func fixtures() []providerFixture {
 				{Name: "calls", File: "calls.ts", Source: []byte("function run() { greet(); const u = new User(); u.save(); }\n")},
 				{Name: "modules", File: "src/mod.ts", Source: []byte("import D, { A as B, type T } from \"./a\";\nimport * as ns from \"../up\";\nexport { B as C } from \"./b.js\";\nexport * from \"zod\";\nexport * as q from \"../../../escape\";\nexport default class K extends D { constructor(private r: B) { super(); } get v() { return 1 } set v(x) {} static s() { ns.go(); } }\n")},
 			},
-			broken: conformance.Case{Name: "broken", File: "broken.ts", Source: []byte("export class B {\n  m( {\n}\nexport function good() {}\n")},
+			broken:  conformance.Case{Name: "broken", File: "broken.ts", Source: []byte("export class B {\n  m( {\n}\nexport function good() {}\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.ts", Source: []byte("export function run(o: any, k: string) { o[k](); }\n")},
 		},
 		{
 			name:     "tsx",
@@ -52,7 +55,8 @@ func fixtures() []providerFixture {
 				{Name: "arrow", File: "a.tsx", Source: []byte("export const T = () => <h1>hi</h1>;\n")},
 				{Name: "components", File: "src/p.tsx", Source: []byte("import { Card } from \"./card\";\nimport * as UI from \"./ui\";\nexport const P = () => <div><Card /><UI.Button /><span /></div>;\n")},
 			},
-			broken: conformance.Case{Name: "broken", File: "broken.tsx", Source: []byte("export function B( {\n return <div>;\n}\nexport function Good() { return <i/>; }\n")},
+			broken:  conformance.Case{Name: "broken", File: "broken.tsx", Source: []byte("export function B( {\n return <div>;\n}\nexport function Good() { return <i/>; }\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.tsx", Source: []byte("export function run(o: any, k: string) { o[k](); }\n")},
 		},
 		{
 			name:     "javascript",
@@ -62,7 +66,8 @@ func fixtures() []providerFixture {
 				{Name: "class", File: "cls.js", Source: []byte("import { X } from \"./x.js\";\nexport class User { constructor() { this.id = 0; } save() {} }\n")},
 				{Name: "calls", File: "calls.js", Source: []byte("function run() { greet(); const u = new User(); u.save(); }\n")},
 			},
-			broken: conformance.Case{Name: "broken", File: "broken.js", Source: []byte("export function broken( {\nexport function good() {}\n")},
+			broken:  conformance.Case{Name: "broken", File: "broken.js", Source: []byte("export function broken( {\nexport function good() {}\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.js", Source: []byte("export function run(o, k) { o[k](); }\n")},
 		},
 		{
 			name:     "python",
@@ -72,7 +77,8 @@ func fixtures() []providerFixture {
 				{Name: "class", File: "cls.py", Source: []byte("import os\nclass User:\n    def __init__(self):\n        self.id = 0\n    def save(self):\n        return os.getpid()\n")},
 				{Name: "calls", File: "calls.py", Source: []byte("def run():\n    greet()\n    u = User()\n    u.save()\n")},
 			},
-			broken: conformance.Case{Name: "broken", File: "broken.py", Source: []byte("def broken(:\n    pass\ndef good():\n    pass\n")},
+			broken:  conformance.Case{Name: "broken", File: "broken.py", Source: []byte("def broken(:\n    pass\ndef good():\n    pass\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.py", Source: []byte("def run(o, n):\n    getattr(o, n)()\n")},
 		},
 		{
 			name:     "php",
@@ -82,7 +88,8 @@ func fixtures() []providerFixture {
 				{Name: "class", File: "cls.php", Source: []byte("<?php\nnamespace App;\nuse App\\Model\\User;\nclass UserService {\n    private User $user;\n    public function find(int $id): User { return $this->user; }\n}\n")},
 				{Name: "relations", File: "rel.php", Source: []byte("<?php\nclass Child extends Base implements Contract {\n    use LogsActivity;\n    public static function make(): self { return new self(); }\n}\n")},
 			},
-			broken: conformance.Case{Name: "broken", File: "broken.php", Source: []byte("<?php\nclass Broken { public function m( {\nfunction good() {}\n")},
+			broken:  conformance.Case{Name: "broken", File: "broken.php", Source: []byte("<?php\nclass Broken { public function m( {\nfunction good() {}\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.php", Source: []byte("<?php\nfunction run($o, $m) { $o->$m(); }\n")},
 		},
 	}
 }
@@ -131,6 +138,17 @@ func TestQualityCandidates(t *testing.T) {
 			}
 			t.Logf("CANDIDATE Q3 member-symbols: %d/%d valid-corpus symbol(s) are container members (receiver/parent) [target: class/object methods extracted as symbols]", memberSyms, totalSyms)
 			t.Logf("CANDIDATE Q4 parent-field: %d/%d valid-corpus symbol(s) populate SymbolDraft.Parent", parentSet, totalSyms)
+
+			// Q7: a call whose callee name is computed at run time is observed
+			// (a Dynamic reference), not silently dropped.
+			dext, _ := f.provider.Extract(context.Background(), source.FileID(f.dynamic.File), f.dynamic.Source)
+			var dynamic int
+			for _, r := range dext.References {
+				if r.Dynamic {
+					dynamic++
+				}
+			}
+			t.Logf("CANDIDATE Q7 dynamic-calls: %d Dynamic reference(s) for one computed-name call [target: 1]", dynamic)
 		})
 	}
 }

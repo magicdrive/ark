@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -108,7 +108,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -239,6 +239,15 @@ func refLess(a, b reference.Reference) bool {
 }
 
 // receiverType renders provider-proven receiver type evidence, or nothing.
+// dynamicName renders the Dynamic marker; omitted when false so snapshots of
+// providers that never emit it are unaffected.
+func dynamicName(d bool) string {
+	if d {
+		return " dynamic=true"
+	}
+	return ""
+}
+
 func receiverType(t string) string {
 	if t == "" {
 		return ""

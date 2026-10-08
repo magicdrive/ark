@@ -60,3 +60,16 @@ Go model, not a gap.
 recognised: JavaScript tests with `.jsx`, `.mjs` and `.cjs` extensions (the
 JavaScript provider indexes these files), and runner-specific conventions such
 as Deno's `foo_test.ts`.
+
+## Q7 — Observing computed-name calls
+
+A call whose callee name is computed at run time should be observed as a
+`language.ReferenceDraft` with `Dynamic` set, so that completeness reports it
+as an unresolved reference of its container instead of the call silently
+not existing ("Unknown is not empty"). Probe (per language): one such call —
+Go `m["k"]()`, TypeScript/TSX/JavaScript `o[k]()`, Python `getattr(o, n)()`,
+PHP `$o->$m()`.
+
+Target: exactly one Dynamic reference, with no name fabricated from the
+expression. Only a Dynamic reference is safe here: a guessed name would be
+matched against declarations.

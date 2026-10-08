@@ -52,7 +52,10 @@ type Reference struct {
 	// ConfidenceCap bounds the confidence of this reference's resolution (see
 	// language.ReferenceDraft.ConfidenceCap); "" when unbounded.
 	ConfidenceCap string
-	IsCall        bool
+	// Dynamic marks a run-time computed name (see language.ReferenceDraft.
+	// Dynamic): Name is display text, never matched against declarations.
+	Dynamic bool
+	IsCall  bool
 }
 
 // NewReferenceID returns a deterministic ID derived from

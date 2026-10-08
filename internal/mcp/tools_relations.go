@@ -17,7 +17,7 @@ func RelationsToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_relations",
-			Description: "Get everything a symbol calls, uses or reads and everything that does so to it, with reference kind (call, construction, type_use, read, ...), confidence and evidence. Ambiguous references appear as candidate relations, one per symbol and reference kind with its reference count (a deterministic sample of at most 10 per direction; candidateCallers / candidateCallees count the symbols, candidateCallerRelations / candidateCalleeRelations the relations). unattributed counts references into or out of the symbol that are not resolved graph edges (0 means complete)",
+			Description: "Get everything a symbol calls, uses or reads and everything that does so to it, with reference kind (call, construction, type_use, read, ...), confidence and evidence. Ambiguous references appear as candidate relations, one per symbol and reference kind with its reference count (a deterministic sample of at most 10 per direction; candidateCallers / candidateCallees count the symbols, candidateCallerRelations / candidateCalleeRelations the relations). unattributed counts references into or out of the symbol that may be a repository relation but are not resolved graph edges (0 means no repository relation is missing). Outgoing references no repository symbol can be the target of are counted as unresolved, those proven to refer outside the repository as outsideRepository, and unresolvedReferences lists the outgoing references with no candidate (first 10 in source order; unresolvedReferencesTotal counts them)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -81,7 +81,11 @@ type relationEntry struct {
 //   - Unattributed: the references into or out of the symbol that are not
 //     resolved graph edges — candidate and unidentified-source relations of
 //     graph kinds included — so 0 means the graph relations are complete (see
-//     index.Completeness).
+//     index.Completeness);
+//   - Unresolved / OutsideRepository / UnresolvedReferences: the outgoing
+//     references that are neither edges nor unattributed, and a sample of
+//     every outgoing reference with no candidate (index.UnresolvedSample),
+//     as in get_callees.
 //
 // Total and Truncated appear only when Relations was cut at maxResults.
 type relationsResult struct {
@@ -93,8 +97,13 @@ type relationsResult struct {
 	CandidateCallerRelations int  `json:"candidateCallerRelations,omitempty"`
 	CandidateCalleeRelations int  `json:"candidateCalleeRelations,omitempty"`
 	Unattributed             int  `json:"unattributed"`
+	Unresolved               int  `json:"unresolved"`
+	OutsideRepository        int  `json:"outsideRepository"`
 	Total                    int  `json:"total,omitempty"`
 	Truncated                bool `json:"truncated,omitempty"`
+
+	UnresolvedReferences      []unresolvedRefEntry `json:"unresolvedReferences,omitempty"`
+	UnresolvedReferencesTotal int                  `json:"unresolvedReferencesTotal,omitempty"`
 }
 
 func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResult, error) {
@@ -152,6 +161,11 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 	}
 	incoming, outgoing := idx.Unattributed(target.ID)
 	out.Unattributed = incoming + outgoing
+	un := idx.UnresolvedOutgoing(target.ID)
+	out.Unresolved = un.Unresolved
+	out.OutsideRepository = un.OutsideRepository
+	out.UnresolvedReferences = unresolvedRefEntries(un)
+	out.UnresolvedReferencesTotal = un.Total
 	if len(relations) > maxResults {
 		out.Total = len(relations)
 		out.Truncated = true

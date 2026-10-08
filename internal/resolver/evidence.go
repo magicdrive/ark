@@ -33,6 +33,9 @@ const (
 	// EvidenceConfidenceCap: the provider bounded the reference's confidence
 	// (reference.Reference.ConfidenceCap); the resolution was lowered to it.
 	EvidenceConfidenceCap EvidenceKind = "confidence_cap"
+	// EvidenceDynamicName: the reference's name is computed at run time
+	// (reference.Reference.Dynamic); it is Unresolved by construction.
+	EvidenceDynamicName EvidenceKind = "dynamic_name"
 )
 
 // ResolutionEvidence records why a particular candidate was matched.
