@@ -14,8 +14,8 @@ jobs:
   ci:
     uses: ./.github/workflows/ci.yml
 
-  # RELEASE SMOKE: the configuration, and the artifacts it builds, before any
-  # of them is published.
+  # RELEASE SMOKE: the GoReleaser configuration, and the artifacts it builds,
+  # before any of them is published.
   release-smoke:
     runs-on: ubuntu-latest
     steps:
@@ -43,7 +43,7 @@ jobs:
           version: '~> v1'
           args: release --snapshot --clean --skip=publish
 
-      - name: Verify artifacts and run the release smoke test
+      - name: Verify artifacts
         run: .github/release/verify-dist.sh dist
 
   # RELEASE: only when every gate above passed.
