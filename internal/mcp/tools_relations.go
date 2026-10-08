@@ -17,7 +17,7 @@ func RelationsToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_relations",
-			Description: "Get everything a symbol calls, uses or reads and everything that does so to it, with reference kind (call, construction, type_use, read, ...), confidence and evidence. Ambiguous references appear as candidate relations, one per symbol and reference kind with its reference count (a deterministic sample of at most 10 per direction; candidateCallers / candidateCallees count the symbols, candidateCallerRelations / candidateCalleeRelations the relations). unattributed counts references into or out of the symbol that may be a repository relation but are not resolved graph edges (0 means no repository relation is missing). Outgoing references no repository symbol can be the target of are counted as unresolved, those proven to refer outside the repository as outsideRepository, and unresolvedReferences lists the outgoing references with no candidate (first 10 in source order; unresolvedReferencesTotal counts them)",
+			Description: "Get everything a symbol calls, uses or reads and everything that does so to it, with reference kind (call, construction, type_use, read, ...), confidence and evidence. Ambiguous references appear as candidate relations, one per symbol and reference kind with its reference count (a deterministic sample of at most 10 per direction; candidateCallers / candidateCallees count the symbols, candidateCallerRelations / candidateCalleeRelations the relations). unattributed counts references into or out of the symbol that may be a repository relation but are not resolved graph edges (0 means no repository relation is missing). Outgoing references no repository symbol can be the target of are counted as unresolved, those proven to refer outside the repository as outsideRepository, and unresolvedReferences lists the outgoing references with no candidate (first 10 in source order; unresolvedReferencesTotal counts them). indexDiagnostics appears when the index has diagnostics (see get_diagnostics): references in code they cover are in no count",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -104,6 +104,9 @@ type relationsResult struct {
 
 	UnresolvedReferences      []unresolvedRefEntry `json:"unresolvedReferences,omitempty"`
 	UnresolvedReferencesTotal int                  `json:"unresolvedReferencesTotal,omitempty"`
+
+	// IndexDiagnostics: see callersResult.IndexDiagnostics.
+	IndexDiagnostics *index.DiagnosticSummary `json:"indexDiagnostics,omitempty"`
 }
 
 func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResult, error) {
@@ -172,6 +175,7 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 		relations = relations[:maxResults]
 	}
 	out.Relations = relations
+	out.IndexDiagnostics = indexDiagnosticsNote(idx)
 	b, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return nil, err

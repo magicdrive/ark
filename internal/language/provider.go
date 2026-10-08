@@ -18,12 +18,25 @@ const (
 	SeverityWarning DiagnosticSeverity = "warning"
 )
 
-// Diagnostic represents a problem encountered during extraction.
+// Diagnostic represents a problem encountered while indexing a file.
 type Diagnostic struct {
 	Severity DiagnosticSeverity
 	Message  string
 	Location source.Location
+
+	// Code is a stable classification set by whoever produced the
+	// diagnostic: the index for its own failures (DiagReadError,
+	// DiagExtractionError), a provider for what it states. "" means
+	// unclassified — never inferred from the message.
+	Code string `json:",omitempty"`
 }
+
+// Diagnostic codes of the index's own failures. With either, the file is not
+// indexed at all (IndexStats.Skipped).
+const (
+	DiagReadError       = "read_error"
+	DiagExtractionError = "extraction_error"
+)
 
 // SymbolDraft is the raw extraction result from a language provider before
 // SymbolIDs are assigned.

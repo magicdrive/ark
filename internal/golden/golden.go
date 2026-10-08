@@ -66,7 +66,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 
 	b.WriteString("## diagnostics\n")
 	for _, d := range sortedDiagnostics(ext.Diagnostics) {
-		fmt.Fprintf(&b, "diag %s %q %s\n", d.Severity, d.Message, loc(d.Location))
+		fmt.Fprintf(&b, "diag %s%s %q %s\n", d.Severity, diagCode(d.Code), d.Message, loc(d.Location))
 	}
 
 	return b.String()
@@ -137,7 +137,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 	// --- diagnostics ---
 	b.WriteString("## diagnostics\n")
 	for _, d := range sortedDiagnostics(idx.Diagnostics()) {
-		fmt.Fprintf(&b, "diag %s %q %s\n", d.Severity, d.Message, loc(d.Location))
+		fmt.Fprintf(&b, "diag %s%s %q %s\n", d.Severity, diagCode(d.Code), d.Message, loc(d.Location))
 	}
 
 	return b.String()
@@ -307,6 +307,15 @@ func namedArgument(a bool) string {
 		return " named_argument=true"
 	}
 	return ""
+}
+
+// diagCode renders a diagnostic's code; nothing when unclassified, so
+// snapshots of providers that set none are unaffected.
+func diagCode(c string) string {
+	if c == "" {
+		return ""
+	}
+	return " code=" + c
 }
 
 // inRepository renders the IdentityInRepository qualifier; omitted when false.

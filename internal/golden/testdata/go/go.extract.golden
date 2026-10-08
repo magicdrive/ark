@@ -4,6 +4,9 @@ symbol Broken kind=function qualified="Broken" parent="" receiver="" exported=tr
 ## references
 ## imports
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.go:3:14-3:15
+diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.go:5:12-5:12
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.go:5:6-5:10
 
 # file: draft.go
 ## symbols

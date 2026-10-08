@@ -62,6 +62,9 @@ type ImpactResult struct {
 	// 0 means the dependent list is complete as far as the index can tell.
 	Unattributed int
 	Diagnostics  []language.Diagnostic
+	// IndexDiagnostics summarizes Diagnostics when there are any (nil
+	// otherwise): code lost to them is in no category or count above.
+	IndexDiagnostics *index.DiagnosticSummary
 }
 
 // Analyze returns the likely impact of changing targetID.
@@ -88,6 +91,9 @@ func Analyze(
 	result := &ImpactResult{
 		Target:      target,
 		Diagnostics: idx.Diagnostics(),
+	}
+	if s := idx.DiagnosticSummary(); !s.Empty() {
+		result.IndexDiagnostics = &s
 	}
 
 	seen := make(map[symbol.SymbolID]bool)

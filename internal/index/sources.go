@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io/fs"
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/source"
 )
 
 // walkSources visits, in lexical (filepath.WalkDir) order, every file an index
@@ -106,4 +108,20 @@ func checkRoot(root string) error {
 		return fmt.Errorf("index: root %q is not a directory", root)
 	}
 	return nil
+}
+
+// fileFailure is the diagnostic of a file the index could not read or a
+// provider could not extract. It names the repository-relative file and
+// omits the OS path, which may lie outside the repository's text.
+func fileFailure(rel, code, what string, err error) language.Diagnostic {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		err = pe.Err
+	}
+	return language.Diagnostic{
+		Severity: language.SeverityWarning,
+		Code:     code,
+		Message:  what + ": " + err.Error(),
+		Location: source.Location{File: source.FileID(rel)},
+	}
 }

@@ -28,10 +28,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
 		if readErr != nil {
-			b.addDiagnostic(language.Diagnostic{
-				Severity: language.SeverityWarning,
-				Message:  "read error: " + readErr.Error(),
-			})
+			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))
 			b.stats.Skipped++
 			return
 		}
@@ -59,10 +56,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 		// Cache miss — extract and store.
 		extraction, err := prov.Extract(ctx, fileID, src)
 		if err != nil {
-			b.addDiagnostic(language.Diagnostic{
-				Severity: language.SeverityWarning,
-				Message:  path + ": extraction error: " + err.Error(),
-			})
+			b.addDiagnostic(fileFailure(relPath, language.DiagExtractionError, "extraction error", err))
 			b.stats.Skipped++
 			return
 		}

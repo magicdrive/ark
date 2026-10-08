@@ -31,3 +31,6 @@ edge TestCreate -calls-> UserService.Create confidence=strong evidence=[receiver
 edge UserService.Create -calls-> Repository.Find confidence=strong evidence=[receiver_type:receiver "s.repo" declared as "Repository"]
 edge UserService.Create -calls-> User confidence=strong evidence=[same_package:symbol "User" found in same package as service.go]
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.go:3:14-3:15
+diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.go:5:12-5:12
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.go:5:6-5:10

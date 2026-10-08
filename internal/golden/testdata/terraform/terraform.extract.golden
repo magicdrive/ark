@@ -6,7 +6,7 @@ ref var.cidr kind=value_reference container="aws_vpc.after_broken" receiver="" n
 ## imports
 ## identity_only
 ## diagnostics
-diag error "syntax error" @broken.tf:1:1-8:1
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.tf:1:1-8:1
 
 # file: data.tf
 ## symbols

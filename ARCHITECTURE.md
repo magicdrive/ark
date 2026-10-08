@@ -194,6 +194,26 @@ improvement and is not.
    Tests: `TestRelations_CandidateSampleBounded`, `TestFindSymbol_TruncationAndOrder`,
    `TestTargetTruncatedFlagSet`, `TestReExport_DepthBounded`, `TestReExport_CycleIsSafe`.
 
+**Diagnostics are what the index reports, not a completeness proof.** A
+diagnostic says Ark could not analyze part of a file (`parse_error`: the
+parser rejected a region, which is then not analyzed as written — the source
+itself may be valid, as grammars reject some valid code) or a whole file (unreadable or a provider failure:
+the file is skipped, never counted as indexed). It names the
+repository-relative file and never an OS path; its `Code` is set only by the
+producer that knows it (`treediag`, a provider, the index) and is otherwise
+unclassified — never inferred from the message. Graph tools add an
+`indexDiagnostics` summary only when there are diagnostics, and its absence
+claims nothing: files of formats no provider handles are not examined at
+all. Diagnostics are distinct from unresolved references (parsed, no known
+target) and from tool errors (`isError`). Every provider reports its
+parser's ERROR / MISSING nodes, and none on the contract's valid corpus
+(provider contract). Authority: `languages/internal/treediag/treediag.go`,
+`mcp/tools_diagnostics.go`. Tests: `TestDiagnostics_*`,
+`TestIndexFailureDiagnostics`, `TestNewWithCache_WarmKeepsDiagnostics`,
+`TestNewWithCache_DiagnosticsFollowContent`.
+Danger: reading "no diagnostics" or "unresolved: 0" as "everything was
+analyzed"; dropping a diagnostic from a warm cache.
+
 ## 4. RepositoryIndex and index reuse
 
 - **`RepositoryIndex` is immutable after `freeze`.** Accessors return copies;

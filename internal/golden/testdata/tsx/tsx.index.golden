@@ -14,3 +14,4 @@ ref setCount kind=call container="Greeting" receiver="" call=true @component.tsx
 ## edges
 edge Greeting -uses_type-> Props confidence=exact evidence=[same_file:symbol "Props" defined in same file component.tsx]
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.tsx:1:1-7:2

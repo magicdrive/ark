@@ -18,6 +18,9 @@ package cache
 // ReferenceDraft.IdentityInRepository / NamedArgument and Extraction.
 // IdentityOnly — follow the same rule: only
 // the Terraform provider emits them, and it has no entries that predate them.
+// Diagnostic.Code is optional the same way; every provider that started
+// stating codes bumped its CacheVersion (go-3, javascript 2, python 2, ts-3,
+// php-12, terraform-5).
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

@@ -468,7 +468,7 @@ ark skill inspect                       # 検出されたスキルを表示
 
 `ark skill update` が更新するのは `SKILL.md` と `agents/openai.yaml` で、`agents/claude-code.md` とインストール済みスラッシュコマンドは、スキルの生成時に書き込まれます。
 
-`agents/claude-code.md` は 19 種類の Ark MCP ツールを使用する Claude Code スラッシュコマンドとして `.claude/commands/` にも自動インストールされます。
+`agents/claude-code.md` は 20 種類の Ark MCP ツールを使用する Claude Code スラッシュコマンドとして `.claude/commands/` にも自動インストールされます。
 
 ---
 
@@ -769,7 +769,7 @@ Ark は **純粋な静的解析**のみを行い、`terraform` を実行せず�
 
 ### 🤖 LLM-Optimized Workflow
 
-Ark は **19 種類の MCP ツール**でコードインテリジェンススタック全体をカバーします:
+Ark は **20 種類の MCP ツール**でコードインテリジェンススタック全体をカバーします:
 
 | ツール | 説明 |
 |--------|------|
@@ -792,6 +792,14 @@ Ark は **19 種類の MCP ツール**でコードインテリジェンススタ
 | `analyze_change_impact` | シンボル変更の影響範囲を推定 |
 | `search_code` | 種別・名前・型使用などによる構造検索 |
 | `get_language_support` | 対応言語とサポートレベルの一覧 |
+| `get_diagnostics` | Ark が完全には解析できなかったファイル（parser が受理しなかった範囲、読めないファイル）。絞り込み・ページング対応 |
+
+#### Ark の回答の読み方：診断・unresolved・完全性
+
+- **診断（diagnostic）** は、Ark がファイルの一部（`parse_error`：parser が受理しなかった範囲で、書かれたとおりには解析されない。grammar が正しいコードを受理しないこともあるため、ソース自体は正しい可能性がある）またはファイル全体（読み込み不可・provider の失敗：ファイルはスキップ）を解析できなかったことを示します。Ark の解析についての情報であり、コンパイラの判定ではありません。`get_diagnostics` で一覧でき、graph 系ツール（`get_callers`、`get_callees`、`get_relations`、`get_context`、`analyze_change_impact`）は **index に診断があるときだけ** 診断の要約（`indexDiagnostics`。impact の JSON では `index_diagnostics`、テキスト出力では末尾の 1 行）を付けます。そのとき「caller なし」という答えは、それらのファイル内のコードを取りこぼしている可能性があります。
+- **unresolved な参照** は別物です。Ark は構文を読めたが参照先を知らない（外部・組み込み・未宣言・実行時計算の名前）ことを示し、graph 系ツールの `unresolved` / `outsideRepository` で数えられます。診断にはなりません。
+- **`unattributed: 0`** は「Ark が *観測した* 参照に、欠けている edge の可能性があるものはない」という意味です。観測していないものは数えられません。**診断 0 件かつ `unresolved: 0` でも、すべての依存関係を把握したことにはなりません** — どの provider も扱わない形式のファイル（`get_language_support` を参照。例：Terraform の `.tf.json`）は調べられず、provider がすべての構文を観測するとも限りません。
+- ツールエラー（`isError`）はツール自体の失敗で、診断ではありません。
 
 コアとなる階層的探索パターン:
 

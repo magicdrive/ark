@@ -116,6 +116,7 @@ func TestProviderContract(t *testing.T) {
 		f := f
 		t.Run(f.name, func(t *testing.T) {
 			conformance.RunContract(t, f.provider, f.valid)
+			conformance.CheckBrokenSourceDiagnosed(t, f.provider, f.broken)
 		})
 	}
 }
@@ -127,13 +128,13 @@ func TestQualityCandidates(t *testing.T) {
 	for _, f := range fixtures() {
 		f := f
 		t.Run(f.name, func(t *testing.T) {
-			// Q1/Q2: broken-source partial extraction & diagnostics.
+			// Q1: broken-source partial extraction (Q2, diagnostics, is part of
+			// the contract: CheckBrokenSourceDiagnosed).
 			ext, err := f.provider.Extract(context.Background(), source.FileID(f.broken.File), f.broken.Source)
 			if err != nil {
 				t.Logf("CANDIDATE broken-source: Extract returned error (%v)", err)
 			}
 			t.Logf("CANDIDATE Q1 partial-extraction: broken source yielded %d symbol(s) [target: recover the trailing valid declaration]", len(ext.Symbols))
-			t.Logf("CANDIDATE Q2 diagnostics: broken source yielded %d diagnostic(s) [target: >=1 diagnostic]", len(ext.Diagnostics))
 
 			// Q3/Q4: nested-member extraction over the valid corpus. Count
 			// symbols that look like members of a container (method receiver

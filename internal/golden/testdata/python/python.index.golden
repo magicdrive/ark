@@ -24,3 +24,4 @@ ref create kind=call container="test_create" receiver="s" call=true @test_servic
 ## edges
 edge test_create -calls-> UserService confidence=strong evidence=[same_package:symbol "UserService" found in same package as test_service.py]
 ## diagnostics
+diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.py:1:12-1:12

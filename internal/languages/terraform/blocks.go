@@ -110,6 +110,7 @@ func (x *extractor) block(b *ts.Node, override bool) {
 	if len(labels) != shape.labels || slices.ContainsFunc(labels, func(l string) bool { return !validName(l) }) {
 		x.diags = append(x.diags, language.Diagnostic{
 			Severity: language.SeverityWarning,
+			Code:     diagInvalidBlockHeader,
 			Message:  fmt.Sprintf("terraform: a %s block needs %d label(s), each a valid name", typ, shape.labels),
 			Location: nodeLocation(b, x.file),
 		})
@@ -130,6 +131,7 @@ func (x *extractor) block(b *ts.Node, override bool) {
 				// Neither this alias nor the default configuration.
 				x.diags = append(x.diags, language.Diagnostic{
 					Severity: language.SeverityWarning,
+					Code:     diagInvalidProviderAlias,
 					Message:  "terraform: a provider alias must be a valid name",
 					Location: nodeLocation(b, x.file),
 				})
@@ -188,6 +190,7 @@ func (x *extractor) declare(node *ts.Node, address string, kind symbol.SymbolKin
 		if address != "terraform" {
 			x.diags = append(x.diags, language.Diagnostic{
 				Severity: language.SeverityWarning,
+				Code:     diagDuplicateDeclaration,
 				Message:  "terraform: duplicate declaration of " + address,
 				Location: nodeLocation(node, x.file),
 			})

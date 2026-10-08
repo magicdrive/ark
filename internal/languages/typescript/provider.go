@@ -14,6 +14,7 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 )
 
@@ -48,7 +49,8 @@ func (p *Provider) Extensions() []string {
 //	"ts-2": members + containment, qualified containers, module bindings /
 //	        exports / ModuleSpec candidates, ModuleScoped, ReceiverType,
 //	        heritage and JSX references.
-func (p *Provider) CacheVersion() string { return "ts-2" }
+//	"ts-3": syntax-error diagnostics (treediag).
+func (p *Provider) CacheVersion() string { return "ts-3" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()
@@ -56,11 +58,7 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 	tree, err := parser.Parse(src)
 	if err != nil {
 		return language.Extraction{
-			Diagnostics: []language.Diagnostic{{
-				Severity: language.SeverityError,
-				Message:  "parse failed: " + err.Error(),
-				Location: source.Location{File: file},
-			}},
+			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},
 		}, nil
 	}
 	defer tree.Release()
@@ -74,6 +72,7 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 		Bindings:     e.bindings,
 		Exports:      e.exports,
 		ModuleScoped: e.isModule,
+		Diagnostics:  treediag.ParseErrors(tree.RootNode(), tsLang, file),
 	}, nil
 }
 

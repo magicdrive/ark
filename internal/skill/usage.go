@@ -30,6 +30,7 @@ var skillTools = []string{
 	"get_context", "get_symbol", "get_relations", "get_callers", "get_callees",
 	"analyze_change_impact", "search_code", "search_in_files", "get_file_content",
 	"list_files", "get_file_info", "get_project_stats", "get_files_arklite",
+	"get_diagnostics",
 }
 
 // markdownGuidance returns the guidance with bare tool names (SKILL.md).

@@ -165,6 +165,7 @@ func TestHandleListTools(t *testing.T) {
 		"analyze_change_impact",
 		"search_code",
 		"get_language_support",
+		"get_diagnostics",
 	}
 
 	if len(result.Tools) != len(expectedTools) {

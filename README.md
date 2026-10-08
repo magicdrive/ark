@@ -469,7 +469,7 @@ Skills include YAML frontmatter for safe updates:
 
 `ark skill update` refreshes `SKILL.md` and `agents/openai.yaml`; `agents/claude-code.md` and the installed slash command are written when a skill is generated.
 
-The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 19 Ark MCP tools.
+The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 20 Ark MCP tools.
 
 ---
 
@@ -795,7 +795,7 @@ downloads modules or providers, and never reads `.terraform/`.
 
 ### 🤖 LLM-Optimized Workflow
 
-Ark provides **19 MCP tools** covering the full code-intelligence stack:
+Ark provides **20 MCP tools** covering the full code-intelligence stack:
 
 | Tool | Description |
 |------|-------------|
@@ -818,6 +818,14 @@ Ark provides **19 MCP tools** covering the full code-intelligence stack:
 | `analyze_change_impact` | Estimate impact of changing a symbol |
 | `search_code` | Structural search by kind, name, type usage, etc. |
 | `get_language_support` | List supported languages and their feature levels |
+| `get_diagnostics` | Files Ark could not fully analyze: regions the parser rejected, unreadable files (filters, paging) |
+
+#### Reading Ark's answers: diagnostics, unresolved and completeness
+
+- **A diagnostic** says Ark could not analyze part of a file (`parse_error`: the parser rejected a region, which is then not analyzed as written — the source itself may be valid, since grammars reject some valid code) or a whole file (unreadable, or a provider failure: the file is skipped). It is about Ark's analysis, not a compiler verdict. `get_diagnostics` lists them; graph tools (`get_callers`, `get_callees`, `get_relations`, `get_context`, `analyze_change_impact`) add an index-diagnostics summary (`indexDiagnostics`; `index_diagnostics` in the impact JSON; a closing line in text output) **only when the index has diagnostics** — then a "no callers" answer may miss code in those files.
+- **An unresolved reference** is different: Ark parsed it but knows no target (an external, built-in, undeclared or computed name). It is counted by `unresolved` / `outsideRepository` on the graph tools, never as a diagnostic.
+- **`unattributed: 0`** means no reference Ark *observed* may be a missing edge. It cannot account for what Ark does not observe: **no diagnostics and `unresolved: 0` still do not prove that every dependency is known** — files of formats no provider handles (see `get_language_support`; e.g. Terraform `.tf.json`) are not examined, and a provider may not observe every construct.
+- A tool error (`isError`) means the tool itself failed; it is never a diagnostic.
 
 The core navigation pattern:
 

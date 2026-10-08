@@ -143,8 +143,13 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 		})
 	}
 
+	var diags *index.DiagnosticSummary
+	if s := e.idx.DiagnosticSummary(); !s.Empty() {
+		diags = &s
+	}
 	return &Result{
-		Items: items,
+		IndexDiagnostics: diags,
+		Items:            items,
 		Stats: Stats{
 			TotalCandidates: totalCandidates,
 			SelectedItems:   len(items),

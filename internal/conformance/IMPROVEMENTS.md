@@ -29,15 +29,6 @@ Probe (per language): a broken declaration followed by a valid one, e.g.
 Target: every provider recovers the trailing valid declaration. Today the
 Tree-sitter error node swallows the remainder for several grammars.
 
-## Q2 — Diagnostics on broken source
-
-A provider that emits no `language.Diagnostic` when the parse tree contains
-error nodes makes breakage silent: the extraction simply has fewer symbols.
-
-Target: at least one `SeverityWarning` diagnostic when the tree has errors.
-"Unknown is not empty" applies here too — silent degradation looks like a
-complete answer.
-
 ## Q3 — Member symbols (JavaScript, Python)
 
 JavaScript and Python do not extract class/object members as symbols, so

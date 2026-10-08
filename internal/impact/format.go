@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/magicdrive/ark/internal/index"
 )
 
 // Format returns a human-readable impact report.
@@ -69,6 +71,10 @@ func Format(r *ImpactResult) string {
 	if un.Truncated() {
 		fmt.Fprintf(&b, "  ... and %d more\n", un.Total-len(un.References))
 	}
+	if d := r.IndexDiagnostics; d != nil {
+		fmt.Fprintf(&b, "\nIndex diagnostics: %d file(s), %d error(s), %d warning(s); code lost to them is in no category above (get_diagnostics)\n",
+			d.Files, d.Errors, d.Warnings)
+	}
 
 	return b.String()
 }
@@ -106,6 +112,8 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 		OutsideRepositoryCount    int             `json:"outside_repository_count"`
 		UnresolvedReferences      []unresolvedRef `json:"unresolved_references,omitempty"`
 		UnresolvedReferencesTotal int             `json:"unresolved_references_total,omitempty"`
+		// Present only when the index has diagnostics.
+		IndexDiagnostics *index.DiagnosticSummary `json:"index_diagnostics,omitempty"`
 	}
 
 	o := out{
@@ -117,6 +125,7 @@ func FormatJSON(r *ImpactResult) ([]byte, error) {
 		UnresolvedCount:           r.UnresolvedCallees.Unresolved,
 		OutsideRepositoryCount:    r.UnresolvedCallees.OutsideRepository,
 		UnresolvedReferencesTotal: r.UnresolvedCallees.Total,
+		IndexDiagnostics:          r.IndexDiagnostics,
 	}
 	for _, e := range r.Entries {
 		o.Entries = append(o.Entries, entry{

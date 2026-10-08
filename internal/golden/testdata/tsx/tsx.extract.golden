@@ -3,6 +3,7 @@
 ## references
 ## imports
 ## diagnostics
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.tsx:1:1-7:2
 
 # file: component.tsx
 ## symbols

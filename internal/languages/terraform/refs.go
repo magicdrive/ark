@@ -282,6 +282,7 @@ func (s *scan) deep(n *ts.Node, depth int) bool {
 		s.x.deepReported = true
 		s.x.diags = append(s.x.diags, language.Diagnostic{
 			Severity: language.SeverityWarning,
+			Code:     diagNestingTooDeep,
 			Message:  "terraform: nesting too deep; references below it are not observed",
 			Location: nodeLocation(n, s.x.file),
 		})

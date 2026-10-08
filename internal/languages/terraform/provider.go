@@ -103,6 +103,7 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 )
 
@@ -117,10 +118,16 @@ func (p *Provider) Language() language.Language { return "terraform" }
 func (p *Provider) Extensions() []string { return []string{".tf", ".tfvars"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "terraform-4" }
+func (p *Provider) CacheVersion() string { return "terraform-5" }
 
-// maxSyntaxDiagnostics bounds the syntax-error diagnostics of one file.
-const maxSyntaxDiagnostics = 5
+// Diagnostic codes (language.Diagnostic.Code) this provider states, beside
+// treediag's parse_failed and parse_error.
+const (
+	diagInvalidBlockHeader   = "invalid_block_header"   // wrong label count or an invalid name: the block is not observed
+	diagInvalidProviderAlias = "invalid_provider_alias" // the provider block is not declared
+	diagDuplicateDeclaration = "duplicate_declaration"  // within one file: the later block declares nothing
+	diagNestingTooDeep       = "nesting_too_deep"       // references below maxExprDepth are not observed
+)
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.HclLanguage()
@@ -128,11 +135,7 @@ func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (l
 	tree, err := parser.Parse(src)
 	if err != nil {
 		return language.Extraction{
-			Diagnostics: []language.Diagnostic{{
-				Severity: language.SeverityError,
-				Message:  "parse failed: " + err.Error(),
-				Location: source.Location{File: file},
-			}},
+			Diagnostics:  []language.Diagnostic{treediag.ParseFailed(file, err)},
 			IdentityOnly: true,
 		}, nil
 	}
@@ -147,7 +150,7 @@ func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (l
 		seen: make(map[string]bool),
 	}
 	root := tree.RootNode()
-	x.syntaxDiagnostics(root)
+	x.diags = append(x.diags, treediag.ParseErrors(root, lang, file)...)
 	for _, body := range topLevelBodies(root, lang) {
 		x.topLevel(body, isOverrideFile(file))
 	}
@@ -207,40 +210,6 @@ func topLevelBodies(root *ts.Node, lang *ts.Language) []*ts.Node {
 		}
 	}
 	return out
-}
-
-// syntaxDiagnostics reports the first maxSyntaxDiagnostics syntax errors.
-func (x *extractor) syntaxDiagnostics(root *ts.Node) {
-	if !root.HasError() {
-		return
-	}
-	n := 0
-	var walk func(node *ts.Node, depth int)
-	walk = func(node *ts.Node, depth int) {
-		if n >= maxSyntaxDiagnostics || depth > maxExprDepth {
-			return
-		}
-		if node.IsError() || node.IsMissing() {
-			n++
-			msg := "syntax error"
-			if node.IsMissing() {
-				msg = "syntax error: missing " + node.Type(x.lang)
-			}
-			x.diags = append(x.diags, language.Diagnostic{
-				Severity: language.SeverityError,
-				Message:  msg,
-				Location: nodeLocation(node, x.file),
-			})
-			return
-		}
-		if !node.HasError() {
-			return
-		}
-		for i := 0; i < node.ChildCount(); i++ {
-			walk(node.Child(i), depth+1)
-		}
-	}
-	walk(root, 0)
 }
 
 func nodeLocation(node *ts.Node, file source.FileID) source.Location {

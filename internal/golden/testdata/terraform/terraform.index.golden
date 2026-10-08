@@ -119,4 +119,4 @@ edge output.network_id -references-> modules/network/output.vpc_id confidence=ex
 edge output.remote_vpc -references-> module.vpc_remote confidence=exact evidence=[qualified_identity:"module.vpc_remote" is declared at main.tf]
 edge provider.aws.west -references-> var.region confidence=exact evidence=[qualified_identity:"var.region" is declared at variables.tf]
 ## diagnostics
-diag error "syntax error" @broken.tf:1:1-8:1
+diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.tf:1:1-8:1
