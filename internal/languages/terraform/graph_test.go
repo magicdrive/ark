@@ -77,7 +77,9 @@ func TestGraph_MultiModuleFixture(t *testing.T) {
 		"local.volumes -references-> var.volume_names exact",
 		"local.web_ids -references-> aws_instance.web exact",
 		"module.database -references-> module.network exact",
+		"module.database -references-> modules/database/var.subnet_id exact", // input argument
 		"module.database -references-> modules/network/output.subnet_id exact",
+		"module.network -references-> modules/network/var.cidr exact", // input argument
 		"module.network -references-> var.cidr exact",
 		"modules/database/aws_db_instance.db -references-> modules/database/aws_vpc.main exact",
 		"modules/database/aws_db_instance.db -references-> modules/database/var.subnet_id exact",
@@ -113,16 +115,32 @@ func TestGraph_NoEdgeCrossesAModuleBoundaryWithoutBinding(t *testing.T) {
 				if from == toDir {
 					continue
 				}
-				viaScope := false
-				for _, ev := range e.Evidence {
-					viaScope = viaScope || ev.Kind == resolver.EvidenceMemberScope
-				}
-				if !viaScope || to.Kind != symbol.KindOutput || !strings.HasPrefix(to.Qualified, strings.TrimPrefix(toDir+"/", "./")) {
+				if !crossesThroughBinding(idx, s, e) {
 					t.Errorf("%s (%s) -> %s (%s) crosses a module boundary without a module binding", s.Qualified, from, to.Qualified, toDir)
 				}
 			}
 		}
 	}
+}
+
+// crossesThroughBinding reports whether an edge leaving its module directory
+// is a module binding: through a member scope, to an output of the child
+// directory (module.NAME.OUTPUT), or from a module call to an input
+// variable of exactly the directory its ParameterScope names.
+func crossesThroughBinding(idx *index.RepositoryIndex, from symbol.Symbol, e index.GraphEdge) bool {
+	if !edgeVia(e, resolver.EvidenceMemberScope) {
+		return false
+	}
+	to, _ := idx.GetSymbol(e.To)
+	toPrefix := strings.TrimPrefix(path.Dir(string(to.Location.File))+"/", "./")
+	switch to.Kind {
+	case symbol.KindOutput:
+		return strings.HasPrefix(to.Qualified, toPrefix+"output.") || (toPrefix == "" && strings.HasPrefix(to.Qualified, "output."))
+	case symbol.KindVariable:
+		return from.Kind == symbol.KindModule && from.ParameterScope != "" &&
+			strings.HasPrefix(to.Qualified, from.ParameterScope) && !strings.Contains(strings.TrimPrefix(to.Qualified, from.ParameterScope), "/")
+	}
+	return false
 }
 
 func TestGraph_SameAddressInDifferentModules(t *testing.T) {
@@ -231,7 +249,8 @@ func resolvedReferenceCount(idx *index.RepositoryIndex, s symbol.Symbol) int {
 		for _, e := range idx.GetCallees(s.ID) {
 			to, _ := idx.GetSymbol(e.To)
 			if (r.NameQualified != "" && to.Qualified == r.NameQualified) ||
-				(r.ReceiverTypeQualified != "" && to.Kind == symbol.KindOutput && strings.HasSuffix(to.Qualified, "output."+r.Name) && edgeVia(e, resolver.EvidenceMemberScope)) {
+				(r.NamedArgument && s.ParameterScope != "" && to.Qualified == s.ParameterScope+r.Name) ||
+				(r.ReceiverTypeQualified != "" && !r.NamedArgument && to.Kind == symbol.KindOutput && strings.HasSuffix(to.Qualified, "output."+r.Name) && edgeVia(e, resolver.EvidenceMemberScope)) {
 				n++
 				break
 			}

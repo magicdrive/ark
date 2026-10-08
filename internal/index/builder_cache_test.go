@@ -2,12 +2,15 @@ package index_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
+	"github.com/magicdrive/ark/internal/source"
 )
 
 func TestNewWithCache_ProducesIndex(t *testing.T) {
@@ -70,5 +73,36 @@ func TestNewWithCache_NopStoreBehavesLikeNew(t *testing.T) {
 
 	if plain.Stats().Symbols != cached.Stats().Symbols {
 		t.Fatalf("NopStore: symbol count differs: %d vs %d", plain.Stats().Symbols, cached.Stats().Symbols)
+	}
+}
+
+// diagProvider emits one diagnostic per file.
+type diagProvider struct{ fakeProvider }
+
+func (diagProvider) Extract(_ context.Context, f source.FileID, _ []byte) (language.Extraction, error) {
+	return language.Extraction{Diagnostics: []language.Diagnostic{{Severity: language.SeverityError, Message: "syntax error", Location: source.Location{File: f}}}}, nil
+}
+
+// A warm cache returns the index a cold one does — diagnostics included.
+func TestNewWithCache_WarmKeepsDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "x.fake"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store, err := cache.NewFileStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	providers := []language.Provider{diagProvider{}}
+	var got []int
+	for i := 0; i < 2; i++ {
+		idx, err := index.NewWithCache(context.Background(), dir, providers, store)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, len(idx.Diagnostics()))
+	}
+	if got[0] != 1 || got[1] != 1 {
+		t.Errorf("diagnostics cold=%d warm=%d, want 1 and 1", got[0], got[1])
 	}
 }

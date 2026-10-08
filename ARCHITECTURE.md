@@ -64,15 +64,22 @@ identity, R0; no name stage reaches them, and a reference of the file without
 identity is Unresolved), `ReferenceDraft.IdentityInRepository` (the identity
 names a repository scope: no declaration there is Unresolved, not
 `OutsideRepository`, and no other declaration can be its target), and
-`SymbolDraft.MemberScope` / `MembersOutside` (a declaration states where its
-members live: a module call with a local `source` names the child module's
-outputs; a remote `source` places them outside the repository). A module call
+`SymbolDraft.MemberScope` / `ParameterScope` / `MembersOutside` (a
+declaration states where its members and parameters live: a module call
+with a local `source` names the child module's outputs, and — for a
+reference marked `NamedArgument` — its input variables; a remote `source`
+places both outside the repository; a named argument is never looked up as
+a member). A module call
 is therefore a member scope, not an import binding and not a call: bindings are
 file-scoped and name files, while a module call is visible to the whole module
 directory and names a directory. Dependencies form their own edge kinds
-(`references`, `depends_on`), never `calls`. Authority:
+(`references`, `depends_on`), never `calls`. A module input argument is a
+reference from the call to the child's variable declaration — the interface
+it binds, like `module.x.out` to the output — so a change to the variable
+reaches every call that passes it; the value flowing from the argument into
+the child is not an edge (`TestInputBinding_*`). Authority:
 `languages/terraform/provider.go` (header), `resolver/identity.go`. Tests:
-`TestIdentityOnly_*`, `TestMemberScope_*`,
+`TestIdentityOnly_*`, `TestMemberScope_*`, `TestParameterScope_*`,
 `TestIsolation_OtherLanguagesAreUnaffected`,
 `TestGraph_NoEdgeCrossesAModuleBoundaryWithoutBinding`.
 Danger: resolving a Terraform address by name "when the module has no match" —

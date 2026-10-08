@@ -38,8 +38,8 @@ symbol null_resource.x kind=resource qualified="dup/null_resource.x" parent="" r
 
 # file: main.tf
 ## symbols
-symbol module.network kind=module qualified="module.network" parent="" receiver="" exported=false member_scope="modules/network/output." @main.tf:2:1-5:2
-symbol module.database kind=module qualified="module.database" parent="" receiver="" exported=false member_scope="modules/database/output." @main.tf:7:1-10:2
+symbol module.network kind=module qualified="module.network" parent="" receiver="" exported=false member_scope="modules/network/output." parameter_scope="modules/network/var." @main.tf:2:1-5:2
+symbol module.database kind=module qualified="module.database" parent="" receiver="" exported=false member_scope="modules/database/output." parameter_scope="modules/database/var." @main.tf:7:1-10:2
 symbol module.vpc_remote kind=module qualified="module.vpc_remote" parent="" receiver="" exported=false members=outside @main.tf:12:1-15:2
 symbol aws_instance.web kind=resource qualified="aws_instance.web" parent="" receiver="" exported=false @main.tf:17:1-35:2
 symbol local.volumes kind=variable qualified="local.volumes" parent="" receiver="" exported=false @main.tf:38:3-38:58
@@ -50,7 +50,9 @@ symbol data.aws_ami.latest kind=data_source qualified="check.ami/data.aws_ami.la
 symbol provider.aws.west kind=configuration qualified="provider.aws.west" parent="" receiver="" exported=false @main.tf:53:1-56:2
 symbol aws_eip.web kind=resource qualified="aws_eip.web" parent="" receiver="" exported=false @main.tf:58:1-61:2
 ## references
+ref cidr kind=value_reference container="module.network" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true named_argument=true call=false @main.tf:4:3-4:7
 ref var.cidr kind=value_reference container="module.network" receiver="" name_qualified="var.cidr" identity_in_repository=true call=false @main.tf:4:12-4:20
+ref subnet_id kind=value_reference container="module.database" receiver="module.database" receiver_type_qualified="module.database" identity_in_repository=true named_argument=true call=false @main.tf:9:3-9:12
 ref module.network kind=value_reference container="module.database" receiver="" name_qualified="module.network" identity_in_repository=true call=false @main.tf:9:15-9:29
 ref subnet_id kind=value_reference container="module.database" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true call=false @main.tf:9:15-9:39
 ref var.instance_count kind=value_reference container="aws_instance.web" receiver="" name_qualified="var.instance_count" identity_in_repository=true call=false @main.tf:18:19-18:37

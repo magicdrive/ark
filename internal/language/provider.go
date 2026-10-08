@@ -59,11 +59,20 @@ type SymbolDraft struct {
 	// means "no such evidence"; members are then looked up as usual.
 	MemberScope string `json:",omitempty"`
 
-	// MembersOutside states that the declarations this symbol's members
-	// denote are, by the language's rules, not part of the repository (a
-	// Terraform module call whose source is a registry or remote address).
-	// A member reference through it is then OutsideRepository. Never set
-	// together with MemberScope.
+	// ParameterScope is MemberScope's counterpart for named arguments: an
+	// argument named N that a reference passes through this declaration
+	// (ReferenceDraft.NamedArgument, its ReceiverTypeQualified this symbol's
+	// Qualified) denotes exactly the parameter declaration whose Qualified is
+	// ParameterScope+N. Example: a Terraform module call whose source is a
+	// local path — its arguments are the child module's input variables.
+	ParameterScope string `json:",omitempty"`
+
+	// MembersOutside states that the declarations this symbol's members and
+	// parameters denote are, by the language's rules, not part of the
+	// repository (a Terraform module call whose source is a registry or
+	// remote address). A member or argument reference through it is then
+	// OutsideRepository. Never set together with MemberScope or
+	// ParameterScope.
 	MembersOutside bool `json:",omitempty"`
 }
 
@@ -136,6 +145,12 @@ type ReferenceDraft struct {
 	// name. Without it a qualified identity with no declaration is taken to
 	// lie outside the repository.
 	IdentityInRepository bool `json:",omitempty"`
+
+	// NamedArgument marks a reference whose Name is a named argument passed
+	// to the declaration its ReceiverTypeQualified identifies: it denotes
+	// that declaration's parameter (SymbolDraft.ParameterScope), never one of
+	// its members. Without a stated parameter scope it is Unresolved.
+	NamedArgument bool `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

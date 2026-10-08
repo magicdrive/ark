@@ -253,3 +253,69 @@ func TestMemberScope_OrdinaryTypesAreUnchanged(t *testing.T) {
 		t.Errorf("got %s %v %v", res.Confidence, res.Candidates, res.Evidence)
 	}
 }
+
+func argRef(name string) reference.Reference {
+	ref := memberRef(name)
+	ref.NamedArgument = true
+	return ref
+}
+
+func paramFixture(call symbol.Symbol) []resolver.FileIndex {
+	return append(memberScopeFixture(call), resolver.FileIndex{FileID: "child/vars.tf", Language: "cfg", IdentityOnly: true, Symbols: []symbol.Symbol{
+		cfgSym("child/vars.tf", "var.id", "child/var.id", symbol.KindVariable),
+		cfgSym("child/vars.tf", "var.cidr", "child/var.cidr", symbol.KindVariable),
+	}})
+}
+
+// A named argument denotes the receiver's parameter (ParameterScope+Name),
+// never a member of the same name, and never a parameter of another scope.
+func TestParameterScope_NamedArgumentResolvesToTheParameter(t *testing.T) {
+	call := cfgSym("main.tf", "module.m", "module.m", symbol.KindModule)
+	call.MemberScope, call.ParameterScope = "child/output.", "child/var."
+	fis := paramFixture(call)
+
+	res := resolveIn(fis, "main.tf", argRef("id"))
+	if res.Confidence != resolver.ConfidenceExact || !res.HasUniqueTarget() || res.Candidates[0].Qualified != "child/var.id" {
+		t.Fatalf("argument: %s %v", res.Confidence, res.Candidates)
+	}
+	// The same name as a member is the output.
+	if res := resolveIn(fis, "main.tf", memberRef("id")); res.Candidates[0].Qualified != "child/output.id" {
+		t.Errorf("member: %v", res.Candidates)
+	}
+	if res := resolveIn(fis, "main.tf", argRef("nope")); res.Confidence != resolver.ConfidenceUnresolved || res.OutsideRepository {
+		t.Errorf("undeclared parameter: %s outside=%t", res.Confidence, res.OutsideRepository)
+	}
+}
+
+func TestParameterScope_NoStatementIsUnresolved(t *testing.T) {
+	// A member scope says nothing about parameters: no fallback to outputs.
+	call := cfgSym("main.tf", "module.m", "module.m", symbol.KindModule)
+	call.MemberScope = "child/output."
+	res := resolveIn(paramFixture(call), "main.tf", argRef("id"))
+	if res.Confidence != resolver.ConfidenceUnresolved || len(res.Candidates) != 0 || res.OutsideRepository {
+		t.Errorf("got %s %v", res.Confidence, res.Candidates)
+	}
+	// A plain type with lexical members is no parameter scope either.
+	typ := symbol.Symbol{ID: "T", Name: "User", Qualified: `App\User`, Kind: symbol.KindClass, Language: "php", Location: source.Location{File: "u.php"}}
+	m := symbol.Symbol{ID: "M", Name: "save", Qualified: `App\User.save`, Kind: symbol.KindMethod, Language: "php", Receiver: "User", ParentQualified: `App\User`, Location: source.Location{File: "u.php"}}
+	ref := reference.Reference{ID: "r", Name: "save", Kind: reference.KindCall, Language: "php", ReceiverExpr: "$u", ReceiverTypeQualified: `App\User`, NamedArgument: true, Location: source.Location{File: "u.php"}}
+	if res := resolveIn([]resolver.FileIndex{{FileID: "u.php", Language: "php", Symbols: []symbol.Symbol{typ, m}}}, "u.php", ref); res.Confidence != resolver.ConfidenceUnresolved || len(res.Candidates) != 0 {
+		t.Errorf("a named argument resolved to a member: %s %v", res.Confidence, res.Candidates)
+	}
+}
+
+func TestParameterScope_OutsideAndAmbiguous(t *testing.T) {
+	call := cfgSym("main.tf", "module.m", "module.m", symbol.KindModule)
+	call.MembersOutside = true
+	if res := resolveIn(paramFixture(call), "main.tf", argRef("id")); !res.OutsideRepository || len(res.Candidates) != 0 {
+		t.Errorf("remote: %+v", res)
+	}
+	a := cfgSym("main.tf", "module.m", "module.m", symbol.KindModule)
+	a.ParameterScope = "child/var."
+	b := cfgSym("dup.tf", "module.m", "module.m", symbol.KindModule)
+	b.ParameterScope = "absent/var."
+	fis := append(paramFixture(a), resolver.FileIndex{FileID: "dup.tf", Language: "cfg", IdentityOnly: true, Symbols: []symbol.Symbol{b}})
+	if res := resolveIn(fis, "main.tf", argRef("id")); res.Confidence != resolver.ConfidenceCandidate || res.HasUniqueTarget() {
+		t.Errorf("two calls: %s %v", res.Confidence, res.Candidates)
+	}
+}

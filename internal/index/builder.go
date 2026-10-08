@@ -119,6 +119,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			Visibility: sd.Visibility,
 
 			MemberScope:    sd.MemberScope,
+			ParameterScope: sd.ParameterScope,
 			MembersOutside: sd.MembersOutside,
 		}
 		if sd.Parent != "" {
@@ -147,6 +148,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			ConfidenceCap:         rd.ConfidenceCap,
 			Dynamic:               rd.Dynamic,
 			IdentityInRepository:  rd.IdentityInRepository,
+			NamedArgument:         rd.NamedArgument,
 			IsCall:                rd.IsCall,
 		})
 	}

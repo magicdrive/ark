@@ -49,6 +49,9 @@ type scan struct {
 	// checkData maps the addresses of data sources scoped to the enclosing
 	// check block to their qualified identities.
 	checkData map[string]string
+	// moduleAddr / moduleCall are the address and qualified identity of the
+	// enclosing module call.
+	moduleAddr, moduleCall string
 }
 
 // topBody scans the body of a top-level block, applying the meta-arguments
@@ -75,6 +78,9 @@ func (s *scan) topBody(body *ts.Node) {
 			case name == "type" && s.blockType == "variable":
 				// a type constraint, not an expression
 			case name == "alias" && s.blockType == "provider":
+			case s.blockType == "module" && name != "count" && name != "for_each":
+				s.moduleArgument(id)
+				s.expr(v, reference.KindValueReference, 0)
 			default:
 				s.expr(v, reference.KindValueReference, 0)
 			}
@@ -199,6 +205,25 @@ func (s *scan) checkDataBody(block, body *ts.Node) {
 	}
 	inner.blockType = "data"
 	inner.topBody(body)
+}
+
+// moduleArgument records an input argument of a module call: a reference
+// from the call to the child module's variable of that name, through the
+// call (NamedArgument, resolved by the call's ParameterScope). It is a
+// reference to the variable's declaration — the interface the call binds —
+// like `module.NAME.OUTPUT` is to the output's; the value flowing from the
+// argument expression into the child is not an edge.
+func (s *scan) moduleArgument(name *ts.Node) {
+	s.x.refs = append(s.x.refs, language.ReferenceDraft{
+		Name:                  name.Text(s.x.src),
+		Kind:                  string(reference.KindValueReference),
+		Container:             s.container,
+		Location:              nodeLocation(name, s.x.file),
+		ReceiverExpr:          s.moduleAddr,
+		ReceiverTypeQualified: s.moduleCall,
+		IdentityInRepository:  true,
+		NamedArgument:         true,
+	})
 }
 
 // providerRef records a `provider = NAME[.ALIAS]` meta-argument: a reference

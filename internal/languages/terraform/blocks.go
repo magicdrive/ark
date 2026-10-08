@@ -158,7 +158,7 @@ func (x *extractor) block(b *ts.Node, override bool) {
 		d, ok := x.declare(b, address, shape.kind, sig, "", typ == "variable" || typ == "output")
 		if ok {
 			if typ == "module" {
-				d.MemberScope, d.MembersOutside = x.moduleMembers(body)
+				d.MemberScope, d.ParameterScope, d.MembersOutside = x.moduleMembers(body)
 			}
 			container = d.Qualified
 		}
@@ -167,6 +167,9 @@ func (x *extractor) block(b *ts.Node, override bool) {
 		return
 	}
 	s := &scan{x: x, container: container, blockType: typ}
+	if typ == "module" {
+		s.moduleAddr, s.moduleCall = address, qualify(x.dir, address)
+	}
 	if typ == "check" {
 		s.checkData = x.checkData(body, container, override)
 	}
@@ -256,26 +259,27 @@ func (x *extractor) checkData(body *ts.Node, check string, override bool) map[st
 	return scoped
 }
 
-// moduleMembers states where the outputs of a module call live, from its
-// `source` argument: a local path names the child module directory —
+// moduleMembers states where the outputs and the input variables of a module
+// call live, from its `source` argument: a local path names the child module
+// directory —
 // cleaned lexically, as Terraform does before it evaluates symlinks; any
 // other source is fetched from outside the repository; a source that is no
 // literal (or absent) states nothing.
-func (x *extractor) moduleMembers(body *ts.Node) (scope string, outside bool) {
+func (x *extractor) moduleMembers(body *ts.Node) (outputs, inputs string, outside bool) {
 	src, ok := x.literalAttr(body, "source")
 	if !ok {
-		return "", false
+		return "", "", false
 	}
 	// Terraform's local prefixes (moduleaddrs.isModuleSourceLocal); a
 	// backslash is a separator on every platform, as Terraform normalizes it.
 	if !slices.ContainsFunc([]string{"./", "../", ".\\", "..\\"}, func(p string) bool { return strings.HasPrefix(src, p) }) {
-		return "", true
+		return "", "", true
 	}
 	child := path.Join(x.dir, strings.ReplaceAll(src, "\\", "/"))
 	if child == ".." || strings.HasPrefix(child, "../") {
-		return "", true // leaves the indexed root
+		return "", "", true // leaves the indexed root
 	}
-	return qualify(child, "output."), false
+	return qualify(child, "output."), qualify(child, "var."), false
 }
 
 // blockHeader returns a block's type, its labels (literal strings or bare

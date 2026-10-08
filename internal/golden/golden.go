@@ -37,7 +37,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## symbols\n")
 	for _, s := range syms {
 		fmt.Fprintf(&b, "symbol %s kind=%s qualified=%q parent=%q receiver=%q exported=%t%s %s\n",
-			s.Name, s.Kind, s.Qualified, s.Parent, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside), loc(s.Location))
+			s.Name, s.Kind, s.Qualified, s.Parent, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside)+parameterScope(s.ParameterScope), loc(s.Location))
 	}
 
 	refs := slices.Clone(ext.References)
@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -98,7 +98,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 	b.WriteString("## symbols\n")
 	for _, s := range syms {
 		fmt.Fprintf(&b, "symbol %s kind=%s lang=%s qualified=%q receiver=%q exported=%t%s %s\n",
-			s.Name, s.Kind, s.Language, s.Qualified, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside), loc(s.Location))
+			s.Name, s.Kind, s.Language, s.Qualified, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside)+parameterScope(s.ParameterScope), loc(s.Location))
 	}
 
 	// --- references (sorted by file order, then location) ---
@@ -108,7 +108,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -289,6 +289,22 @@ func memberScope(scope string, outside bool) string {
 		return " members=outside"
 	case scope != "":
 		return fmt.Sprintf(" member_scope=%q", scope)
+	}
+	return ""
+}
+
+// parameterScope / namedArgument render the parameter-scope evidence;
+// nothing when absent.
+func parameterScope(scope string) string {
+	if scope == "" {
+		return ""
+	}
+	return fmt.Sprintf(" parameter_scope=%q", scope)
+}
+
+func namedArgument(a bool) string {
+	if a {
+		return " named_argument=true"
 	}
 	return ""
 }

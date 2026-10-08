@@ -38,10 +38,17 @@
 // language's symbol.
 //
 // `module.NAME.OUTPUT` is two references: the module call `module.NAME`, and
-// the output OUTPUT through the module call (ReceiverTypeQualified). A module
+// the output OUTPUT through the module call (ReceiverTypeQualified). Each
+// input argument of a module block (every attribute but source, version,
+// count, for_each, providers and depends_on) is a NamedArgument reference
+// from the call to the child's `variable` of that name, through the call's
+// ParameterScope: the call refers to the variable's declaration as it does to
+// an output's. The value flowing from the argument expression into the child
+// is not modelled; neither is an input the call omits. A module
 // call whose `source` is a local path ("./", "../") states the child module
-// directory lexically (SymbolDraft.MemberScope), so the output resolves to
-// the child's `output.OUTPUT`; any other source is fetched by Terraform from
+// directory lexically (SymbolDraft.MemberScope, ParameterScope), so the
+// output resolves to the child's `output.OUTPUT` and an argument to its
+// `var.NAME`; any other source is fetched by Terraform from
 // outside the repository (MembersOutside), as is a local path leaving the
 // indexed root. Remote sources are never fetched; nothing is executed.
 //
@@ -110,7 +117,7 @@ func (p *Provider) Language() language.Language { return "terraform" }
 func (p *Provider) Extensions() []string { return []string{".tf", ".tfvars"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "terraform-3" }
+func (p *Provider) CacheVersion() string { return "terraform-4" }
 
 // maxSyntaxDiagnostics bounds the syntax-error diagnostics of one file.
 const maxSyntaxDiagnostics = 5

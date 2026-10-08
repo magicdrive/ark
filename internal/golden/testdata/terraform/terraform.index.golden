@@ -1,5 +1,5 @@
 ## stats
-files=13 symbols=36 references=41 relations=33 skipped=0
+files=13 symbols=36 references=43 relations=35 skipped=0
 lang terraform=13
 ## symbols
 symbol aws_vpc.after_broken kind=resource lang=terraform qualified="aws_vpc.after_broken" receiver="" exported=false @broken.tf:5:1-7:2
@@ -8,8 +8,8 @@ symbol aws_security_group.web kind=resource lang=terraform qualified="aws_securi
 symbol null_resource.x kind=resource lang=terraform qualified="dup/null_resource.x" receiver="" exported=false @dup/a.tf:1:1-1:32
 symbol output.x kind=output lang=terraform qualified="dup/output.x" receiver="" exported=true @dup/a.tf:3:1-5:2
 symbol null_resource.x kind=resource lang=terraform qualified="dup/null_resource.x" receiver="" exported=false @dup/b.tf:1:1-1:32
-symbol module.network kind=module lang=terraform qualified="module.network" receiver="" exported=false member_scope="modules/network/output." @main.tf:2:1-5:2
-symbol module.database kind=module lang=terraform qualified="module.database" receiver="" exported=false member_scope="modules/database/output." @main.tf:7:1-10:2
+symbol module.network kind=module lang=terraform qualified="module.network" receiver="" exported=false member_scope="modules/network/output." parameter_scope="modules/network/var." @main.tf:2:1-5:2
+symbol module.database kind=module lang=terraform qualified="module.database" receiver="" exported=false member_scope="modules/database/output." parameter_scope="modules/database/var." @main.tf:7:1-10:2
 symbol module.vpc_remote kind=module lang=terraform qualified="module.vpc_remote" receiver="" exported=false members=outside @main.tf:12:1-15:2
 symbol aws_instance.web kind=resource lang=terraform qualified="aws_instance.web" receiver="" exported=false @main.tf:17:1-35:2
 symbol local.volumes kind=variable lang=terraform qualified="local.volumes" receiver="" exported=false @main.tf:38:3-38:58
@@ -42,7 +42,9 @@ symbol var.volume_names kind=variable lang=terraform qualified="var.volume_names
 ref var.cidr kind=value_reference container="aws_vpc.after_broken" receiver="" name_qualified="var.cidr" identity_in_repository=true call=false @broken.tf:6:16-6:24
 ref var.region kind=value_reference container="aws_security_group.web" receiver="" name_qualified="var.region" identity_in_repository=true call=false @data.tf:6:17-6:27
 ref null_resource.x kind=value_reference container="dup/output.x" receiver="" name_qualified="dup/null_resource.x" identity_in_repository=true call=false @dup/a.tf:4:11-4:26
+ref cidr kind=value_reference container="module.network" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true named_argument=true call=false @main.tf:4:3-4:7
 ref var.cidr kind=value_reference container="module.network" receiver="" name_qualified="var.cidr" identity_in_repository=true call=false @main.tf:4:12-4:20
+ref subnet_id kind=value_reference container="module.database" receiver="module.database" receiver_type_qualified="module.database" identity_in_repository=true named_argument=true call=false @main.tf:9:3-9:12
 ref module.network kind=value_reference container="module.database" receiver="" name_qualified="module.network" identity_in_repository=true call=false @main.tf:9:15-9:29
 ref subnet_id kind=value_reference container="module.database" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true call=false @main.tf:9:15-9:39
 ref var.instance_count kind=value_reference container="aws_instance.web" receiver="" name_qualified="var.instance_count" identity_in_repository=true call=false @main.tf:18:19-18:37
@@ -97,7 +99,9 @@ edge check.ami -references-> data.aws_ami.ubuntu confidence=exact evidence=[qual
 edge local.volumes -references-> var.volume_names confidence=exact evidence=[qualified_identity:"var.volume_names" is declared at variables.tf]
 edge local.web_ids -references-> aws_instance.web confidence=exact evidence=[qualified_identity:"aws_instance.web" is declared at main.tf]
 edge module.database -references-> module.network confidence=exact evidence=[qualified_identity:"module.network" is declared at main.tf]
+edge module.database -references-> modules/database/var.subnet_id confidence=exact evidence=[member_scope:parameter "subnet_id" of "module.database" is "modules/database/var.subnet_id"]
 edge module.database -references-> modules/network/output.subnet_id confidence=exact evidence=[member_scope:member "subnet_id" of "module.network" is "modules/network/output.subnet_id"]
+edge module.network -references-> modules/network/var.cidr confidence=exact evidence=[member_scope:parameter "cidr" of "module.network" is "modules/network/var.cidr"]
 edge module.network -references-> var.cidr confidence=exact evidence=[qualified_identity:"var.cidr" is declared at variables.tf]
 edge modules/database/aws_db_instance.db -references-> modules/database/aws_vpc.main confidence=exact evidence=[qualified_identity:"modules/database/aws_vpc.main" is declared at modules/database/main.tf]
 edge modules/database/aws_db_instance.db -references-> modules/database/var.subnet_id confidence=exact evidence=[qualified_identity:"modules/database/var.subnet_id" is declared at modules/database/main.tf]

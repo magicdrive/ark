@@ -67,7 +67,10 @@ type Reference struct {
 	// IdentityInRepository qualifies the qualified identities (see
 	// language.ReferenceDraft.IdentityInRepository).
 	IdentityInRepository bool
-	IsCall               bool
+	// NamedArgument: Name is a named argument passed to the receiver (see
+	// language.ReferenceDraft.NamedArgument).
+	NamedArgument bool
+	IsCall        bool
 }
 
 // NewReferenceID returns a deterministic ID derived from

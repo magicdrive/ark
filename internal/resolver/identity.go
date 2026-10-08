@@ -133,24 +133,43 @@ func noQualifiedDeclaration(res Resolution, ref reference.Reference, detail stri
 	return res
 }
 
-// memberScopeResolution resolves a member through a receiver declaration that
-// states its members' home (Symbol.MemberScope / MembersOutside). It reports
-// false when no receiver declaration carries such a statement; the member is
-// then looked up as under any other receiver type. Several receiver
-// declarations never pick one: the members their statements name are
-// Candidates.
+// memberScopeResolution resolves a member — or, for a NamedArgument
+// reference, a parameter — through a receiver declaration that states where
+// they live (Symbol.MemberScope / ParameterScope / MembersOutside). It
+// reports false when no receiver declaration carries such a statement and the
+// reference is no named argument; the member is then looked up as under any
+// other receiver type. A named argument is never looked up as a member.
+// Several receiver declarations never pick one: the declarations their
+// statements name are Candidates.
 func (r *Resolver) memberScopeResolution(res Resolution, ref reference.Reference, types []symbol.Symbol) (Resolution, bool) {
+	scopeOf := func(t symbol.Symbol) string {
+		if ref.NamedArgument {
+			return t.ParameterScope
+		}
+		return t.MemberScope
+	}
+	what := "member"
+	if ref.NamedArgument {
+		what = "parameter"
+	}
 	stated := false
 	for _, t := range types {
-		stated = stated || t.MemberScope != "" || t.MembersOutside
+		stated = stated || scopeOf(t) != "" || t.MembersOutside
 	}
 	if !stated {
-		return res, false
+		if !ref.NamedArgument {
+			return res, false
+		}
+		res.Evidence = []ResolutionEvidence{{
+			Kind:   EvidenceMemberScope,
+			Detail: fmt.Sprintf("%q states no parameters for argument %q", ref.ReceiverTypeQualified, ref.Name),
+		}}
+		return res, true
 	}
 	if len(types) == 1 && types[0].MembersOutside {
 		res.Evidence = []ResolutionEvidence{{
 			Kind:   EvidenceMemberScope,
-			Detail: fmt.Sprintf("the members of %q are declared outside the repository", types[0].Qualified),
+			Detail: fmt.Sprintf("the %ss of %q are declared outside the repository", what, types[0].Qualified),
 		}}
 		res.OutsideRepository = true
 		return res, true
@@ -158,16 +177,16 @@ func (r *Resolver) memberScopeResolution(res Resolution, ref reference.Reference
 	var decls []symbol.Symbol
 	var target string
 	for _, t := range types {
-		if t.MemberScope == "" {
+		if scopeOf(t) == "" {
 			continue
 		}
-		target = t.MemberScope + ref.Name
+		target = scopeOf(t) + ref.Name
 		decls = append(decls, r.typeDecls(ref.Language, target)...)
 	}
-	detail := fmt.Sprintf("member %q of %q is %q", ref.Name, ref.ReceiverTypeQualified, target)
+	detail := fmt.Sprintf("%s %q of %q is %q", what, ref.Name, ref.ReceiverTypeQualified, target)
 	conf := ConfidenceExact
 	if len(types) > 1 {
-		detail = fmt.Sprintf("member %q of %q, declared %d times", ref.Name, ref.ReceiverTypeQualified, len(types))
+		detail = fmt.Sprintf("%s %q of %q, declared %d times", what, ref.Name, ref.ReceiverTypeQualified, len(types))
 		conf = ConfidenceCandidate
 	}
 	if len(decls) == 0 {

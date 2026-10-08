@@ -37,7 +37,8 @@ const (
 	// (reference.Reference.Dynamic); it is Unresolved by construction.
 	EvidenceDynamicName EvidenceKind = "dynamic_name"
 	// EvidenceMemberScope: the receiver declaration states which declarations
-	// its members denote (symbol.Symbol.MemberScope / MembersOutside).
+	// its members or parameters denote (symbol.Symbol.MemberScope /
+	// ParameterScope / MembersOutside).
 	EvidenceMemberScope EvidenceKind = "member_scope"
 	// EvidenceIdentityOnly: the reference is written in a file whose names
 	// resolve only by qualified identity, and it carries none.

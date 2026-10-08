@@ -67,9 +67,11 @@ type Symbol struct {
 	// language.SymbolDraft.Visibility).
 	Visibility string `json:",omitempty"`
 
-	// MemberScope / MembersOutside state where the declarations this
-	// symbol's members denote live (see language.SymbolDraft.MemberScope).
+	// MemberScope / ParameterScope / MembersOutside state where the
+	// declarations this symbol's members and parameters denote live (see
+	// language.SymbolDraft.MemberScope).
 	MemberScope    string `json:",omitempty"`
+	ParameterScope string `json:",omitempty"`
 	MembersOutside bool   `json:",omitempty"`
 }
 

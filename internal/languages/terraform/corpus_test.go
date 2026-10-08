@@ -19,7 +19,6 @@ import (
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/resolver"
-	"github.com/magicdrive/ark/internal/symbol"
 )
 
 // TestCorpus_External measures the provider on real Terraform repositories.
@@ -163,17 +162,22 @@ func measureCorpus(t *testing.T, dir string) {
 			st.Relations, unattributed, noCandidate, got, edgeKindRefs, sourceless)
 	}
 
-	// Module boundary: an edge leaves its module directory only to a child
-	// module's output through a member scope.
+	// Module boundary: an edge leaves its module directory only as a module
+	// binding — to a child module's output or input variable through the
+	// call's member / parameter scope.
+	crossBinding := map[string]int{}
+	defer func() { t.Logf("cross-module edges (module bindings) by target kind: %v", crossBinding) }()
 	for _, s := range idx.FindSymbols("") {
 		for _, e := range idx.GetCallees(s.ID) {
 			to, _ := idx.GetSymbol(e.To)
 			if e.Confidence != resolver.ConfidenceExact {
 				t.Errorf("non-Exact edge %s -> %s (%s)", s.Qualified, to.Qualified, e.Confidence)
 			}
-			if path.Dir(string(s.Location.File)) != path.Dir(string(to.Location.File)) &&
-				(to.Kind != symbol.KindOutput || !edgeVia(e, resolver.EvidenceMemberScope)) {
-				t.Errorf("cross-module edge %s -> %s", s.Qualified, to.Qualified)
+			if path.Dir(string(s.Location.File)) != path.Dir(string(to.Location.File)) {
+				crossBinding[string(to.Kind)]++
+				if !crossesThroughBinding(idx, s, e) {
+					t.Errorf("cross-module edge %s -> %s", s.Qualified, to.Qualified)
+				}
 			}
 		}
 	}

@@ -41,6 +41,8 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 
 		// Try cache hit first.
 		if cached, hit, _ := store.Get(cacheKey); hit {
+			// A hit must yield the index a miss would: diagnostics included.
+			b.addDiagnostics(cached.Diagnostics)
 			b.ingestExtraction(fileID, cached.Language, language.Extraction{
 				Symbols:      cached.Symbols,
 				References:   cached.References,
