@@ -46,7 +46,8 @@
 // indexed root. Remote sources are never fetched; nothing is executed.
 //
 // Not references (never observed): built-in and contextual values (`path.*`,
-// `terraform.*`, `count.*`, `each.*`, `self.*`), for-expression and template
+// `terraform.*`, `count.*`, `each.*`, `self.*`, `caller`), roots Terraform
+// reserves and rejects (`plan`, `state`, `template`, `lazy`, `arg`), for-expression and template
 // `for` variables, `dynamic` block iterators, object keys written as bare
 // names, function names, `lifecycle.ignore_changes` (attribute paths of the
 // resource itself), `variable.type` (type constraints), the `terraform`
@@ -55,9 +56,27 @@
 // error. A traversal whose shape is no address (`foo`, `aws_vpc[0]`) denotes
 // no declaration and is not observed either.
 //
+// A managed resource whose type would read as another reference root or as
+// one of the namespaces above (`resource "output" "x"`, `resource "var"
+// "x"`) has the address `resource.TYPE.NAME`, the only spelling Terraform
+// accepts for it; conversely `output.x`, `check.x` and `provider.x` in an
+// expression are such resources (they are no reference roots in a
+// configuration file) and never denote the output, check or provider block.
+//
+// A local module source starts with `./`, `../`, `.\` or `..\`; backslashes
+// are separators on every platform and the path is cleaned lexically, as
+// Terraform does before it evaluates symlinks. The index walks real
+// directories only, so a module reached only through a symlinked directory
+// is Unresolved.
+//
 // Override files (`override.tf`, `*_override.tf`) merge into declarations of
 // other files: they declare no symbols, and their references have no
-// container. In a `.tfvars` file each top-level assignment is a write of the
+// container — except a module block that replaces the call's `source`. It is
+// declared beside the original call, so the call and its outputs are
+// ambiguous (Candidate) instead of resolved through the original source,
+// which the merge may have replaced. Other overridden arguments can leave
+// edges of the original declaration that the merge removes: an
+// over-approximation, never another target. In a `.tfvars` file each top-level assignment is a write of the
 // input variable it names; which module receives the values is decided on the
 // command line, so the write carries no identity.
 //
@@ -91,7 +110,7 @@ func (p *Provider) Language() language.Language { return "terraform" }
 func (p *Provider) Extensions() []string { return []string{".tf", ".tfvars"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "terraform-2" }
+func (p *Provider) CacheVersion() string { return "terraform-3" }
 
 // maxSyntaxDiagnostics bounds the syntax-error diagnostics of one file.
 const maxSyntaxDiagnostics = 5

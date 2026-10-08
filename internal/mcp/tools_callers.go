@@ -16,7 +16,7 @@ func CallersToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_callers",
-			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations). For Terraform the callers are dependents: edge kind referenced_by (uses its value) or depended_on_by (depends_on), never a call",
+			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete among the references Ark observes: files it does not extract — e.g. Terraform .tf.json — and code lost to an unrecoverable syntax error are in no count); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations). For Terraform the callers are dependents: edge kind referenced_by (uses its value) or depended_on_by (depends_on), never a call",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{

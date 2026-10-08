@@ -14,10 +14,28 @@ import (
 // Deeper nesting is reported once per file and not observed.
 const maxExprDepth = 256
 
-// contextualRoots are Terraform's built-in and contextual value roots: they
-// denote no declaration (package doc).
+// contextualRoots are Terraform's built-in and contextual value roots, and
+// the roots it reserves and rejects (addrs.ParseRef): they denote no
+// declaration (package doc).
 var contextualRoots = map[string]bool{
 	"path": true, "terraform": true, "count": true, "each": true, "self": true,
+	"caller": true, "plan": true, "state": true, "template": true, "lazy": true, "arg": true,
+}
+
+// reservedTypes are the managed-resource types whose TYPE.NAME would read as
+// another reference root, or as one of the address namespaces this package
+// gives non-resource declarations (output.x, check.x, provider.x). A
+// resource of such a type has the address resource.TYPE.NAME — the only
+// spelling Terraform accepts for it — and a reference whose root is output,
+// check or provider (no reference roots in a configuration file, so a
+// resource type to Terraform) is a reference to such a resource, never to
+// the output, check or provider block.
+var reservedTypes = map[string]bool{
+	"var": true, "local": true, "module": true, "data": true, "ephemeral": true,
+	"resource": true, "list": true, "action": true, "output": true, "check": true,
+	"provider": true, "run": true, "terraform": true, "path": true, "count": true,
+	"each": true, "self": true, "caller": true, "plan": true, "state": true,
+	"template": true, "lazy": true, "arg": true,
 }
 
 // scan walks the expressions of one declaration. locals are the names bound
@@ -365,14 +383,20 @@ func (s *scan) traversalAt(parent *ts.Node, i int, kind reference.ReferenceKind)
 	switch name {
 	case "var", "local", "module":
 		prefix = name + "."
-	case "data", "ephemeral":
+	case "data", "ephemeral", "list", "action":
 		prefix, need = name+".", 2
 	case "resource":
 		// resource.TYPE.NAME is Terraform's explicit spelling of TYPE.NAME
 		// (an escape for a resource type that collides with a reserved root).
 		need = 2
+		if len(attrs) > 0 && reservedTypes[seg(0)] {
+			prefix = "resource."
+		}
 	default:
 		prefix = name + "." // managed resource TYPE.NAME
+		if reservedTypes[name] {
+			prefix = "resource." + prefix
+		}
 	}
 	if len(attrs) < need {
 		return

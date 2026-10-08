@@ -761,7 +761,7 @@ Ark は Terraform 構成（`.tf`）の宣言 — `resource` / `data` / `ephemera
 |---|---|
 | **対応** | 上記ブロック、同一 module のファイル横断解決、ローカル module の output（`module.x["k"].out`、`module.x[*].out` を含む）、明示的 `depends_on`、provider 構成と alias、check スコープの data source、override ファイル（`override.tf`、`*_override.tf`：参照は計上し、宣言はしない）、壊れたファイル（Tree-sitter の回復が及ぶ範囲で後続の宣言を回復し — 閉じていない括弧はファイル末尾まで飲み込むことがある — error 診断を出す） |
 | **設計上 参照ではない** | `count.*`、`each.*`、`self.*`、`path.*`、`terraform.*`、`for` / template `for` の変数、`dynamic` の iterator、bare な object key、関数名（provider 定義関数を含む）、`lifecycle.ignore_changes`、variable の型制約 |
-| **意図的に unresolved / outside** | リモート module の output（`outsideRepository`）、module に `provider "x"` ブロックがない場合の `provider = x`（暗黙・継承の構成）、`.tf.json` にだけ宣言されたアドレス |
+| **意図的に unresolved / outside** | リモート module の output（`outsideRepository`）、module に `provider "x"` ブロックがない場合の `provider = x`（暗黙・継承の構成）、`.tf.json` にだけ宣言されたアドレス、symlink されたディレクトリ経由でのみ到達する module、override ファイルが `source` を置き換える module 呼び出し（どちらが有効かは merge 順で決まるため `Candidate`）、variable から計算される source |
 | **未実装** | `.tf.json` / `.tfvars.json`（JSON 構文）、汎用 `.hcl`（Packer・Nomad・Terragrunt・Terraform test ファイルは Terraform として索引しない）、`moved` / `import` / `removed` ブロック（観測しない）、resource type の暗黙の default provider、`.tfvars` がどの module に渡るか、`terraform_remote_state` などの state 間データ、Terraform Cloud workspace |
 
 Ark は **純粋な静的解析**のみを行い、`terraform` を実行せず、module や provider を

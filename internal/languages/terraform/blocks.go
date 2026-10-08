@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"unicode"
 	"unicode/utf8"
@@ -137,8 +138,19 @@ func (x *extractor) block(b *ts.Node, override bool) {
 			address += "." + alias
 		}
 	}
+	if typ == "resource" && reservedTypes[labels[0]] {
+		// TYPE.NAME would denote another namespace (output.x is no output);
+		// such a resource is addressable only as resource.TYPE.NAME.
+		address = "resource." + address
+	}
 	container := ""
-	if !override {
+	// An override block declares nothing — except a module call whose
+	// source it replaces: which source is effective depends on merge order,
+	// so the override's call is declared beside the original one, and the
+	// call and its outputs are ambiguous rather than resolved through the
+	// original source alone.
+	overridesSource := override && typ == "module" && x.hasAttr(body, "source")
+	if !override || overridesSource {
 		sig := typ
 		for _, l := range labels {
 			sig += " " + quote(l)
@@ -245,7 +257,8 @@ func (x *extractor) checkData(body *ts.Node, check string, override bool) map[st
 }
 
 // moduleMembers states where the outputs of a module call live, from its
-// `source` argument: a local path names the child module directory; any
+// `source` argument: a local path names the child module directory —
+// cleaned lexically, as Terraform does before it evaluates symlinks; any
 // other source is fetched from outside the repository; a source that is no
 // literal (or absent) states nothing.
 func (x *extractor) moduleMembers(body *ts.Node) (scope string, outside bool) {
@@ -253,10 +266,12 @@ func (x *extractor) moduleMembers(body *ts.Node) (scope string, outside bool) {
 	if !ok {
 		return "", false
 	}
-	if !strings.HasPrefix(src, "./") && !strings.HasPrefix(src, "../") {
+	// Terraform's local prefixes (moduleaddrs.isModuleSourceLocal); a
+	// backslash is a separator on every platform, as Terraform normalizes it.
+	if !slices.ContainsFunc([]string{"./", "../", ".\\", "..\\"}, func(p string) bool { return strings.HasPrefix(src, p) }) {
 		return "", true
 	}
-	child := path.Join(x.dir, src)
+	child := path.Join(x.dir, strings.ReplaceAll(src, "\\", "/"))
 	if child == ".." || strings.HasPrefix(child, "../") {
 		return "", true // leaves the indexed root
 	}
@@ -294,6 +309,23 @@ func (x *extractor) blockHeader(b *ts.Node) (typ string, labels []string, body *
 		}
 	}
 	return typ, labels, body, typ != ""
+}
+
+// hasAttr reports whether body sets attribute name directly.
+func (x *extractor) hasAttr(body *ts.Node, name string) bool {
+	if body == nil {
+		return false
+	}
+	for i := 0; i < body.ChildCount(); i++ {
+		attr := body.Child(i)
+		if attr.Type(x.lang) != "attribute" {
+			continue
+		}
+		if id := firstChildOfType(attr, x.lang, "identifier"); id != nil && id.Text(x.src) == name {
+			return true
+		}
+	}
+	return false
 }
 
 // literalAttr returns the literal string value of attribute name directly in
@@ -335,8 +367,10 @@ func (x *extractor) literalAttr(body *ts.Node, name string) (string, bool) {
 	return "", false
 }
 
-// stringLiteral returns the text of a quoted string without interpolation,
-// directive or escape sequence; ok is false otherwise.
+// stringLiteral returns the value of a quoted string without interpolation
+// or directive, with HCL's escape sequences decoded (\n \r \t \" \\
+// \uNNNN \UNNNNNNNN, and $${ / %%{ for a literal ${ / %{); ok is false for
+// anything else.
 func (x *extractor) stringLiteral(n *ts.Node) (string, bool) {
 	var sb strings.Builder
 	for i := 0; i < n.ChildCount(); i++ {
@@ -344,13 +378,63 @@ func (x *extractor) stringLiteral(n *ts.Node) (string, bool) {
 		switch c.Type(x.lang) {
 		case "quoted_template_start", "quoted_template_end":
 		case "template_literal":
-			t := c.Text(x.src)
-			if strings.ContainsAny(t, `\`) {
+			t, ok := unescapeHCL(c.Text(x.src))
+			if !ok {
 				return "", false
 			}
 			sb.WriteString(t)
 		default:
 			return "", false
+		}
+	}
+	return sb.String(), true
+}
+
+func unescapeHCL(t string) (string, bool) {
+	if !strings.ContainsAny(t, `\$%`) {
+		return t, true
+	}
+	var sb strings.Builder
+	for i := 0; i < len(t); i++ {
+		c := t[i]
+		switch {
+		case (c == '$' || c == '%') && strings.HasPrefix(t[i:], string(c)+string(c)+"{"):
+			sb.WriteByte(c)
+			sb.WriteByte('{')
+			i += 2
+		case c == '\\':
+			if i+1 >= len(t) {
+				return "", false
+			}
+			i++
+			switch t[i] {
+			case 'n':
+				sb.WriteByte('\n')
+			case 'r':
+				sb.WriteByte('\r')
+			case 't':
+				sb.WriteByte('\t')
+			case '"', '\\':
+				sb.WriteByte(t[i])
+			case 'u', 'U':
+				width := 4
+				if t[i] == 'U' {
+					width = 8
+				}
+				if i+1+width > len(t) {
+					return "", false
+				}
+				r, err := strconv.ParseUint(t[i+1:i+1+width], 16, 32)
+				if err != nil || !utf8.ValidRune(rune(r)) {
+					return "", false
+				}
+				sb.WriteRune(rune(r))
+				i += width
+			default:
+				return "", false
+			}
+		default:
+			sb.WriteByte(c)
 		}
 	}
 	return sb.String(), true
