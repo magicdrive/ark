@@ -18,6 +18,9 @@ CLAUDE.md
 #/.claude/settings.json
 #/.claude/settings.local.json
 
+### Local AI agent instructions (per developer; design knowledge is in ARCHITECTURE.md)
+/AGENTS.md
+
 ### Vim
 # Swap
 [._]*.s[a-v][a-z]

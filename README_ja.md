@@ -785,6 +785,7 @@ ChatGPT や Cline があなたのコードベースを効率的に探索する�
 ## 📎 See Also
 
 * プロジェクトホーム — <https://github.com/magicdrive/ark>
+* アーキテクチャと設計上の不変条件 — [ARCHITECTURE.md](ARCHITECTURE.md)（英語）
 
 ## Author
 

@@ -798,6 +798,7 @@ One command generates everything needed to teach ChatGPT or Cline how to efficie
 ## 📎 See Also
 
 * Project home — <https://github.com/magicdrive/ark>
+* Architecture and design invariants — [ARCHITECTURE.md](ARCHITECTURE.md)
 
 ## Author
 

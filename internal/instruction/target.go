@@ -23,8 +23,8 @@ type targetInfo struct {
 // Only `claude` has an officially documented, model-visible MCP tool-naming
 // convention (mcp__<server>__<tool>), so only it gets a dedicated renderer.
 // Every other target uses renderPlain: the canonical guidance's bare tool
-// names, unchanged. See docs/instruction-targets investigation (Opus,
-// 2026-10-05) for why no other synthetic naming is used.
+// names, unchanged: no other agent documents a naming convention, so any other
+// synthetic name would be a guess.
 var targets = []targetInfo{
 	{"claude", "CLAUDE.md", renderClaude},
 	{"codex", "AGENTS.md", renderPlain},

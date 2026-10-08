@@ -12,7 +12,7 @@ import (
 type Request struct {
 	Target       symbol.SymbolID
 	MaxTokens    int // estimated token budget (len(text)/4 approximation); target is always included
-	MaxDepth     int // graph traversal depth (default 2)
+	MaxDepth     int // graph traversal depth (default 2); callers are collected one hop deep, callees at most two (collectCandidates)
 	IncludeTests bool
 }
 

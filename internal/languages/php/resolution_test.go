@@ -68,15 +68,12 @@ func TestResolution_VariableReceiverAmbiguous(t *testing.T) {
 	}
 }
 
-// TestKnownIssue_StaticReceiverFalseExact documents a KNOWN false Exact pending
-// architecture review (see PHP-6 completion report): a static call `User::create()`
-// resolves via the resolver's same-file bare-name match (which ignores the
-// explicit type receiver) to an unrelated same-file method `SuperUser.create`,
-// producing a false Exact AND a false graph edge. Fixing this requires a
-// language-neutral, receiver-aware change to the SHARED resolver's confidence
-// behavior, which is deferred to an architecture review (it must not regress the
-// existing 5 languages). This test asserts the DESIRED behavior and is skipped
-// until that change lands.
+// TestKnownIssue_StaticReceiverFalseExact (the name is historical) pins the fix
+// of a former false Exact: a static call `User::create()` resolved via the
+// resolver's same-file bare-name match, which ignored the explicit type
+// receiver, to an unrelated same-file method `SuperUser.create` — a false Exact
+// AND a false graph edge. The language-neutral fix constrains every name-based
+// stage to members of an explicit type receiver (resolver.constrainReceiver).
 func TestKnownIssue_StaticReceiverFalseExact(t *testing.T) {
 	idx := phpIndex(t, "res_static_false")
 	if hasEdgeTo(idx, "f", "SuperUser.create") {

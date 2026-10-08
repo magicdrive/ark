@@ -47,7 +47,7 @@ func specList() []spec {
 		// relations + resolution + typed graph, certified for agent-oriented
 		// context quality. Held at Graph (not ContextQualityCertified) because
 		// import/namespace/inherited-member resolution precision is honestly
-		// limited vs a compiler; see internal/conformance/IMPROVEMENTS.md.
+		// limited vs a compiler; see README.md, "Language Support".
 		{php.NewProvider(), grammars.PhpLanguage, language.SupportLevelGraph},
 	}
 }

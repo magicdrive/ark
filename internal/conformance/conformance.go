@@ -6,7 +6,7 @@
 // satisfies. Aspirational quality requirements that are not yet met by all
 // providers (e.g. partial extraction and diagnostics on broken source) are NOT
 // asserted here; they are tracked in IMPROVEMENTS.md and surfaced by the
-// non-failing audit in AuditQualityCandidates.
+// non-failing audit TestQualityCandidates (conformance_test.go).
 package conformance
 
 import (

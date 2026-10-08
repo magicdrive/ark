@@ -8,8 +8,8 @@ import (
 )
 
 // TestRegistry_CanonicalSet pins the canonical supported-language set and order.
-// tsx is a first-class language in the registry (its exclusion from MCP
-// indexing is a separate, MCP-local compatibility concern).
+// tsx is a first-class language in the registry and is indexed by every MCP
+// tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
 	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php"}
 	got := languages.Registry().Languages()

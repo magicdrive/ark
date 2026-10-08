@@ -99,8 +99,8 @@ func TestProviderContract(t *testing.T) {
 }
 
 // TestQualityCandidates is a NON-FAILING audit. It records, per provider, the
-// current status of aspirational quality requirements that PR 1 intentionally
-// does NOT fix (see IMPROVEMENTS.md). It never calls t.Error/t.Fatal.
+// current status of the open quality gaps listed in IMPROVEMENTS.md — the
+// authority for their per-provider status. It never calls t.Error/t.Fatal.
 func TestQualityCandidates(t *testing.T) {
 	for _, f := range fixtures() {
 		f := f

@@ -28,9 +28,11 @@ import (
 //
 // Receiver identity and member lookup stay separate. ReceiverTypeQualified only
 // identifies the receiver's type; the member is then looked up exactly as under
-// any other proven receiver type (memberResolution). A member that is not found
-// on that type is Unresolved: inherited, trait and magic members are not
-// resolved here.
+// any other proven receiver type (memberResolution). A member that the type does
+// not declare itself is looked up structurally through its traits and
+// supertypes (inheritance.go); when that finds no target the reference is
+// Unresolved. Dispatch through magic methods (__call, __get, ...) is not
+// modelled.
 
 // langQualified is the key of the qualified-identity index. Symbol.Qualified has
 // a different meaning in each language, so identities are only comparable within

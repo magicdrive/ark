@@ -124,8 +124,7 @@ func phpNamespace(node *ts.Node, lang *ts.Language, src []byte, file source.File
 // semantic import clause (D6). It handles non-grouped and grouped forms, plus
 // per-clause `function`/`const` kind markers. Import kind (class/function/
 // const) is intentionally not represented: the existing ImportDraft has no kind
-// field and the import TARGET + alias are what matter here; see the completion
-// report for why dropping kind is correct for Ark's current use.
+// field and the import TARGET + alias are what Ark's import consumers use.
 func appendImports(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, imp *[]language.ImportDraft) {
 	visitUseClauses(node, lang, src, func(clause *ts.Node, prefix string, _ useKind) {
 		if d, ok := parseUseClause(clause, lang, src, file, prefix); ok {
