@@ -9,6 +9,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 var (
@@ -49,8 +50,7 @@ func Parse(lang SupportedLanguage, src []byte) (*ParseResult, error) {
 		return nil, ErrUnsupportedLanguage
 	}
 
-	parser := ts.NewParser(tsLang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(tsLang, src)
 	if err != nil {
 		return nil, ErrParseFailed
 	}

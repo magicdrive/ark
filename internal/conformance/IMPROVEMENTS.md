@@ -29,6 +29,25 @@ Probe (per language): a broken declaration followed by a valid one, e.g.
 Target: every provider recovers the trailing valid declaration. Today the
 Tree-sitter error node swallows the remainder for several grammars.
 
+## Q8 — Parser fidelity
+
+gotreesitter is a reimplementation of the Tree-sitter runtime. Measured
+against the reference runtime with the same grammar commits (differential
+testing over real corpora), its trees differ in two ways:
+
+- **with an error the reference does not report** — a valid region is not
+  analyzed and reported as `parse_error`. `tsparse` recovers the cases its
+  candidate route parses; the rest stay visible as diagnostics (e.g. a PHP
+  destructuring assignment: `TestKnownParserDefect_PHPDestructuring`).
+- **without any error** — an ambiguous construct resolved differently (Go
+  generic instantiation vs. index expression, TypeScript `as` / `satisfies`
+  / `<`). Nothing reports these, so references from them may differ.
+
+Target: trees identical to the reference runtime on valid source. Measure
+declarations with `go test ./internal/languages/golang -run TestFidelity -v`
+(and `ARK_GO_FIDELITY_ROOTS` for external corpora); whole-tree comparison
+needs the reference runtime and is not part of the test suite.
+
 ## Q3 — Member symbols (JavaScript, Python)
 
 JavaScript and Python do not extract class/object members as symbols, so

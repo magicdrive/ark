@@ -214,6 +214,25 @@ parser's ERROR / MISSING nodes, and none on the contract's valid corpus
 Danger: reading "no diagnostics" or "unresolved: 0" as "everything was
 analyzed"; dropping a diagnostic from a warm cache.
 
+**One parse path, measured against the reference runtime.** Every provider
+and the syntax tools parse through `tsparse.Parse`: gotreesitter's
+production route, and — only when that tree has an error — its admission
+candidate route, kept only if it has none. Differential testing against the
+reference Tree-sitter runtime (same grammar commits) is the evidence: the
+production route rejects some valid code (lost declarations, false
+`parse_error`) that the candidate route parses identically to the
+reference, while switching routes everywhere changes more correct trees than
+it fixes. A tree without an error is a complete derivation by the grammar,
+so the fallback recovers a derivation and never invents one; when both
+routes fail, the production tree and its diagnostics stand. Trees that differ
+from the reference *without* an error (ambiguous generic / `as` /
+`satisfies` constructs) are not detectable this way and remain a known gap
+(`internal/conformance/IMPROVEMENTS.md`, Q8). Authority:
+`tsparse/tsparse.go`. Tests: `TestParse_*`, `TestFidelity_*`,
+`TestKnownParserDefect_PHPDestructuring`.
+Danger: switching the process-wide route "because it fixed a file", or
+dropping diagnostics instead of recovering the parse.
+
 ## 4. RepositoryIndex and index reuse
 
 - **`RepositoryIndex` is immutable after `freeze`.** Accessors return copies;

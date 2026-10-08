@@ -365,7 +365,7 @@ class C { public function m() { Foo::a(); new Foo(); } }`) {
 // The provider now emits qualified identity evidence, which changes its cached
 // output: entries written as php-6 lack it and must not be reused.
 func TestCacheVersionCoversQualifiedIdentity(t *testing.T) {
-	if got := NewProvider().CacheVersion(); got != "php-12" {
-		t.Errorf("CacheVersion = %q, want php-12 (php-6 entries carry no qualified identity, php-7 no constructor property evidence or confidence caps, php-8 no $this/parent:: identity, member visibility or trait adaptations, php-9 no dynamic calls, nullsafe calls, class-strings or new self/parent, php-10 local evidence from non-dominating assignments, php-11 no syntax-error diagnostics)", got)
+	if got := NewProvider().CacheVersion(); got != "php-13" {
+		t.Errorf("CacheVersion = %q, want php-13 (php-6 entries carry no qualified identity, php-7 no constructor property evidence or confidence caps, php-8 no $this/parent:: identity, member visibility or trait adaptations, php-9 no dynamic calls, nullsafe calls, class-strings or new self/parent, php-10 local evidence from non-dominating assignments, php-11 no syntax-error diagnostics, php-12 trees the production parser route misparsed)", got)
 	}
 }

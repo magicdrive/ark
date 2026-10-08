@@ -32,6 +32,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts code intelligence from PHP source files.
@@ -43,12 +44,11 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-12" }
+func (p *Provider) CacheVersion() string { return "php-13" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
 			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},

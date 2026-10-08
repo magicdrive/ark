@@ -16,6 +16,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts TypeScript (.ts) or TSX (.tsx) files.
@@ -50,12 +51,11 @@ func (p *Provider) Extensions() []string {
 //	        exports / ModuleSpec candidates, ModuleScoped, ReceiverType,
 //	        heritage and JSX references.
 //	"ts-3": syntax-error diagnostics (treediag).
-func (p *Provider) CacheVersion() string { return "ts-3" }
+func (p *Provider) CacheVersion() string { return "ts-4" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()
-	parser := ts.NewParser(tsLang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(tsLang, src)
 	if err != nil {
 		return language.Extraction{
 			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},

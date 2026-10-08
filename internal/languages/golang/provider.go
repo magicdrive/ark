@@ -12,6 +12,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts symbols from Go source files.
@@ -22,12 +23,11 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "go-3" }
+func (p *Provider) CacheVersion() string        { return "go-4" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
 			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},
@@ -83,10 +83,14 @@ func goFunction(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 
 func goMethod(node *ts.Node, lang *ts.Language, src []byte, file source.FileID) *language.SymbolDraft {
 	var name, receiver string
+	seenReceiver := false
 	for i := 0; i < node.ChildCount(); i++ {
 		child := node.Child(i)
 		t := child.Type(lang)
-		if t == "parameter_list" && receiver == "" {
+		if t == "parameter_list" && !seenReceiver {
+			// Only the first parameter list is the receiver; the next one
+			// holds the method's own parameters.
+			seenReceiver = true
 			receiver = goReceiverType(child, lang, src)
 		} else if (t == "field_identifier" || t == "identifier") && name == "" {
 			name = child.Text(src)
@@ -116,18 +120,29 @@ func goReceiverType(node *ts.Node, lang *ts.Language, src []byte) string {
 		child := node.Child(i)
 		if child.Type(lang) == "parameter_declaration" {
 			for j := 0; j < child.ChildCount(); j++ {
-				gc := child.Child(j)
-				switch gc.Type(lang) {
-				case "type_identifier":
-					return gc.Text(src)
-				case "pointer_type":
-					for k := 0; k < gc.ChildCount(); k++ {
-						ggc := gc.Child(k)
-						if ggc.Type(lang) == "type_identifier" {
-							return ggc.Text(src)
-						}
-					}
+				if name := goReceiverTypeName(child.Child(j), lang, src); name != "" {
+					return name
 				}
+			}
+		}
+	}
+	return ""
+}
+
+// goReceiverTypeName is the base type name of a receiver type: T, *T, T[P]
+// or *T[P].
+func goReceiverTypeName(n *ts.Node, lang *ts.Language, src []byte) string {
+	switch n.Type(lang) {
+	case "type_identifier":
+		return n.Text(src)
+	case "pointer_type", "generic_type":
+		for k := 0; k < n.ChildCount(); k++ {
+			c := n.Child(k)
+			switch c.Type(lang) {
+			case "type_identifier":
+				return c.Text(src)
+			case "generic_type":
+				return goReceiverTypeName(c, lang, src)
 			}
 		}
 	}

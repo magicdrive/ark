@@ -11,6 +11,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts symbols from Python source files.
@@ -20,12 +21,11 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "python" }
 func (p *Provider) Extensions() []string        { return []string{".py", ".pyw"} }
-func (p *Provider) CacheVersion() string        { return "2" }
+func (p *Provider) CacheVersion() string        { return "3" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PythonLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
 			Diagnostics: []language.Diagnostic{treediag.ParseFailed(file, err)},

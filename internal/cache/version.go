@@ -20,7 +20,9 @@ package cache
 // the Terraform provider emits them, and it has no entries that predate them.
 // Diagnostic.Code is optional the same way; every provider that started
 // stating codes bumped its CacheVersion (go-3, javascript 2, python 2, ts-3,
-// php-12, terraform-5).
+// php-12, terraform-5), and again when tsparse began recovering trees the
+// production parser route misparsed (go-4, javascript 3, python 3, ts-4,
+// php-13, terraform-6).
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

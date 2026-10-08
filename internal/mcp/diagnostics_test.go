@@ -300,3 +300,17 @@ func TestDiagnostics_ListingIsInPathOrder(t *testing.T) {
 		t.Errorf("order %v", files)
 	}
 }
+
+// Valid Go that gotreesitter's production route misparsed: no diagnostic is
+// reported, because the file is now analyzed — not because one was hidden.
+func TestDiagnostics_RecoveredValidSourceHasNone(t *testing.T) {
+	dir := t.TempDir()
+	writeTree(t, dir, map[string]string{"q.go": "package q\nfunc h() {\n\tfor range l {\n\t\tz.e(func() {\n\t\t\tfor range a {\n\t\t\t\tk.k(y.f(s.x), s.x != \"\")\n\t\t\t}\n\t\t\tfor range s {\n\t\t\t\tif m != a.c[n] {\n\t\t\t\t}\n\t\t\t}\n\t\t})\n\t}\n}\nfunc Later() {}\n"})
+	h := &ToolsHandler{rootDir: dir}
+	if out := diagnosticsOf(t, h, map[string]interface{}{}); out.Total != 0 {
+		t.Errorf("%+v", out)
+	}
+	if text := toolText(t, h, "find_symbol", map[string]interface{}{"pattern": "Later"}); !strings.Contains(text, `"Later"`) {
+		t.Errorf("the declaration after the construct is missing:\n%s", text)
+	}
+}

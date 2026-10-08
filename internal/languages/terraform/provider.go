@@ -105,6 +105,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/internal/treediag"
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/tsparse"
 )
 
 // Provider extracts code intelligence from Terraform files.
@@ -118,7 +119,7 @@ func (p *Provider) Language() language.Language { return "terraform" }
 func (p *Provider) Extensions() []string { return []string{".tf", ".tfvars"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "terraform-5" }
+func (p *Provider) CacheVersion() string { return "terraform-6" }
 
 // Diagnostic codes (language.Diagnostic.Code) this provider states, beside
 // treediag's parse_failed and parse_error.
@@ -131,8 +132,7 @@ const (
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.HclLanguage()
-	parser := ts.NewParser(lang)
-	tree, err := parser.Parse(src)
+	tree, err := tsparse.Parse(lang, src)
 	if err != nil {
 		return language.Extraction{
 			Diagnostics:  []language.Diagnostic{treediag.ParseFailed(file, err)},

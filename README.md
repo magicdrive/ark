@@ -826,6 +826,7 @@ Ark provides **20 MCP tools** covering the full code-intelligence stack:
 - **An unresolved reference** is different: Ark parsed it but knows no target (an external, built-in, undeclared or computed name). It is counted by `unresolved` / `outsideRepository` on the graph tools, never as a diagnostic.
 - **`unattributed: 0`** means no reference Ark *observed* may be a missing edge. It cannot account for what Ark does not observe: **no diagnostics and `unresolved: 0` still do not prove that every dependency is known** — files of formats no provider handles (see `get_language_support`; e.g. Terraform `.tf.json`) are not examined, and a provider may not observe every construct.
 - A tool error (`isError`) means the tool itself failed; it is never a diagnostic.
+- Ark's parser (gotreesitter, a pure-Go Tree-sitter runtime) rejects some valid code. When its main route fails, Ark retries with its alternative route and keeps that tree only if it parses cleanly; whatever still fails stays a `parse_error`. It can also resolve ambiguous constructs (Go generic calls, TypeScript `as` / `satisfies`) differently from the reference Tree-sitter runtime without any error — references from such code may differ.
 
 The core navigation pattern:
 
