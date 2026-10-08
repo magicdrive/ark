@@ -31,8 +31,8 @@ Tree-sitter error node swallows the remainder for several grammars.
 
 ## Q2 — Diagnostics on broken source
 
-No provider emits a `language.Diagnostic` when the parse tree contains error
-nodes: breakage is silent, and the extraction simply has fewer symbols.
+A provider that emits no `language.Diagnostic` when the parse tree contains
+error nodes makes breakage silent: the extraction simply has fewer symbols.
 
 Target: at least one `SeverityWarning` diagnostic when the tree has errors.
 "Unknown is not empty" applies here too — silent degradation looks like a
@@ -73,3 +73,10 @@ PHP `$o->$m()`.
 Target: exactly one Dynamic reference, with no name fabricated from the
 expression. Only a Dynamic reference is safe here: a guessed name would be
 matched against declarations.
+
+Terraform has no such syntax: function names are static built-ins and a
+computed index (`local.m[var.k]`) selects a value, not a declaration. Its
+probe has no computed-name call, so 0 is its correct count. Q3/Q4 do not
+apply to it either: Terraform declarations have no members (an attribute
+such as `.id` is not a declaration), and a check-scoped data source is its
+only symbol with `Parent`.

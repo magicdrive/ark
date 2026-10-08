@@ -49,6 +49,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 				Bindings:     cached.Bindings,
 				Exports:      cached.Exports,
 				ModuleScoped: cached.ModuleScoped,
+				IdentityOnly: cached.IdentityOnly,
 			})
 			return
 		}
@@ -79,6 +80,7 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 			Bindings:     extraction.Bindings,
 			Exports:      extraction.Exports,
 			ModuleScoped: extraction.ModuleScoped,
+			IdentityOnly: extraction.IdentityOnly,
 		})
 	})
 

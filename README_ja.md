@@ -325,7 +325,7 @@ ark mcp-init --force
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python, php) | 自動検出 |
+| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python, php, terraform) | 自動検出 |
 | `--format <text\|json>` | 出力フォーマット | `text` |
 | `-h, --help` | ヘルプを表示 | – |
 
@@ -341,7 +341,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python, php) | 自動検出 |
+| `--lang <language>` | 言語指定 (go, typescript, tsx, javascript, python, php, terraform) | 自動検出 |
 | `--format <text\|json>` | 出力フォーマット | `text` |
 | `-h, --help` | ヘルプを表示 | – |
 
@@ -655,13 +655,15 @@ Parse → Symbols → References → Resolution → Graph → Context。
 | JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
 | Python     |   ✓   |    ✓    |     ✓      |            |       |         |
 | PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
+| Terraform  |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
 
 チェックマークは、canonical Language Registry がその言語の **認定サポートレベル**
 として表明している段階を示します（`get_language_support` が実行時に報告）。PHP の
 `get_context` 経路は実装済みで専用の context-quality テストもありますが、関数・定数名や
 framework の dispatch など resolver の精度を意図的に保守的に保っているため、
 PHP は **Graph** レベルで表明しています。過大表明を避けるため Context 列は未チェック
-のままにしています。
+のままにしています。Terraform の `get_context` は依存グラフ上で動作しますが、まだ
+context-quality ベンチマークの対象ではないため、同じく **Graph** レベルで表明しています。
 
 #### TypeScript / TSX — 静的コードインテリジェンス
 
@@ -727,6 +729,43 @@ class、例えば vendor の class は `Unresolved` のままで、同名のリ�
 で止まります。関数・定数名は保守的です。framework（Laravel/Symfony 等）セマンティクスは
 扱いません。Ark は **純粋な静的解析**のみを行い、リポジトリのコード・Composer・PHP
 ツールを一切実行しません。
+
+#### Terraform — 静的な構成インテリジェンス
+
+Ark は Terraform 構成（`.tf`）の宣言 — `resource` / `data` / `ephemeral` /
+`module` / `variable` / `locals`（local ごとに 1 シンボル）/ `output` /
+`provider`（`alias` 付き）/ `check`（スコープ付き `data` を含む）/ `terraform`
+ブロック — と、それらの間の **依存関係** を静的に抽出します。依存関係は式中の静的な
+アドレス（`aws_vpc.main.id`、`data.aws_ami.ubuntu.id`、`var.region`、`local.name`、
+`module.net`、`resource.TYPE.NAME`。template、heredoc、条件式、関数呼び出し、`for`
+式、splat、index、`dynamic` ブロック内を含む）、`depends_on`、`provider` /
+`providers` メタ引数です。これらは `references` / `depends_on` の graph edge になり
+（`get_callees`。`get_callers` では `referenced_by` / `depended_on_by`）、呼び出しとして
+扱われることはありません。`.tfvars` の代入は、名前の示す variable への write として
+記録します。HCL の解析には Ark の pure-Go runtime に含まれる Tree-sitter HCL grammar
+を使います（CGO 不要、新規依存なし）。
+
+**module のスコープはディレクトリです。** シンボル名は Terraform アドレス
+（`aws_vpc.main`）、qualified name は module ディレクトリを前置したもの
+（`modules/network/aws_vpc.main`）です。参照は、それが書かれた module の中だけで、
+そのディレクトリの全 `.tf` ファイルを横断して解決します。アドレスの宣言が 1 つなら
+`Exact`、2 つなら `Candidate`（edge なし）、そこに宣言がなければ — 別の module に
+同じアドレスがあっても — `Unresolved` です。`module.NAME.OUTPUT` は、module の
+`source` がローカルパス（`./`、`../`）のとき子 module の `output "OUTPUT"` に解決
+します。registry・Git などリモート module の output は `outsideRepository` として報告
+します。Terraform の名前は identity でのみ照合し、名前の類似で Terraform 同士や他言語の
+シンボルと結び付けることはありません。名前は HCL の識別子規則に従い Unicode 文字
+（`aws_vpc.日本`）も扱います。Terraform と同じく正規化はせず、書かれたとおりに比較します。
+
+| | 状態 |
+|---|---|
+| **対応** | 上記ブロック、同一 module のファイル横断解決、ローカル module の output（`module.x["k"].out`、`module.x[*].out` を含む）、明示的 `depends_on`、provider 構成と alias、check スコープの data source、override ファイル（`override.tf`、`*_override.tf`：参照は計上し、宣言はしない）、壊れたファイル（Tree-sitter の回復が及ぶ範囲で後続の宣言を回復し — 閉じていない括弧はファイル末尾まで飲み込むことがある — error 診断を出す） |
+| **設計上 参照ではない** | `count.*`、`each.*`、`self.*`、`path.*`、`terraform.*`、`for` / template `for` の変数、`dynamic` の iterator、bare な object key、関数名（provider 定義関数を含む）、`lifecycle.ignore_changes`、variable の型制約 |
+| **意図的に unresolved / outside** | リモート module の output（`outsideRepository`）、module に `provider "x"` ブロックがない場合の `provider = x`（暗黙・継承の構成）、`.tf.json` にだけ宣言されたアドレス |
+| **未実装** | `.tf.json` / `.tfvars.json`（JSON 構文）、汎用 `.hcl`（Packer・Nomad・Terragrunt・Terraform test ファイルは Terraform として索引しない）、`moved` / `import` / `removed` ブロック（観測しない）、resource type の暗黙の default provider、`.tfvars` がどの module に渡るか、`terraform_remote_state` などの state 間データ、Terraform Cloud workspace |
+
+Ark は **純粋な静的解析**のみを行い、`terraform` を実行せず、module や provider を
+ダウンロードせず、`.terraform/` を読みません。
 
 ### 🤖 LLM-Optimized Workflow
 

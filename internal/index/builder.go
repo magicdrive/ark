@@ -117,6 +117,9 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			Exported:  sd.Exported,
 
 			Visibility: sd.Visibility,
+
+			MemberScope:    sd.MemberScope,
+			MembersOutside: sd.MembersOutside,
 		}
 		if sd.Parent != "" {
 			sym.Parent = symbol.NewSymbolID(lang, string(fileID), symbol.KindUnknown, sd.Parent)
@@ -143,6 +146,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			ReceiverTypeQualified: rd.ReceiverTypeQualified,
 			ConfidenceCap:         rd.ConfidenceCap,
 			Dynamic:               rd.Dynamic,
+			IdentityInRepository:  rd.IdentityInRepository,
 			IsCall:                rd.IsCall,
 		})
 	}
@@ -167,6 +171,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 		Bindings:     ex.Bindings,
 		Exports:      ex.Exports,
 		ModuleScoped: ex.ModuleScoped,
+		IdentityOnly: ex.IdentityOnly,
 	}
 }
 
@@ -420,7 +425,9 @@ func dedupeEdges(edges []GraphEdge) []GraphEdge {
 // edgeKindFor maps a reference kind to the graph edge it forms. Construction is
 // modelled as a call-like edge — an explicit decision, NOT a default fallback:
 // `new T()` depends on T much like a call (this preserves the pre-D4 behaviour
-// that relied on the old default). Every other kind (read/write/unknown or any
+// that relied on the old default). A value reference and an explicit
+// dependency (configuration languages) form dependency edges of their own,
+// never call edges. Every other kind (read/write/unknown or any
 // future kind) has no graph semantics and never forms an edge.
 func edgeKindFor(k reference.ReferenceKind) (EdgeKind, bool) {
 	switch k {
@@ -436,6 +443,10 @@ func edgeKindFor(k reference.ReferenceKind) (EdgeKind, bool) {
 		return EdgeImplements, true
 	case reference.KindUsesTrait:
 		return EdgeUsesTrait, true
+	case reference.KindValueReference:
+		return EdgeReferences, true
+	case reference.KindExplicitDependency:
+		return EdgeDependsOn, true
 	}
 	return "", false
 }

@@ -36,6 +36,12 @@ const (
 	// EvidenceDynamicName: the reference's name is computed at run time
 	// (reference.Reference.Dynamic); it is Unresolved by construction.
 	EvidenceDynamicName EvidenceKind = "dynamic_name"
+	// EvidenceMemberScope: the receiver declaration states which declarations
+	// its members denote (symbol.Symbol.MemberScope / MembersOutside).
+	EvidenceMemberScope EvidenceKind = "member_scope"
+	// EvidenceIdentityOnly: the reference is written in a file whose names
+	// resolve only by qualified identity, and it carries none.
+	EvidenceIdentityOnly EvidenceKind = "identity_only"
 )
 
 // ResolutionEvidence records why a particular candidate was matched.

@@ -83,3 +83,6 @@ jobs:
 
       - name: Run fuzz smoke (TypeScript module specifiers)
         run: go test -run '^$' -fuzz=FuzzModuleSpec -fuzztime=10s ./internal/languages/typescript/
+
+      - name: Run fuzz smoke (Terraform extraction)
+        run: go test -run '^$' -fuzz=FuzzExtractTerraform -fuzztime=10s ./internal/languages/terraform/

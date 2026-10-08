@@ -326,7 +326,7 @@ ark mcp-init --force
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php) | auto-detect |
+| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php, terraform) | auto-detect |
 | `--format <text\|json>` | Output format | `text` |
 | `-h, --help` | Show help | – |
 
@@ -342,7 +342,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php) | auto-detect |
+| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php, terraform) | auto-detect |
 | `--format <text\|json>` | Output format | `text` |
 | `-h, --help` | Show help | – |
 
@@ -642,7 +642,7 @@ Symbols: 11
 
 - **No CGO required** — Cross-compile anywhere, single static binary
 - **Real parsing** — Not regex hacks, actual AST-based symbol extraction
-- **Multi-language** — Go, TypeScript, TSX, JavaScript, Python, PHP (and growing!)
+- **Multi-language** — Go, TypeScript, TSX, JavaScript, Python, PHP, Terraform (and growing!)
 
 ### 🌐 Language Support
 
@@ -657,6 +657,7 @@ Parse → Symbols → References → Resolution → Graph → Context.
 | JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
 | Python     |   ✓   |    ✓    |     ✓      |            |       |         |
 | PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
+| Terraform  |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
 
 A checkmark means the canonical Language Registry advertises that level as the
 language's certified support level; `get_language_support` reports it at runtime.
@@ -664,7 +665,9 @@ PHP's `get_context` path is implemented and covered by dedicated context-quality
 tests, but PHP is advertised at **Graph** level because several resolver
 precision areas (function and constant names, framework dispatch) remain
 intentionally conservative — so the Context cell is left unchecked rather than
-overstating certification.
+overstating certification. Terraform's `get_context` works on the dependency
+graph, but no context-quality benchmark covers it yet, so it is advertised at
+**Graph** as well.
 
 #### TypeScript / TSX — static code intelligence
 
@@ -749,6 +752,46 @@ constant names remain intentionally conservative; no framework
 (Laravel/Symfony/…) semantics.
 Ark performs **pure static analysis** and never executes repository code,
 Composer, or any PHP tooling.
+
+#### Terraform — static configuration intelligence
+
+Ark statically extracts the declarations of Terraform configuration
+(`.tf`) — `resource`, `data`, `ephemeral`, `module`, `variable`, `locals`
+(one symbol per local), `output`, `provider` (with `alias`), `check` (with its
+scoped `data` sources) and `terraform` blocks — and the **dependencies**
+between them: every static address in an expression (`aws_vpc.main.id`,
+`data.aws_ami.ubuntu.id`, `var.region`, `local.name`, `module.net`,
+`resource.TYPE.NAME`, inside templates, heredocs, conditionals, function calls,
+`for` expressions, splats, indexes and `dynamic` blocks), `depends_on`, and the
+`provider` / `providers` meta-arguments. They form `references` and
+`depends_on` graph edges (`get_callees`; `referenced_by` / `depended_on_by` in
+`get_callers`) — never calls. `.tfvars` assignments are recorded as writes of
+the variables they name. HCL is parsed with the Tree-sitter HCL grammar of
+Ark's pure-Go runtime (no CGO, no new dependency).
+
+**Module scope is the directory.** A symbol's name is its Terraform address
+(`aws_vpc.main`); its qualified name prefixes the module directory
+(`modules/network/aws_vpc.main`). A reference resolves only within the module
+it is written in, across all of that directory's `.tf` files — `Exact` when the
+address is declared once, `Candidate` (no edge) when it is declared twice,
+`Unresolved` when it is not declared there, even if another module declares
+the same address. `module.NAME.OUTPUT` resolves to the child module's
+`output "OUTPUT"` when the module's `source` is a local path (`./`, `../`);
+an output of a registry, Git or other remote module is reported as
+`outsideRepository`. Terraform names are matched by identity only: no name
+heuristic links them to each other or to symbols of other languages. Names
+follow HCL's identifier rules, including Unicode letters (`aws_vpc.日本`), and
+are compared as written — like Terraform, Ark does not normalize them.
+
+| | Status |
+|---|---|
+| **Supported** | the blocks above; same-module cross-file resolution; local module outputs (incl. `module.x["k"].out`, `module.x[*].out`); explicit `depends_on`; provider configurations and aliases; check-scoped data sources; override files (`override.tf`, `*_override.tf`: their references are counted, they declare nothing); broken files (declarations after the error are recovered where Tree-sitter's recovery allows — an unclosed bracket can swallow the rest of the file — and an error diagnostic is emitted) |
+| **Not references by design** | `count.*`, `each.*`, `self.*`, `path.*`, `terraform.*`, `for` / template-`for` variables, `dynamic` iterators, bare object keys, function names (incl. provider-defined functions), `lifecycle.ignore_changes`, variable type constraints |
+| **Intentionally unresolved / outside** | outputs of remote modules (`outsideRepository`), `provider = x` when the module declares no `provider "x"` block (implicit or inherited configuration), addresses declared only in `.tf.json` files |
+| **Not implemented** | `.tf.json` / `.tfvars.json` (JSON syntax), generic `.hcl` files (Packer, Nomad, Terragrunt and Terraform test files are not Terraform-indexed), `moved` / `import` / `removed` blocks (not observed), the implicit default provider of a resource type, which module receives a `.tfvars` file, `terraform_remote_state` / cross-state data, Terraform Cloud workspaces |
+
+Ark performs **pure static analysis**: it never runs `terraform`, never
+downloads modules or providers, and never reads `.terraform/`.
 
 ### 🤖 LLM-Optimized Workflow
 

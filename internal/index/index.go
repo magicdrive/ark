@@ -25,6 +25,13 @@ const (
 	EdgeExtends    EdgeKind = "extends"
 	EdgeImplements EdgeKind = "implements"
 	EdgeUsesTrait  EdgeKind = "uses_trait"
+	// Dependency edges of configuration languages (Terraform). EdgeReferences:
+	// From uses the value or configuration of To (an implicit dependency);
+	// EdgeDependsOn: From is explicitly ordered after To. Neither is a call.
+	// Forward-only like the typed relation edges; the reverse edge is the
+	// generic EdgeCalledBy, its RefKind keeping the meaning.
+	EdgeReferences EdgeKind = "references"
+	EdgeDependsOn  EdgeKind = "depends_on"
 )
 
 // GraphEdge is a directed relationship between two symbols with confidence.

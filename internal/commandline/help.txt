@@ -88,12 +88,12 @@ instruction options:
 
 syntax options:
   -h, --help                                       Show help message.
-  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php).
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php, terraform).
   --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
 
 symbol options:
   -h, --help                                       Show help message.
-  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php).
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php, terraform).
   --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
 
 skill subcommands:

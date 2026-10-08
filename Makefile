@@ -73,6 +73,7 @@ fuzz:
 	@$(GO) test -fuzz=FuzzResolveToolPath -fuzztime=10s $(CURDIR)/internal/mcp/
 	@$(GO) test -fuzz=FuzzCacheDecoding   -fuzztime=10s $(CURDIR)/internal/cache/
 	@$(GO) test -fuzz=FuzzExtract         -fuzztime=10s $(CURDIR)/internal/languages/golang/
+	@$(GO) test -run '^$$' -fuzz=FuzzExtractTerraform -fuzztime=10s $(CURDIR)/internal/languages/terraform/
 
 # Run intelligence benchmarks
 .PHONY: bench

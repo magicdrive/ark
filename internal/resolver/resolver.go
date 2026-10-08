@@ -25,6 +25,9 @@ type FileIndex struct {
 	Bindings     []language.BindingDraft
 	Exports      []language.ExportDraft
 	ModuleScoped bool
+	// IdentityOnly: the file's symbols are reached only by qualified
+	// identity (see language.Extraction.IdentityOnly).
+	IdentityOnly bool
 }
 
 // Resolver resolves syntactic references to candidate symbols using
@@ -79,6 +82,11 @@ func New(files []FileIndex) *Resolver {
 		r.byFile[fi.FileID] = fi
 		for _, sym := range fi.Symbols {
 			r.byID[sym.ID] = sym
+			if fi.IdentityOnly {
+				// Reached only through the qualified-identity index
+				// (identity.go), never through a name-based stage.
+				continue
+			}
 			r.byName[sym.Name] = append(r.byName[sym.Name], sym)
 			if sym.Qualified != "" {
 				r.byQualified[sym.Qualified] = append(r.byQualified[sym.Qualified], sym)
@@ -159,6 +167,12 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 	// resolved before — and instead of — every other rule below.
 	if ref.NameQualified != "" || ref.ReceiverTypeQualified != "" {
 		return r.resolveQualifiedIdentity(res, ref)
+	}
+	// In an identity-only file a name without identity evidence denotes
+	// nothing a name match could find (FileIndex.IdentityOnly).
+	if fi.IdentityOnly {
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceIdentityOnly, Detail: fmt.Sprintf("%s resolves names only by qualified identity", fi.FileID)}}
+		return res
 	}
 	if ref.ReceiverExpr == "" {
 		return r.resolveByName(res, ref, fi)
@@ -380,6 +394,9 @@ func (r *Resolver) importMatch(ref reference.Reference, fi FileIndex) []symbol.S
 	importBase := filepath.Base(importPath)
 	var out []symbol.Symbol
 	for _, f := range r.files {
+		if f.IdentityOnly {
+			continue
+		}
 		fid := string(f.FileID)
 		matches := strings.Contains(fid, importPath) ||
 			strings.HasPrefix(fid, importBase+"/") ||

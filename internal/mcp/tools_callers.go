@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -15,7 +16,7 @@ func CallersToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_callers",
-			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations)",
+			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations). For Terraform the callers are dependents: edge kind referenced_by (uses its value) or depended_on_by (depends_on), never a call",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -47,7 +48,7 @@ func CallersToolDefinitions() []Tool {
 		},
 		{
 			Name:        "get_callees",
-			Description: "Find symbols called by a given symbol, using the repository index. Every call/construction/type reference observed in the symbol is exactly one of: an edge; unattributed (may be a repository symbol but is not a resolved edge); unresolved (no repository symbol can be its target and none is proven: an external, built-in or run-time computed name); outsideRepository (proven to refer outside the repository). unattributed 0 means no callee in the repository is missing from edges; unattributed, unresolved and outsideRepository all 0 means every observed reference is an edge. unresolvedReferences lists the references with no candidate at all (first 10 in source order, unresolvedReferencesTotal counts them; reason unattributed, unresolved, dynamic_name or outside_repository). Syntax Ark does not observe as a reference is in no count; candidates lists possible callees of its ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations)",
+			Description: "Find symbols called by a given symbol, using the repository index. Every call/construction/type reference observed in the symbol is exactly one of: an edge; unattributed (may be a repository symbol but is not a resolved edge); unresolved (no repository symbol can be its target and none is proven: an external, built-in or run-time computed name); outsideRepository (proven to refer outside the repository). unattributed 0 means no callee in the repository is missing from edges; unattributed, unresolved and outsideRepository all 0 means every observed reference is an edge. unresolvedReferences lists the references with no candidate at all (first 10 in source order, unresolvedReferencesTotal counts them; reason unattributed, unresolved, dynamic_name or outside_repository). Syntax Ark does not observe as a reference is in no count; candidates lists possible callees of its ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations). For Terraform the callees are dependencies: edge kind references (an expression uses the declaration's value) or depends_on (explicit depends_on), never a call",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -261,7 +262,7 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 			edges = append(edges, edgeEntry{
 				From:       fromName,
 				To:         toName,
-				Kind:       string(e.Kind),
+				Kind:       edgeDisplayKind(e),
 				Confidence: e.Confidence.String(),
 				Evidence:   ev,
 			})
@@ -309,6 +310,23 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 		return nil, err
 	}
 	return &CallToolResult{Content: []Content{{Type: "text", Text: string(b)}}}, nil
+}
+
+// edgeDisplayKind is the kind an edge entry reports. A reverse edge is the
+// generic index.EdgeCalledBy; one built from a dependency reference
+// (configuration languages) reports what it is — referenced_by /
+// depended_on_by — so a dependency is never shown as a call. Every other edge
+// reports its graph kind unchanged.
+func edgeDisplayKind(e index.GraphEdge) string {
+	if e.Kind == index.EdgeCalledBy {
+		switch e.RefKind {
+		case reference.KindValueReference:
+			return "referenced_by"
+		case reference.KindExplicitDependency:
+			return "depended_on_by"
+		}
+	}
+	return string(e.Kind)
 }
 
 // candidateEntries lists the sampled candidate relations whose other end is

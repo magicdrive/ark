@@ -25,7 +25,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `ConfidenceCap`, `Dynamic`; bindings, exports, `ModuleScoped`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
@@ -54,6 +54,30 @@ from depending on its semantics, so this boundary is kept by design review;
 tests verify the evidence contracts it relies on (the resolver's tests drive
 it with synthetic, provider-independent evidence).
 
+**Scope that a name match cannot see** (Terraform). A Terraform address is
+unique only within its module, and a module is a directory, so the provider
+qualifies every declaration and every reference with the module directory it
+derives from the file's own path — still one file, nothing else consulted.
+Three generic extensions carry it, and none names a language:
+`Extraction.IdentityOnly` (the file's symbols are reached only by qualified
+identity, R0; no name stage reaches them, and a reference of the file without
+identity is Unresolved), `ReferenceDraft.IdentityInRepository` (the identity
+names a repository scope: no declaration there is Unresolved, not
+`OutsideRepository`, and no other declaration can be its target), and
+`SymbolDraft.MemberScope` / `MembersOutside` (a declaration states where its
+members live: a module call with a local `source` names the child module's
+outputs; a remote `source` places them outside the repository). A module call
+is therefore a member scope, not an import binding and not a call: bindings are
+file-scoped and name files, while a module call is visible to the whole module
+directory and names a directory. Dependencies form their own edge kinds
+(`references`, `depends_on`), never `calls`. Authority:
+`languages/terraform/provider.go` (header), `resolver/identity.go`. Tests:
+`TestIdentityOnly_*`, `TestMemberScope_*`,
+`TestIsolation_OtherLanguagesAreUnaffected`,
+`TestGraph_NoEdgeCrossesAModuleBoundaryWithoutBinding`.
+Danger: resolving a Terraform address by name "when the module has no match" —
+`aws_vpc.main` of another module is a different resource.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -62,11 +86,11 @@ untyped receiver, module scope, unknown participant) only lower it.
 
 | Class | Known | Unknown | Graph edge |
 |---|---|---|---|
-| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding, qualified identity, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
+| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding, qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
 | Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
 | Candidate | Plausible targets (one or several), kept as evidence. | Which one, or whether another unseen target exists. | **never** |
 | Unresolved | No candidate. | The target. This is a correct, sound answer — not a gap to fill. | never |
-| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding) places the referent outside the repository's declarations. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
+| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding, a receiver whose members are declared outside) places the referent outside the repository's declarations. An identity that names a repository scope (`IdentityInRepository`) never does. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
 
 Strong is a closed-world claim ("the only `X` here"). That is why module-scoped
 files cap proximity/uniqueness at Candidate and why `OutsideRepository`
@@ -148,6 +172,9 @@ improvement and is not.
    `TestCompleteness_OutgoingPartition`, `TestDynamicName_NeverResolves`,
    `TestGetCallers_ResultSemantics`, `TestGetContext_CallersAndCompleteness`,
    `TestUnresolved_FieldCase_MakeWithIsReported`, `TestUnresolved_CrossLanguage`.
+   An unresolved reference with `IdentityInRepository` is never same-name
+   attributed: its identity already excludes every other declaration
+   (`TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed`).
    Danger: dropping the count when it is 0 or "noisy"; adding unresolved
    references to `unattributed` (or to a caller's count) to "be safe" —
    that attributes a reference to symbols it cannot denote; resolving a
@@ -211,6 +238,22 @@ Tests: `context/contract_test.go`, `TestContext_CandidateCallerIsCompletenessOnl
 `TestContext_AmbiguousNoFabrication` (PHP), `internal/contextquality` scenarios.
 Danger: filling spare budget with candidates or name matches.
 
+**Impact traverses the graph, never names.** `analyze_change_impact` takes
+direct dependents and dependencies from the target's edges and transitive
+dependents from `graph.TransitiveCallerHops`. In both traversal directions the
+next symbol is `edge.To` (a reverse edge stores the caller in `To`); each symbol
+is reached once, the start never, breadth-first, and its distance is its real
+hop count. A transitive entry's confidence is that of its path — the weakest
+edge on it, never promoted; of several shortest paths the strongest is
+chosen (a longer path never shortens the distance). Its evidence is its own
+first hop only, never the path's evidence joined into one claim. Authority:
+`graph/graph.go` (`Hop`), `impact/impact.go` (`ImpactEntry`). Tests:
+`TestTraversal_*`, `TestPathConfidence_*`, `TestAnalyze_Transitive*`,
+`TestImpact_ThroughModuleOutputs`.
+Danger: choosing the next symbol by edge kind — it silently stops every
+transitive walk at depth 1; labelling a transitive dependent with the
+confidence of one edge of its path.
+
 ## 6. Determinism
 
 Contract: identical inputs give identical output — resolver order and
@@ -235,7 +278,9 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
 **Architectural non-goals** (changing these is a design decision, not a feature):
 
 - Executing anything from the analyzed repository — code, package managers,
-  compilers, configuration (`SECURITY.md`).
+  compilers, configuration (`SECURITY.md`) — or fetching what it refers to
+  (Terraform registry / Git modules, providers): a remote module's outputs
+  are `OutsideRepository`.
 - Framework runtime semantics (Laravel container, Symfony, Doctrine, ...)
   inside a language provider. If ever added, it is separate evidence, not
   PHP language support.

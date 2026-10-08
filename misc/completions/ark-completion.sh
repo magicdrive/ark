@@ -17,7 +17,7 @@ _ark_subcommands="mcp-server mcp-init setup syntax symbol skill instruction"
 _ark_skill_subcommands="init add-explorer update inspect"
 _ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
 _ark_instruction_targets="claude codex cursor cline copilot-vscode copilot-cli"   # a separate registry from the setup clients (same names today, by coincidence)
-_ark_langs="go typescript tsx javascript python php"
+_ark_langs="go typescript tsx javascript python php terraform"
 _ark_exts="go js ts py java c cpp h txt md html css xml yml yaml json"
 _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8 -s --delete-comment -D"
 _ark_gen_opts="--output-filename -o --scan-buffer -b --output-format -f --mask-secrets -m \
@@ -232,14 +232,14 @@ _ark_zsh() {
   )
 
   syntax_opts=(
-    '--lang:Language:(go typescript tsx javascript python php)'
+    '--lang:Language:(go typescript tsx javascript python php terraform)'
     '--format:Output format:(text json)'
     '-h[Show help]'
     '--help[Show help]'
   )
 
   symbol_opts=(
-    '--lang:Language:(go typescript tsx javascript python php)'
+    '--lang:Language:(go typescript tsx javascript python php terraform)'
     '--format:Output format:(text json)'
     '-h[Show help]'
     '--help[Show help]'

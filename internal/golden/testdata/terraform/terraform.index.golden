@@ -1,0 +1,118 @@
+## stats
+files=13 symbols=36 references=41 relations=33 skipped=0
+lang terraform=13
+## symbols
+symbol aws_vpc.after_broken kind=resource lang=terraform qualified="aws_vpc.after_broken" receiver="" exported=false @broken.tf:5:1-7:2
+symbol data.aws_ami.ubuntu kind=data_source lang=terraform qualified="data.aws_ami.ubuntu" receiver="" exported=false @data.tf:1:1-3:2
+symbol aws_security_group.web kind=resource lang=terraform qualified="aws_security_group.web" receiver="" exported=false @data.tf:5:1-7:2
+symbol null_resource.x kind=resource lang=terraform qualified="dup/null_resource.x" receiver="" exported=false @dup/a.tf:1:1-1:32
+symbol output.x kind=output lang=terraform qualified="dup/output.x" receiver="" exported=true @dup/a.tf:3:1-5:2
+symbol null_resource.x kind=resource lang=terraform qualified="dup/null_resource.x" receiver="" exported=false @dup/b.tf:1:1-1:32
+symbol module.network kind=module lang=terraform qualified="module.network" receiver="" exported=false member_scope="modules/network/output." @main.tf:2:1-5:2
+symbol module.database kind=module lang=terraform qualified="module.database" receiver="" exported=false member_scope="modules/database/output." @main.tf:7:1-10:2
+symbol module.vpc_remote kind=module lang=terraform qualified="module.vpc_remote" receiver="" exported=false members=outside @main.tf:12:1-15:2
+symbol aws_instance.web kind=resource lang=terraform qualified="aws_instance.web" receiver="" exported=false @main.tf:17:1-35:2
+symbol local.volumes kind=variable lang=terraform qualified="local.volumes" receiver="" exported=false @main.tf:38:3-38:58
+symbol local.web_ids kind=variable lang=terraform qualified="local.web_ids" receiver="" exported=false @main.tf:39:3-39:38
+symbol local.main kind=variable lang=terraform qualified="local.main" receiver="" exported=false @main.tf:40:3-40:24
+symbol check.ami kind=configuration lang=terraform qualified="check.ami" receiver="" exported=false @main.tf:43:1-51:2
+symbol data.aws_ami.latest kind=data_source lang=terraform qualified="check.ami/data.aws_ami.latest" receiver="" exported=false @main.tf:44:3-46:4
+symbol provider.aws.west kind=configuration lang=terraform qualified="provider.aws.west" receiver="" exported=false @main.tf:53:1-56:2
+symbol aws_eip.web kind=resource lang=terraform qualified="aws_eip.web" receiver="" exported=false @main.tf:58:1-61:2
+symbol aws_vpc.main kind=resource lang=terraform qualified="modules/database/aws_vpc.main" receiver="" exported=false @modules/database/main.tf:2:1-2:29
+symbol aws_db_instance.db kind=resource lang=terraform qualified="modules/database/aws_db_instance.db" receiver="" exported=false @modules/database/main.tf:4:1-8:2
+symbol var.subnet_id kind=variable lang=terraform qualified="modules/database/var.subnet_id" receiver="" exported=true @modules/database/main.tf:10:1-12:2
+symbol output.endpoint kind=output lang=terraform qualified="modules/database/output.endpoint" receiver="" exported=true @modules/database/main.tf:14:1-16:2
+symbol aws_vpc.main kind=resource lang=terraform qualified="modules/network/aws_vpc.main" receiver="" exported=false @modules/network/main.tf:1:1-3:2
+symbol aws_subnet.private kind=resource lang=terraform qualified="modules/network/aws_subnet.private" receiver="" exported=false @modules/network/main.tf:5:1-7:2
+symbol local.subnet_id kind=variable lang=terraform qualified="modules/network/local.subnet_id" receiver="" exported=false @modules/network/main.tf:10:3-10:36
+symbol output.vpc_id kind=output lang=terraform qualified="modules/network/output.vpc_id" receiver="" exported=true @modules/network/outputs.tf:1:1-3:2
+symbol output.subnet_id kind=output lang=terraform qualified="modules/network/output.subnet_id" receiver="" exported=true @modules/network/outputs.tf:5:1-7:2
+symbol var.cidr kind=variable lang=terraform qualified="modules/network/var.cidr" receiver="" exported=true @modules/network/variables.tf:1:1-3:2
+symbol output.network_id kind=output lang=terraform qualified="output.network_id" receiver="" exported=true @outputs.tf:1:1-3:2
+symbol output.missing kind=output lang=terraform qualified="output.missing" receiver="" exported=true @outputs.tf:5:1-7:2
+symbol output.remote_vpc kind=output lang=terraform qualified="output.remote_vpc" receiver="" exported=true @outputs.tf:9:1-11:2
+symbol output.endpoint kind=output lang=terraform qualified="output.endpoint" receiver="" exported=true @outputs.tf:13:1-15:2
+symbol output.undeclared kind=output lang=terraform qualified="output.undeclared" receiver="" exported=true @outputs.tf:17:1-19:2
+symbol var.region kind=variable lang=terraform qualified="var.region" receiver="" exported=true @variables.tf:1:1-4:2
+symbol var.instance_count kind=variable lang=terraform qualified="var.instance_count" receiver="" exported=true @variables.tf:6:1-8:2
+symbol var.cidr kind=variable lang=terraform qualified="var.cidr" receiver="" exported=true @variables.tf:10:1-12:2
+symbol var.volume_names kind=variable lang=terraform qualified="var.volume_names" receiver="" exported=true @variables.tf:14:1-16:2
+## references
+ref var.cidr kind=value_reference container="aws_vpc.after_broken" receiver="" name_qualified="var.cidr" identity_in_repository=true call=false @broken.tf:6:16-6:24
+ref var.region kind=value_reference container="aws_security_group.web" receiver="" name_qualified="var.region" identity_in_repository=true call=false @data.tf:6:17-6:27
+ref null_resource.x kind=value_reference container="dup/output.x" receiver="" name_qualified="dup/null_resource.x" identity_in_repository=true call=false @dup/a.tf:4:11-4:26
+ref var.cidr kind=value_reference container="module.network" receiver="" name_qualified="var.cidr" identity_in_repository=true call=false @main.tf:4:12-4:20
+ref module.network kind=value_reference container="module.database" receiver="" name_qualified="module.network" identity_in_repository=true call=false @main.tf:9:15-9:29
+ref subnet_id kind=value_reference container="module.database" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true call=false @main.tf:9:15-9:39
+ref var.instance_count kind=value_reference container="aws_instance.web" receiver="" name_qualified="var.instance_count" identity_in_repository=true call=false @main.tf:18:19-18:37
+ref data.aws_ami.ubuntu kind=value_reference container="aws_instance.web" receiver="" name_qualified="data.aws_ami.ubuntu" identity_in_repository=true call=false @main.tf:19:19-19:38
+ref module.network kind=value_reference container="aws_instance.web" receiver="" name_qualified="module.network" identity_in_repository=true call=false @main.tf:20:19-20:33
+ref subnet_id kind=value_reference container="aws_instance.web" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true call=false @main.tf:20:19-20:43
+ref var.region kind=value_reference container="aws_instance.web" receiver="" name_qualified="var.region" identity_in_repository=true call=false @main.tf:21:69-21:79
+ref aws_security_group.web kind=depends_on container="aws_instance.web" receiver="" name_qualified="aws_security_group.web" identity_in_repository=true call=false @main.tf:23:20-23:42
+ref local.volumes kind=value_reference container="aws_instance.web" receiver="" name_qualified="local.volumes" identity_in_repository=true call=false @main.tf:26:16-26:29
+ref var.volume_names kind=value_reference container="local.volumes" receiver="" name_qualified="var.volume_names" identity_in_repository=true call=false @main.tf:38:26-38:42
+ref aws_instance.web kind=value_reference container="local.web_ids" receiver="" name_qualified="aws_instance.web" identity_in_repository=true call=false @main.tf:39:16-39:32
+ref data.aws_ami.latest kind=value_reference container="check.ami" receiver="" name_qualified="check.ami/data.aws_ami.latest" identity_in_repository=true call=false @main.tf:48:21-48:40
+ref data.aws_ami.ubuntu kind=value_reference container="check.ami" receiver="" name_qualified="data.aws_ami.ubuntu" identity_in_repository=true call=false @main.tf:48:47-48:66
+ref var.region kind=value_reference container="provider.aws.west" receiver="" name_qualified="var.region" identity_in_repository=true call=false @main.tf:55:12-55:22
+ref provider.aws.west kind=value_reference container="aws_eip.web" receiver="" name_qualified="provider.aws.west" identity_in_repository=true call=false @main.tf:59:14-59:22
+ref aws_instance.web kind=value_reference container="aws_eip.web" receiver="" name_qualified="aws_instance.web" identity_in_repository=true call=false @main.tf:60:14-60:30
+ref aws_vpc.main kind=value_reference container="modules/database/aws_db_instance.db" receiver="" name_qualified="modules/database/aws_vpc.main" identity_in_repository=true call=false @modules/database/main.tf:5:15-5:27
+ref var.subnet_id kind=value_reference container="modules/database/aws_db_instance.db" receiver="" name_qualified="modules/database/var.subnet_id" identity_in_repository=true call=false @modules/database/main.tf:6:15-6:28
+ref aws_subnet.private kind=value_reference container="modules/database/aws_db_instance.db" receiver="" name_qualified="modules/database/aws_subnet.private" identity_in_repository=true call=false @modules/database/main.tf:7:15-7:33
+ref aws_db_instance.db kind=value_reference container="modules/database/output.endpoint" receiver="" name_qualified="modules/database/aws_db_instance.db" identity_in_repository=true call=false @modules/database/main.tf:15:11-15:29
+ref var.cidr kind=value_reference container="modules/network/aws_vpc.main" receiver="" name_qualified="modules/network/var.cidr" identity_in_repository=true call=false @modules/network/main.tf:2:16-2:24
+ref aws_vpc.main kind=value_reference container="modules/network/aws_subnet.private" receiver="" name_qualified="modules/network/aws_vpc.main" identity_in_repository=true call=false @modules/network/main.tf:6:12-6:24
+ref aws_subnet.private kind=value_reference container="modules/network/local.subnet_id" receiver="" name_qualified="modules/network/aws_subnet.private" identity_in_repository=true call=false @modules/network/main.tf:10:15-10:33
+ref aws_vpc.main kind=value_reference container="modules/network/output.vpc_id" receiver="" name_qualified="modules/network/aws_vpc.main" identity_in_repository=true call=false @modules/network/outputs.tf:2:11-2:23
+ref local.subnet_id kind=value_reference container="modules/network/output.subnet_id" receiver="" name_qualified="modules/network/local.subnet_id" identity_in_repository=true call=false @modules/network/outputs.tf:6:11-6:26
+ref module.network kind=value_reference container="output.network_id" receiver="" name_qualified="module.network" identity_in_repository=true call=false @outputs.tf:2:11-2:25
+ref vpc_id kind=value_reference container="output.network_id" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true call=false @outputs.tf:2:11-2:32
+ref module.network kind=value_reference container="output.missing" receiver="" name_qualified="module.network" identity_in_repository=true call=false @outputs.tf:6:11-6:25
+ref no_such_output kind=value_reference container="output.missing" receiver="module.network" receiver_type_qualified="module.network" identity_in_repository=true call=false @outputs.tf:6:11-6:40
+ref module.vpc_remote kind=value_reference container="output.remote_vpc" receiver="" name_qualified="module.vpc_remote" identity_in_repository=true call=false @outputs.tf:10:11-10:28
+ref vpc_id kind=value_reference container="output.remote_vpc" receiver="module.vpc_remote" receiver_type_qualified="module.vpc_remote" identity_in_repository=true call=false @outputs.tf:10:11-10:35
+ref endpoint kind=value_reference container="output.endpoint" receiver="module.database" receiver_type_qualified="module.database" identity_in_repository=true call=false @outputs.tf:14:11-14:35
+ref module.database kind=value_reference container="output.endpoint" receiver="" name_qualified="module.database" identity_in_repository=true call=false @outputs.tf:14:11-14:26
+ref aws_vpc.main kind=value_reference container="output.undeclared" receiver="" name_qualified="aws_vpc.main" identity_in_repository=true call=false @outputs.tf:18:11-18:23
+ref var.region kind=value_reference container="" receiver="" name_qualified="var.region" identity_in_repository=true call=false @override.tf:2:9-2:19
+ref var.region kind=write container="" receiver="" call=false @terraform.tfvars:1:1-1:7
+ref var.instance_count kind=write container="" receiver="" call=false @terraform.tfvars:2:1-2:15
+## edges
+edge aws_eip.web -references-> aws_instance.web confidence=exact evidence=[qualified_identity:"aws_instance.web" is declared at main.tf]
+edge aws_eip.web -references-> provider.aws.west confidence=exact evidence=[qualified_identity:"provider.aws.west" is declared at main.tf]
+edge aws_instance.web -depends_on-> aws_security_group.web confidence=exact evidence=[qualified_identity:"aws_security_group.web" is declared at data.tf]
+edge aws_instance.web -references-> data.aws_ami.ubuntu confidence=exact evidence=[qualified_identity:"data.aws_ami.ubuntu" is declared at data.tf]
+edge aws_instance.web -references-> local.volumes confidence=exact evidence=[qualified_identity:"local.volumes" is declared at main.tf]
+edge aws_instance.web -references-> module.network confidence=exact evidence=[qualified_identity:"module.network" is declared at main.tf]
+edge aws_instance.web -references-> modules/network/output.subnet_id confidence=exact evidence=[member_scope:member "subnet_id" of "module.network" is "modules/network/output.subnet_id"]
+edge aws_instance.web -references-> var.instance_count confidence=exact evidence=[qualified_identity:"var.instance_count" is declared at variables.tf]
+edge aws_instance.web -references-> var.region confidence=exact evidence=[qualified_identity:"var.region" is declared at variables.tf]
+edge aws_security_group.web -references-> var.region confidence=exact evidence=[qualified_identity:"var.region" is declared at variables.tf]
+edge aws_vpc.after_broken -references-> var.cidr confidence=exact evidence=[qualified_identity:"var.cidr" is declared at variables.tf]
+edge check.ami -references-> check.ami/data.aws_ami.latest confidence=exact evidence=[qualified_identity:"check.ami/data.aws_ami.latest" is declared at main.tf]
+edge check.ami -references-> data.aws_ami.ubuntu confidence=exact evidence=[qualified_identity:"data.aws_ami.ubuntu" is declared at data.tf]
+edge local.volumes -references-> var.volume_names confidence=exact evidence=[qualified_identity:"var.volume_names" is declared at variables.tf]
+edge local.web_ids -references-> aws_instance.web confidence=exact evidence=[qualified_identity:"aws_instance.web" is declared at main.tf]
+edge module.database -references-> module.network confidence=exact evidence=[qualified_identity:"module.network" is declared at main.tf]
+edge module.database -references-> modules/network/output.subnet_id confidence=exact evidence=[member_scope:member "subnet_id" of "module.network" is "modules/network/output.subnet_id"]
+edge module.network -references-> var.cidr confidence=exact evidence=[qualified_identity:"var.cidr" is declared at variables.tf]
+edge modules/database/aws_db_instance.db -references-> modules/database/aws_vpc.main confidence=exact evidence=[qualified_identity:"modules/database/aws_vpc.main" is declared at modules/database/main.tf]
+edge modules/database/aws_db_instance.db -references-> modules/database/var.subnet_id confidence=exact evidence=[qualified_identity:"modules/database/var.subnet_id" is declared at modules/database/main.tf]
+edge modules/database/output.endpoint -references-> modules/database/aws_db_instance.db confidence=exact evidence=[qualified_identity:"modules/database/aws_db_instance.db" is declared at modules/database/main.tf]
+edge modules/network/aws_subnet.private -references-> modules/network/aws_vpc.main confidence=exact evidence=[qualified_identity:"modules/network/aws_vpc.main" is declared at modules/network/main.tf]
+edge modules/network/aws_vpc.main -references-> modules/network/var.cidr confidence=exact evidence=[qualified_identity:"modules/network/var.cidr" is declared at modules/network/variables.tf]
+edge modules/network/local.subnet_id -references-> modules/network/aws_subnet.private confidence=exact evidence=[qualified_identity:"modules/network/aws_subnet.private" is declared at modules/network/main.tf]
+edge modules/network/output.subnet_id -references-> modules/network/local.subnet_id confidence=exact evidence=[qualified_identity:"modules/network/local.subnet_id" is declared at modules/network/main.tf]
+edge modules/network/output.vpc_id -references-> modules/network/aws_vpc.main confidence=exact evidence=[qualified_identity:"modules/network/aws_vpc.main" is declared at modules/network/main.tf]
+edge output.endpoint -references-> module.database confidence=exact evidence=[qualified_identity:"module.database" is declared at main.tf]
+edge output.endpoint -references-> modules/database/output.endpoint confidence=exact evidence=[member_scope:member "endpoint" of "module.database" is "modules/database/output.endpoint"]
+edge output.missing -references-> module.network confidence=exact evidence=[qualified_identity:"module.network" is declared at main.tf]
+edge output.network_id -references-> module.network confidence=exact evidence=[qualified_identity:"module.network" is declared at main.tf]
+edge output.network_id -references-> modules/network/output.vpc_id confidence=exact evidence=[member_scope:member "vpc_id" of "module.network" is "modules/network/output.vpc_id"]
+edge output.remote_vpc -references-> module.vpc_remote confidence=exact evidence=[qualified_identity:"module.vpc_remote" is declared at main.tf]
+edge provider.aws.west -references-> var.region confidence=exact evidence=[qualified_identity:"var.region" is declared at variables.tf]
+## diagnostics
+diag error "syntax error" @broken.tf:1:1-8:1

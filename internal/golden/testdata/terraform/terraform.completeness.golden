@@ -1,0 +1,16 @@
+symbol dup/null_resource.x unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller dup/output.x kind=value_reference confidence=candidate refs=1
+symbol dup/output.x unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  candidate_callee dup/null_resource.x kind=value_reference confidence=candidate refs=1
+  candidate_callee dup/null_resource.x kind=value_reference confidence=candidate refs=1
+symbol dup/null_resource.x unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller dup/output.x kind=value_reference confidence=candidate refs=1
+symbol modules/database/aws_db_instance.db unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate aws_subnet.private kind=value_reference receiver="" reason=unresolved @modules/database/main.tf:7:15-7:33
+symbol output.missing unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate no_such_output kind=value_reference receiver="module.network" reason=unresolved @outputs.tf:6:11-6:40
+symbol output.remote_vpc unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate vpc_id kind=value_reference receiver="module.vpc_remote" reason=outside_repository @outputs.tf:10:11-10:35
+symbol output.undeclared unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate aws_vpc.main kind=value_reference receiver="" reason=unresolved @outputs.tf:18:11-18:23
+symbol var.region unattributed_in=1 unattributed_out=0 unresolved=0 outside=0

@@ -21,9 +21,11 @@ import (
 //	candidate  r has no unique Strong+ target and T is among r's candidates;
 //	unresolved r has no candidate at all, its resolution does not place the
 //	           referent outside the repository (resolver.Resolution.
-//	           OutsideRepository), and T has r's name and language — and, when
-//	           T is a member, r has a receiver (a receiverless name never
-//	           denotes a member);
+//	           OutsideRepository), r's identity does not name a repository
+//	           scope (reference.Reference.IdentityInRepository: then no other
+//	           symbol can be its target), and T has r's name and language —
+//	           and, when T is a member, r has a receiver (a receiverless name
+//	           never denotes a member);
 //	sourceless r resolves uniquely (Strong+) to T but its enclosing code is no
 //	           symbol (e.g. top-level script statements), so no edge records it.
 //
@@ -160,6 +162,11 @@ func (c *Completeness) Observe(ref reference.Reference, res resolver.Resolution,
 		reason = UnresolvedOutside
 	case ref.Dynamic:
 		reason = UnresolvedDynamic
+	case ref.IdentityInRepository:
+		// Its identity names a repository scope and no declaration there
+		// carries it: no symbol of another identity can be its target,
+		// whatever its name (language.ReferenceDraft.IdentityInRepository).
+		reason = UnresolvedUnknown
 	default:
 		for _, s := range c.byName[ref.Name] {
 			if s.Language != ref.Language {

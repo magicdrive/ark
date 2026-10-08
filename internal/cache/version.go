@@ -13,7 +13,10 @@ package cache
 // and must bump its Provider.CacheVersion (PHP: "php-7"). ReferenceDraft.
 // ConfidenceCap and SymbolDraft.Visibility follow the same rule (PHP: "php-9"),
 // as does ReferenceDraft.Dynamic (PHP: "php-10"). Changing which references
-// carry evidence is an extraction change too (PHP: "php-11").
+// carry evidence is an extraction change too (PHP: "php-11"). The Terraform
+// fields — SymbolDraft.MemberScope / MembersOutside, ReferenceDraft.
+// IdentityInRepository and Extraction.IdentityOnly — follow the same rule: only
+// the Terraform provider emits them, and it has no entries that predate them.
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

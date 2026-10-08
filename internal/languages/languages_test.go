@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -66,6 +66,7 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"python":     language.SupportLevelReferences,
 		"go":         language.SupportLevelContextQualityCertified,
 		"php":        language.SupportLevelGraph,
+		"terraform":  language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)
@@ -82,5 +83,23 @@ func TestRegistry_PHPIsGraph(t *testing.T) {
 	}
 	if d, ok := reg.DetectByFilename("index.php"); !ok || d.Language != "php" {
 		t.Errorf("DetectByFilename(index.php) = %v,%v; want php", d.Language, ok)
+	}
+}
+
+// TestRegistry_TerraformExtensions pins which files carry Terraform semantics:
+// .tf and .tfvars (incl. *.auto.tfvars). Generic .hcl (Packer, Nomad,
+// Terragrunt, Terraform test files) and the JSON syntax (.tf.json) are not
+// Terraform-indexed.
+func TestRegistry_TerraformExtensions(t *testing.T) {
+	reg := languages.Registry()
+	for _, name := range []string{"main.tf", "terraform.tfvars", "prod.auto.tfvars", "MAIN.TF"} {
+		if d, ok := reg.DetectByFilename(name); !ok || d.Language != "terraform" {
+			t.Errorf("%s: not detected as terraform", name)
+		}
+	}
+	for _, name := range []string{"build.pkr.hcl", "job.nomad.hcl", "terragrunt.hcl", "main.tftest.hcl", "main.tf.json", "vars.tfvars.json"} {
+		if d, ok := reg.DetectByFilename(name); ok && d.Language == "terraform" {
+			t.Errorf("%s: must not be indexed as terraform", name)
+		}
 	}
 }

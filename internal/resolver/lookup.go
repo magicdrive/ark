@@ -34,6 +34,10 @@ func (r *Resolver) buildLookupIndexes() {
 	r.dirSymbols = make(map[string]map[string][]dirSymbol)
 	for i := range r.files {
 		fi := &r.files[i]
+		if fi.IdentityOnly {
+			// Identity-only symbols are in no name-based index (resolver.go).
+			continue
+		}
 		dir := filepath.Dir(string(fi.FileID))
 		byName := r.dirSymbols[dir]
 		if byName == nil {

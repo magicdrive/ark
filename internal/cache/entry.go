@@ -19,5 +19,9 @@ type CachedExtraction struct {
 	Bindings     []language.BindingDraft `json:"bindings,omitempty"`
 	Exports      []language.ExportDraft  `json:"exports,omitempty"`
 	ModuleScoped bool                    `json:"moduleScoped,omitempty"`
-	CachedAt     time.Time               `json:"cachedAt"`
+	// IdentityOnly (language.Extraction.IdentityOnly) is optional like the
+	// omitempty draft fields: an entry without it decodes false, which is
+	// what every provider that predates it produces.
+	IdentityOnly bool      `json:"identityOnly,omitempty"`
+	CachedAt     time.Time `json:"cachedAt"`
 }
