@@ -35,18 +35,27 @@ gotreesitter is a reimplementation of the Tree-sitter runtime. Measured
 against the reference runtime with the same grammar commits (differential
 testing over real corpora), its trees differ in two ways:
 
-- **with an error the reference does not report** — a valid region is not
-  analyzed and reported as `parse_error`. `tsparse` recovers the cases its
-  candidate route parses; the rest stay visible as diagnostics (e.g. a PHP
-  destructuring assignment: `TestKnownParserDefect_PHPDestructuring`).
-- **without any error** — an ambiguous construct resolved differently (Go
-  generic instantiation vs. index expression, TypeScript `as` / `satisfies`
-  / `<`). Nothing reports these, so references from them may differ.
+- **with an error the reference does not report** — `tsparse` recovers
+  every such case of the measured corpora through its fallback routes; a
+  case no route parses would stay a `parse_error`.
+- **without any error** — an ambiguous construct derived differently (Go
+  `f[T](x)`, TypeScript `f<T>(x)`, `satisfies` / `as` targets). The Go and
+  TypeScript extractors read the shapes that carry references by the
+  languages' rules (ARCHITECTURE.md §3). Still open: TypeScript generic calls
+  whose type arguments contain function types, indexed access or computed
+  keys (`f<(a: T) => U>(x)`) are not recovered when misparsed — the call is
+  missing, never wrong (16 calls in zod).
 
-Target: trees identical to the reference runtime on valid source. Measure
-declarations with `go test ./internal/languages/golang -run TestFidelity -v`
-(and `ARK_GO_FIDELITY_ROOTS` for external corpora); whole-tree comparison
-needs the reference runtime and is not part of the test suite.
+Target: references identical to the language front end on valid source.
+Measure with `TestFidelity_RepositoryReferencesMatchGoAST` /
+`TestFidelity_ExternalReferences` (Go) and `TestFidelity_TypeScriptCompiler`
+(TypeScript, opt-in). Whole-tree comparison with the reference runtime is
+not part of the test suite.
+
+Measured extractor gaps on valid TypeScript (zod; not parser defects):
+types in interface bodies and overload signatures, references inside
+string-named methods (`"~validate"() {}`) and `export` declarations nested in
+a `namespace` are not observed.
 
 ## Q3 — Member symbols (JavaScript, Python)
 

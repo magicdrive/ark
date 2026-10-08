@@ -51,7 +51,11 @@ func (p *Provider) Extensions() []string {
 //	        exports / ModuleSpec candidates, ModuleScoped, ReceiverType,
 //	        heritage and JSX references.
 //	"ts-3": syntax-error diagnostics (treediag).
-func (p *Provider) CacheVersion() string { return "ts-4" }
+//	"ts-4": trees the production parser route misparsed (tsparse).
+//	"ts-5": generic calls the parser read as comparisons; type parameters
+//	        of nested signatures, mapped-type keys and `infer` names are not
+//	        type uses; forest-route trees (tsparse).
+func (p *Provider) CacheVersion() string { return "ts-5" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()

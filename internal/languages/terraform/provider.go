@@ -119,7 +119,7 @@ func (p *Provider) Language() language.Language { return "terraform" }
 func (p *Provider) Extensions() []string { return []string{".tf", ".tfvars"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "terraform-6" }
+func (p *Provider) CacheVersion() string { return "terraform-7" }
 
 // Diagnostic codes (language.Diagnostic.Code) this provider states, beside
 // treediag's parse_failed and parse_error.

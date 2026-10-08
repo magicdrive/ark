@@ -2,18 +2,20 @@ package php
 
 import (
 	"context"
+	"fmt"
 	"slices"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/source"
 )
 
-// knownDestructuringDefect is valid PHP (the reference Tree-sitter runtime
-// with the same tree-sitter-php commit parses it without error), minimized
-// by delta debugging from Slim's CallableResolver.php. gotreesitter rejects
-// the destructuring assignment on line 16 on both of its parser routes, so
-// that statement is not analyzed; nothing else is lost.
-const knownDestructuringDefect = `<?php
+// destructuringRecovery is valid PHP (the reference Tree-sitter runtime with
+// the same tree-sitter-php commit parses it without error), minimized by
+// delta debugging from Slim's CallableResolver.php. gotreesitter's production
+// and candidate routes reject the destructuring assignment on line 16; its
+// forest route parses the file exactly as the reference runtime does, field
+// names included (tsparse).
+const destructuringRecovery = `<?php
 /**
  */
 final class CallableResolver implements AdvancedCallableResolverInterface
@@ -40,11 +42,10 @@ final class CallableResolver implements AdvancedCallableResolverInterface
 }
 `
 
-// TestKnownParserDefect_PHPDestructuring pins the honest degradation: every
-// declaration is extracted, and the only diagnostic is the rejected statement
-// (or none, once the parser accepts it).
-func TestKnownParserDefect_PHPDestructuring(t *testing.T) {
-	ex, err := NewProvider().Extract(context.Background(), source.FileID("CallableResolver.php"), []byte(knownDestructuringDefect))
+// TestParserRecovery_PHPDestructuring: the statement is analyzed, so it has
+// no diagnostic, and every declaration and call around it is extracted.
+func TestParserRecovery_PHPDestructuring(t *testing.T) {
+	ex, err := NewProvider().Extract(context.Background(), source.FileID("CallableResolver.php"), []byte(destructuringRecovery))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,9 +58,17 @@ func TestKnownParserDefect_PHPDestructuring(t *testing.T) {
 	if !slices.Equal(got, want) {
 		t.Errorf("symbols %v, want %v", got, want)
 	}
-	for _, d := range ex.Diagnostics {
-		if d.Code != "parse_error" || d.Location.Range.Start.Line != 16 {
-			t.Errorf("unexpected diagnostic %+v", d)
+	if len(ex.Diagnostics) != 0 {
+		t.Errorf("diagnostics on valid source: %+v", ex.Diagnostics)
+	}
+	var calls []string
+	for _, r := range ex.References {
+		if r.Kind == "call" {
+			calls = append(calls, fmt.Sprintf("%s L%d %s", r.Name, r.Location.Range.Start.Line, r.Container))
 		}
+	}
+	slices.Sort(calls)
+	if want := []string{"has L17 CallableResolver.resolveSlimNotation", "is_object L18 CallableResolver.resolveSlimNotation"}; !slices.Equal(calls, want) {
+		t.Errorf("calls %v, want %v", calls, want)
 	}
 }

@@ -22,7 +22,9 @@ package cache
 // stating codes bumped its CacheVersion (go-3, javascript 2, python 2, ts-3,
 // php-12, terraform-5), and again when tsparse began recovering trees the
 // production parser route misparsed (go-4, javascript 3, python 3, ts-4,
-// php-13, terraform-6).
+// php-13, terraform-6), and when it added the forest route and the Go / TypeScript
+// extractors began reading ambiguous generic syntax by the languages' rules
+// (go-5, javascript 4, python 4, ts-5, php-14, terraform-7).
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

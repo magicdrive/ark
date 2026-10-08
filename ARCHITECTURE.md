@@ -217,21 +217,47 @@ analyzed"; dropping a diagnostic from a warm cache.
 **One parse path, measured against the reference runtime.** Every provider
 and the syntax tools parse through `tsparse.Parse`: gotreesitter's
 production route, and — only when that tree has an error — its admission
-candidate route, kept only if it has none. Differential testing against the
-reference Tree-sitter runtime (same grammar commits) is the evidence: the
-production route rejects some valid code (lost declarations, false
-`parse_error`) that the candidate route parses identically to the
-reference, while switching routes everywhere changes more correct trees than
-it fixes. A tree without an error is a complete derivation by the grammar,
-so the fallback recovers a derivation and never invents one; when both
-routes fail, the production tree and its diagnostics stand. Trees that differ
-from the reference *without* an error (ambiguous generic / `as` /
-`satisfies` constructs) are not detectable this way and remain a known gap
-(`internal/conformance/IMPROVEMENTS.md`, Q8). Authority:
-`tsparse/tsparse.go`. Tests: `TestParse_*`, `TestFidelity_*`,
-`TestKnownParserDefect_PHPDestructuring`.
+candidate route, then its forest route, each kept only if it has none.
+Differential testing against the reference Tree-sitter runtime (same grammar
+commits) is the evidence: the production route rejects some valid code (lost
+declarations, false `parse_error`) that the other routes parse identically
+to the reference, field names included, while switching routes everywhere
+changes more correct trees than it fixes. A tree without an error is a
+complete derivation by the grammar, so the fallback recovers a derivation
+and never invents one; when every route fails, the production tree and its
+diagnostics stand. Authority: `tsparse/tsparse.go`. Tests: `TestParse_*`,
+`TestParserRecovery_PHPDestructuring`.
 Danger: switching the process-wide route "because it fixed a file", or
 dropping diagnostics instead of recovering the parse.
+
+**An error-free tree is not the language's reading of ambiguous syntax.**
+Where the grammar is ambiguous the parser may pick a derivation the language
+does not, with no error (differential testing: Go 33, TypeScript 37 files of
+the real corpora). The extractors therefore read those shapes by the
+language's own rules, whichever derivation the tree holds:
+
+- Go `f[x](...)` / `r.f[x](...)` / `T[X](v)` (generic call, conversion, or a
+  call of an element): an element of a local value is no reference; a member
+  of a value is a reference capped at Candidate (a generic method or an
+  element of a field); a package-level or package-qualified name is a call.
+  `T[X]{...}` constructs `T`. Tests: `TestExtract_SubscriptedCallsFollowGoRules`,
+  `TestGraph_SubscriptedCallOfALocalIsNoEdge`.
+- TypeScript `f<T>(x)` derived as the comparisons `(f < T) > (x)`: a call
+  when the text is type arguments followed by `(` — TypeScript's own rule,
+  checked with a type grammar narrower than TypeScript's, so a comparison is
+  never made a call (`languages/typescript/generic_call.go`). Type parameters of nested
+  signatures, mapped-type keys and `infer` names scope like type parameters
+  and are never type uses. Tests: `TestExtract_GenericCallReadAsComparison`,
+  `TestExtract_ComparisonsAreNotGenericCalls`,
+  `TestExtract_TypeScopedNamesAreNotTypeUses`,
+  `TestGraph_TypeScopedNamesAreNoEdgesToSameNamedTypes`.
+
+The independent oracles are the languages' own front ends:
+`TestFidelity_RepositoryReferencesMatchGoAST` (go/ast + go/types, this
+repository; `ARK_GO_FIDELITY_ROOTS` for others) and
+`TestFidelity_TypeScriptCompiler` (the TypeScript compiler; opt-in,
+`ARK_TS_FIDELITY_ROOTS` + `ARK_TYPESCRIPT_MODULE`). Remaining gaps:
+`internal/conformance/IMPROVEMENTS.md`, Q8.
 
 ## 4. RepositoryIndex and index reuse
 

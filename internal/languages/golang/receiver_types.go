@@ -162,11 +162,8 @@ func goDeclCounts(n *ts.Node, lang *ts.Language, src []byte, counts map[string]i
 }
 
 // goFunctionTypeEnv builds the proven receiver-type environment for a
-// function_declaration or method_declaration.
-func goFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte) goTypeEnv {
-	counts := make(map[string]int)
-	goDeclCounts(fn, lang, src, counts)
-
+// function_declaration or method_declaration whose goDeclCounts are counts.
+func goFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, counts map[string]int) goTypeEnv {
 	env := make(goTypeEnv)
 	set := func(name, typ string, from uint32) {
 		if name == "" || name == "_" || typ == "" || counts[name] != 1 {

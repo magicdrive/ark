@@ -44,7 +44,7 @@ func (p *Provider) Language() language.Language { return "php" }
 func (p *Provider) Extensions() []string        { return []string{".php"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "php-13" }
+func (p *Provider) CacheVersion() string { return "php-14" }
 
 func (p *Provider) Extract(_ context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PhpLanguage()

@@ -256,3 +256,58 @@ func (r *recv) last() { after() }
 		t.Errorf("diagnostics on valid source: %+v", ex.Diagnostics)
 	}
 }
+
+// The same family of defect where the candidate route fails too (only the
+// forest route parses it). Its structure is minimized from a real test file
+// in which it hid 29 functions; the defect depends on the exact text, so the
+// minimized identifiers are kept.
+func TestExtract_RecoversDeclarationsAfterRangeAndLiteralIndex(t *testing.T) {
+	src := []byte(`package v1
+func v2() {
+	for v3, v4 := range v5 {
+		v6.v7( func() {
+			for v3, v8 := range v4.v9 {
+				v9[v10.v11{}] = v12{
+				}
+			}
+			if v13() > v13() {
+				v6.v14("")
+			}
+			for v15, v16 := range v17 {
+				if v16.v18().v19 != v4.v20[v15] {
+					v6.v14( v4.v20[v15], )
+				}
+			}
+		})
+	}
+}
+
+func after() {}
+
+func (r *recv) last() { after() }
+`)
+	ex, err := NewProvider().Extract(context.Background(), source.FileID("q.go"), src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var syms, calls []string
+	for _, s := range ex.Symbols {
+		syms = append(syms, s.Qualified)
+	}
+	for _, r := range ex.References {
+		if r.Name == "v14" || r.Name == "after" {
+			calls = append(calls, r.Container+">"+r.Name)
+		}
+	}
+	slices.Sort(syms)
+	slices.Sort(calls)
+	if !slices.Equal(syms, []string{"after", "recv.last", "v2"}) {
+		t.Errorf("symbols %v", syms)
+	}
+	if !slices.Equal(calls, []string{"recv.last>after", "v2>v14", "v2>v14"}) {
+		t.Errorf("calls %v", calls)
+	}
+	if len(ex.Diagnostics) != 0 {
+		t.Errorf("diagnostics on valid source: %+v", ex.Diagnostics)
+	}
+}

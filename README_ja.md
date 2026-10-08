@@ -800,7 +800,7 @@ Ark は **20 種類の MCP ツール**でコードインテリジェンススタ
 - **unresolved な参照** は別物です。Ark は構文を読めたが参照先を知らない（外部・組み込み・未宣言・実行時計算の名前）ことを示し、graph 系ツールの `unresolved` / `outsideRepository` で数えられます。診断にはなりません。
 - **`unattributed: 0`** は「Ark が *観測した* 参照に、欠けている edge の可能性があるものはない」という意味です。観測していないものは数えられません。**診断 0 件かつ `unresolved: 0` でも、すべての依存関係を把握したことにはなりません** — どの provider も扱わない形式のファイル（`get_language_support` を参照。例：Terraform の `.tf.json`）は調べられず、provider がすべての構文を観測するとも限りません。
 - ツールエラー（`isError`）はツール自体の失敗で、診断ではありません。
-- Ark の parser（pure-Go の Tree-sitter runtime である gotreesitter）は、正しいコードの一部を受理できないことがあります。主経路で失敗したときは別経路で再解析し、エラーなく解析できた場合だけその木を使います。それでも失敗した範囲は `parse_error` のままです。また、曖昧な構文（Go のジェネリック呼び出し、TypeScript の `as` / `satisfies`）を、エラーなしに公式の Tree-sitter runtime と異なる形に解釈することがあり、その部分の参照は異なる場合があります。
+- Ark の parser（pure-Go の Tree-sitter runtime である gotreesitter）は、正しいコードの一部を受理できないことがあります。主経路で失敗したときは別の経路で再解析し、エラーなく解析できた場合だけその木を使います。それでも失敗した範囲は `parse_error` のままです。また、曖昧な構文（Go の `f[T](x)`、TypeScript の `f<T>(x)`）は、エラーなく解析できた木でも言語の解釈と異なる場合があります。Ark の Go / TypeScript 解析はそこで言語自身の規則に従い、判定できない呼び出しは除外するか Candidate にとどめ、確実なものとしては扱いません。
 
 コアとなる階層的探索パターン:
 
