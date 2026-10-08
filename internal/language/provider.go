@@ -138,6 +138,16 @@ type ReferenceDraft struct {
 	// resolution. Any other non-empty value is treated as "candidate".
 	ConfidenceCap string `json:",omitempty"`
 
+	// TargetKinds, when set, are the only symbol kinds the reference can
+	// denote: the language's syntax fixes the kind but not the target (Go
+	// `f[x](...)` calls f only if f is a generic function or type; were it
+	// a variable, the call would be of one of its elements). The resolver
+	// removes candidates of any other kind — a resolution left with none is
+	// Unresolved — and never raises a confidence for it. It is a comma-separated
+	// list of symbol.SymbolKind values (a string keeps the draft comparable);
+	// empty means any.
+	TargetKinds string `json:",omitempty"`
+
 	// Dynamic marks a reference whose name is computed at run time — the
 	// language's syntax fixes that something is called or constructed here,
 	// but not which name (PHP `$obj->$m()`, `$fn()`, `new $cls()`; JavaScript

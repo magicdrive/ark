@@ -3,6 +3,7 @@ package resolver
 import (
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -133,7 +134,38 @@ func (r *Resolver) Resolve() []Resolution {
 // R1 and R2 are authoritative: when they cannot resolve, the reference is
 // Unresolved — they never fall back to name heuristics.
 func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resolution {
-	return applyConfidenceCap(r.resolveReference(ref, fi), ref)
+	return applyConfidenceCap(restrictTargetKinds(r.resolveReference(ref, fi), ref), ref)
+}
+
+// restrictTargetKinds removes the candidates of kinds the reference cannot
+// denote (reference.Reference.TargetKinds). It only removes: none left is
+// Unresolved, and narrowing several candidates to one never makes it unique —
+// the survivor stays at most a Candidate, as the ambiguity was.
+func restrictTargetKinds(res Resolution, ref reference.Reference) Resolution {
+	if ref.TargetKinds == "" || len(res.Candidates) == 0 {
+		return res
+	}
+	allowed := strings.Split(ref.TargetKinds, ",")
+	var kept []Candidate
+	for _, c := range res.Candidates {
+		if slices.Contains(allowed, string(c.Kind)) {
+			kept = append(kept, c)
+		}
+	}
+	if len(kept) == len(res.Candidates) {
+		return res
+	}
+	ev := ResolutionEvidence{Kind: EvidenceTargetKind, Detail: fmt.Sprintf("the reference can denote only %s", ref.TargetKinds)}
+	if len(kept) == 0 {
+		return Resolution{
+			ReferenceID:   res.ReferenceID,
+			ReferenceName: res.ReferenceName,
+			Confidence:    ConfidenceUnresolved,
+			Evidence:      append(append([]ResolutionEvidence(nil), res.Evidence...), ev),
+		}
+	}
+	res.Candidates = kept
+	return capConfidence(res, ConfidenceCandidate, ev)
 }
 
 // applyConfidenceCap lowers res to the provider's ConfidenceCap. It only ever

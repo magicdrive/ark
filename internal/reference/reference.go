@@ -61,6 +61,9 @@ type Reference struct {
 	// ConfidenceCap bounds the confidence of this reference's resolution (see
 	// language.ReferenceDraft.ConfidenceCap); "" when unbounded.
 	ConfidenceCap string
+	// TargetKinds are the only symbol kinds the reference can denote (see
+	// language.ReferenceDraft.TargetKinds); empty when any.
+	TargetKinds string
 	// Dynamic marks a run-time computed name (see language.ReferenceDraft.
 	// Dynamic): Name is display text, never matched against declarations.
 	Dynamic bool

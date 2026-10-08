@@ -42,6 +42,9 @@ func (emptyImporter) Import(path string) (*types.Package, error) {
 type fidelityReport struct {
 	checked  int
 	problems map[string][]string
+	// held counts generic calls capped, or not restricted to function /
+	// method / type targets.
+	held, generic int
 }
 
 func (r *fidelityReport) add(kind, where string) {
@@ -163,11 +166,18 @@ func checkPackage(t *testing.T, fset *token.FileSet, files []*ast.File, srcs map
 						index = !isSig || sig.TypeParams() == nil
 					}
 				}
+				if generic {
+					rep.generic++
+					if got != nil && (got.ConfidenceCap != "" || got.TargetKinds == "") {
+						rep.held++
+					}
+				}
 				switch {
 				case generic && got == nil:
 					rep.add("missing generic call", where(x, text(x.Fun)))
-				case index && got != nil && got.ConfidenceCap == "":
-					// f[i](...) calls an element of a value, not f.
+				case index && got != nil && got.ConfidenceCap == "" && got.TargetKinds == "":
+					// f[i](...) calls an element of a value, not f: the
+					// reference must not be able to resolve to the value.
 					rep.add("FALSE call (element of a value)", where(x, text(x.Fun)))
 				}
 			}
@@ -251,7 +261,7 @@ func reportProblems(t *testing.T, root string, rep *fidelityReport) {
 		kinds = append(kinds, k)
 	}
 	sort.Strings(kinds)
-	t.Logf("%s: %d files compared", root, rep.checked)
+	t.Logf("%s: %d files compared; %d of %d generic calls of the package's own declarations capped or unrestricted", root, rep.checked, rep.held, rep.generic)
 	for _, k := range kinds {
 		ex := rep.problems[k]
 		if len(ex) > 5 {
@@ -307,6 +317,19 @@ func use(s S, fns []func(int), i int) {
 	_ = &lib.Box[int]{}
 	handlers[i](1)
 }
+
+func more[T any]() {
+	handlers[Mode](1)
+	lib.Make[int](1)
+	lib.Make[T](1)
+	lib.Make[A, B](1)
+	lib.Make[S](1)
+	lib.Make[Q](1)
+	lib.Handlers[Name](1)
+	lib.Make[[]int](1)
+}
+
+const Name = "n"
 `)
 	ex, err := NewProvider().Extract(context.Background(), "p.go", src)
 	if err != nil || len(ex.Diagnostics) > 0 {
@@ -314,19 +337,32 @@ func use(s S, fns []func(int), i int) {
 	}
 	got := map[string]string{}
 	for _, r := range ex.References {
-		if r.Container != "use" {
+		if r.Container != "use" && r.Container != "more" {
 			continue
 		}
-		got[fmt.Sprintf("%s %s.%s L%d", r.Kind, r.ReceiverExpr, r.Name, r.Location.Range.Start.Line)] = r.ConfidenceCap
+		kinds := ""
+		if r.TargetKinds != "" {
+			kinds = "function/method/type only"
+		}
+		got[fmt.Sprintf("%s %s.%s L%d", r.Kind, r.ReceiverExpr, r.Name, r.Location.Range.Start.Line)] = r.ConfidenceCap + kinds
 	}
+	// fns[i](1), fns[0](1), s.hooks[i](1), handlers[i](1): an element of a
+	// value (the index i is a parameter; handlers a var of the file) names no
+	// declaration — no reference.
 	want := map[string]string{
 		// fns[i](1), fns[0](1): elements of a parameter — no reference.
-		"call s.hooks L16":          "candidate", // generic method or field element
-		"call .Make L17":            "",
-		"call lib.Make L18":         "",
+		"call .Make L17":            "function/method/type only",
+		"call lib.Make L18":         "function/method/type only",
 		"construction .Set L19":     "",
 		"construction .lib.Box L20": "",
-		"call .handlers L21":        "", // a package-level name: its use
+		// handlers[Mode](1): handlers is a var of the file — no reference.
+		"call lib.Make L26": "function/method/type only", // int: a predeclared type
+		"call lib.Make L27": "function/method/type only", // T: a type parameter in scope
+		"call lib.Make L28": "function/method/type only", // two subscripts: type arguments
+		"call lib.Make L29": "function/method/type only", // S: a type of the file
+		"call lib.Make L30": "function/method/type only", // Q: a type or a constant — decided by the target
+		// lib.Handlers[Name](1): Name is a const of the file — an element.
+		"call lib.Make L32": "function/method/type only", // []int: type syntax
 	}
 	for k, c := range want {
 		if gc, ok := got[k]; !ok || gc != c {
@@ -339,18 +375,24 @@ func use(s S, fns []func(int), i int) {
 }
 
 // The parser derives this generic call as a call of an index expression (in
-// this exact text; the shape depends on the context).
+// this exact text; the shape depends on the context). Whether Node is a type
+// or a constant indexing a package-level map of functions, the reference can
+// denote only a generic function, method or type.
 func TestExtract_GenericCallDerivedAsIndexExpression(t *testing.T) {
-	src := []byte("package p\n\nfunc f() {\n\tfor v := range lib.Select[Node]() {\n\t\t_ = v\n\t}\n}\n")
-	ex, err := NewProvider().Extract(context.Background(), "p.go", src)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	for _, r := range ex.References {
-		got = append(got, fmt.Sprintf("%s %s.%s %q", r.Kind, r.ReceiverExpr, r.Name, r.ConfidenceCap))
-	}
-	if want := []string{`call lib.Select ""`}; !slices.Equal(got, want) {
-		t.Errorf("got %v, want %v", got, want)
+	for _, c := range []struct{ src, want string }{
+		{"package p\n\ntype Node struct{}\n\nfunc f() {\n\tfor v := range lib.Select[Node]() {\n\t\t_ = v\n\t}\n}\n", `call lib.Select function,method,type,struct,interface`},
+		{"package p\n\nfunc f() {\n\tfor v := range lib.Select[Node]() {\n\t\t_ = v\n\t}\n}\n", `call lib.Select function,method,type,struct,interface`},
+	} {
+		ex, err := NewProvider().Extract(context.Background(), "p.go", []byte(c.src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got []string
+		for _, r := range ex.References {
+			got = append(got, fmt.Sprintf("%s %s.%s %s", r.Kind, r.ReceiverExpr, r.Name, r.TargetKinds))
+		}
+		if !slices.Equal(got, []string{c.want}) {
+			t.Errorf("got %v, want %v", got, c.want)
+		}
 	}
 }

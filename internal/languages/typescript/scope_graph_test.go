@@ -1,6 +1,7 @@
 package typescript_test
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -30,5 +31,22 @@ export type Uses = K | U | V;
 	}
 	if len(uses) != 3 {
 		t.Errorf("the real uses must stay edges: %v", uses)
+	}
+}
+
+// A recovered generic call resolves like any call: through the module
+// binding of its receiver, exactly; a call on a receiver of unproven type
+// (z.number().apply<...>) is no edge.
+func TestGraph_RecoveredGenericCallResolvesThroughItsBinding(t *testing.T) {
+	idx := buildIndex(t, map[string]string{
+		"src/processors.ts": "export function aggregateChecks<T>(x: unknown): { minimum: T } { return { minimum: x as T }; }\n",
+		"src/use.ts": `import * as processors from "./processors";
+export const c = processors.aggregateChecks<number>(inst).minimum ?? null;
+z.number().apply<z.ZodMiniNumber>((schema) => schema.check(0));
+`,
+	})
+	want := []string{"src/use.ts:c -calls-> src/processors.ts:aggregateChecks exact"}
+	if got := edgeSet(t, idx); !slices.Equal(got, want) {
+		t.Errorf("edges %v, want %v", got, want)
 	}
 }

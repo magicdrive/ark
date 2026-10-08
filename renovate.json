@@ -53,6 +53,11 @@
       "matchDatasources": ["go"],
       "labels": ["security"],
       "prPriority": 10
+    },
+    {
+      "description": "The CI TypeScript compiler (.github/ts-oracle) is the soundness oracle: upgrade it deliberately, re-running the differential",
+      "matchFileNames": [".github/ts-oracle/**"],
+      "enabled": false
     }
   ],
   "minimumReleaseAge": "3 days",

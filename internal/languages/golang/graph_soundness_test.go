@@ -64,3 +64,81 @@ func build(d int) {
 		t.Errorf("build calls Make[check]: %v", got)
 	}
 }
+
+// Element calls of package-level function slices and maps — the variable in
+// the same file or another file of the package, a function of the same name
+// in another package — are no edges; generic calls and constructions are.
+func TestGraph_ElementCallsOfPackageValuesAreNoEdges(t *testing.T) {
+	root := t.TempDir()
+	files := map[string]string{
+		"go.mod": "module example.com/m\n",
+		"a/a.go": `package a
+
+var handlers []func(int)
+var table map[string]func(int)
+
+type Registry struct{ handlers []func(int) }
+
+func Identity[T any](value T) T { return value }
+
+type Box[T any] struct{ Value T }
+
+func useA(i int)             { handlers[i](1) }
+func useB(name string)       { table[name](1) }
+func useC()                  { Identity[int](1) }
+func useD(v int)             { _ = Box[int]{Value: v} }
+func useE(i int)             { others[i](1) }
+func useF(r Registry, i int) { r.handlers[i](1) }
+func useG()                  { Identity[Key](k) }
+func useH()                  { others[Mode](1) }
+func useI()                  { Generic[Key](k) }
+`,
+		"a/b.go": "package a\n\nvar others []func(int)\n\ntype Key int\n\nvar k Key\n\nconst Mode = 0\n\nfunc Generic[T any](v T) {}\n",
+		"b/b.go": "package b\n\nfunc handlers(x int) {}\nfunc table(x int) {}\nfunc others(x int) {}\n",
+	}
+	for rel, body := range files {
+		p := filepath.Join(root, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	idx, err := index.New(context.Background(), root, []language.Provider{golang.NewProvider()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]string{}
+	for _, f := range idx.Files() {
+		for _, s := range idx.SymbolsByFile(f) {
+			for _, e := range idx.GetCallees(s.ID) {
+				if to, ok := idx.GetSymbol(e.To); ok {
+					got[s.Qualified+" -> "+to.Qualified+"@"+string(to.Location.File)] = fmt.Sprint(e.Confidence)
+				}
+			}
+			for _, c := range idx.CandidateCallers(s.ID) {
+				if from, ok := idx.GetSymbol(c); ok {
+					got[from.Qualified+" ~> "+s.Qualified+"@"+string(s.Location.File)] = "candidate"
+				}
+			}
+		}
+	}
+	want := map[string]string{
+		"useC -> Identity@a/a.go": "exact",
+		"useD -> Box@a/a.go":      "exact",
+		"useG -> Identity@a/a.go": "exact",
+		// Both names declared in another file: decided by the target.
+		"useI -> Generic@a/b.go": "strong",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("missing %s (%s)", k, v)
+		}
+	}
+	for k, v := range got {
+		if want[k] == "" {
+			t.Errorf("unexpected relation %s (%s)", k, v)
+		}
+	}
+}

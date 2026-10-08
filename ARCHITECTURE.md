@@ -25,7 +25,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
@@ -225,7 +225,9 @@ to the reference, field names included, while switching routes everywhere
 changes more correct trees than it fixes. A tree without an error is a
 complete derivation by the grammar, so the fallback recovers a derivation
 and never invents one; when every route fails, the production tree and its
-diagnostics stand. Authority: `tsparse/tsparse.go`. Tests: `TestParse_*`,
+diagnostics stand. Trees it does not return it releases. Authority:
+`tsparse/tsparse.go`. Tests: `TestParse_*` (the contract), `TestRoute_*`
+(gotreesitter v0.55.1 route behavior — the upgrade gate),
 `TestParserRecovery_PHPDestructuring`.
 Danger: switching the process-wide route "because it fixed a file", or
 dropping diagnostics instead of recovering the parse.
@@ -237,15 +239,24 @@ the real corpora). The extractors therefore read those shapes by the
 language's own rules, whichever derivation the tree holds:
 
 - Go `f[x](...)` / `r.f[x](...)` / `T[X](v)` (generic call, conversion, or a
-  call of an element): an element of a local value is no reference; a member
-  of a value is a reference capped at Candidate (a generic method or an
-  element of a field); a package-level or package-qualified name is a call.
-  `T[X]{...}` constructs `T`. Tests: `TestExtract_SubscriptedCallsFollowGoRules`,
-  `TestGraph_SubscriptedCallOfALocalIsNoEdge`.
+  call of an element of a slice / array / map of functions): only what the
+  file proves decides — never the parser's choice of reading. A subscript or
+  callee that is a value (a local, a var / const of the file) makes it an
+  element call: no reference. A subscript that is a type (predeclared, a type
+  or type parameter in scope, type syntax, several subscripts), or a callee
+  that is a function / type of the file, makes it a call. Otherwise the
+  reference can denote only a function, method or type
+  (`ReferenceDraft.TargetKinds`): resolved to a variable or constant — an
+  element call after all — it is Unresolved. `T[X]{...}` constructs `T`. Tests:
+  `TestExtract_SubscriptedCallsFollowGoRules`,
+  `TestGraph_SubscriptedCallOfALocalIsNoEdge`,
+  `TestGraph_ElementCallsOfPackageValuesAreNoEdges`.
 - TypeScript `f<T>(x)` derived as the comparisons `(f < T) > (x)`: a call
   when the text is type arguments followed by `(` — TypeScript's own rule,
-  checked with a type grammar narrower than TypeScript's, so a comparison is
-  never made a call (`languages/typescript/generic_call.go`). Type parameters of nested
+  checked with a type grammar narrower than TypeScript's (lexical rules,
+  reserved words and line-break rules included), so a comparison is never
+  made a call; `TestFidelity_TypeArgumentsMatchCompiler` checks every text it
+  accepts against the compiler (`languages/typescript/generic_call.go`). Type parameters of nested
   signatures, mapped-type keys and `infer` names scope like type parameters
   and are never type uses. Tests: `TestExtract_GenericCallReadAsComparison`,
   `TestExtract_ComparisonsAreNotGenericCalls`,
@@ -255,8 +266,11 @@ language's own rules, whichever derivation the tree holds:
 The independent oracles are the languages' own front ends:
 `TestFidelity_RepositoryReferencesMatchGoAST` (go/ast + go/types, this
 repository; `ARK_GO_FIDELITY_ROOTS` for others) and
-`TestFidelity_TypeScriptCompiler` (the TypeScript compiler; opt-in,
-`ARK_TS_FIDELITY_ROOTS` + `ARK_TYPESCRIPT_MODULE`). Remaining gaps:
+`TestFidelity_TypeScriptCompiler` with `TestFidelity_TypeArgumentsMatchCompiler`
+(the TypeScript compiler; opt-in locally via `ARK_TYPESCRIPT_MODULE`,
+required in CI: `.github/ts-oracle/run.sh` installs the pinned compiler and
+fails on a missing or wrong-version compiler, a skip or a mismatch — `make
+ts-oracle` runs it locally). Remaining gaps:
 `internal/conformance/IMPROVEMENTS.md`, Q8.
 
 ## 4. RepositoryIndex and index reuse

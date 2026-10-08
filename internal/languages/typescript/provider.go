@@ -55,7 +55,9 @@ func (p *Provider) Extensions() []string {
 //	"ts-5": generic calls the parser read as comparisons; type parameters
 //	        of nested signatures, mapped-type keys and `infer` names are not
 //	        type uses; forest-route trees (tsparse).
-func (p *Provider) CacheVersion() string { return "ts-5" }
+//	"ts-6": the recovered type arguments follow TypeScript's lexical,
+//	        reserved-word and line-break rules.
+func (p *Provider) CacheVersion() string { return "ts-6" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()

@@ -1,8 +1,11 @@
 package typescript
 
 import (
+	"bytes"
 	"sort"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	ts "github.com/odvcencio/gotreesitter"
 
@@ -138,7 +141,7 @@ func (p *typeArgParser) skipSpace() {
 				p.pos++
 			}
 		case c == '/' && p.pos+1 < len(p.src) && p.src[p.pos+1] == '*':
-			end := strings.Index(string(p.src[p.pos+2:]), "*/")
+			end := bytes.Index(p.src[p.pos+2:], []byte("*/"))
 			if end < 0 {
 				p.pos = len(p.src)
 				return
@@ -150,9 +153,48 @@ func (p *typeArgParser) skipSpace() {
 	}
 }
 
-func isIdentByte(c byte, first bool) bool {
-	return c == '_' || c == '$' || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
-		c >= 0x80 || (!first && c >= '0' && c <= '9')
+// isIdentRune reports whether r may start (first) or continue an
+// identifier. Beyond ASCII only letters (and, continuing, marks, digits and
+// connectors) are accepted — a subset of Unicode ID_Start / ID_Continue that
+// every TypeScript version accepts; anything else stops the identifier.
+func isIdentRune(r rune, first bool) bool {
+	switch {
+	case r == '_' || r == '$' || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z'):
+		return true
+	case r >= '0' && r <= '9':
+		return !first
+	case r < utf8.RuneSelf || r == utf8.RuneError:
+		return false
+	case unicode.IsLetter(r):
+		return true
+	}
+	return !first && unicode.In(r, unicode.Mn, unicode.Mc, unicode.Nd, unicode.Pc)
+}
+
+// reservedWords cannot name a type (checked against the compiler,
+// TestFidelity_TypeArgumentsMatchCompiler): ECMAScript reserved words and the
+// type operators. Contextual keywords (let, out, type, ...) can; after a dot
+// any identifier name can.
+var reservedWords = map[string]bool{
+	"break": true, "case": true, "catch": true, "class": true, "const": true, "continue": true,
+	"debugger": true, "default": true, "delete": true, "do": true, "else": true, "enum": true,
+	"export": true, "extends": true, "finally": true, "for": true, "function": true, "if": true,
+	"import": true, "in": true, "instanceof": true, "new": true, "return": true, "super": true,
+	"switch": true, "throw": true, "try": true, "var": true, "while": true, "with": true,
+	"infer": true, "readonly": true, "unique": true,
+}
+
+// peekSameLine reports whether the next token is c with no line break
+// before it (a postfix `[` and a type reference's `<` must not follow one:
+// parser.ts, hasPrecedingLineBreak), consuming the space before it if so.
+func (p *typeArgParser) peekSameLine(c byte) bool {
+	start := p.pos
+	p.skipSpace()
+	if p.pos < len(p.src) && p.src[p.pos] == c && !bytes.ContainsAny(p.src[start:p.pos], "\n\r") {
+		return true
+	}
+	p.pos = start
+	return false
 }
 
 // peek returns the next punctuation byte, or 0 for anything else.
@@ -175,12 +217,22 @@ func (p *typeArgParser) eat(c byte) bool {
 // ident consumes an identifier and returns it with its start, or "".
 func (p *typeArgParser) ident() (string, int) {
 	p.skipSpace()
+	return p.identHere()
+}
+
+// identHere consumes an identifier starting exactly at the current position.
+// A `\` escape is never accepted.
+func (p *typeArgParser) identHere() (string, int) {
 	start := p.pos
-	if p.pos >= len(p.src) || !isIdentByte(p.src[p.pos], true) {
-		return "", start
+	for p.pos < len(p.src) {
+		r, n := utf8.DecodeRune(p.src[p.pos:])
+		if !isIdentRune(r, p.pos == start) {
+			break
+		}
+		p.pos += n
 	}
-	for p.pos < len(p.src) && isIdentByte(p.src[p.pos], p.pos == start) {
-		p.pos++
+	if p.pos < len(p.src) && p.src[p.pos] == '\\' {
+		p.pos = start
 	}
 	return string(p.src[start:p.pos]), start
 }
@@ -234,7 +286,8 @@ func (p *typeArgParser) postfix() bool {
 	if !p.primary() {
 		return false
 	}
-	for p.eat('[') {
+	for p.peekSameLine('[') {
+		p.pos++
 		if p.eat(']') {
 			continue
 		}
@@ -274,27 +327,32 @@ func (p *typeArgParser) primary() bool {
 		return false
 	case "typeof":
 		// A type query names a value, not a type: not a type reference.
-		if q, _ := p.ident(); q == "" {
+		if q, _ := p.ident(); q == "" || reservedWords[q] {
 			return false
 		}
-		for p.peek() == '.' {
+		for p.pos+1 < len(p.src) && p.src[p.pos] == '.' {
 			p.pos++
-			if q, _ := p.ident(); q == "" {
+			if q, _ := p.identHere(); q == "" {
 				return false
 			}
 		}
 		return true
-	case "keyof", "readonly", "unique":
+	case "keyof":
 		return p.postfix()
 	}
 	if typeKeywords[name] {
 		return true
 	}
+	if reservedWords[name] {
+		return false
+	}
 	parts := []string{name}
 	end := p.pos
-	for p.peek() == '.' {
+	// A qualified name: no space or comment around its dots, so the
+	// receiver is its text.
+	for p.pos+1 < len(p.src) && p.src[p.pos] == '.' {
 		p.pos++
-		q, _ := p.ident()
+		q, _ := p.identHere()
 		if q == "" {
 			return false
 		}
@@ -307,19 +365,40 @@ func (p *typeArgParser) primary() bool {
 		start:    uint32(start),
 		end:      uint32(end),
 	})
-	if p.peek() == '<' {
+	if p.peekSameLine('<') {
 		return p.typeArgs()
 	}
 	return true
 }
 
+// stringLiteral parses a '...' or "..." string; escapes that are malformed
+// or that strict code rejects (\x and \u without their digits, octal) fail.
 func (p *typeArgParser) stringLiteral() bool {
 	q := p.src[p.pos]
 	for p.pos++; p.pos < len(p.src); p.pos++ {
-		switch p.src[p.pos] {
+		switch c := p.src[p.pos]; c {
 		case '\\':
 			p.pos++
-		case '\n':
+			if p.pos >= len(p.src) {
+				return false
+			}
+			switch e := p.src[p.pos]; {
+			case e == 'x':
+				if !p.hexDigits(2) {
+					return false
+				}
+			case e == 'u':
+				if !p.hexDigits(4) {
+					return false
+				}
+			case e >= '1' && e <= '9':
+				return false
+			case e == '0' && p.pos+1 < len(p.src) && p.src[p.pos+1] >= '0' && p.src[p.pos+1] <= '9':
+				return false
+			case e == '\r' && p.pos+1 < len(p.src) && p.src[p.pos+1] == '\n':
+				p.pos++
+			}
+		case '\n', '\r':
 			return false
 		case q:
 			p.pos++
@@ -329,15 +408,58 @@ func (p *typeArgParser) stringLiteral() bool {
 	return false
 }
 
+// hexDigits consumes exactly n hex digits after the escape letter.
+func (p *typeArgParser) hexDigits(n int) bool {
+	for i := 1; i <= n; i++ {
+		if p.pos+i >= len(p.src) || !isHex(p.src[p.pos+i]) {
+			return false
+		}
+	}
+	p.pos += n
+	return true
+}
+
+func isHex(c byte) bool {
+	return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')
+}
+
+// number parses a deliberately small subset of numeric literal types:
+// [-]0 or [-]1-9 digits, an optional .digits fraction, or an integer with a
+// bigint n. Separators, exponents, other bases and legacy octal fail.
 func (p *typeArgParser) number() bool {
 	if p.src[p.pos] == '-' {
 		p.pos++
 	}
+	digits := func() int {
+		start := p.pos
+		for p.pos < len(p.src) && p.src[p.pos] >= '0' && p.src[p.pos] <= '9' {
+			p.pos++
+		}
+		return p.pos - start
+	}
 	start := p.pos
-	for p.pos < len(p.src) && ((p.src[p.pos] >= '0' && p.src[p.pos] <= '9') || p.src[p.pos] == '.' || p.src[p.pos] == '_') {
+	n := digits()
+	if n == 0 || (n > 1 && p.src[start] == '0') {
+		return false
+	}
+	if p.pos < len(p.src) && p.src[p.pos] == '.' {
+		p.pos++
+		if digits() == 0 {
+			return false
+		}
+	} else if p.pos < len(p.src) && p.src[p.pos] == 'n' {
 		p.pos++
 	}
-	return p.pos > start
+	// Nothing may stick to it (1.2.3, 1_0, 1x, 1e3).
+	if p.pos < len(p.src) {
+		if c := p.src[p.pos]; c == '.' || c == '_' || c == '\\' || (c >= '0' && c <= '9') {
+			return false
+		}
+		if r, _ := utf8.DecodeRune(p.src[p.pos:]); isIdentRune(r, false) {
+			return false
+		}
+	}
+	return true
 }
 
 // typeLiteral parses `{ [readonly] name[?]: Type [;|,] ... }`.

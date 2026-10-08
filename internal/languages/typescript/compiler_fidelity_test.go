@@ -18,22 +18,20 @@ import (
 // TestFidelity_TypeScriptCompiler compares Ark's call, construction and type
 // references with what the TypeScript compiler's parser sees (and its binder,
 // for type parameters), over the .ts / .tsx files under the directories
-// ARK_TS_FIDELITY_ROOTS lists. It needs Node.js and the typescript package
-// (ARK_TYPESCRIPT_MODULE: the package directory), so it is skipped unless
-// both are given; Ark itself never needs either.
+// ARK_TS_FIDELITY_ROOTS lists (skipped without it). It needs the compiler
+// (oracle_test.go).
 //
 // A reference only Ark has is a false reference and fails the test; a
 // reference Ark lacks is logged (Ark observes a subset of the language:
 // see internal/conformance/IMPROVEMENTS.md).
 func TestFidelity_TypeScriptCompiler(t *testing.T) {
-	roots, tsmod := os.Getenv("ARK_TS_FIDELITY_ROOTS"), os.Getenv("ARK_TYPESCRIPT_MODULE")
-	if roots == "" || tsmod == "" {
-		t.Skip("ARK_TS_FIDELITY_ROOTS / ARK_TYPESCRIPT_MODULE not set")
+	roots := os.Getenv("ARK_TS_FIDELITY_ROOTS")
+	if roots == "" {
+		// Which files to compare is the caller's choice; CI passes the
+		// repository's own TypeScript test data.
+		t.Skip("ARK_TS_FIDELITY_ROOTS not set")
 	}
-	node, err := exec.LookPath("node")
-	if err != nil {
-		t.Skip("node not found")
-	}
+	node, tsmod := tsOracle(t)
 	script, err := filepath.Abs(filepath.Join("testdata", "fidelity", "tsrefs.js"))
 	if err != nil {
 		t.Fatal(err)
@@ -147,6 +145,9 @@ func TestFidelity_TypeScriptCompiler(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Logf("%d files compared, %d references agree, missing: %v", compared, ok, missing)
+	if compared == 0 || ok == 0 {
+		t.Fatalf("nothing compared under %s: a wrong root?", roots)
+	}
 	kinds := make([]string, 0, len(falseRefs))
 	for k := range falseRefs {
 		kinds = append(kinds, k)

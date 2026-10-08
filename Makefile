@@ -74,6 +74,13 @@ fuzz:
 	@$(GO) test -fuzz=FuzzCacheDecoding   -fuzztime=10s $(CURDIR)/internal/cache/
 	@$(GO) test -fuzz=FuzzExtract         -fuzztime=10s $(CURDIR)/internal/languages/golang/
 	@$(GO) test -run '^$$' -fuzz=FuzzExtractTerraform -fuzztime=10s $(CURDIR)/internal/languages/terraform/
+	@$(GO) test -run '^$$' -fuzz='^FuzzTypeArgParser$$' -fuzztime=10s $(CURDIR)/internal/languages/typescript/
+
+# Run the TypeScript compiler differential against the pinned compiler
+# (needs Node.js and npm; CI runs it in its own job)
+.PHONY: ts-oracle
+ts-oracle:
+	@$(CURDIR)/.github/ts-oracle/run.sh
 
 # Run intelligence benchmarks
 .PHONY: bench
@@ -130,6 +137,7 @@ help:
 	@echo "  make staticcheck       - Run staticcheck"
 	@echo "  make lint              - Run all quality gates (vet+test+race+staticcheck)"
 	@echo "  make fuzz              - Run fuzz smoke tests (10s each)"
+	@echo "  make ts-oracle         - Run the TypeScript compiler differential (Node.js)"
 	@echo "  make bench             - Run intelligence benchmarks"
 	@echo "  make clean             - Remove build artifacts"
 	@echo "  make dev-tools         - Install dev tools"

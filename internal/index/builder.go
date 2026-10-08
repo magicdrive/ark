@@ -146,6 +146,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			NameQualified:         rd.NameQualified,
 			ReceiverTypeQualified: rd.ReceiverTypeQualified,
 			ConfidenceCap:         rd.ConfidenceCap,
+			TargetKinds:           rd.TargetKinds,
 			Dynamic:               rd.Dynamic,
 			IdentityInRepository:  rd.IdentityInRepository,
 			NamedArgument:         rd.NamedArgument,

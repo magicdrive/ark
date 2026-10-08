@@ -67,6 +67,9 @@ func f() {
 }
 `
 
+// routesDiffer is invalid Go both routes reject, with different trees.
+const routesDiffer = "package app\n\nfunc Broken( {"
+
 func candidate(t *testing.T, lang *ts.Language, src string) *ts.Tree {
 	t.Helper()
 	p := ts.NewParser(lang)
@@ -101,20 +104,41 @@ func parse(t *testing.T, lang *ts.Language, src string) *ts.Tree {
 	return tree
 }
 
-func TestParse_RecoversValidSourceTheProductionRouteRejects(t *testing.T) {
+// --- The contract Ark's analysis relies on (any gotreesitter version) ---
+
+// referenceShape is a fragment of the reference runtime's tree for each
+// valid repro (field names aside).
+var referenceShape = map[string][]string{
+	// `for range l` ranges over the identifier l; the braces are the loop's
+	// block — no composite literal anywhere.
+	nestedRange: {"(for_statement (range_clause (identifier)) (block"},
+	// `range v4.v9` ranges over a selector; the composite literals are the
+	// index `v10.v11{}` and its value only.
+	nestedRangeLiteral: {"(range_clause (expression_list (identifier) (identifier)) (selector_expression (identifier) (field_identifier))) (block"},
+	// A generic call, not a type instantiation.
+	candidateOnly: {"(call_expression (selector_expression (identifier) (field_identifier)) (type_arguments"},
+}
+
+func TestParse_ValidSourceHasTheReferenceTree(t *testing.T) {
 	lang := grammars.GoLanguage()
-	if !production(t, lang, nestedRange).RootNode().HasError() {
-		t.Log("the production route now parses the repro: the fallback is no longer exercised by it")
-	}
-	got := parse(t, lang, nestedRange).RootNode()
-	if got.HasError() {
-		t.Fatal("valid source still has an error")
-	}
-	sx := got.SExpr(lang)
-	// The reference tree: `for range l` ranges over the identifier l and
-	// the braces are the loop's block — no composite literal anywhere.
-	if strings.Contains(sx, "composite_literal") || !strings.Contains(sx, "(for_statement (range_clause (identifier)) (block") {
-		t.Errorf("tree differs from the reference shape:\n%s", sx)
+	for src, frags := range referenceShape {
+		got := parse(t, lang, src).RootNode()
+		if got.HasError() {
+			t.Errorf("valid source has an error:\n%s", src)
+			continue
+		}
+		sx := got.SExpr(lang)
+		for _, f := range frags {
+			if !strings.Contains(sx, f) {
+				t.Errorf("tree lacks %s:\n%s", f, sx)
+			}
+		}
+		if src == nestedRange && strings.Contains(sx, "composite_literal") {
+			t.Errorf("composite literal in:\n%s", sx)
+		}
+		if src == nestedRangeLiteral && strings.Count(sx, "composite_literal") != 2 {
+			t.Errorf("composite literals in:\n%s", sx)
+		}
 	}
 }
 
@@ -123,10 +147,8 @@ func TestParse_InvalidSourceKeepsTheProductionTree(t *testing.T) {
 		lang *ts.Language
 		src  string
 	}{
-		"go": {grammars.GoLanguage(), "package a\nfunc A( {\nfunc B() {}\n"},
-		// Both routes err here, with different trees: an erroring
-		// alternative must never replace the production tree.
-		"go-routes-differ": {grammars.GoLanguage(), "package app\n\nfunc Broken( {"},
+		"go":               {grammars.GoLanguage(), "package a\nfunc A( {\nfunc B() {}\n"},
+		"go-routes-differ": {grammars.GoLanguage(), routesDiffer},
 		"php":              {grammars.PhpLanguage(), "<?php\nclass A { function m( {\n"},
 		"ts":               {grammars.TypescriptLanguage(), "export class B {\n  m( {\n}\n"},
 		"js":               {grammars.JavascriptLanguage(), "function f( {\n"},
@@ -139,59 +161,148 @@ func TestParse_InvalidSourceKeepsTheProductionTree(t *testing.T) {
 			t.Errorf("%s: an invalid source parsed without error", name)
 		}
 		if prod.SExpr(c.lang) != got.SExpr(c.lang) {
-			t.Errorf("%s: the production tree was not kept", name)
+			t.Errorf("%s: the production tree (and its diagnostics) was not kept", name)
 		}
 	}
 }
 
-func TestParse_ValidSourceIsTheProductionTree(t *testing.T) {
+// A production tree without an error is never replaced.
+func TestParse_CleanProductionTreeIsKept(t *testing.T) {
 	lang := grammars.GoLanguage()
-	src := "package a\n\nfunc A() { B(x[i]) }\nfunc B[T any](t T) {}\n"
-	if production(t, lang, src).RootNode().SExpr(lang) != parse(t, lang, src).RootNode().SExpr(lang) {
-		t.Error("a valid source the production route parses must keep its tree")
-	}
-}
-
-func TestParse_ForestRouteRecoversWhatBothOtherRoutesReject(t *testing.T) {
-	lang := grammars.GoLanguage()
-	if !production(t, lang, nestedRangeLiteral).RootNode().HasError() || !candidate(t, lang, nestedRangeLiteral).RootNode().HasError() {
-		t.Log("a route now parses the repro: the forest fallback is no longer exercised by it")
-	}
-	got := parse(t, lang, nestedRangeLiteral).RootNode()
-	if got.HasError() {
-		t.Fatal("valid source still has an error")
-	}
-	sx := got.SExpr(lang)
-	// The reference tree: `range v4.v9` ranges over a selector, and the
-	// composite literal is the index `v10.v11{}` only.
-	if !strings.Contains(sx, "(range_clause (expression_list (identifier) (identifier)) (selector_expression (identifier) (field_identifier))) (block") ||
-		strings.Count(sx, "composite_literal") != 2 {
-		t.Errorf("tree differs from the reference shape:\n%s", sx)
-	}
-}
-
-// The candidate route is only a fallback: where the production tree has no
-// error it is kept even though the candidate route also parses cleanly.
-func TestParse_ProductionTreeWinsOverADifferentCleanCandidate(t *testing.T) {
-	lang := grammars.GoLanguage()
-	prod := production(t, lang, candidateOnly).RootNode()
-	cand := candidate(t, lang, candidateOnly).RootNode()
-	if prod.HasError() || cand.HasError() || prod.SExpr(lang) == cand.SExpr(lang) {
-		t.Log("the routes no longer differ on this input: the assertion below is vacuous")
-	}
-	if got := parse(t, lang, candidateOnly).RootNode().SExpr(lang); got != prod.SExpr(lang) {
-		t.Errorf("Parse returned the candidate tree:\n%s", got)
+	for _, src := range []string{candidateOnly, "package a\n\nfunc A() { B(x[i]) }\nfunc B[T any](t T) {}\n"} {
+		prod := production(t, lang, src).RootNode()
+		if prod.HasError() {
+			continue // not this contract's input
+		}
+		if got := parse(t, lang, src).RootNode().SExpr(lang); got != prod.SExpr(lang) {
+			t.Errorf("a clean production tree was replaced:\n%s", got)
+		}
 	}
 }
 
 func TestParse_Deterministic(t *testing.T) {
 	lang := grammars.GoLanguage()
-	for _, src := range []string{nestedRange, nestedRangeLiteral} {
-		want := parse(t, lang, src).RootNode().SExpr(lang)
-		for i := 0; i < 20; i++ {
-			if got := parse(t, lang, src).RootNode().SExpr(lang); got != want {
-				t.Fatalf("run %d differs", i)
-			}
+	for _, src := range []string{nestedRange, nestedRangeLiteral, candidateOnly, routesDiffer} {
+		tree, r0, err := parseRoute(lang, []byte(src))
+		if err != nil {
+			t.Fatal(err)
 		}
+		want := tree.RootNode().SExpr(lang)
+		tree.Release()
+		for i := 0; i < 20; i++ {
+			tree, r, err := parseRoute(lang, []byte(src))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := tree.RootNode().SExpr(lang); got != want || r != r0 {
+				t.Fatalf("run %d differs (route %s, first %s)", i, r, r0)
+			}
+			tree.Release()
+		}
+	}
+}
+
+// The returned tree is the caller's: parsing on — releasing rejected and
+// replaced trees back to gotreesitter's pools — never touches it.
+func TestParse_ReturnedTreeSurvivesLaterParses(t *testing.T) {
+	lang := grammars.GoLanguage()
+	kept := map[string]*ts.Tree{}
+	want := map[string]string{}
+	for _, src := range []string{nestedRange, nestedRangeLiteral, candidateOnly, routesDiffer} {
+		kept[src] = parse(t, lang, src)
+		want[src] = kept[src].RootNode().SExpr(lang)
+	}
+	for i := 0; i < 50; i++ {
+		for _, src := range []string{nestedRange, nestedRangeLiteral, routesDiffer} {
+			tree, err := Parse(lang, []byte(src))
+			if err != nil {
+				t.Fatal(err)
+			}
+			tree.Release()
+		}
+	}
+	for src, tree := range kept {
+		if got := tree.RootNode().SExpr(lang); got != want[src] {
+			t.Errorf("a returned tree changed after later parses:\n%s", src)
+		}
+	}
+}
+
+// --- gotreesitter v0.55.1 route behavior (the dependency gate) ---
+//
+// These pin which route each known input takes. A failure after a
+// gotreesitter upgrade means route behavior changed: re-measure the fallback
+// against the reference runtime (ARCHITECTURE.md §3) before updating them.
+
+func routeOf(t *testing.T, lang *ts.Language, src string) route {
+	t.Helper()
+	tree, r, err := parseRoute(lang, []byte(src))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tree.Release()
+	return r
+}
+
+func forestClean(t *testing.T, lang *ts.Language, src string) bool {
+	t.Helper()
+	tree, ok := ts.NewParser(lang).ParseForestExperimental([]byte(src))
+	if !ok || tree == nil {
+		return false
+	}
+	defer tree.Release()
+	return !tree.RootNode().HasError()
+}
+
+func TestRoute_NestedRangeTakesTheCandidateRoute(t *testing.T) {
+	lang := grammars.GoLanguage()
+	if !production(t, lang, nestedRange).RootNode().HasError() {
+		t.Fatal("precondition: the production route must reject nestedRange")
+	}
+	if candidate(t, lang, nestedRange).RootNode().HasError() {
+		t.Fatal("precondition: the candidate route must parse nestedRange")
+	}
+	if r := routeOf(t, lang, nestedRange); r != routeCandidate {
+		t.Errorf("route %s, want %s", r, routeCandidate)
+	}
+}
+
+func TestRoute_RangeAndLiteralIndexTakesTheForestRoute(t *testing.T) {
+	lang := grammars.GoLanguage()
+	if !production(t, lang, nestedRangeLiteral).RootNode().HasError() || !candidate(t, lang, nestedRangeLiteral).RootNode().HasError() {
+		t.Fatal("precondition: the production and candidate routes must reject nestedRangeLiteral")
+	}
+	if !forestClean(t, lang, nestedRangeLiteral) {
+		t.Fatal("precondition: the forest route must parse nestedRangeLiteral")
+	}
+	if r := routeOf(t, lang, nestedRangeLiteral); r != routeForest {
+		t.Errorf("route %s, want %s", r, routeForest)
+	}
+}
+
+func TestRoute_DifferentCleanCandidateIsNotTaken(t *testing.T) {
+	lang := grammars.GoLanguage()
+	prod := production(t, lang, candidateOnly).RootNode()
+	cand := candidate(t, lang, candidateOnly).RootNode()
+	if prod.HasError() || cand.HasError() || prod.SExpr(lang) == cand.SExpr(lang) {
+		t.Fatal("precondition: both routes must parse candidateOnly cleanly, into different trees")
+	}
+	if r := routeOf(t, lang, candidateOnly); r != routeProduction {
+		t.Errorf("route %s, want %s", r, routeProduction)
+	}
+}
+
+func TestRoute_ErringAlternativesAreNotTaken(t *testing.T) {
+	lang := grammars.GoLanguage()
+	prod := production(t, lang, routesDiffer).RootNode()
+	cand := candidate(t, lang, routesDiffer).RootNode()
+	if !prod.HasError() || !cand.HasError() || prod.SExpr(lang) == cand.SExpr(lang) {
+		t.Fatal("precondition: both routes must reject routesDiffer, into different trees")
+	}
+	if forestClean(t, lang, routesDiffer) {
+		t.Fatal("precondition: the forest route must not parse routesDiffer")
+	}
+	if r := routeOf(t, lang, routesDiffer); r != routeProduction {
+		t.Errorf("route %s, want %s", r, routeProduction)
 	}
 }

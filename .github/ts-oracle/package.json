@@ -1,0 +1,9 @@
+{
+  "name": "ark-ts-oracle",
+  "private": true,
+  "description": "CI-only: the TypeScript compiler the TypeScript differential tests compare Ark against. Never an Ark runtime dependency.",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "typescript": "5.6.3"
+  }
+}

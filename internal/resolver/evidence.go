@@ -43,6 +43,9 @@ const (
 	// EvidenceIdentityOnly: the reference is written in a file whose names
 	// resolve only by qualified identity, and it carries none.
 	EvidenceIdentityOnly EvidenceKind = "identity_only"
+	// EvidenceTargetKind: the reference can denote only some symbol kinds
+	// (reference.Reference.TargetKinds); candidates of others were removed.
+	EvidenceTargetKind EvidenceKind = "target_kind"
 )
 
 // ResolutionEvidence records why a particular candidate was matched.

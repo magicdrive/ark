@@ -25,38 +25,84 @@
 // grammar is ambiguous (Go `f[T](x)`, TypeScript `f<T>(x)`): the extractors
 // treat those shapes by the language's own rules, not by the tree alone.
 //
-// The forest route is not part of gotreesitter's stable API; the version is
-// pinned and TestParse_* pin the behavior relied on here.
+// Ownership: Parse returns either a tree the caller owns and releases, or an
+// error and no tree. Every tree it does not return — the production tree when
+// a fallback is kept, a rejected fallback tree, any tree on an error or a
+// panic — it releases itself, once.
+//
+// Dependency gate: the routes are gotreesitter v0.55.1 behavior, and the
+// forest route is not part of its stable API. When upgrading gotreesitter,
+// TestRoute_* must still pass (they pin which route each known input takes;
+// a failure means the route behavior changed and the fallback must be
+// re-measured against the reference runtime), as must TestParse_* (the
+// contract Ark's analysis relies on, independent of routes).
 package tsparse
 
 import (
 	ts "github.com/odvcencio/gotreesitter"
 )
 
+// route names the parser route whose tree Parse returned.
+type route string
+
+const (
+	routeProduction route = "production"
+	routeCandidate  route = "candidate"
+	routeForest     route = "forest"
+)
+
 // Parse parses src with lang. The caller releases the returned tree.
 func Parse(lang *ts.Language, src []byte) (*ts.Tree, error) {
+	tree, _, err := parseRoute(lang, src)
+	return tree, err
+}
+
+// parseRoute is Parse, also naming the route of the returned tree.
+func parseRoute(lang *ts.Language, src []byte) (_ *ts.Tree, _ route, err error) {
+	var owned []*ts.Tree // trees to release unless returned
+	defer func() {
+		if r := recover(); r != nil {
+			for _, t := range owned {
+				t.Release()
+			}
+			panic(r)
+		}
+	}()
+	keep := func(t *ts.Tree) *ts.Tree {
+		if t != nil {
+			owned = append(owned, t)
+		}
+		return t
+	}
+	// handOver releases every owned tree but t, which the caller now owns.
+	handOver := func(t *ts.Tree) *ts.Tree {
+		for _, o := range owned {
+			if o != t {
+				o.Release()
+			}
+		}
+		owned = nil
+		return t
+	}
+
 	p := ts.NewParser(lang)
 	p.SetAdmissionCandidateRoute(false)
 	tree, err := p.Parse(src)
-	if err != nil || tree == nil || !tree.RootNode().HasError() {
-		return tree, err
+	keep(tree)
+	if err != nil || tree == nil {
+		handOver(nil)
+		return nil, "", err
+	}
+	if !tree.RootNode().HasError() {
+		return handOver(tree), routeProduction, nil
 	}
 	alt := ts.NewParser(lang)
 	alt.SetAdmissionCandidateRoute(true)
-	if recovered, altErr := alt.Parse(src); altErr == nil && recovered != nil {
-		if !recovered.RootNode().HasError() {
-			tree.Release()
-			return recovered, nil
-		}
-		recovered.Release()
+	if recovered, altErr := alt.Parse(src); keep(recovered) != nil && altErr == nil && !recovered.RootNode().HasError() {
+		return handOver(recovered), routeCandidate, nil
 	}
-	forest := ts.NewParser(lang)
-	if recovered, ok := forest.ParseForestExperimental(src); ok && recovered != nil {
-		if !recovered.RootNode().HasError() {
-			tree.Release()
-			return recovered, nil
-		}
-		recovered.Release()
+	if recovered, ok := ts.NewParser(lang).ParseForestExperimental(src); keep(recovered) != nil && ok && !recovered.RootNode().HasError() {
+		return handOver(recovered), routeForest, nil
 	}
-	return tree, nil
+	return handOver(tree), routeProduction, nil
 }
