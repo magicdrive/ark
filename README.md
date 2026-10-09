@@ -802,7 +802,7 @@ downloads modules or providers, and never reads `.terraform/`.
 
 ### 🤖 LLM-Optimized Workflow
 
-Ark provides **20 MCP tools** covering the full code-intelligence stack:
+Ark provides **21 MCP tools** covering the full code-intelligence stack:
 
 | Tool | Description |
 |------|-------------|
@@ -817,6 +817,7 @@ Ark provides **20 MCP tools** covering the full code-intelligence stack:
 | `get_project_stats` | Language breakdown, file counts |
 | `get_files_arklite` | Multiple files in compressed format |
 | `get_context` | Token-budgeted, relevance-ranked context for a symbol (target always included) |
+| `search_context` | Find symbols from a partial identifier (`auth`, `getUser`): up to `limit` ranked candidates (default 5), context for the first `contextLimit` (default 1), all within one response-wide token budget. A rank is name similarity, not correctness |
 | `find_references` | Find all usages of a symbol across the repo |
 | `get_relations` | Explore import/dependency relations between files |
 | `get_callers` | Find symbols that call a given symbol |
@@ -829,7 +830,7 @@ Ark provides **20 MCP tools** covering the full code-intelligence stack:
 
 #### Reading Ark's answers: diagnostics, unresolved and completeness
 
-- **A diagnostic** says Ark could not analyze part of a file (`parse_error`: the parser rejected a region, which is then not analyzed as written — the source itself may be valid, since grammars reject some valid code) or a whole file (unreadable, or a provider failure: the file is skipped). It is about Ark's analysis, not a compiler verdict. `get_diagnostics` lists them; graph tools (`get_callers`, `get_callees`, `get_relations`, `get_context`, `analyze_change_impact`) add an index-diagnostics summary (`indexDiagnostics`; `index_diagnostics` in the impact JSON; a closing line in text output) **only when the index has diagnostics** — then a "no callers" answer may miss code in those files.
+- **A diagnostic** says Ark could not analyze part of a file (`parse_error`: the parser rejected a region, which is then not analyzed as written — the source itself may be valid, since grammars reject some valid code) or a whole file (unreadable, or a provider failure: the file is skipped). It is about Ark's analysis, not a compiler verdict. `get_diagnostics` lists them; graph tools (`get_callers`, `get_callees`, `get_relations`, `get_context`, `search_context`, `analyze_change_impact`) add an index-diagnostics summary (`indexDiagnostics`; `index_diagnostics` in the impact JSON; a closing line in text output) **only when the index has diagnostics** — then a "no callers" answer may miss code in those files.
 - **An unresolved reference** is different: Ark parsed it but knows no target (an external, built-in, undeclared or computed name). It is counted by `unresolved` / `outsideRepository` on the graph tools, never as a diagnostic.
 - **`unattributed: 0`** means no reference Ark *observed* may be a missing edge. It cannot account for what Ark does not observe: **no diagnostics and `unresolved: 0` still do not prove that every dependency is known** — files of formats no provider handles (see `get_language_support`; e.g. Terraform `.tf.json`) are not examined, and a provider may not observe every construct.
 - A tool error (`isError`) means the tool itself failed; it is never a diagnostic.

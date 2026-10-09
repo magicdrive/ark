@@ -4,6 +4,7 @@ Use Ark MCP as the primary tool for repository exploration and code understandin
 
 - **Repository structure and architecture:** use `get_repository_map`. Use `get_directory_tree` only when the directory layout itself is what you need.
 - **Locating a definition:** use `find_symbol`. Use `get_symbols` to see the structure of one file.
+- **Finding a symbol whose exact name you do not know:** use `search_context` with a partial identifier (e.g. "auth", "getUser", "user_profile"). It returns up to 5 ranked candidates and, by default, context for rank 1 only. Check the other candidates: a rank is name similarity, not proof that it is the symbol you need. For another candidate, raise `contextLimit`, or request its context by its qualified name with its path as the file filter.
 - **Understanding, modifying, debugging or reviewing a symbol:** prefer `get_context`. It returns the code you need, ranked and token-budgeted, so you do not have to assemble it by hand from several files.
 - **Exact source of one symbol:** use `get_symbol`.
 - **Dependencies and call relationships:** use `get_relations`, `get_callers` (who calls it) and `get_callees` (what it calls).

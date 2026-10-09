@@ -775,7 +775,7 @@ Ark は **純粋な静的解析**のみを行い、`terraform` を実行せず�
 
 ### 🤖 LLM-Optimized Workflow
 
-Ark は **20 種類の MCP ツール**でコードインテリジェンススタック全体をカバーします:
+Ark は **21 種類の MCP ツール**でコードインテリジェンススタック全体をカバーします:
 
 | ツール | 説明 |
 |--------|------|
@@ -790,6 +790,7 @@ Ark は **20 種類の MCP ツール**でコードインテリジェンススタ
 | `get_project_stats` | 言語別ファイル数などの統計 |
 | `get_files_arklite` | 複数ファイルを圧縮形式で取得 |
 | `get_context` | シンボルに対してトークン予算付きのコンテキストを取得（ターゲットは常に含まれる） |
+| `search_context` | 名前の一部（`auth`、`getUser`）からシンボルを発見。順位付き候補を最大 `limit` 件（既定 5）返し、上位 `contextLimit` 件（既定 1）にコンテキストを付ける。すべて応答全体のトークン予算内。順位は名前の近さであり正しさの保証ではない |
 | `find_references` | シンボルの全参照箇所を検索 |
 | `get_relations` | ファイル間のインポート・依存関係を探索 |
 | `get_callers` | あるシンボルを呼び出しているシンボルを検索 |
@@ -802,7 +803,7 @@ Ark は **20 種類の MCP ツール**でコードインテリジェンススタ
 
 #### Ark の回答の読み方：診断・unresolved・完全性
 
-- **診断（diagnostic）** は、Ark がファイルの一部（`parse_error`：parser が受理しなかった範囲で、書かれたとおりには解析されない。grammar が正しいコードを受理しないこともあるため、ソース自体は正しい可能性がある）またはファイル全体（読み込み不可・provider の失敗：ファイルはスキップ）を解析できなかったことを示します。Ark の解析についての情報であり、コンパイラの判定ではありません。`get_diagnostics` で一覧でき、graph 系ツール（`get_callers`、`get_callees`、`get_relations`、`get_context`、`analyze_change_impact`）は **index に診断があるときだけ** 診断の要約（`indexDiagnostics`。impact の JSON では `index_diagnostics`、テキスト出力では末尾の 1 行）を付けます。そのとき「caller なし」という答えは、それらのファイル内のコードを取りこぼしている可能性があります。
+- **診断（diagnostic）** は、Ark がファイルの一部（`parse_error`：parser が受理しなかった範囲で、書かれたとおりには解析されない。grammar が正しいコードを受理しないこともあるため、ソース自体は正しい可能性がある）またはファイル全体（読み込み不可・provider の失敗：ファイルはスキップ）を解析できなかったことを示します。Ark の解析についての情報であり、コンパイラの判定ではありません。`get_diagnostics` で一覧でき、graph 系ツール（`get_callers`、`get_callees`、`get_relations`、`get_context`、`search_context`、`analyze_change_impact`）は **index に診断があるときだけ** 診断の要約（`indexDiagnostics`。impact の JSON では `index_diagnostics`、テキスト出力では末尾の 1 行）を付けます。そのとき「caller なし」という答えは、それらのファイル内のコードを取りこぼしている可能性があります。
 - **unresolved な参照** は別物です。Ark は構文を読めたが参照先を知らない（外部・組み込み・未宣言・実行時計算の名前）ことを示し、graph 系ツールの `unresolved` / `outsideRepository` で数えられます。診断にはなりません。
 - **`unattributed: 0`** は「Ark が *観測した* 参照に、欠けている edge の可能性があるものはない」という意味です。観測していないものは数えられません。**診断 0 件かつ `unresolved: 0` でも、すべての依存関係を把握したことにはなりません** — どの provider も扱わない形式のファイル（`get_language_support` を参照。例：Terraform の `.tf.json`）は調べられず、provider がすべての構文を観測するとも限りません。
 - ツールエラー（`isError`）はツール自体の失敗で、診断ではありません。

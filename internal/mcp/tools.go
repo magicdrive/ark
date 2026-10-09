@@ -12,6 +12,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/commandline"
+	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages"
@@ -40,6 +41,10 @@ type ToolsHandler struct {
 	// index_cache.go); created on first use.
 	indexOnce sync.Once
 	indexes   *indexCache
+
+	// buildContext replaces the Context Engine in search_context tests; nil
+	// means the engine (see contextBuild).
+	buildContext func(idx *index.RepositoryIndex, root string, req arkctx.Request) (*arkctx.Result, error)
 }
 
 // NewToolsHandler creates a new tools handler.
@@ -460,6 +465,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 	tools = append(tools, CallersToolDefinitions()...)
 	tools = append(tools, RepomapToolDefinitions()...)
 	tools = append(tools, ContextToolDefinitions()...)
+	tools = append(tools, SearchContextToolDefinitions()...)
 	tools = append(tools, ImpactToolDefinitions()...)
 	tools = append(tools, SearchToolDefinitions()...)
 	tools = append(tools, LanguageSupportToolDefinitions()...)
@@ -502,6 +508,8 @@ func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (
 		return h.getRepositoryMap(arguments)
 	case "get_context":
 		return h.getContext(arguments)
+	case "search_context":
+		return h.searchContext(arguments)
 	case "analyze_change_impact":
 		return h.analyzeChangeImpact(arguments)
 	case "search_code":

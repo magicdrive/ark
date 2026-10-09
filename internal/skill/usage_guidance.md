@@ -9,6 +9,7 @@ Ark answers one question: what code do I need to read to understand or safely mo
 | How the repository is organised (modules, key symbols, dependencies) | `get_repository_map` |
 | What the directory layout looks like | `get_directory_tree` |
 | Where something is defined | `find_symbol` |
+| A symbol whose exact name you do not know (partial identifier) | `search_context` |
 | What one file contains | `get_symbols` |
 | Understand, change, debug or review a symbol | `get_context` |
 | The exact implementation of one symbol | `get_symbol` |
@@ -26,7 +27,7 @@ Ark answers one question: what code do I need to read to understand or safely mo
 - **Orientation:** `get_repository_map` suits an unfamiliar codebase or an architecture question; skip it when the symbol or file is already known. Use `get_directory_tree` when the directory layout itself is what you need.
 - **Relationships:** ask the graph tools ("who calls this?", "what depends on this?") instead of grepping or reading files to infer them.
 - **Impact:** use `analyze_change_impact` when a change may reach beyond the code you are editing, such as a public API, a shared type, an interface or a widely used function. Skip it for small, local changes. It labels heuristic findings as possible dependents: treat those as leads to verify, not as guaranteed impact.
-- **Search:** use `find_symbol` or `search_code` when you are looking for code constructs; use `search_in_files` for literal text, strings, comments and regular expressions.
+- **Search:** use `search_context` when you know only part of a name ("auth", "getUser"): it ranks candidates by how closely their names match, returns up to `limit` of them (default 5) and attaches context to the first `contextLimit` (default 1), all within one budget — one call can replace `find_symbol` followed by `get_context`. Candidates are ranked by name, not by what the code refers to: read the whole list before relying on rank 1. When another candidate is the one you need, raise `contextLimit` to its rank or call `get_context` with its qualified name and its path as `filePattern`. Use `find_symbol` for a regular expression over declarations and `search_code` for structural criteria; use `search_in_files` for literal text, strings, comments and regular expressions.
 - **Whole files:** prefer the tools above when they answer the question efficiently; read a file with `get_file_content` when whole-file context is genuinely useful.
 
 ### Ambiguity and uncertainty
@@ -40,6 +41,6 @@ Ark answers one question: what code do I need to read to understand or safely mo
 
 These illustrate how tools combine; they are not sequences to follow.
 
-- **Understand an unfamiliar subsystem:** `get_repository_map`, then `find_symbol` or `search_code` for its entry points, then `get_context` on the central symbol, then `get_relations` if how it connects matters.
+- **Understand an unfamiliar subsystem:** `get_repository_map`, then `search_context`, `find_symbol` or `search_code` for its entry points, then `get_context` on the central symbol, then `get_relations` if how it connects matters.
 - **Modify a known symbol:** `get_context` (after `find_symbol` if you need its location), then `analyze_change_impact` if downstream effects matter, and `get_symbol` if you need the exact current implementation to edit it.
 - **Debug a call path:** `find_symbol`, then `get_callers` / `get_callees` along the path, then `get_context` for the symbols that look relevant.

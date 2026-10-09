@@ -27,7 +27,7 @@ const mcpToolPrefix = "mcp__ark__"
 // first group; the rest are supporting tools skills have always granted.
 var skillTools = []string{
 	"get_repository_map", "get_directory_tree", "find_symbol", "get_symbols",
-	"get_context", "get_symbol", "get_relations", "get_callers", "get_callees",
+	"get_context", "search_context", "get_symbol", "get_relations", "get_callers", "get_callees",
 	"analyze_change_impact", "search_code", "search_in_files", "get_file_content",
 	"list_files", "get_file_info", "get_project_stats", "get_files_arklite",
 	"get_diagnostics",

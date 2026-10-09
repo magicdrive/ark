@@ -93,6 +93,9 @@ var pathTools = []pathTool{
 		return map[string]interface{}{"path": d, "kind": "function"}
 	}},
 	{"get_diagnostics", func(_, d string) map[string]interface{} { return map[string]interface{}{"path": d} }},
+	{"search_context", func(_, d string) map[string]interface{} {
+		return map[string]interface{}{"query": "helper", "path": d}
+	}},
 }
 
 // Every tool that is not listed in pathTools must take no path.

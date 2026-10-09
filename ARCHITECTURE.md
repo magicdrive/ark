@@ -324,6 +324,26 @@ Tests: `context/contract_test.go`, `TestContext_CandidateCallerIsCompletenessOnl
 `TestContext_AmbiguousNoFabrication` (PHP), `internal/contextquality` scenarios.
 Danger: filling spare budget with candidates or name matches.
 
+**Search relevance is not resolution** (`search_context`). It ranks indexed
+symbols by how their names match a partial identifier
+(`search/symbols.go`, `MatchSymbols`: match type, then a stable key — never
+input order) and attaches each top candidate's context, built by the engine
+from that candidate's `SymbolID`. A rank never selects a target, never
+enters target lookup, the resolver or confidence, and same-named candidates
+stay separate — including two declarations behind one shared `SymbolID`,
+which get no context since the index cannot attribute it. `contextLimit`
+(default 1) only chooses how many top candidates get context; the others
+keep their rank, ID and location (`not_requested`, `context_limit`).
+`maxTokens` bounds the whole serialized response: metadata first, then
+contexts in rank order, trimmed or marked `omitted_budget`.
+Authority: `mcp/tools_search_context.go` (header comment). Tests:
+`TestSearchContext_SameNameNeverMerged`, `TestSearchContext_BudgetIsNeverExceeded`,
+`TestSearchContext_MatchesGetContext`, `TestMatchSymbols_DeterministicUnderInputOrder`,
+`TestSearchContext_ContextLimitSemantics`, `TestSearchContext_SharedSymbolIDIsNotAttributed`.
+Danger: resolving the query text to "the best match" and building context
+for it, treating context on rank 1 as a verdict, or passing the
+per-response budget to each candidate.
+
 **Impact traverses the graph, never names.** `analyze_change_impact` takes
 direct dependents and dependencies from the target's edges and transitive
 dependents from `graph.TransitiveCallerHops`. In both traversal directions the
