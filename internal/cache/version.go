@@ -30,7 +30,9 @@ package cache
 //
 // SymbolIDs are not cached: the index derives them from the cached drafts
 // (index.NewFileIndex), so a change of identity scheme (declaration ordinals)
-// needs no bump — an entry can never carry an old ID.
+// needs no bump — an entry can never carry an old ID — and a build that finds
+// two declarations sharing an ID (index/identity.go) fails the same way warm
+// as cold.
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

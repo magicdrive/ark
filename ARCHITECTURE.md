@@ -208,6 +208,12 @@ improvement and is not.
    file that carries the provider's parent name and encloses the symbol, or
    empty (no such declaration, several, or a cycle); `ParentQualified` keeps
    the provider's statement for the resolver. Tests: `TestParentIdentity_*`, `FuzzParentIdentity`.
+   IDs stay 64 bits (stable, short, already exposed); should two distinct
+   declarations ever share one, the index is not built
+   (`index.IdentityCollisionError`, diagnostics `symbol_id_collision`) — no
+   map, edge, parent or context is ever derived from a merged ID, and keeping
+   one of the two would change what names resolve to. Authority:
+   `index/identity.go`. Tests: `TestIdentityCollision_*`, `FuzzIdentityCollision`.
    Danger: keying anything by (file, qualified name) alone — it merges
    namesakes, mixing their sources, callees and callers; deriving an ID from
    a name instead of finding the declaration.

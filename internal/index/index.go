@@ -133,6 +133,11 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 		return nil, ctx.Err()
 	}
 
+	// Distinct declarations sharing a SymbolID stop the build before anything
+	// is derived from the merged ID (identity.go).
+	if err := b.identityError(); err != nil {
+		return nil, err
+	}
 	b.resolve()
 	b.fingerprint = digest.sum()
 	return b.freeze(), nil

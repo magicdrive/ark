@@ -42,6 +42,10 @@ type ToolsHandler struct {
 	indexOnce sync.Once
 	indexes   *indexCache
 
+	// newIndex replaces index construction in tests (e.g. to force SymbolID
+	// collisions through index.NewWithIDs); nil means index.NewWithCache.
+	newIndex func(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*index.RepositoryIndex, error)
+
 	// buildContext replaces the Context Engine in search_context tests; nil
 	// means the engine (see contextBuild).
 	buildContext func(idx *index.RepositoryIndex, root string, req arkctx.Request) (*arkctx.Result, error)
@@ -194,8 +198,12 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 		if store == nil {
 			store = cache.NopStore{}
 		}
+		build := index.NewWithCache
+		if h.newIndex != nil {
+			build = h.newIndex
+		}
 		h.indexes = newIndexCache(providers, func(ctx context.Context, root string) (*index.RepositoryIndex, error) {
-			return index.NewWithCache(ctx, root, providers, store)
+			return build(ctx, root, providers, store)
 		})
 	})
 	return h.indexes.get(ctx, canonical)

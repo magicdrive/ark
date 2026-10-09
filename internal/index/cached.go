@@ -6,6 +6,7 @@ import (
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/symbol"
 )
 
 // ArkVersion is embedded in cache keys so that upgrading ark invalidates stale
@@ -18,11 +19,16 @@ var ArkVersion = "0.1.0"
 // On any cache read error the file is re-extracted (cache-miss semantics).
 // Panic is never used for cache failures.
 func NewWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*RepositoryIndex, error) {
+	return newWithCache(ctx, root, providers, store, symbol.NewDeclarationID)
+}
+
+func newWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store, ids IDFunc) (*RepositoryIndex, error) {
 	if err := checkRoot(root); err != nil {
 		return nil, err
 	}
 
 	b := newBuilder()
+	b.ids = ids
 	digest := newSourceDigest(providers)
 
 	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
@@ -87,6 +93,11 @@ func NewWithCache(ctx context.Context, root string, providers []language.Provide
 		return nil, ctx.Err()
 	}
 
+	// Distinct declarations sharing a SymbolID stop the build before anything
+	// is derived from the merged ID (identity.go).
+	if err := b.identityError(); err != nil {
+		return nil, err
+	}
 	b.resolve()
 	b.fingerprint = digest.sum()
 	return b.freeze(), nil

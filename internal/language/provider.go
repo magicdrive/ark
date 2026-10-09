@@ -36,6 +36,10 @@ type Diagnostic struct {
 const (
 	DiagReadError       = "read_error"
 	DiagExtractionError = "extraction_error"
+
+	// DiagSymbolIDCollision: two distinct declarations share a SymbolID.
+	// The index is then not built at all (index.IdentityCollisionError).
+	DiagSymbolIDCollision = "symbol_id_collision"
 )
 
 // SymbolDraft is the raw extraction result from a language provider before

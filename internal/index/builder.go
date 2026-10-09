@@ -49,6 +49,12 @@ type builder struct {
 	// containers caches (file, qualified) → distinct symbol IDs for container
 	// identification; built lazily during resolve().
 	containers map[source.FileID]map[string][]symbol.SymbolID
+
+	// ids assigns SymbolIDs (symbol.NewDeclarationID unless a test injects
+	// collisions); collided holds the IDs found on distinct declarations
+	// (identity.go).
+	ids      IDFunc
+	collided map[symbol.SymbolID]bool
 }
 
 func newBuilder() *builder {
@@ -65,6 +71,7 @@ func newBuilder() *builder {
 		callsTo:               make(map[symbol.SymbolID][]GraphEdge),
 		fileSet:               make(map[source.FileID]bool),
 		stats:                 IndexStats{Languages: make(map[string]int)},
+		ids:                   symbol.NewDeclarationID,
 	}
 }
 
@@ -82,9 +89,9 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 		b.stats.Languages[lang]++
 	}
 
-	fi := NewFileIndex(lang, fileID, ex)
+	fi := newFileIndex(lang, fileID, ex, b.ids)
 	for _, sym := range fi.Symbols {
-		b.symbolsByID[sym.ID] = sym
+		b.observeID(sym)
 		b.symbolsByFile[fileID] = append(b.symbolsByFile[fileID], sym)
 		b.symbolsByName[sym.Name] = append(b.symbolsByName[sym.Name], sym)
 		if sym.Qualified != "" {
@@ -103,6 +110,10 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 // resolver (repository indexing and MCP relations), so symbol identity,
 // containment and reference evidence cannot diverge between surfaces.
 func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) resolver.FileIndex {
+	return newFileIndex(lang, fileID, ex, symbol.NewDeclarationID)
+}
+
+func newFileIndex(lang string, fileID source.FileID, ex language.Extraction, ids IDFunc) resolver.FileIndex {
 	// Build symbols. Each declaration is its own symbol: namesakes in one file
 	// (same kind and qualified name) get distinct ordinal IDs.
 	drafts := uniqueDeclarations(ex.Symbols)
@@ -110,7 +121,7 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 	var fileSymbols []symbol.Symbol
 	for i, sd := range drafts {
 		sym := symbol.Symbol{
-			ID:        symbol.NewDeclarationID(lang, string(fileID), sd.Kind, sd.Qualified, ordinals[i]),
+			ID:        ids(lang, string(fileID), sd.Kind, sd.Qualified, ordinals[i]),
 			Name:      sd.Name,
 			Qualified: sd.Qualified,
 			Kind:      sd.Kind,
