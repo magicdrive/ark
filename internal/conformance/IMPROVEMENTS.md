@@ -15,7 +15,7 @@ Rules for this file:
   `RunContract` as a failing assertion and delete its entry here. Git keeps
   the history.
 - Durable design decisions and invariants belong in `ARCHITECTURE.md`;
-  per-language user-facing limits in `README.md` ("Language Support").
+  per-language user-facing limits in `docs/language-support.md`.
 - Closing a gap changes behavior: it may change golden snapshots and must not
   weaken any invariant in `ARCHITECTURE.md` (no false Strong/Exact, no
   fabricated edge). Bump the provider's `CacheVersion`.

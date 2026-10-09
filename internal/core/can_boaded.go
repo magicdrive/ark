@@ -12,6 +12,10 @@ import (
 func CanBoaded(opt *commandline.Option, path string) bool {
 	absPath, _ := filepath.Abs(path)
 
+	if opt.AccessExclude != nil && opt.AccessExclude(absPath) {
+		return false
+	}
+
 	if opt.GitIgnoreRule != nil {
 		if opt.GitIgnoreRule.MatchesPath(common.TrimDotSlash(path)) {
 			return false
@@ -83,6 +87,11 @@ func extensionListed(list []string, ext string) bool {
 // applied to a directory they would prune every directory whose own name is
 // not, say, a ".php" file.
 func CanEnterDir(opt *commandline.Option, dir string) bool {
+	if opt.AccessExclude != nil {
+		if absDir, err := filepath.Abs(dir); err == nil && opt.AccessExclude(absDir) {
+			return false
+		}
+	}
 	if opt.GitIgnoreRule != nil && opt.GitIgnoreRule.MatchesPath(common.TrimDotSlash(dir)) {
 		return false
 	}

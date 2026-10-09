@@ -107,7 +107,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 	b.nameSpaces = nameSpaces(providers)
 	digest := newSourceDigest(providers)
 
-	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
+	err := walkSources(ctx, root, providers, nil, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
 		if readErr != nil {
 			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))

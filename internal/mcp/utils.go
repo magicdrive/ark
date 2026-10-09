@@ -29,8 +29,9 @@ func skipMetadata(root, current string, info os.FileInfo) (bool, error) {
 
 // GenerateDirectoryTreeJSON wraps core.GenerateTreeJSONString. ignore is the
 // repository's ignore rule (rooted at the repository root, not the process
-// working directory); nil applies none.
-func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore) (string, error) {
+// working directory); nil applies none. exclude is the .arkignore access
+// policy (Option.AccessExclude); nil excludes nothing.
+func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore, exclude func(string) bool) (string, error) {
 	// Create a temporary option with default values
 	opt := &commandline.Option{
 		WorkingDir:                      ".",
@@ -57,6 +58,7 @@ func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore) (str
 		return "", err
 	}
 	opt.GitIgnoreRule = ignore
+	opt.AccessExclude = exclude
 
 	allowedFileMap := map[string]bool{}
 	jsonStr, _, err := core.GenerateTreeJSONString(path, allowedFileMap, opt)
@@ -99,15 +101,16 @@ type boundedTreeEntry struct {
 // Without limits it is exactly GenerateDirectoryTreeJSON; with them it walks
 // the same entries in the same order under the same filters, stopping at the
 // limits instead of filtering afterwards.
-func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore, limits treeLimits) (string, error) {
+func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore, exclude func(string) bool, limits treeLimits) (string, error) {
 	if limits.none() {
-		return GenerateDirectoryTreeJSON(path, ignore)
+		return GenerateDirectoryTreeJSON(path, ignore, exclude)
 	}
 	opt := &commandline.Option{AllowGitignoreFlagValue: "on", IgnoreDotFileFlagValue: "off"}
 	if err := opt.NormalizeFileFilters(); err != nil {
 		return "", err
 	}
 	opt.GitIgnoreRule = ignore
+	opt.AccessExclude = exclude
 	tree, err := boundedTree(path, "", 0, opt, limits)
 	if err != nil {
 		return "", err

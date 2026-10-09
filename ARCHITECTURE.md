@@ -15,6 +15,11 @@ authority wins and this file is the bug.
 Ark's priority order is **trustworthy context before useful context**: an
 honest "unknown" is a correct answer; a confident wrong answer is a defect.
 
+This file is for contributors. Users' documentation — what the confidence
+levels mean for an answer, per-language limits, operations — is in `docs/`
+(`docs/resolution-model.md`, `docs/language-support.md`,
+`docs/operations.md`).
+
 ## 1. Pipeline and responsibility boundaries
 
 ```
@@ -29,7 +34,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
-| MCP (`internal/mcp`) | Target lookup, index reuse, path containment, serialization. | Pick one of several targets; reuse an index it has not proven current. |
+| MCP (`internal/mcp`) | Target lookup, index reuse, path containment, serialization, output secret masking. | Pick one of several targets; reuse an index it has not proven current; return a result that has not passed the output sanitizer. |
 
 Composition: `internal/languages` is the one place that wires providers into
 the registry (adding a language = one spec). `internal/testfiles` is the one
@@ -340,6 +345,67 @@ fails on a missing or wrong-version compiler, a skip or a mismatch — `make
 ts-oracle` runs it locally). Remaining gaps:
 `internal/conformance/IMPROVEMENTS.md`, Q8.
 
+**Secrets are masked at the output boundary, and only there.** Every tool
+result, resource and error leaves through one sanitizer
+(`mcp/sanitize.go`) that applies the repository-dump rules
+(`secrets/mod.go`) to repository text. Providers, the index, the resolver,
+the graph and the cache see the source as written, so masking never changes
+a symbol, an ID, a resolution or an edge. JSON results are rewritten token by
+token: keys, numbers, structure and order are kept; identifier values (paths,
+names, IDs, enumerations) are never masked, because clients pass them back;
+a result with nothing to mask is returned byte for byte; unknown keys and
+unknown tools are masked. Masking is on unless the server is started with
+`--mask-secrets off` (with a warning); a request cannot turn it off
+(`mcp/masking.go`, `TestFileContent_SecurityOverridesStillIgnored`).
+Tests: `TestSanitize_*`,
+`TestMCPSecretMasking_NoDetectableSecretLeaves`,
+`TestMCPSecretMasking_IdentifiersAreNotMasked`,
+`TestMCPSecretMasking_HTTPConcurrent`, `TestMCPSecretMasking_Settings`.
+Danger: masking during extraction "to be safe" — it changes what names
+resolve to and what the cache holds; or a string replace over the
+serialized response — it can break JSON and IDs.
+
+**`.arkignore` decides what the MCP server may read, where files are
+reached.** One policy (`mcp/access_policy.go`) — every `.arkignore` under the
+root, read with the dump's matcher (`libgitignore`) — is applied at the path
+gate (`resolveToolPath`, also for a symlink's target), in every file walk
+(`core.CanBoaded` / `CanEnterDir` through `Option.AccessExclude`, and the
+symbol and reference searches) and in the index walk
+(`index.NewWithCacheExcluding`): an excluded file is never read, so nothing
+derived from it exists to leak. The index's freshness fingerprint uses the
+same filtered walk, so a rule change that alters the file set rebuilds it. It
+is independent of masking. Tests: `TestMCPArkignore_ExcludedFilesAreUnreachable`,
+`TestMCPArkignore_FollowsRuleChanges`, `TestMCPArkignore_DumpExcludesTheSameFiles`.
+Danger: filtering excluded files out of responses — callers, counts,
+candidates, search hits and context would still be derived from them.
+
+**The rules are read for every request, once, and never trusted from a
+cache.** Each request (`ToolsHandler.forRequest`) has one
+`libgitignore.IgnoreReader`, which reads every rule file at most once: the
+path gate reads only the rule files that can apply to the named path
+(`IgnoreReader.For`: the root's, those of the directories above it, its own),
+walks read the whole repository's (`All`), and both see the same version of
+each file. Compiled rules are reused across requests only under the
+fingerprint (paths and SHA-256 of the contents) of the bytes they were
+compiled from. Matching is indexed by pattern directory
+(`GitIgnore.MatchesRel`), deciding exactly as the reference loop
+(`MatchesPathHow`). Tests: `TestAccessPolicyCache_*`,
+`TestIgnoreReader_ForDecidesAsAll`, `TestIgnoreReader_OneVersionPerReader`,
+`TestIgnoreFiles_CompileEqualsGenerate`, `TestMatchesRel_EqualsMatchesPath`.
+Danger: skipping the per-request read (a timer, mtimes, a watcher) — a rule
+change would not apply to the next request; or compiling from a second read
+— a fingerprint would name another version's rule.
+
+**Symlinks leading outside the root are not followed unless the operator
+allows it.** By default the gate refuses a path that resolves outside the
+root and walks skip a symlink whose target lies outside it (so it is not
+indexed or cached). `mcp-server --allow-external-symlinks on`
+(`Option.AllowExternalSymlinks`; no request can set it) admits paths inside
+the root that resolve outside, with `.arkignore` applied to the path in the
+repository. Tests: `TestMCPExternalSymlinks_*`. Danger: admitting a path
+because its target is a symlink target — only paths inside the root, reached
+through a link in the repository, may lead outside.
+
 ## 4. RepositoryIndex and index reuse
 
 - **`RepositoryIndex` is immutable after `freeze`.** Accessors return copies;
@@ -482,7 +548,7 @@ JavaScript emits no module bindings — or any other language pair);
 `ReferenceKind × SymbolKind` compatibility in name-based stages; trait
 adaptations (`insteadof`/`as`) beyond stopping; reverse typed-relation context
 (`extended_by`, ...); relation-aware ranking weights; deeper context traversal.
-Per-language limits: `README.md`, "Language Support". Provider conformance
+Per-language limits: `docs/language-support.md`. Provider conformance
 gaps: `internal/conformance/IMPROVEMENTS.md`.
 
 ## 8. Verifying a change

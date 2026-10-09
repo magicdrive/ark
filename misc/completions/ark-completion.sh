@@ -27,7 +27,7 @@ _ark_gen_opts="--output-filename -o --scan-buffer -b --output-format -f --mask-s
 _ark_mcp_flags="--skip-non-utf8 -s --delete-comment -D --no-cache --help -h --version -v"
 _ark_mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
-    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E"
+    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E --allow-external-symlinks"
 _ark_setup_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 _ark_mcp_init_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 _ark_syntax_opts="--lang --format -h --help"
@@ -107,7 +107,7 @@ _ark_bash() {
       case $prev in
         --type|-t) _ark_offer "stdio http"; return 0 ;;
         --http-port|-p) _ark_offer "8008 8522 8080 9000"; return 0 ;;
-        --mask-secrets|-m|--allow-gitignore|-a|--ignore-dotfile|-d) _ark_offer "on off"; return 0 ;;
+        --mask-secrets|-m|--allow-gitignore|-a|--ignore-dotfile|-d|--allow-external-symlinks) _ark_offer "on off"; return 0 ;;
         --scan-buffer|-b) _ark_offer "1M 5M 10M 100K"; return 0 ;;
         --include-ext|-i|--exclude-ext|-e) _ark_offer "${_ark_exts}"; return 0 ;;
         --root|-r) _filedir -d; return 0 ;;
@@ -217,6 +217,7 @@ _ark_zsh() {
     '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
     '--exclude-dir[-E]:dirname:_files -/'
     '--skip-non-utf8[-s]' '--delete-comment[-D]'
+    '--allow-external-symlinks[Read through symlinks leading outside the repository]:on/off:(on off)'
     '--no-cache[Disable persistent index cache]'
     '--help[-h]' '--version[-v]'
   )

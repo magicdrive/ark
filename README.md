@@ -1,888 +1,343 @@
-
 # Ark
 
-> Yet another alternate \[directory | repository\] text generator tool — with code intelligence MCP tools
+**Code intelligence engine for AI coding agents.**
 
-**ark** recursively scans a directory and produces a clean, human‑readable dump of the tree and file contents. It also provides **code intelligence** features via Tree-sitter for symbol extraction and MCP (Model Context Protocol) server support. Perfect for
+[日本語](README_ja.md) · [Getting started](docs/getting-started.md) ·
+[MCP tools](docs/mcp-tools.md) · [Resolution model](docs/resolution-model.md) ·
+[Architecture](ARCHITECTURE.md)
 
-* 📚 sharing codebases with LLMs
-* 🧪 static‑analysis pipelines
-* 🗂️ snapshotting source trees
-* 🔍 **code intelligence** — extract symbols, navigate definitions
-* 🛰️ **MCP server** — serve codebase context to AI agents
+Ark parses a repository, extracts its declarations and references, resolves
+what each reference points to, and serves the resulting graph to coding
+agents over the [Model Context Protocol](https://modelcontextprotocol.io).
+An agent can ask who calls a function, what a change may affect, or which
+code it needs to read before editing — and get an answer that states how
+certain it is.
 
-It supports **plaintext**, **markdown**, **XML**, and **arklite** outputs, full UTF‑8 handling (with optional skip), extensive filtering, and **Tree-sitter powered** code analysis.
+Ark is a single static binary. It analyzes Go, TypeScript, TSX, PHP,
+Terraform, JavaScript and Python without running any code from the
+repository.
 
----
+## Why Ark
 
-## 🚀 Quick Start
+An agent working in a large repository usually navigates by text search and
+by reading whole files. That has costs that grow with the repository:
 
-### 1. Install
+- **Context is spent on irrelevant code.** Finding one function means reading
+  the files around every match.
+- **Names are ambiguous.** `Save` may be declared in five packages; a text
+  match cannot tell which one a call reaches.
+- **Relationships are guessed.** A function with the same name in another
+  package, or another language, looks like a caller.
+- **Unknowns look like answers.** "No other callers found" may mean there are
+  none, or that the search could not see them.
 
-Using Homebrew:
+Ark addresses these with structure and evidence:
+
+| Problem | What Ark provides |
+|---|---|
+| Too much text | Declarations, call relationships and token-budgeted context for one symbol, instead of whole files |
+| Ambiguous names | Every declaration has its own `symbolId`; ambiguous queries return the list of declarations, never a silent pick |
+| Guessed relationships | References resolved by each language's scoping rules: imports, packages, receivers, namespaces. Names never match across languages |
+| Hidden unknowns | Every answer carries a confidence level and counts what Ark saw but could not resolve |
+
+## How it works
+
+```text
+repository files
+      │
+      ▼
+language providers   Tree-sitter parsing, one file at a time:
+      │              declarations, references, imports, language evidence
+      ▼
+index builder        symbols with stable IDs, containment
+      │
+      ▼
+resolver             evidence → candidates + confidence (exact / strong / candidate)
+      │
+      ▼
+graph                edges only from a unique exact or strong resolution;
+      │              everything else counted, never dropped
+      ▼
+context · impact · repository map · search
+      │
+      ▼
+MCP server  ──────►  coding agent
+```
+
+The index is built on the first request and reused while the source files
+are unchanged; extraction results are cached on disk between sessions.
+Details: [ARCHITECTURE.md](ARCHITECTURE.md),
+[Operations](docs/operations.md).
+
+## Quick start
+
+**1. Install**
 
 ```bash
 brew install magicdrive/tap/ark
 ```
 
-Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark/releases).
+Or download a binary from [Releases](https://github.com/magicdrive/ark/releases),
+or run `go install github.com/magicdrive/ark@main` (not `@latest`, which
+resolves to the legacy v1 line — see
+[Getting started](docs/getting-started.md#go-toolchain)).
 
-With the Go toolchain, install from `main`:
-
-```bash
-go install github.com/magicdrive/ark@main
-```
-
-> `go install github.com/magicdrive/ark@latest` does **not** install the current release: the
-> module path carries no major-version suffix, so the Go module proxy resolves `@latest` to the
-> legacy v1 line, and `@v5.x` tags are not installable with `go install`. A binary installed from
-> `@main` reports a pseudo-version (`v0.0.0-<date>-<commit>`) in `ark --version`.
-
----
-
-### 2. Generate a codebase dump
+**2. Connect your agent** — in the repository root:
 
 ```bash
-ark <dirname>                # creates ark-output.txt in the cwd
+ark setup claude          # Claude Code
+ark setup cursor          # Cursor
+ark setup codex           # Codex
+ark setup cline           # Cline CLI
+ark setup copilot-vscode  # GitHub Copilot in VS Code
+ark setup copilot-cli     # GitHub Copilot CLI
 ```
 
----
+`setup` adds Ark's entry to the client's MCP configuration and leaves every
+other entry untouched. Restart the client and approve the server.
 
-### 3. Set up Ark for your coding agent
-
-Choose your coding agent and run `ark setup` once in your project root:
+**3. Tell the agent how to use it** (optional, recommended):
 
 ```bash
-cd /your/project
-
-ark setup claude   # Claude Code
-# or
-ark setup cursor   # Cursor
-# or
-ark setup codex    # Codex
-# or
-ark setup cline    # Cline CLI
-# or
-ark setup copilot-vscode  # GitHub Copilot in VS Code, Chat / Agent mode (this repository)
-# or
-ark setup copilot-cli  # GitHub Copilot CLI (this repository)
+ark instruction claude >> CLAUDE.md   # or codex / cursor / cline / copilot-vscode / copilot-cli
 ```
 
-This registers the Ark MCP server in the client's configuration. For **Claude Code**
-it additionally generates a project skill / `/<name>` slash command.
+**4. Ask** — "Give me an overview of this repository", "Who calls
+`PlaceOrder`?", "What could break if I change `store.Save`?".
 
-Then **restart (or reload) your client** and approve the Ark MCP server when prompted.
+Full guide, including manual configuration:
+[Getting started](docs/getting-started.md).
 
-#### Agent integration matrix
+## Example: before changing a function
 
-Only clients Ark actually tests a `setup` path for are listed as supported.
+A five-file Go service: `api` calls `orders.Place`, which calls `store.Save`.
+The responses below are Ark's actual output, shortened where marked `…`.
 
-| Client       | Setup command       | Config written                                   |
-|--------------|---------------------|--------------------------------------------------|
-| Claude Code  | `ark setup claude`  | `.mcp.json` (project) / `~/.claude/settings.json` (`--global`) |
-| Cursor       | `ark setup cursor`  | `.cursor/mcp.json` (project) / `~/.cursor/mcp.json` (`--global`) |
-| Codex        | `ark setup codex`   | Codex user config, via the official `codex` CLI  |
-| Cline        | `ark setup cline`   | `~/.cline/mcp.json` (Cline **CLI**; see note below) |
-| GitHub Copilot (VS Code) | `ark setup copilot-vscode` | `.vscode/mcp.json` (project only; see note below) |
-| GitHub Copilot CLI | `ark setup copilot-cli` | `.github/mcp.json` (project only; see note below) |
-
-> **Cline scope:** v4.1 supports the **Cline CLI** configuration at `~/.cline/mcp.json` only.
-> The MCP settings used by Cline's VS Code / Cursor / Windsurf extensions
-> (`.../globalStorage/.../cline_mcp_settings.json`) are **out of scope** — Ark never
-> probes OS/editor-specific storage paths. Configure the IDE extension manually if needed.
-
-> **Copilot (VS Code) scope:** `ark setup copilot-vscode` configures **GitHub Copilot Chat / Agent mode in VS Code**
-> for the current repository only (`.vscode/mcp.json`, top-level `servers`). `--global` is not
-> supported (the VS Code user-level path is not officially documented). It does **not** configure
-> the Copilot CLI, the GitHub-hosted Copilot agent, or GitHub repository settings, and it never
-> touches the portable `.mcp.json` (used by Claude Code). Copilot CLI setup is not currently
-> managed by `ark setup copilot-vscode` — that is what `copilot-cli` below is for.
->
-> The generated `--root` is the **absolute path of your repository** (VS Code's documentation does not
-> guarantee workspace-variable substitution in `.vscode/mcp.json` `args`, nor its meaning in multi-root
-> workspaces), so the file is machine-specific: do not commit/share it as-is, or have each developer
-> run `ark setup copilot-vscode` locally. `command` is `ark` (resolved on `PATH`) unless you pass `--ark-path`.
-
-> **Copilot CLI scope:** `ark setup copilot-cli` (a different client from `copilot-vscode`) configures the
-> **GitHub Copilot CLI** for the current repository only: `.github/mcp.json` (`mcpServers`, a `local`
-> entry). `--global` is not supported (`~/.copilot/mcp-config.json` is not managed), and the
-> `copilot mcp` command is not used. Copilot CLI gives a `.mcp.json` server of the same name
-> **precedence over `.github/mcp.json`**, so if `<root>/.mcp.json` already defines `mcpServers.ark`,
-> setup is **refused** (also with `--force`; nothing is changed). A closer nested `.mcp.json`
-> defining `ark` outranks it too, which Ark cannot detect at setup time; likewise running
-> `ark setup claude` *after* `copilot-cli` creates a root `.mcp.json` `ark` entry that takes
-> precedence. As above, `--root` is an absolute path: each developer should run
-> `ark setup copilot-cli` locally rather than committing the file.
-
-After setup you can use the MCP tools directly — `mcp__ark__find_symbol`,
-`mcp__ark__get_symbols`, etc. — and, with Claude Code, the generated `/<name>` slash command.
-
-> **`--force` means "replace Ark's entry", not "overwrite your config".**
-> `--force` replaces only Ark's own MCP entry. It never deletes unrelated MCP servers,
-> discards unknown fields, repairs malformed config, or overwrites other client settings.
-
-> **Tip:** `setup` connects Ark MCP to your agent; `instruction` tells the agent how to use it effectively. To
-> instruct Claude Code, run `ark instruction claude` and add the output to your project's `CLAUDE.md` (see
-> [`ark instruction`](#-instruction--agent-usage-instructions), which also covers `codex`, `cursor`, `cline`,
-> `copilot-vscode` and `copilot-cli`). A ready-to-use Claude template is at
-> [`misc/CLAUDE.md.example`](misc/CLAUDE.md.example).
-
----
-
-## 🧰 Basic Usage
+**What depends on `store.Save`?** — `analyze_change_impact`
 
 ```text
-ark [OPTIONS] <dirname>
-ark setup <client> [OPTIONS]
-ark mcp-server [OPTIONS]
-ark mcp-init [OPTIONS]
-ark syntax <file> [OPTIONS]
-ark symbol <file> [OPTIONS]
-ark skill [OPTIONS]
+Impact analysis: Save
+
+Target:
+  Save  store/store.go:12
+
+Direct dependents (callers):
+  Place                                    orders/orders.go:10  [exact]
+…
+Tests:
+  TestPlace                                orders/orders_test.go:5  [strong]
+
+Transitive dependents:
+  Handler.Retry                            api/handler.go:18  [exact]
+  Handler.Checkout                         api/handler.go:12  [exact]
+
+Possible dependents (low confidence):
+  (none)
+
+Unattributed references: 0
 ```
 
----
-
-## 📂 Sub‑commands
-
-| Command      | Description                                      |
-|--------------|--------------------------------------------------|
-| `setup <client>` | Configure Ark for a supported coding agent (claude, cursor, codex, cline, copilot-vscode, copilot-cli). |
-| `mcp-server` | Run Ark as an MCP server (stdio or HTTP).        |
-| `mcp-init`   | Add ark MCP config to `.mcp.json`.              |
-| `syntax`     | Parse file and output AST using Tree-sitter.     |
-| `symbol`     | Extract symbols (functions, types, etc.) from file. |
-| `skill`      | Generate Ark MCP skill for Claude Code / OpenAI. |
-| `instruction <target>` | Print agent instructions for using Ark MCP (target: `claude`, `codex`, `cursor`, `cline`, `copilot-vscode`, `copilot-cli`). |
-
----
-
-## ⚙️ General Options
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--help` | `-h` | Show help and exit | – |
-| `--version` | `-v` | Show version | – |
-| `--output-filename <file>` | `-o` | Name of the output file | `ark-output.txt` |
-| `--scan-buffer <size>` | `-b` | Read buffer size (`10M`, `500K`, …) | `10M` |
-| `--output-format <fmt>` | `-f` | `txt`, `md`, `xml`, `arklite` | `txt` |
-| `--mask-secrets <on/off>` | `-m` | Detect & mask secrets | `on` |
-| `--allow-gitignore <on/off>` | `-a` | Obey `.gitignore` rules | `on` |
-| `--additionally-ignorerule <file>` | `-A` | Extra ignore‑rule file | – |
-| `--with-line-number <on/off>` | `-n` | Prepend line numbers | `on` |
-| `--ignore-dotfile <on/off>` | `-d` | Skip dotfiles | `off` |
-| `--pattern-regex <regexp>` | `-x` | Include paths matching regexp | – |
-| `--include-ext <exts>` | `-i` | Include only ext(s) (`go,ts,html`) | – |
-| `--exclude-dir-regex <regexp>` | `-g` | Exclude dirs matching regexp | – |
-| `--exclude-file-regex <regexp>` | `-G` | Exclude files matching regexp | – |
-| `--exclude-ext <exts>` | `-e` | Exclude ext(s) | – |
-| `--exclude-dir <names>` | `-E` | Exclude dirs by name | – |
-| `--compless` | `-c` | Compress result with **arklite** | – |
-| `--skip-non-utf8` | `-s` | Ignore non‑UTF‑8 files | – |
-| `--silent` | `-S` | Suppress logs / progress | – |
-| `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
-
----
-
-## ⚡ setup — One-command Agent Setup
-
-`ark setup <client>` is the fastest way to integrate Ark into any project. It
-registers the Ark MCP server in the target client's configuration (and, for
-Claude Code, generates the project skill / slash command).
-
-```bash
-cd /your/project
-ark setup cursor
-ark setup claude --name my-project   # --name only affects the Claude skill
-ark setup codex --global
-```
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `<client>` | – | Target agent: `claude`, `cursor`, `codex`, `cline`, `copilot-vscode` (GitHub Copilot in VS Code) or `copilot-cli` (GitHub Copilot CLI); both project only | – |
-| `--name <name>` | `-n` | Claude skill/slash-command name (**Claude only**) | directory name |
-| `--ark-path <path>` | `-p` | Path to the `ark` binary (validated at setup time) | auto-detect (`ark` on `PATH`) |
-| `--root <dir>` | `-r` | Repository root to serve | `$PWD` |
-| `--global` | `-g` | Use the client's **user-level** MCP configuration | project scope |
-| `--force` | `-f` | Replace an existing **Ark-owned** entry on conflict | – |
-
-### Safety contract
-
-`ark setup` is designed to be *boring to install*:
-
-- **Idempotent** — running it repeatedly makes no further changes once configured
-  (equivalent config → no-op, the file is not even rewritten).
-- **Conflict-safe** — if an existing Ark entry differs from what you request, setup
-  fails and tells you to re-run with `--force`. It never silently overwrites.
-- **Preserving** — unrelated MCP servers and unknown fields are always kept.
-- **Never repairs** — a malformed/unparseable config is reported, never overwritten
-  (even with `--force`).
-- **Atomic** — config files are replaced via a temp file + rename, with a
-  concurrent-modification (lost-update) check and a verify-after-write step.
-
-`ark setup` (with no client) remains a **deprecated** alias for `ark setup claude`
-during v4.x and prints a warning.
-
-### Manual configuration
-
-If `ark setup` cannot run (managed machine, read-only config, unusual install), add
-the Ark MCP server yourself. The command is always `ark mcp-server --root <path>`.
-
-**Claude Code** — `.mcp.json` (project) or `~/.claude/settings.json` (global):
+**What does `Checkout` call?** — `get_callees`
 
 ```json
 {
-  "mcpServers": {
-    "ark": { "type": "stdio", "command": "ark",
-             "args": ["mcp-server", "--root", "${CLAUDE_PROJECT_DIR:-.}/"], "env": {} }
-  }
+  "symbol": "Checkout",
+  "edges": [
+    { "from": "Handler.Checkout", "to": "Place", "kind": "calls", "confidence": "exact",
+      "evidence": "orders.Place declared in imported package example.com/shop/orders (orders)" }
+  ],
+  "unattributed": 1,
+  "candidates": [
+    { "symbol": "Log.Record", "file": "audit/audit.go", "kind": "call", "confidence": "candidate",
+      "evidence": "only symbol named \"Record\" in repository", "references": 1 }
+  ],
+  "unresolved": 0,
+  "outsideRepository": 0
 }
 ```
 
-Claude Code sets `CLAUDE_PROJECT_DIR` only in the server's environment, so this argument
-expands to `./`, which Ark resolves against the directory Claude Code launches it from
-(the project). To pin a different directory, or for the global file, use an absolute
-`--root`. Ark logs a warning when `CLAUDE_PROJECT_DIR` names a different directory than
-the one it serves.
+`Checkout` also calls `h.audit.Record(…)` through a struct field whose type
+Ark does not track. Ark does not claim that edge: it reports `Log.Record` as a
+candidate and counts the reference as unattributed, so the agent knows the
+edge list is not the whole story.
 
-**Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
-
-```json
-{
-  "mcpServers": {
-    "ark": { "command": "ark", "args": ["mcp-server", "--root", "/abs/path/to/repo"], "env": {} }
-  }
-}
-```
-
-**Cline CLI** — `~/.cline/mcp.json`: same shape as Cursor.
-
-**GitHub Copilot (VS Code)** — `.vscode/mcp.json`: servers live under `servers`, with `"type": "stdio"`:
-
-```json
-{
-  "servers": {
-    "ark": { "type": "stdio", "command": "ark", "args": ["mcp-server", "--root", "/abs/path/to/repo"], "env": {} }
-  }
-}
-```
-
-**Codex** — register via the official CLI: `codex mcp add ark -- ark mcp-server --root /abs/path/to/repo`.
-
-### Troubleshooting
-
-| Symptom | Fix |
-|---------|-----|
-| `ark command ... not found on PATH` | Install `ark` on `PATH`, or pass `--ark-path /full/path/to/ark`. |
-| Client does not detect Ark | Fully restart/reload the client so it re-reads MCP config. |
-| `found a different Ark MCP configuration` | Intended config differs from existing; re-run with `--force`. |
-| `cannot parse <file>` | The config is malformed; fix it by hand — Ark will not touch a broken file. |
-| `the Codex CLI (codex) was not found` | Install Codex (`codex`), or configure manually (see above). |
-| `root directory does not exist` | Pass a `--root` that exists; Ark validates it up front. |
-| `path ... is outside the server root` | Use a path inside the served root (relative to it, or absolute). Check the root in the message; a relative `--root` means the directory the server was launched from. |
-| Permission denied | The config file/dir is not writable; fix permissions or use `--global`. |
-
----
-
-## 🔧 mcp‑init Options
-
-`ark mcp-init` adds (or updates) the ark MCP server entry in `.mcp.json` for the current project, so you can use ark tools in Claude Code without manual configuration.
-
-```bash
-# Add ark MCP to the current project
-ark mcp-init
-
-# Add to global Claude Code settings (~/.claude/settings.json)
-ark mcp-init --global
-
-# Specify a custom root directory
-ark mcp-init --root /path/to/project
-
-# Overwrite an existing entry
-ark mcp-init --force
-```
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--ark-path <path>` | `-p` | Path to ark binary | auto-detect |
-| `--root <dir>` | `-r` | Root directory to serve | `$PWD` |
-| `--name <name>` | `-n` | MCP server name | `ark` |
-| `--global` | `-g` | Write to `~/.claude/settings.json` | `.mcp.json` (project-local) |
-| `--force` | `-f` | Overwrite existing entry | – |
-
----
-
-## 🛰  mcp‑server Options
-
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--root <dir>` | `-r` | Serve directory root; a relative path is resolved against the launch directory at startup, and a missing or non-directory root stops the server | `$PWD` |
-| `--type <stdio\|http>` | `-t` | Transport (`stdio`, or `http` on `--http-port`, endpoint `/mcp`) | `stdio` |
-| `--http-port <port>` | `-p` | HTTP listen port | `8522` |
-| `--scan-buffer <size>` | `-b` | Read buffer size (`10M`, `500K`, …) | `10M` |
-| `--mask-secrets <on/off>` | `-m` | Detect & mask secrets | `on` |
-| `--allow-gitignore <on/off>` | `-a` | Obey `.gitignore` rules | `on` |
-| `--additionally-ignorerule <file>` | `-A` | Extra ignore‑rule file | – |
-| `--ignore-dotfile <on/off>` | `-d` | Skip dotfiles | `off` |
-| `--pattern-regex <regexp>` | `-x` | Include paths matching regexp | – |
-| `--include-ext <exts>` | `-i` | Include only ext(s) (`go,ts,html`) | – |
-| `--exclude-dir-regex <regexp>` | `-g` | Exclude dirs matching regexp | – |
-| `--exclude-file-regex <regexp>` | `-G` | Exclude files matching regexp | – |
-| `--exclude-ext <exts>` | `-e` | Exclude ext(s) | – |
-| `--exclude-dir <names>` | `-E` | Exclude dirs by name | – |
-| `--skip-non-utf8` | `-s` | Ignore non‑UTF‑8 files | – |
-| `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
-| `--no-cache` | – | Disable the persistent extraction cache (otherwise kept in `<root>/.ark/index`; add `.ark/` to `.gitignore`) | – |
-
----
-
-## 🔍 syntax Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php, terraform) | auto-detect |
-| `--format <text\|json>` | Output format | `text` |
-| `-h, --help` | Show help | – |
-
-```bash
-ark syntax main.go                # Parse Go file
-ark syntax app.ts --format json   # Parse TypeScript, JSON output
-ark syntax script.py --lang python
-```
-
----
-
-## 🏷️ symbol Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--lang <language>` | Language (go, typescript, tsx, javascript, python, php, terraform) | auto-detect |
-| `--format <text\|json>` | Output format | `text` |
-| `-h, --help` | Show help | – |
-
-```bash
-ark symbol main.go                # Extract symbols from Go file
-ark symbol app.ts --format json   # Extract symbols, JSON output
-ark symbol script.py --lang python
-```
-
----
-
-## 📜 instruction — Agent usage instructions
-
-`ark instruction <target>` prints a short Markdown instruction that tells a coding agent how to use Ark MCP
-effectively (which tool to prefer for which question, when whole-file reads make sense, how to treat
-uncertain results). The guidance itself is the same for every target; only its presentation changes —
-`claude` renders each tool name the way Claude Code exposes it (`mcp__ark__<tool>`), since that is the one
-agent whose model-visible MCP tool naming is officially documented. Every other target gets the guidance's
-bare tool names unchanged: Ark does not invent a tool-naming convention where none is documented.
-
-| Target | Agent / surface | Suggested destination |
-|--------|------------------|------------------------|
-| `claude` | Claude Code | `CLAUDE.md` |
-| `codex` | OpenAI Codex (CLI / IDE extension / cloud) | `AGENTS.md` |
-| `cursor` | Cursor | `AGENTS.md` |
-| `cline` | Cline | `.clinerules/ark.md` |
-| `copilot-vscode` | GitHub Copilot in VS Code | `.github/copilot-instructions.md` |
-| `copilot-cli` | GitHub Copilot CLI | `.github/copilot-instructions.md` |
-
-"Suggested destination" is where each agent's own documentation says it looks for repository-local
-instructions — not the only mechanism that agent supports, and not something Ark writes for you.
-
-```bash
-ark instruction claude                      # print to stdout
-ark instruction codex > ark-instruction.md
-ark instruction codex >> AGENTS.md          # review AGENTS.md first to avoid duplicating an existing Ark section
-ark instruction cursor >> AGENTS.md
-mkdir -p .clinerules && ark instruction cline > .clinerules/ark.md
-ark instruction copilot-vscode >> .github/copilot-instructions.md
-ark instruction copilot-cli >> .github/copilot-instructions.md
-```
-
-It only prints text: Ark never creates or edits any of these files, and nothing but the instruction goes to
-stdout. Unsupported targets (e.g. `agents`, `copilot` — neither is a target; see below) fail with the list
-of supported ones. `ark setup claude` shows the same Claude instruction after setup; `ark skill` (reusable
-skill / slash-command artifacts) is a separate feature.
-
-An instruction file is context for the agent's model, not an enforced policy boundary — treat it the same
-way you would treat any other prompt text.
-
-`ark instruction <target>` and `ark setup <client>` currently name the same six agents, but they are
-independent registries for independent concerns: `setup` connects Ark's MCP server to a client; `instruction`
-teaches an agent how to use it. Either list can change without the other.
-
-**Why no `agents` or `copilot` target:** `AGENTS.md` is a destination that several targets happen to share,
-not an agent identity — Claude Code, for one, does not reliably read it (it is skipped whenever a `CLAUDE.md`
-is present). And `copilot` alone is ambiguous between `copilot-vscode` and `copilot-cli`, which read from the
-same file but are different setup surfaces. `ark instruction` always names the agent, never the file format.
-
----
-
-## 🎯 skill Command
-
-Ark skills provide **task-oriented guidance for using Ark MCP effectively**: which tool fits which goal
-(repository map, symbol context, graph relations, change impact, search), how the tools combine, when to
-stop exploring, and how to treat ambiguous or uncertain results. They are richer than
-[`ark instruction`](#-instruction--agent-usage-instructions), which prints the same short standing guidance
-for whichever agent you target; both teach the same usage model.
-
-### Subcommands
-
-| Subcommand | Description |
-|------------|-------------|
-| `skill` | Auto mode - detect existing skills and generate appropriate type |
-| `skill init` | Generate Repository Skill (full repo-specific skill) |
-| `skill add-explorer` | Add Explorer Skill as companion to existing skills |
-| `skill update` | Update Ark-managed skills (preserves user files) |
-| `skill inspect` | Show detected skills and repository analysis |
-
-### Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--name <name>` | Skill name | auto-determined |
-| `--output <dirname>` | Output directory | `skills/<name>` |
-| `--archive` | Create ZIP archive | – |
-| `--force` | Overwrite existing skill | – |
-| `-h, --help` | Show help | – |
-
-### Update Options
-
-| Option | Description |
-|--------|-------------|
-| `--force` | Force update even if user modifications detected |
-| `--dry-run` | Show what would be updated without making changes |
-
-```bash
-ark skill                              # Auto mode
-ark skill init                         # Generate Repository Skill
-ark skill add-explorer                 # Add Explorer Skill
-ark skill update                       # Update Ark-managed skills
-ark skill update --dry-run             # Preview update
-ark skill inspect                      # Show detected skills
-```
-
-### Skill Types
-
-**Repository Skill** (`skill init`): Full project-specific skill including:
-- Build/test commands detected from go.mod, package.json, Makefile, etc.
-- Project language analysis
-- Conventions reference file
-
-**Explorer Skill** (`skill add-explorer`): Lightweight companion skill for code navigation:
-- Task-oriented guidance for using Ark MCP (goal → tool, uncertainty handling)
-- Works alongside existing project skills
-
-### Generated Files
-
-Skills include YAML frontmatter for safe updates:
-- `SKILL.md` - Skill documentation with `ark-managed: true` metadata
-- `agents/openai.yaml` - OpenAI/Cline agent configuration
-- `agents/claude-code.md` - Claude Code custom agent (uses `mcp__ark__*` tool names)
-- `references/conventions.md` - Project conventions (Repository Skill only)
-
-`ark skill update` refreshes `SKILL.md` and `agents/openai.yaml`; `agents/claude-code.md` and the installed slash command are written when a skill is generated.
-
-The `agents/claude-code.md` file is also automatically installed to `.claude/commands/` as a Claude Code slash command that uses all 20 Ark MCP tools.
-
----
-
-## 📝 Arguments
-
-| Argument | Description |
-|----------|-------------|
-| `<dirname>` | Directory to scan |
-| `<byte-string>` | Size string (`10M`, `100K`, …) |
-| `<extension>` | File extension (`go`, `ts`, `html`) |
-| `<regexp>` | Go `regexp` syntax pattern |
-
----
-
-## 📦 Output Examples
-
-<details>
-<summary>Plaintext <code>(--output-format txt)</code></summary>
+**What do I need to read to change `Place`?** — `get_context`
 
 ```text
-example_project
-├── main.go
-└── sub
-    └── sub.txt
+### orders/orders.go:10-15
+Symbol: Place
+Reason: target
+Confidence: exact
 
-=== sub/sub.txt ===
-hello world
-```
-</details>
+func Place(id string, total int) error {
+	if err := validate(total); err != nil {
+		return err
+	}
+	return store.Save(store.Order{ID: id, Total: total})
+}
 
-<details>
-<summary>Markdown <code>(--output-format md)</code></summary>
-
-````markdown
-# Project Tree
-```
-example_project
-├── main.go
-└── sub
-    └── sub.txt
+### store/store.go:12-15
+Symbol: Save
+Reason: direct callee
+Confidence: exact
+…
+--- stats: 6/6 items, ~143 tokens (budget 600), unattributed: 0 callers, 0 callees; unresolved callees: 0, outside repository: 0 ---
 ```
 
----
+The target, its callees and its callers: six declarations, about 140
+estimated tokens, instead of the three files they live in.
 
-# File: sub/sub.txt
-```txt
-hello world
-```
-````
-</details>
+## Capabilities
 
-<details>
-<summary>XML <code>(--output-format xml)</code></summary>
+Ark's MCP server provides 21 tools. Reference with parameters and examples:
+[MCP tools](docs/mcp-tools.md).
 
-```xml
-<?xml version="1.0" encoding="UTF-8"?>
-<ProjectDump>
-  <Description>
-    <ProjectName>example_project</ProjectName>
-    <ProjectPath>/abs/path/example_project</ProjectPath>
-  </Description>
-  <Tree><![CDATA[
-example_project
-├── main.go
-└── sub
-    └── sub.txt
-  ]]></Tree>
-  <Files>
-    <File path="main.go"><![CDATA[
-package main
-func main() { println("hello") }
-    ]]></File>
-    <File path="sub/sub.txt"><![CDATA[
-hello world
-    ]]></File>
-  </Files>
-</ProjectDump>
-```
-</details>
-
-<details>
-<summary>Arklite <code>(--output-format arklite)</code></summary>
-
-```
-# Arklite Format: example_project (/abs/path/example_project)
-
-## Directory Tree (JSON)
-{"name":"example_project","type":"directory","children":[{"name":"main.go","type":"file"},{"name":"sub","type":"directory","children":[{"name":"sub.txt","type":"file"}]}]}
-
-## File Dump
-@main.go
-package main␤func main(){␤println("hello")␤}
-@sub/sub.txt
-hello world
-```
-</details>
-
----
-
-## 🤔 What is Arklite?
-
-Arklite is a compact single‑line‑per‑file format tuned for LLM token efficiency:
-
-1. Natural‑language header (project + path)  
-2. JSON directory tree  
-3. File dump (`@path` + content with `␤` for newlines)
-
----
-
-## 🗂 Example `.arkignore`
-
-```gitignore
-# VCS
-.git/
-.hg/
-.svn/
-
-# IDEs / editors
-.idea/
-.vscode/
-*.code-workspace
-*.sublime-*
-```
-
----
-
-## 🧩 Shell Completions
-
-```sh
-# Bash & Zsh (one script for both)
-source misc/completions/ark-completion.sh
-# Fish
-mkdir -p ~/.config/fish/completions
-cp misc/completions/fish/ark.fish ~/.config/fish/completions/
-```
-
-Completions cover the subcommands, every flag, the finite flag values
-(`--lang`, `--format`, `--type`, `on`/`off`, ...) and `ark setup <client>`
-(`claude`, `cursor`, `codex`, `cline`, `copilot-vscode`, `copilot-cli`). Standalone per-shell files are in
-`misc/completions/{bash,zsh,fish}/`. Tests (`internal/completion`) fail if a
-completion file drifts from the CLI, the setup client registry or the language
-registry.
-
----
-
-## ✨ Why Ark?
-
-### 🎯 Symbol-First Code Exploration
-
-Instead of dumping entire files, **extract only what you need**:
-
-```bash
-$ ark symbol internal/mcp/tools.go
-File: internal/mcp/tools.go (go)
-Symbols: 11
-
-  struct ToolsHandler [exported] (line 15-18)
-  function NewToolsHandler [exported] (line 21-26)
-  method ListTools (ToolsHandler) [exported] (line 29-251)
-  method CallTool (ToolsHandler) [exported] (line 254-279)
-  ...
-```
-
-**Benefits:**
-- 📉 **Token-efficient** — No need to read entire files
-- 🎯 **Precise** — Jump directly to the definition you need
-- 🔍 **Discoverable** — `[exported]` markers show API surface at a glance
-
-### 🚀 Pure Go + Tree-sitter = Best of Both Worlds
-
-- **No CGO required** — Cross-compile anywhere, single static binary
-- **Real parsing** — Not regex hacks, actual AST-based symbol extraction
-- **Multi-language** — Go, TypeScript, TSX, JavaScript, Python, PHP, Terraform (and growing!)
-
-### 🌐 Language Support
-
-Ark advertises only the capabilities it actually tests. Levels build up:
-Parse → Symbols → References → Resolution → Graph → Context.
-
-| Language   | Parse | Symbols | References | Resolution | Graph | Context |
-|------------|:-----:|:-------:|:----------:|:----------:|:-----:|:-------:|
-| Go         |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
-| TypeScript |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
-| TSX        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |    ✓    |
-| JavaScript |   ✓   |    ✓    |     ✓      |            |       |         |
-| Python     |   ✓   |    ✓    |     ✓      |            |       |         |
-| PHP        |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
-| Terraform  |   ✓   |    ✓    |     ✓      |     ✓      |   ✓   |         |
-
-A checkmark means the canonical Language Registry advertises that level as the
-language's certified support level; `get_language_support` reports it at runtime.
-PHP's `get_context` path is implemented and covered by dedicated context-quality
-tests, but PHP is advertised at **Graph** level because several resolver
-precision areas (function and constant names, framework dispatch) remain
-intentionally conservative — so the Context cell is left unchecked rather than
-overstating certification. Terraform's `get_context` works on the dependency
-graph, but no context-quality benchmark covers it yet, so it is advertised at
-**Graph** as well.
-
-#### TypeScript / TSX — static code intelligence
-
-Ark statically extracts **symbols** with stable containment (classes,
-interfaces, type aliases, enums, functions, `const` components, and every class /
-interface **member**: constructors, instance / static / abstract methods,
-properties, constructor parameter properties, arrow-function fields; a
-getter/setter pair is one property symbol), **module bindings** (named, aliased,
-default, namespace and type-only imports), **export tables** (local, aliased,
-default, named re-export, `export *`, `export * as ns`, barrel chains),
-**references** (calls, `this.m()`, static and namespace-qualified calls,
-construction, type references, JSX components) and **typed relations**
-(`extends` / `implements`) into a typed symbol graph and agent-oriented context.
-
-Resolution is evidence-based and conservative. Explicit repository-local
-relative imports (`./user`, `../domain/user`, `./user.ts`, `./user/index`)
-resolve deterministically through aliases and barrel chains (bounded and
-cycle-safe) to the **defining** symbol. A member call resolves only when its
-receiver type is proven structurally — `this`, an explicit type annotation,
-`const x = new T()`, or a typed field / constructor parameter property; a
-receiver without such evidence (`repo.save()` with an unannotated `repo`) stays
-`Candidate`/`Unresolved` even when only one `save` exists. Intrinsic JSX
-elements (`<div />`) are never repository references.
-
-| | Status |
+| Task | Tools |
 |---|---|
-| **Certified** (tested end-to-end: graph adversarial fixtures, context-quality scenarios with recall 1.00 and no false Exact / fabricated edge, MCP, cache, fuzz, determinism) | relative-import resolution, aliases, default / namespace / type-only imports, barrels, member resolution under proven receiver types, `this` / static members, `extends` / `implements`, JSX component references |
-| **Intentionally unresolved** (honest `Candidate` / `Unresolved`, never a guess) | external packages (`zod`, `react`, `node:fs`), path aliases (`@/foo`, tsconfig `paths`), variable receivers without proven type, inherited-member lookup, declaration merging (same name as interface + class), computed / dynamic access (`a[k]()`), `.js`-suffixed specifiers when both `.ts` and `.tsx` exist, anonymous default exports |
-| **Not implemented** | return-type propagation and type inference (`const u = repo.find()`), control-flow narrowing, compiler-equivalent overload resolution, `.d.ts` / `.mts` / `package.json` resolution, `tsconfig` interpretation, `namespace` bodies, enum members, destructured declarations, framework semantics (React / Next / Nest / Angular), decorator / DI inference |
+| Orient in a repository | `get_repository_map`, `get_directory_tree`, `get_project_stats` |
+| Find symbols | `search_context` (partial names), `find_symbol` (regex), `search_code` (kind, calls, type usage), `get_symbols`, `get_symbol` |
+| Trace relationships | `get_callers`, `get_callees`, `get_relations`, `find_references` |
+| Assess a change | `analyze_change_impact` |
+| Retrieve focused context | `get_context`, `search_context` |
+| Read and search files | `get_file_content`, `get_files_arklite`, `search_in_files`, `list_files`, `get_file_info` |
+| Inspect the analysis | `get_diagnostics`, `get_language_support` |
 
-**Module resolution is not compiler-equivalent.** Ark assigns deterministic
-priority only within the repository-local, config-independent lexical subset it
-explicitly supports (`./user` → `user.ts`, `user.tsx`, `user/index.ts`,
-`user/index.tsx`, in that order; `.js` / `.jsx` substitutes are deliberately
-unranked and stay ambiguous when both a `.ts` and a `.tsx` exist). Ark does not
-interpret `tsconfig`, `moduleResolution`, `moduleSuffixes` or `package.json`.
-Projects whose resolution depends on those settings may resolve differently from
-Ark's repository-local lexical subset.
+## Reliability and confidence
 
-Same-named static and instance members of one class share one symbol identity,
-and a non-adjacent getter/setter pair uses the first accessor as its span.
-Files without any `import` / `export` are treated as scripts (globals) and keep
-the legacy proximity rules. Ark performs **pure static analysis** and never
-executes repository code, Node, npm / yarn / pnpm / bun, `tsc`, `tsserver`,
-package scripts, or repository configuration.
+Every resolved reference has a confidence level. The level describes the
+evidence, not a probability.
 
-#### PHP — static code intelligence
+| Level | Meaning | Becomes a graph edge |
+|---|---|---|
+| `exact` | One target, proven by the language's scoping as Ark models it: same file, an import, a qualified name, a declared type | yes |
+| `strong` | One target by weaker evidence, such as the only declaration of the name in the package | yes |
+| `candidate` | One or more plausible targets | **no** |
+| unresolved | No target in the repository (a builtin, an external package, a computed name) | no |
 
-Ark statically extracts PHP **symbols** (namespaces, classes, interfaces,
-traits, enums, functions, constants, methods, constructors, properties,
-class constants, enum cases, promoted properties), **imports** (plain / aliased
-/ grouped / function / const `use`), **references** (function / static /
-instance / nullsafe / `$this` calls, construction including `new self` /
-`new parent`, class-constant reads, type references and `Foo::class`
-class-strings),
-and **typed relations** (`extends` / `implements` / trait `use`) into a typed
-symbol graph and agent-oriented context — while **preserving uncertainty** for
-dynamic or ambiguous constructs.
+What this means in practice:
 
-**Known limitations (by design):** dynamic calls / construction (`$obj->$m()`,
-`$fn()`, `new $c()`) are not guessed — they are reported as unresolved
-references of the calling symbol (`get_callees` `unresolved`), and only
-`$c = Foo::class; new $c()` with `$c` never rebound resolves; a class-string
-passed to a container (`$this->container->make(Foo::class)`) is a type use of
-`Foo`, never a call to or construction of `Foo` or of whatever a binding
-substitutes; a receiver's type comes only from a declaration
-(a typed parameter, a constructor-injected property) or from a single
-`$x = new T()` / `$c = T::class` statement whose block contains the use — an
-assignment inside a branch, loop, `try` or condition and used after it is not
-evidence; there is
-no Composer / PSR-4 / autoload resolution; class names are resolved from the
-file's own `namespace` / `use` / `use … as` / fully-qualified syntax by exact
-identity match (a class that is not declared in the repository, e.g. a vendor
-class, stays `Unresolved` and is never matched to a same-named repository class;
-a name declared more than once is a `Candidate`); inherited and trait members
-(including `self::` / `static::` / `parent::`) are resolved structurally — own
-declaration → traits → nearest parent → interfaces — through repository-declared
-types only, stopping at an honest `Candidate` / `Unresolved` when a participant
-is outside the repository or ambiguous, a trait adaptation (`insteadof` / `as`)
-names the member, or the member is private to a supertype; function and
-constant names remain intentionally conservative; no framework
-(Laravel/Symfony/…) semantics.
-Ark performs **pure static analysis** and never executes repository code,
-Composer, or any PHP tooling.
+- **Treat `candidate` as a lead, not a dependency.** Callers, callees, impact
+  and context are built from edges only.
+- **An empty list is not proof of absence.** Every graph answer reports
+  `unattributed` (references that may be missing edges), `unresolved` and
+  `outsideRepository` counts, and `indexDiagnostics` when files could not be
+  fully analyzed.
+- **Ark does not guess between declarations.** Ambiguous names return the
+  list of declarations with their `symbolId`.
+- **Names never cross languages.** A Python `run()` is never a call to a Go
+  `run`; TSX and TypeScript share names because TSX is TypeScript.
+- **Go follows Go's scoping.** Unqualified names resolve within their
+  package, `pkg.Name` through its import, and locally shadowed names are
+  never resolved elsewhere.
 
-#### Terraform — static configuration intelligence
+Ark's evidence is static. It is not a compiler and does not infer types:
+method calls whose receiver type is not written down locally stay
+`candidate`. Full model: [Resolution model](docs/resolution-model.md).
 
-Ark statically extracts the declarations of Terraform configuration
-(`.tf`) — `resource`, `data`, `ephemeral`, `module`, `variable`, `locals`
-(one symbol per local), `output`, `provider` (with `alias`), `check` (with its
-scoped `data` sources) and `terraform` blocks — and the **dependencies**
-between them: every static address in an expression (`aws_vpc.main.id`,
-`data.aws_ami.ubuntu.id`, `var.region`, `local.name`, `module.net`,
-`resource.TYPE.NAME`, inside templates, heredocs, conditionals, function calls,
-`for` expressions, splats, indexes and `dynamic` blocks), `depends_on`, and the
-`provider` / `providers` meta-arguments. They form `references` and
-`depends_on` graph edges (`get_callees`; `referenced_by` / `depended_on_by` in
-`get_callers`) — never calls. `.tfvars` assignments are recorded as writes of
-the variables they name. HCL is parsed with the Tree-sitter HCL grammar of
-Ark's pure-Go runtime (no CGO, no new dependency).
+## Language support
 
-**Module scope is the directory.** A symbol's name is its Terraform address
-(`aws_vpc.main`); its qualified name prefixes the module directory
-(`modules/network/aws_vpc.main`). A reference resolves only within the module
-it is written in, across all of that directory's `.tf` files — `Exact` when the
-address is declared once, `Candidate` (no edge) when it is declared twice,
-`Unresolved` when it is not declared there, even if another module declares
-the same address. `module.NAME.OUTPUT` resolves to the child module's
-`output "OUTPUT"` when the module's `source` is a local path (`./`, `../`);
-an output of a registry, Git or other remote module is reported as
-`outsideRepository`. Terraform names are matched by identity only: no name
-heuristic links them to each other or to symbols of other languages. Names
-follow HCL's identifier rules, including Unicode letters (`aws_vpc.日本`), and
-are compared as written — like Terraform, Ark does not normalize them.
+Support differs by language. Each language has a certified level — the
+highest stage Ark's tests cover:
 
-| | Status |
+| Language | Level | Notes |
+|---|---|---|
+| Go | context-quality certified | Package scoping; method calls need a locally written receiver type |
+| TypeScript, TSX | context-quality certified | Relative imports, barrels, typed receivers; no `tsconfig` paths or type inference |
+| PHP | graph | Namespaces, `use`, inheritance and traits; no framework or autoload semantics |
+| Terraform | graph | Module-scoped addresses, local module outputs; `.tf.json` not read |
+| JavaScript | references | Top-level functions, classes, `const`/`let`; class methods not extracted |
+| Python | references | Top-level functions and classes; methods not extracted |
+
+Graph tools answer for every language, but results above a language's
+certified level are not covered by tests. Details and per-language
+limitations: [Language support](docs/language-support.md).
+
+## Performance
+
+Measured with the MCP server on public repositories (median of five runs;
+[method and environment](docs/performance.md)):
+
+| Repository | Files indexed | First request | Later requests | After restart (cache) | Peak memory |
+|---|---:|---:|---:|---:|---:|
+| ky (TypeScript) | 34 | 0.14 s | 2 ms | 21 ms | 50 MB |
+| express (JavaScript) | 152 | 0.40 s | 10 ms | 82 ms | 56 MB |
+| Ark (Go) | 600 | 3.8 s | 41 ms | 0.33 s | 246 MB |
+| golang.org/x/tools (Go) | 1,875 | 18.5 s | 138 ms | 1.7 s | 959 MB |
+
+Ark makes no general claim about token or time savings for agents; those
+depend on the agent, model and task. Token budgets in Ark's responses are
+estimates (`len(text)/4`), not model token counts.
+
+## Security and privacy
+
+- Ark reads files under the served root and never executes repository code,
+  build tools or package managers.
+- Ark opens no outbound network connections. The optional HTTP transport
+  listens on `localhost` only and has no authentication.
+- Tool paths are confined to the root. Symlinks leading out of it are
+  neither read nor indexed unless the operator starts the server with
+  `--allow-external-symlinks on` ([Symlink policy](SECURITY.md#symlink-policy)).
+- Ark returns source code to the MCP client; whether it is sent to a model
+  provider is decided by the client. Secrets that Ark's pattern rules detect
+  (cloud and service tokens, private keys, `password = …` assignments) are
+  masked in MCP responses by default (`--mask-secrets off` disables it, with
+  a warning); masking is not exhaustive, and paths and symbol names are never
+  masked.
+- Files excluded by `.arkignore` are invisible to the MCP server: no tool
+  reads, lists, searches or indexes them, whatever the masking setting.
+- The server caches extraction results in `<root>/.ark/index`; add `.ark/` to
+  `.gitignore`.
+
+Details and known limitations: [SECURITY.md](SECURITY.md).
+
+## Limitations
+
+- No type inference, return-type propagation or control-flow analysis.
+- Module resolution is not compiler-equivalent: `tsconfig` paths, Composer /
+  PSR-4 autoloading and `package.json` are not interpreted.
+- No framework semantics (dependency-injection containers, routing,
+  decorators).
+- No cross-language references, even through an explicit import (a
+  JavaScript file importing a TypeScript file).
+- JavaScript and Python class methods are not extracted.
+- A file the parser cannot fully read is analyzed only where it parses; the
+  rest is reported by `get_diagnostics`.
+
+## Also in the box
+
+- **Repository dump** — `ark <dir>` writes a directory's tree and file
+  contents to one text, Markdown, XML or compact *arklite* file, with
+  `.gitignore` handling and secret masking.
+- **`ark symbol` / `ark syntax`** — print one file's declarations or syntax
+  tree.
+- **`ark skill`** — generate task guidance for agents that use skills.
+
+See the [CLI reference](docs/cli.md).
+
+## Documentation
+
+| Document | Contents |
 |---|---|
-| **Supported** | the blocks above; same-module cross-file resolution; local module outputs (incl. `module.x["k"].out`, `module.x[*].out`); module input arguments (an edge from the call to the child's `variable`, so changing a shared module's variable reaches every call passing it); explicit `depends_on`; provider configurations and aliases; check-scoped data sources; override files (`override.tf`, `*_override.tf`: their references are counted, they declare nothing); broken files (declarations after the error are recovered where Tree-sitter's recovery allows — an unclosed bracket can swallow the rest of the file — and an error diagnostic is emitted) |
-| **Not references by design** | `count.*`, `each.*`, `self.*`, `path.*`, `terraform.*`, `for` / template-`for` variables, `dynamic` iterators, bare object keys, function names (incl. provider-defined functions), `lifecycle.ignore_changes`, variable type constraints |
-| **Intentionally unresolved / outside** | outputs of remote modules (`outsideRepository`), `provider = x` when the module declares no `provider "x"` block (implicit or inherited configuration), addresses declared only in `.tf.json` files, modules reached only through a symlinked directory, a module call whose `source` an override file replaces (`Candidate`: which source is effective depends on the merge), sources computed from variables |
-| **Not implemented** | the value flow from a module argument into the child (and inputs a call omits), `.tf.json` / `.tfvars.json` (JSON syntax), generic `.hcl` files (Packer, Nomad, Terragrunt and Terraform test files are not Terraform-indexed), `moved` / `import` / `removed` blocks (not observed), the implicit default provider of a resource type, which module receives a `.tfvars` file, `terraform_remote_state` / cross-state data, Terraform Cloud workspaces |
+| [Getting started](docs/getting-started.md) | Installation, agent setup, first session, upgrades |
+| [MCP tools](docs/mcp-tools.md) | Every tool's parameters, output and caveats |
+| [Resolution model](docs/resolution-model.md) | Confidence, evidence, name spaces, how to read answers |
+| [Language support](docs/language-support.md) | Levels and per-language capabilities and limits |
+| [CLI reference](docs/cli.md) | Every command and option |
+| [Performance](docs/performance.md) | Measurements and how to reproduce them |
+| [Operations](docs/operations.md) | Index lifecycle, cache, resources, failure modes |
+| [Troubleshooting](docs/troubleshooting.md) | Common problems and messages |
+| [Architecture](ARCHITECTURE.md) | Design invariants for contributors |
+| [Security](SECURITY.md) | Threat model and data boundary |
 
-Ark performs **pure static analysis**: it never runs `terraform`, never
-downloads modules or providers, and never reads `.terraform/`.
+## Contributing
 
-### 🤖 LLM-Optimized Workflow
-
-Ark provides **21 MCP tools** covering the full code-intelligence stack:
-
-| Tool | Description |
-|------|-------------|
-| `get_directory_tree` | Understand project layout |
-| `get_symbols` | List functions/types in a file |
-| `find_symbol` | Search for a symbol by name across the repo |
-| `get_symbol` | Get source code of one specific function/type |
-| `search_in_files` | Full-text or regex search across files |
-| `list_files` | Filter-aware file listing |
-| `get_file_content` | Read a whole file |
-| `get_file_info` | File metadata (size, lines, language) |
-| `get_project_stats` | Language breakdown, file counts |
-| `get_files_arklite` | Multiple files in compressed format |
-| `get_context` | Token-budgeted, relevance-ranked context for a symbol (target always included) |
-| `search_context` | Find symbols from a partial identifier (`auth`, `getUser`): up to `limit` ranked candidates (default 5), context for the first `contextLimit` (default 1), all within one response-wide token budget. A rank is name similarity, not correctness |
-| `find_references` | Find all usages of a symbol across the repo |
-| `get_relations` | Explore import/dependency relations between files |
-| `get_callers` | Find symbols that call a given symbol |
-| `get_callees` | Find symbols called by a given symbol |
-| `get_repository_map` | Compact logical map of the repo for LLM orientation |
-| `analyze_change_impact` | Estimate impact of changing a symbol |
-| `search_code` | Structural search by kind, name, type usage, etc. |
-| `get_language_support` | List supported languages and their feature levels |
-| `get_diagnostics` | Files Ark could not fully analyze: regions the parser rejected, unreadable files (filters, paging) |
-
-#### Reading Ark's answers: diagnostics, unresolved and completeness
-
-- **A diagnostic** says Ark could not analyze part of a file (`parse_error`: the parser rejected a region, which is then not analyzed as written — the source itself may be valid, since grammars reject some valid code) or a whole file (unreadable, or a provider failure: the file is skipped). It is about Ark's analysis, not a compiler verdict. `get_diagnostics` lists them; graph tools (`get_callers`, `get_callees`, `get_relations`, `get_context`, `search_context`, `analyze_change_impact`) add an index-diagnostics summary (`indexDiagnostics`; `index_diagnostics` in the impact JSON; a closing line in text output) **only when the index has diagnostics** — then a "no callers" answer may miss code in those files.
-- **An unresolved reference** is different: Ark parsed it but knows no target (an external, built-in, undeclared or computed name). It is counted by `unresolved` / `outsideRepository` on the graph tools, never as a diagnostic.
-- **`unattributed: 0`** means no reference Ark *observed* may be a missing edge. It cannot account for what Ark does not observe: **no diagnostics and `unresolved: 0` still do not prove that every dependency is known** — files of formats no provider handles (see `get_language_support`; e.g. Terraform `.tf.json`) are not examined, and a provider may not observe every construct.
-- **Names never cross languages.** A Python `run()` is not a call to a Go or TypeScript `run`, however unique the name: name-based resolution considers only the referencing file's language (`.ts` and `.tsx` are one). A name only another language declares stays unresolved.
-- **Go calls resolve by Go's scoping.** An unqualified name is a declaration of its own package (or a dot import), `pkg.Name` one of the imported package, and a name a local variable shadows is never an edge — never "the only declaration with that name" elsewhere in the repository. Method calls on a variable whose type is not written down locally stay Candidates.
-- **Every declaration is its own symbol**, even when a file declares one name twice (several Go `init`, a function defined twice): each has its own `symbolId`, source, callers and callees. Should two distinct declarations ever get the same 64-bit `symbolId` (a hash collision, astronomically unlikely), Ark refuses to build the index — the index tools answer `SymbolID collision` with both declarations — rather than merge them. A name shared by several declarations is ambiguous to the target tools (`get_context`, `get_callers`, `get_callees`, `get_relations`, `analyze_change_impact`); their candidate list shows each one's `symbolId`, which those tools accept to select it.
-- A tool error (`isError`) means the tool itself failed; it is never a diagnostic.
-- Ark's parser (gotreesitter, a pure-Go Tree-sitter runtime) rejects some valid code. When its main route fails, Ark retries with its alternative routes and keeps a tree only if it parses cleanly; whatever still fails stays a `parse_error`. Where the syntax is ambiguous (Go `f[T](x)`, TypeScript `f<T>(x)`), a cleanly parsed tree can still read it differently from the language; Ark's Go and TypeScript analysis follows the languages' own rules there, and a call it cannot decide is left out or kept at Candidate — never claimed as certain.
-
-The core navigation pattern:
-
-```
-get_directory_tree   →   Understand project structure
-        ↓
-    find_symbol      →   Locate "where is Foo?"
-        ↓
-    get_symbols      →   List what's in a file
-        ↓
-    get_symbol       →   Extract exact source code
-        ↓
-    get_context      →   Token-budgeted context for safe modification
-```
-
-This approach **dramatically reduces token usage** compared to reading entire files, while maintaining full context awareness.
-
-### 📦 Instant Skill Generation
-
-```bash
-$ ark skill --name my-project-explorer
-✅ Created my-project-explorer/SKILL.md
-✅ Created my-project-explorer/agents/openai.yaml
-```
-
-One command generates everything needed to teach ChatGPT or Cline how to efficiently explore your codebase.
-
----
-
-## 📎 See Also
-
-* Project home — <https://github.com/magicdrive/ark>
-* Architecture and design invariants — [ARCHITECTURE.md](ARCHITECTURE.md)
-
-## Author
-
-© 2025 - 2026Hiroshi IKEGAMI
+Bug reports and pull requests are welcome on
+[GitHub](https://github.com/magicdrive/ark/issues). Before changing the
+analysis, read [ARCHITECTURE.md](ARCHITECTURE.md): it lists the invariants a
+plausible-looking change can break and the tests that enforce them. A change
+is verified as described in its section 8 (`make lint` runs most checks
+locally).
 
 ## License
 
-Released under the [MIT License](LICENSE)
+[MIT](LICENSE) © 2025–2026 Hiroshi IKEGAMI

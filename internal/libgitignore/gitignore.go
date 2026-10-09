@@ -6,7 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
+	"sync/atomic"
 )
 
 type IgnorePattern struct {
@@ -21,6 +24,9 @@ type IgnorePattern struct {
 type GitIgnore struct {
 	Root     string
 	patterns []*IgnorePattern
+
+	indexMu sync.Mutex
+	relIdx  atomic.Pointer[relIndex]
 }
 
 func NewGitIgnore() *GitIgnore {
@@ -202,6 +208,17 @@ func (gi *GitIgnore) MatchesPathHow(path string) (bool, *IgnorePattern) {
 }
 
 func (gi *GitIgnore) MatchesPath(path string) bool {
+	// A path inside Root takes the indexed route, which decides the same
+	// (TestMatchesRel_EqualsMatchesPath).
+	if gi.Root != "" {
+		absPath := path
+		if !filepath.IsAbs(path) {
+			absPath = filepath.Join(gi.Root, path)
+		}
+		if rel, err := filepath.Rel(gi.Root, absPath); err == nil && rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+			return gi.MatchesRel(filepath.ToSlash(rel))
+		}
+	}
 	ok, _ := gi.MatchesPathHow(path)
 	return ok
 }
@@ -216,4 +233,85 @@ func unescapeGitignore(line string) string {
 		line = line[1:]
 	}
 	return line
+}
+
+// relIndex speeds up MatchesRel: the patterns grouped by their directory
+// relative to Root, in rule order, and the patterns whose directory is not
+// inside Root (rules from --additionally-ignorerule are anchored at the
+// working directory, which may be anywhere).
+type relIndex struct {
+	n     int              // patterns indexed; more were appended since if fewer than len(patterns)
+	byDir map[string][]int // directory ("/"-separated, "." for Root) → pattern positions
+	other []int            // directory outside Root: applicability decided as MatchesPath does
+}
+
+// index returns the index of the current patterns, building it on first use
+// and again after patterns were appended. (Appending while another goroutine
+// matches is not supported, as before.)
+func (gi *GitIgnore) index() *relIndex {
+	if ix := gi.relIdx.Load(); ix != nil && ix.n == len(gi.patterns) {
+		return ix
+	}
+	gi.indexMu.Lock()
+	defer gi.indexMu.Unlock()
+	if ix := gi.relIdx.Load(); ix != nil && ix.n == len(gi.patterns) {
+		return ix
+	}
+	{
+		ix := &relIndex{n: len(gi.patterns), byDir: map[string][]int{}}
+		for i, p := range gi.patterns {
+			rel, err := filepath.Rel(gi.Root, p.Dir)
+			rel = filepath.ToSlash(rel)
+			if err != nil || rel == ".." || strings.HasPrefix(rel, "../") {
+				ix.other = append(ix.other, i)
+				continue
+			}
+			ix.byDir[rel] = append(ix.byDir[rel], i)
+		}
+		gi.relIdx.Store(ix)
+		return ix
+	}
+}
+
+// MatchesRel is MatchesPath for a clean, "/"-separated path relative to Root
+// that does not leave it, with the same result: instead of every pattern it
+// evaluates, in rule order, only the patterns whose directory contains the
+// path.
+func (gi *GitIgnore) MatchesRel(rel string) bool {
+	ix := gi.index()
+	var cands []int
+	// MatchesPath applies a pattern when the path relative to the pattern's
+	// directory does not start with "..".
+	add := func(dir, below string) {
+		if !strings.HasPrefix(below, "..") {
+			cands = append(cands, ix.byDir[dir]...)
+		}
+	}
+	add(".", rel)
+	for i := 0; i < len(rel); i++ {
+		if rel[i] == '/' {
+			add(rel[:i], rel[i+1:])
+		}
+	}
+	add(rel, ".")
+	if len(ix.other) > 0 {
+		abs := filepath.Join(gi.Root, filepath.FromSlash(rel))
+		for _, i := range ix.other {
+			if below, err := filepath.Rel(gi.patterns[i].Dir, abs); err == nil && !strings.HasPrefix(below, "..") {
+				cands = append(cands, i)
+			}
+		}
+	}
+	if len(cands) == 0 {
+		return false
+	}
+	sort.Ints(cands)
+	matched := false
+	for _, i := range cands {
+		p := gi.patterns[i]
+		if p.Regexp.MatchString(rel) {
+			matched = !p.Negate // a negation un-matches; a pattern matches
+		}
+	}
+	return matched
 }

@@ -44,7 +44,7 @@ func TestGenerateDirectoryTreeJSON(t *testing.T) {
 	}
 
 	// Test GenerateDirectoryTreeJSON
-	jsonStr, err := GenerateDirectoryTreeJSON(tmpDir, nil)
+	jsonStr, err := GenerateDirectoryTreeJSON(tmpDir, nil, nil)
 	if err != nil {
 		t.Fatalf("GenerateDirectoryTreeJSON failed: %v", err)
 	}

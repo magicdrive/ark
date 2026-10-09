@@ -39,15 +39,23 @@ func (h *ResourcesHandler) ListResources() []Resource {
 	}
 }
 
-// ReadResource reads a specific resource by URI
+// ReadResource reads a specific resource by URI, with the secrets in its
+// text masked (sanitize.go).
 func (h *ResourcesHandler) ReadResource(uri string) (*ReadResourceResult, error) {
-	if strings.HasPrefix(uri, "file://") {
-		return h.readFileResource(uri)
-	} else if strings.HasPrefix(uri, "directory://") {
-		return h.readDirectoryResource(uri)
+	var result *ReadResourceResult
+	var err error
+	switch {
+	case strings.HasPrefix(uri, "file://"):
+		result, err = h.readFileResource(uri)
+	case strings.HasPrefix(uri, "directory://"):
+		result, err = h.readDirectoryResource(uri)
+	default:
+		return nil, fmt.Errorf("unsupported resource URI scheme: %s", uri)
 	}
-
-	return nil, fmt.Errorf("unsupported resource URI scheme: %s", uri)
+	if !masksByDefault(h.opt) {
+		return result, err
+	}
+	return sanitizeResourceResult(result), err
 }
 
 func (h *ResourcesHandler) readFileResource(uri string) (*ReadResourceResult, error) {
@@ -58,7 +66,7 @@ func (h *ResourcesHandler) readFileResource(uri string) (*ReadResourceResult, er
 	}
 
 	// Use tools handler to get file content
-	toolsHandler := NewToolsHandler(h.rootDir, h.opt)
+	toolsHandler := NewToolsHandler(h.rootDir, h.opt).forRequest()
 	args := map[string]interface{}{
 		"path": path,
 	}
@@ -91,7 +99,7 @@ func (h *ResourcesHandler) readDirectoryResource(uri string) (*ReadResourceResul
 	}
 
 	// Use tools handler to get directory tree
-	toolsHandler := NewToolsHandler(h.rootDir, h.opt)
+	toolsHandler := NewToolsHandler(h.rootDir, h.opt).forRequest()
 	args := map[string]interface{}{
 		"path": path,
 	}

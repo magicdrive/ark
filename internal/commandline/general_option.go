@@ -27,31 +27,39 @@ type Option struct {
 	AdditionallyIgnoreRuleFilenames    string
 	AdditionallyIgnoreRuleFilenameList []string
 	GitIgnoreRule                      *libgitignore.GitIgnore
-	IgnoreDotFileFlagValue             string
-	IgnoreDotFileFlag                  model.OnOffSwitch
-	PatternRegexpString                string
-	PatternRegexp                      *regexp.Regexp
-	IncludeExt                         string
-	IncludeExtList                     []string
-	ExcludeDirRegexpString             string
-	ExcludeDirRegexp                   *regexp.Regexp
-	ExcludeFileRegexpString            string
-	ExcludeFileRegexp                  *regexp.Regexp
-	ExcludeExt                         string
-	ExcludeExtList                     []string
-	ExcludeDir                         string
-	ExcludeDirList                     []string
-	WithLineNumberFlagValue            string
-	WithLineNumberFlag                 model.OnOffSwitch
-	OutputFormatValue                  string
-	OutputFormat                       model.OutputFormat
-	ComplessFlag                       bool
-	SkipNonUTF8Flag                    bool
-	DeleteCommentsFlag                 bool
-	SilentFlag                         bool
-	HelpFlag                           bool
-	VersionFlag                        bool
-	FlagSet                            *flag.FlagSet
+	// AccessExclude, when set (the MCP server's .arkignore access policy),
+	// reports paths that are never listed or read, whatever the other
+	// filters say. The CLI leaves it nil.
+	AccessExclude func(path string) bool
+	// AllowExternalSymlinks (mcp-server --allow-external-symlinks on) lets
+	// the MCP server read files through symlinks in the repository that lead
+	// outside it. Only the operator sets it; the CLI leaves it false.
+	AllowExternalSymlinks   bool
+	IgnoreDotFileFlagValue  string
+	IgnoreDotFileFlag       model.OnOffSwitch
+	PatternRegexpString     string
+	PatternRegexp           *regexp.Regexp
+	IncludeExt              string
+	IncludeExtList          []string
+	ExcludeDirRegexpString  string
+	ExcludeDirRegexp        *regexp.Regexp
+	ExcludeFileRegexpString string
+	ExcludeFileRegexp       *regexp.Regexp
+	ExcludeExt              string
+	ExcludeExtList          []string
+	ExcludeDir              string
+	ExcludeDirList          []string
+	WithLineNumberFlagValue string
+	WithLineNumberFlag      model.OnOffSwitch
+	OutputFormatValue       string
+	OutputFormat            model.OutputFormat
+	ComplessFlag            bool
+	SkipNonUTF8Flag         bool
+	DeleteCommentsFlag      bool
+	SilentFlag              bool
+	HelpFlag                bool
+	VersionFlag             bool
+	FlagSet                 *flag.FlagSet
 }
 
 func GeneralOptParse(args []string) (int, *Option, error) {

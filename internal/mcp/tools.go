@@ -34,8 +34,10 @@ type ToolsHandler struct {
 	// They depend only on the repository's ignore files — never on the
 	// process working directory or a request — and are rebuilt when those
 	// files change.
-	ignoreMu sync.Mutex
-	ignore   [2]ignoreState
+	ignoreMu     sync.Mutex
+	ignore       [2]ignoreState
+	ignoreHits   int // compiled rule reused (tests)
+	ignoreBuilds int // rule parsed and compiled (tests)
 
 	// indexes reuses completed repository indexes across requests (see
 	// index_cache.go); created on first use.
@@ -49,6 +51,70 @@ type ToolsHandler struct {
 	// buildContext replaces the Context Engine in search_context tests; nil
 	// means the engine (see contextBuild).
 	buildContext func(idx *index.RepositoryIndex, root string, req arkctx.Request) (*arkctx.Result, error)
+
+	// base and req are set on the handler of one request (forRequest): base
+	// is the server's handler, which holds the state shared across requests
+	// (ignore rules, indexes); req holds the request's policy snapshot.
+	base *ToolsHandler
+	req  *requestScope
+}
+
+// requestScope is what one request reads once and then uses throughout: the
+// ignore files and the access policy compiled from them, so a request never
+// mixes two generations of the rules.
+type requestScope struct {
+	reader *libgitignore.IgnoreReader // reads each rule file once for the request
+
+	policyOnce sync.Once
+	policy     accessPolicy
+}
+
+// forRequest returns the handler for one request: the same server state,
+// with a policy snapshot taken on first use and kept for the request.
+func (h *ToolsHandler) forRequest() *ToolsHandler {
+	if h.req != nil {
+		return h
+	}
+	return &ToolsHandler{
+		rootDir:      h.rootDir,
+		opt:          h.opt,
+		cacheStore:   h.cacheStore,
+		newIndex:     h.newIndex,
+		buildContext: h.buildContext,
+		base:         h,
+		req:          &requestScope{reader: h.newIgnoreReader()},
+	}
+}
+
+// shared returns the handler holding the state shared across requests.
+func (h *ToolsHandler) shared() *ToolsHandler {
+	if h.base != nil {
+		return h.base
+	}
+	return h
+}
+
+// newIgnoreReader returns a reader of the repository's ignore files.
+func (h *ToolsHandler) newIgnoreReader() *libgitignore.IgnoreReader {
+	var extra []string
+	if h.opt != nil {
+		extra = h.opt.AdditionallyIgnoreRuleFilenameList
+	}
+	return libgitignore.NewIgnoreReader(h.rootDir, extra)
+}
+
+// ignoreReader returns the request's reader (each rule file read once for
+// the request), or a fresh one outside a request.
+func (h *ToolsHandler) ignoreReader() *libgitignore.IgnoreReader {
+	if h.req != nil {
+		return h.req.reader
+	}
+	return h.newIgnoreReader()
+}
+
+// ignoreFiles reads the whole repository's ignore files.
+func (h *ToolsHandler) ignoreFiles() (*libgitignore.IgnoreFiles, error) {
+	return h.ignoreReader().All()
 }
 
 // NewToolsHandler creates a new tools handler.
@@ -79,6 +145,7 @@ func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cac
 type ignoreState struct {
 	fingerprint string
 	rule        *libgitignore.GitIgnore
+	err         error // why rule is nil, if it is
 }
 
 func ignoreSlot(allowGitignore bool) int {
@@ -93,23 +160,35 @@ func ignoreSlot(allowGitignore bool) int {
 // cannot be built (e.g. an unreadable directory) is nil — no ignoring —
 // exactly as Option.Normalize treats it.
 func (h *ToolsHandler) ignoreRule(allowGitignore bool) *libgitignore.GitIgnore {
-	var extra []string
-	if h.opt != nil {
-		extra = h.opt.AdditionallyIgnoreRuleFilenameList
-	}
-	fp, err := libgitignore.IgnoreFilesFingerprint(h.rootDir, extra)
-	i := ignoreSlot(allowGitignore)
-	h.ignoreMu.Lock()
-	defer h.ignoreMu.Unlock()
-	if err == nil && h.ignore[i].fingerprint == fp && fp != "" {
-		return h.ignore[i].rule
-	}
-	rule, _ := libgitignore.GenerateIntegratedGitIgnore(allowGitignore, h.rootDir, extra)
-	if err != nil {
-		fp = "" // never reuse a rule whose inputs could not be identified
-	}
-	h.ignore[i] = ignoreState{fingerprint: fp, rule: rule}
+	rule, _ := h.ignoreRuleErr(allowGitignore)
 	return rule
+}
+
+// ignoreRuleErr is ignoreRule with the error that left the rule nil.
+//
+// The ignore files are read (walked, read and hashed) for every request, so
+// an added, removed, moved or edited rule file is seen by the next request;
+// only compiling is skipped while their fingerprint is unchanged. The rule is
+// compiled from the very bytes the fingerprint was taken of, so the cache can
+// never pair a fingerprint with the rule of other contents.
+func (h *ToolsHandler) ignoreRuleErr(allowGitignore bool) (*libgitignore.GitIgnore, error) {
+	files, err := h.ignoreFiles()
+	if err != nil {
+		return nil, err // the repository could not be walked: nothing to reuse
+	}
+	fp := files.Fingerprint()
+	i := ignoreSlot(allowGitignore)
+	s := h.shared()
+	s.ignoreMu.Lock()
+	defer s.ignoreMu.Unlock()
+	if s.ignore[i].fingerprint == fp {
+		s.ignoreHits++
+		return s.ignore[i].rule, s.ignore[i].err
+	}
+	s.ignoreBuilds++
+	rule, buildErr := files.Compile(allowGitignore)
+	s.ignore[i] = ignoreState{fingerprint: fp, rule: rule, err: buildErr}
+	return rule, buildErr
 }
 
 // fileToolOption returns a per-request copy of the server's file-selection
@@ -161,6 +240,7 @@ func (h *ToolsHandler) fileToolOption(args map[string]interface{}) (*commandline
 		return nil, fmt.Errorf("allowGitignore %w", err)
 	}
 	opt.GitIgnoreRule = h.ignoreRule(opt.AllowGitignoreFlag.Bool())
+	opt.AccessExclude = h.accessPolicy().excludesWalked
 	return &opt, nil
 }
 
@@ -192,21 +272,43 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 	if err != nil {
 		return nil, err
 	}
-	h.indexOnce.Do(func() {
+	s := h.shared()
+	if h.req != nil {
+		ctx = context.WithValue(ctx, policyKey{}, h.accessPolicy())
+	}
+	s.indexOnce.Do(func() {
 		providers := defaultProviders()
 		store := h.cacheStore
 		if store == nil {
 			store = cache.NopStore{}
 		}
-		build := index.NewWithCache
+		// The index never contains a file the .arkignore access policy
+		// excludes: each build and each freshness fingerprint walks the
+		// sources with the policy current at that moment, so a policy change
+		// that alters the file set alters the fingerprint and forces a rebuild.
+		build := func(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*index.RepositoryIndex, error) {
+			return index.NewWithCacheExcluding(ctx, root, providers, store, s.accessPolicy().indexExclude)
+		}
 		if h.newIndex != nil {
 			build = h.newIndex
 		}
-		h.indexes = newIndexCache(providers, func(ctx context.Context, root string) (*index.RepositoryIndex, error) {
+		s.indexes = newIndexCache(providers, func(ctx context.Context, root string) (*index.RepositoryIndex, error) {
 			return build(ctx, root, providers, store)
 		})
+		if s.newIndex == nil {
+			// A freshness check runs in the request: it uses the request's
+			// snapshot (taken after the request arrived, as the index cache
+			// requires). A build runs detached and reads the policy itself.
+			s.indexes.fingerprint = func(ctx context.Context, root string) (string, error) {
+				policy, ok := ctx.Value(policyKey{}).(accessPolicy)
+				if !ok {
+					policy = s.accessPolicy()
+				}
+				return index.SourceFingerprintExcluding(ctx, root, providers, policy.indexExclude)
+			}
+		}
 	})
-	return h.indexes.get(ctx, canonical)
+	return s.indexes.get(ctx, canonical)
 }
 
 // canonicalDir returns the absolute, symlink-free form of dir, refusing a
@@ -275,7 +377,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 					},
 					"maskSecrets": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Mask secrets in output",
+						"description": "Accepted for compatibility. Masking follows the server's --mask-secrets setting; a call cannot turn it off",
 						"default":     true,
 					},
 					"deleteComments": map[string]interface{}{
@@ -448,7 +550,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 					},
 					"maskSecrets": map[string]interface{}{
 						"type":        "boolean",
-						"description": "Mask secrets in output",
+						"description": "Accepted for compatibility. Masking follows the server's --mask-secrets setting; a call cannot turn it off",
 						"default":     true,
 					},
 					"deleteComments": map[string]interface{}{
@@ -482,7 +584,19 @@ func (h *ToolsHandler) ListTools() []Tool {
 }
 
 // CallTool executes a specific tool
+// CallTool runs a tool and returns its result as it may leave the server:
+// with the secrets in its repository-derived text masked (sanitize.go),
+// unless masking is turned off (masking.go).
 func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (*CallToolResult, error) {
+	h = h.forRequest()
+	result, err := h.callTool(name, arguments)
+	if !h.masking(name, arguments) {
+		return result, err
+	}
+	return sanitizeToolResult(name, result), err
+}
+
+func (h *ToolsHandler) callTool(name string, arguments map[string]interface{}) (*CallToolResult, error) {
 	switch name {
 	case "get_directory_tree":
 		return h.getDirectoryTree(arguments)
@@ -555,7 +669,7 @@ func (h *ToolsHandler) getDirectoryTree(args map[string]interface{}) (*CallToolR
 			}
 		}
 	}
-	tree, err := GenerateBoundedDirectoryTreeJSON(fullPath, h.ignoreRule(true), limits)
+	tree, err := GenerateBoundedDirectoryTreeJSON(fullPath, h.ignoreRule(true), h.accessPolicy().excludesWalked, limits)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},

@@ -43,6 +43,7 @@ mcp_opts=(
   '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
   '--exclude-dir[-E]:dirname:_files -/'
   '--skip-non-utf8[-s]' '--delete-comment[-D]'
+  '--allow-external-symlinks[Read through symlinks leading outside the repository]:on/off:(on off)'
   '--no-cache[Disable persistent index cache]'
   '--help[-h]' '--version[-v]'
 )

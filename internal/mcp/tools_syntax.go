@@ -22,7 +22,10 @@ import (
 //     refused. String-prefix checks are intentionally not used.
 //   - physically, when the path exists: its symlink-resolved form must be
 //     inside the symlink-resolved root, so a symlink in the repository cannot
-//     expose what lies outside it. A symlink that stays inside the root works.
+//     expose what lies outside it — unless the operator started the server
+//     with --allow-external-symlinks on (access_policy.go), and then only
+//     through a path that is itself inside the root. A symlink that stays
+//     inside the root works.
 //
 // An absolute path that names an in-root location through another spelling of
 // a symlinked root (macOS /var vs /private/var) is accepted and returned in the
@@ -50,7 +53,19 @@ func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, e
 		if rel, inside = relInside(realRoot, real); !inside {
 			return "", "", outsideRootError(path, root)
 		}
+		if policy := h.pathPolicy(rel); policy.excludesRel(rel) {
+			return "", "", policy.excludedPathError(path)
+		}
 		return filepath.Join(root, rel), rel, nil
+	}
+
+	// The .arkignore access policy (access_policy.go): the path as named
+	// and, below, the file a symlink leads to — each decided by the rule
+	// files that can apply to it. The root itself is never excluded.
+	if rel != "." {
+		if policy := h.pathPolicy(rel); policy.excludesRel(rel) {
+			return "", "", policy.excludedPathError(path)
+		}
 	}
 
 	// Physical containment. A path that does not resolve (missing, dangling)
@@ -61,8 +76,19 @@ func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, e
 		if rootErr != nil {
 			return "", "", outsideRootError(path, root)
 		}
-		if _, ok := relInside(realRoot, real); !ok {
+		realRel, ok := relInside(realRoot, real)
+		if !ok {
+			// Reached through a symlink in the repository (the path itself
+			// is inside the root): readable only if the operator allowed it.
+			if h.opt != nil && h.opt.AllowExternalSymlinks {
+				return candidate, rel, nil
+			}
 			return "", "", fmt.Errorf("path %q resolves through a symlink to %q, outside the server root %q; use a path inside the repository", path, real, root)
+		}
+		if realRel != "." && realRel != rel {
+			if policy := h.pathPolicy(realRel); policy.excludesRel(realRel) {
+				return "", "", policy.excludedPathError(path)
+			}
 		}
 	}
 	return candidate, rel, nil
@@ -303,6 +329,7 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 
 	var statsScanned, statsSkipped, statsParseErr int
 
+	policy := h.accessPolicy()
 	err = filepath.Walk(fullPath, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -312,6 +339,12 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		}
 		if skip, err := skipMetadata(fullPath, filePath, info); skip {
 			return err
+		}
+		if filePath != fullPath && policy.excludesEntry(filePath, info.Mode()&os.ModeSymlink != 0) {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		if info.IsDir() {
 			return nil

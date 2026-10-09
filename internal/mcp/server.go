@@ -72,6 +72,7 @@ type MCPServer struct {
 
 // NewMCPServer creates a new MCP server instance
 func NewMCPServer(rootDir string, serverOpt *commandline.ServeOption) *MCPServer {
+	warnIfServerMaskingOff(serverOpt.GeneralOption)
 	var store cache.Store
 	if serverOpt.NoCache {
 		store = cache.NopStore{}
@@ -90,6 +91,15 @@ func NewMCPServer(rootDir string, serverOpt *commandline.ServeOption) *MCPServer
 		tools:     NewToolsHandlerWithCache(rootDir, serverOpt.GeneralOption, store),
 		resources: NewResourcesHandler(rootDir, serverOpt.GeneralOption),
 	}
+}
+
+// errorData is the error text a tool or resource failure returns: masked
+// unless the server runs with --mask-secrets off.
+func (s *MCPServer) errorData(err error) string {
+	if !masksByDefault(s.serverOpt.GeneralOption) {
+		return err.Error()
+	}
+	return sanitizeText(err.Error(), false)
 }
 
 // processRequest routes the request to the appropriate handler
@@ -225,7 +235,7 @@ func (s *MCPServer) handleCallTool(request *MCPRequest) *MCPResponse {
 			Error: &MCPError{
 				Code:    ErrorCodeInternalError,
 				Message: "Tool execution error",
-				Data:    err.Error(),
+				Data:    s.errorData(err),
 			},
 		}
 	}
@@ -287,7 +297,7 @@ func (s *MCPServer) handleReadResource(request *MCPRequest) *MCPResponse {
 			Error: &MCPError{
 				Code:    ErrorCodeInternalError,
 				Message: "Resource read error",
-				Data:    err.Error(),
+				Data:    s.errorData(err),
 			},
 		}
 	}

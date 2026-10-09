@@ -1,7 +1,9 @@
 Usage: ark [OPTIONS] <dirname>
 
 Description:
-   Yet another alternate [directory|repository] represent text generator tool.
+   Code intelligence engine for AI coding agents: an MCP server that serves a
+   repository's symbols, references, call graph and change impact (ark setup, ark mcp-server).
+   Without a subcommand, ark dumps a directory's tree and file contents into one file.
 
 Sub commands:
   setup <client>                                   Configure Ark for a supported coding agent (claude, cursor, codex, cline, copilot-vscode, copilot-cli).
@@ -13,16 +15,16 @@ Sub commands:
   instruction <target>                             Print agent instructions for using Ark MCP (target: claude, codex, cursor, cline, copilot-vscode, copilot-cli).
 
 
-general (text generator mode) options:
+general (repository dump mode) options:
   -h, --help                                       Show this help message and exit.
   -v, --version                                    Show version.
-  -o, --output-filename <filename>                 Specify ark output txt filename. (optional. default: 'ark_output.txt')
+  -o, --output-filename <filename>                 Specify the output filename. (optional. default: 'ark-output.txt'; .md, .xml or .arklite.txt by format)
   -b, --scan-buffer <number|byte-string>           Specify the line scan buffer size. (optional. default: '10M')
   -f, --output-format <'txt'|'md'|'xml'|'arklite'> Specify the format of the output file. (optional. default: 'txt').
   -m, --mask-secrets <'on'|'off'>                  Specify Detect the secrets and convert it to masked output. (optional. default: 'on').
   -a, --allow-gitignore <'on'|'off'>               Specify enable .gitignore filter rule. (optional. default: 'on')
   -A, --additionally-ignorerule <filepath>         Specify a file containing additional ignore rules. (optional.)
-  -n, --with-line-number <'on'|'off'>              Specify Whether to include file line numbers when outputting. (optional. default: 'on')
+  -n, --with-line-number <'on'|'off'>              Specify Whether to include file line numbers when outputting (txt format). (optional. default: 'off')
   -d, --ignore-dotfile <'on'|'off'>                Specify ignore dot files. (optional. default 'off')
   -x, --pattern-regex <regxp>                      Specify watch file pattern regexp. (optional.)
   -i, --include-ext <extention>                    Specify include file extention. Allows comma separated list.(optional.)
@@ -62,7 +64,7 @@ mcp-server options:
   -t, --type <http|stdio>                          Specify the mcp-server serve type. (optional. default: 'stdio')
   -p, --http-port <number>                         Specify the mcp-server port. (optional. default: 8522)
   -b, --scan-buffer <number|byte-string>           Specify the line scan buffer size. (optional. default: '10M')
-  -m, --mask-secrets <'on'|'off'>                  Specify Detect the secrets and convert it to masked output. (optional. default: 'on').
+  -m, --mask-secrets <'on'|'off'>                  Mask detected secrets in every MCP response; 'off' disables masking and logs a warning. (optional. default: 'on').
   -a, --allow-gitignore <'on'|'off'>               Specify enable .gitignore filter rule. (optional. default: 'on')
   -A, --additionally-ignorerule <filepath>         Specify a file containing additional ignore rules. (optional.)
   -d, --ignore-dotfile <'on'|'off'>                Specify ignore dot files. (optional. default 'off')
@@ -74,6 +76,7 @@ mcp-server options:
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
+  --allow-external-symlinks <'on'|'off'>           Read files through symlinks in the repository that lead outside it. (optional. default: 'off')
   --no-cache                                       Disable the persistent extraction cache in <root>/.ark/index. (optional.)
 
 instruction options:
@@ -123,5 +126,5 @@ Arguments:
   <regexp>                                         regular expresion string. Interpreted with golang `regexp` package.
 
 See Also:
-  ark documentation: https://github.com/magicdrive/ark/README.md
+  ark documentation: https://github.com/magicdrive/ark#readme
 

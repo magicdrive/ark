@@ -155,7 +155,7 @@ func TestDirectoryTree_DepthAndExcludes(t *testing.T) {
 	}
 	// No limits: exactly the previous output.
 	plain, _ := callText(t, h, "get_directory_tree", map[string]interface{}{"path": "."})
-	if legacy, err := GenerateDirectoryTreeJSON(root, h.ignoreRule(true)); err != nil || plain != legacy {
+	if legacy, err := GenerateDirectoryTreeJSON(root, h.ignoreRule(true), h.accessPolicy().excludesWalked); err != nil || plain != legacy {
 		t.Errorf("unbounded tree changed:\n%s\n---\n%s", plain, legacy)
 	}
 	if got, want := paths(map[string]interface{}{"path": ".", "maxDepth": float64(1)}),

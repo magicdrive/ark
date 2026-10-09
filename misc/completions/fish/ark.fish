@@ -71,6 +71,7 @@ complete -c ark -n '__fish_ark_no_subcommand' -l exclude-dir      -s E -d 'Exclu
 
 # ----- mcp-server flags ------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l no-cache -d 'Disable persistent index cache'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l allow-external-symlinks -d 'Read through symlinks leading outside the repository' -x -a 'on off'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -s s -l skip-non-utf8  -d 'Skip non-UTF8 files'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -s D -l delete-comment -d 'Delete code comments'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -s h -l help            -d 'Show help'

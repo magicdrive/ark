@@ -156,5 +156,5 @@ func declarationLess(a, b symbol.Symbol) bool {
 // It exists to test collision handling; production builds use New or
 // NewWithCache, which assign symbol.NewDeclarationID.
 func NewWithIDs(ctx context.Context, root string, providers []language.Provider, store cache.Store, ids IDFunc) (*RepositoryIndex, error) {
-	return newWithCache(ctx, root, providers, store, ids)
+	return newWithCache(ctx, root, providers, store, ids, nil)
 }

@@ -162,8 +162,18 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 	}
 
 	if info.IsDir() {
+		policy := h.accessPolicy()
 		_ = filepath.Walk(fullPath, func(p string, fi os.FileInfo, err error) error {
-			if err != nil || fi.IsDir() {
+			if err != nil {
+				return nil
+			}
+			if p != fullPath && policy.excludesEntry(p, fi.Mode()&os.ModeSymlink != 0) {
+				if fi.IsDir() {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if fi.IsDir() {
 				return nil
 			}
 			collect(p)

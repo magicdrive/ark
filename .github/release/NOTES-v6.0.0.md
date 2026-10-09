@@ -8,15 +8,35 @@
 
 ## Overview
 
-v6.0.0 makes Ark's answers about *which declaration* trustworthy, and adds a
-discovery tool for agents that do not know a symbol's exact name.
+Ark is a code intelligence engine for AI coding agents: it resolves what the
+references in a repository point to and serves the resulting graph over MCP,
+with the confidence of every answer. v6.0.0 makes those answers about *which
+declaration* trustworthy, and adds a discovery tool for agents that do not
+know a symbol's exact name.
 
-- Every declaration is its own symbol, even when one file declares a name
-  twice; nothing merges two declarations any more.
-- `search_context` finds symbols from a partial identifier and returns the top
-  candidate's context in one call, within one token budget.
+- **Go references follow Go's scoping** (improved): package scope, imports
+  and local shadowing decide a call's target; an unrelated declaration that
+  happens to share a name is no longer an edge.
+- **Names never cross languages** (improved): a Python, JavaScript or PHP
+  call no longer resolves to another language's declaration. TSX and
+  TypeScript, one language, still share names.
+- **Every declaration is its own symbol** (improved), even when one file
+  declares a name twice; nothing merges two declarations any more.
+- **`search_context`** (new) finds symbols from a partial identifier and
+  returns the top candidate's context in one call, within one token budget.
 - The MCP server resolves `--root` once at startup, accepts absolute paths
-  inside it, and refuses symlinks that lead outside it.
+  inside it, and neither reads nor indexes through symlinks that lead outside
+  it unless the operator starts it with `--allow-external-symlinks on` (new).
+- **Secrets are masked in MCP responses** (new): the repository dump's
+  masking rules apply at the MCP output boundary — source snippets, search
+  lines, receiver expressions, resources and errors — on by default;
+  `ark mcp-server --mask-secrets off` turns it off, with a warning.
+- **`.arkignore` applies to the MCP server** (new): files it excludes are
+  never read, listed, searched or indexed by any tool, directly or through a
+  symlink, whatever the masking setting.
+- **Documentation** (new): a `docs/` set — getting started, MCP tool
+  reference, resolution model, language support, operations, performance,
+  troubleshooting — and a rewritten README.
 
 The CLI and the MCP schema change only additively (one new tool, one new
 optional parameter). The major version marks that **results change meaning
@@ -105,19 +125,48 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 
 ## Security
 
+- **Secret masking at the MCP output boundary.** v5.0.1 masked secrets only in
+  `get_file_content`, `get_files_arklite` and `file://`; `get_symbol`,
+  `get_context`, `search_context`, `search_in_files` and the receiver
+  expressions of `find_references`, `get_callees` and `analyze_change_impact`
+  returned them as written. Every tool result, resource and error now passes
+  one sanitizer that applies the existing rules (`internal/secrets`, unchanged)
+  to repository text, keeps JSON structure, keys, numbers, paths, symbol names
+  and IDs unchanged, and returns a response with nothing to mask byte for
+  byte. It is on by default; `ark mcp-server --mask-secrets off` turns it off
+  for the server and logs a warning on standard error once. A request cannot
+  turn it off: `maskSecrets` on `get_file_content` / `get_files_arklite`
+  stays accepted without effect, as before. Analysis, index and cache are
+  unaffected.
+- **`.arkignore` is enforced by the MCP server.** Every `.arkignore` under the
+  root (with the dump's pattern syntax and matcher) now decides what the
+  server may read: an excluded path, or a symlink to one, is answered as not
+  existing; listings, searches, trees, statistics and the index skip excluded
+  files, so no symbol, edge, context, map entry or diagnostic of them exists.
+  Rule changes apply to the next request, of the same or a restarted server;
+  the extraction cache cannot serve an excluded file. Independent of masking;
+  rules that cannot be read fail closed. Each request reads every rule file
+  once; a named path reads only the rule files above it; compiled rules are
+  reused while the rule files' SHA-256 contents are unchanged.
 - Path arguments of every MCP tool go through one gate: relative paths resolve
   against the absolute root; absolute paths are accepted only inside it;
   `../` escapes are refused; an existing path whose symlink-resolved form leaves
   the root is refused (v5.0.1 returned the content of a file reached through
-  such a symlink). See `SECURITY.md` for the remaining limits (TOCTOU; walks may
-  read a symlinked *file* they encounter).
+  such a symlink), and walks and the index skip symlinks whose target lies
+  outside the root.
+- **`mcp-server --allow-external-symlinks <on|off>`** (new, default `off`):
+  with `on`, files reached through symlinks in the repository that lead
+  outside it are read and indexed; `.arkignore` still applies to the path in
+  the repository, paths outside the root stay refused, and no request can
+  change the setting. See `SECURITY.md` (Symlink policy) for the behaviour
+  per access and the remaining limit (TOCTOU).
 
 ## Breaking changes
 
 | Area | v5.0.1 | v6.0.0 | Migration |
 |---|---|---|---|
 | `mcp-server --root` | A missing or non-directory root started a server that failed every request | Startup error naming the resolved path | Pass an existing directory |
-| Symlinks leaving the root | File tools followed them | Refused (`resolves through a symlink … outside the server root`) | Serve a root that contains the files, or copy them in |
+| Symlinks leaving the root | File tools followed them; walks read file symlinks | Refused when named (`resolves through a symlink … outside the server root`); skipped by walks and the index | Serve a root that contains the files, or start the server with `--allow-external-symlinks on` |
 | Same-file namesakes (`init`, redefinitions) | One merged symbol; tools answered with a mix of both | Separate symbols; a bare name is **ambiguous** for target tools | Pass the `symbolId` from the ambiguity listing (or from `search_context`) |
 | SymbolIDs | — | Unchanged for every declaration except the 2nd+ namesake in a file | Re-read IDs of namesakes |
 | `Symbol.Parent` (in `search_code` JSON) | Hash of a name (no such symbol) | Real parent ID or `""` | Treat as an ID reference |
@@ -125,6 +174,9 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 | Go call graph | A unique name anywhere was Strong (x/tools: 2,437 cross-package edges); imports matched by path substring | Package scoping; on x/tools Go edges 11,179 → 9,604 with zero oracle-contradicted Strong/Exact | Expect fewer, correct edges; some former callers become Candidates |
 | Go `pkg.Name` to a package outside the repository | Unresolved | `outsideRepository` | — |
 | A name declared only in another language | Strong / Candidate to that declaration | Unresolved | Expect no callers, impact or context across languages |
+| Secrets in MCP responses | Masked only by the file tools | Masked in every response by default; `mcp-server --mask-secrets off` turns it off, with a warning | Start the server with `--mask-secrets off` where unmasked text is required |
+| Files listed in `.arkignore` | Read, listed, searched and indexed by the MCP server | Invisible to every MCP tool and resource | Remove patterns for files agents must see |
+| Source in code-intelligence responses | As written | Detected secrets, and code the assignment rule matches (`token := next()`), show `*****MASKED*****` | — |
 | Error text | Root shown as given (`./`) | Absolute root; ambiguity listing has `file:line symbolId=` | Do not parse error text |
 
 No CLI flag, MCP tool, required parameter or output field was removed.
@@ -158,13 +210,29 @@ No CLI flag, MCP tool, required parameter or output field was removed.
 | golang.org/x/tools v0.36.0 | 1216 | 14.7–16.1 → 15.2–15.9 s | 79 → 74 ms | 2.15 → 2.25 s | 832–947 → 781–1029 MB |
 
 Timings and RSS overlap between versions across repeated runs (RSS varies with
-GC timing). Go package scoping (measured against the v6 audit build, same
+GC timing). This table compares versions on the audit's corpus copies (x/tools:
+1,216 indexed files); `docs/performance.md` measures v6.0.0 alone on the full
+release archives (x/tools: 1,875 files), with a reproducible procedure. Go package scoping (measured against the v6 audit build, same
 corpora): resolver time 1.31 s → 0.19 s on x/tools (268 → 54 ms on Ark: the
 repository-wide name stages no longer run for Go), index build 14.9 → 13.6 s,
 heap retained by the index unchanged (70.5 → 68.4 MB on x/tools); warm tool
 latency within run-to-run variation. In-process on x/tools: allocations +1.6% (3.64M → 3.70M), heap
 304 → 305 MB. `search_context` warm latency: 0.5 ms / 32 ms / 8 ms / 96 ms on the
 four corpora.
+
+Access policy (`.arkignore` and symlinks) — warm latency per tool, median of
+9, `.arkignore` integration's first version → this release; the build before
+any `.arkignore` enforcement in brackets:
+
+| Corpus | `get_diagnostics` | `list_files` | `search_in_files` | `get_file_content` |
+|---|---|---|---|---|
+| Ark (1 pattern) | 40.3 → 36.3 ms [26.8] | 112.9 → 87.0 ms [103.3] | 138.8 → 109.6 ms [120.3] | 6.4 → 0.4 ms [0.2] |
+| golang.org/x/tools (no `.arkignore`) | 130.6 → 137.4 ms [108.0] | 115.0 → 102.3 ms [90.5] | 92.2 → 69.3 ms [72.8] | 25.3 → 0.4 ms [0.4] |
+| x/tools + 300 nested `.arkignore` (900 patterns) | 1,810 → 217 ms [104] | 4,953 → 277 ms [2,491] | 1,447 → 126 ms [733] | 34.0 → 0.5 ms [0.3] |
+
+The remaining cost of index tools (≈10 ms on Ark, ≈30 ms on x/tools) is the
+walk that re-reads the rule files on every request; compiling the rules takes
+microseconds and is reused while they are unchanged.
 
 Tool-level workflow benchmark (12 tasks: exact, partial and ambiguous names,
 callers, callees, impact, error path, another Go repository, TypeScript; no
@@ -182,6 +250,29 @@ case-insensitive partial name) and avoids `find_symbol`'s per-call file scan,
 but returns more tokens: 31k of its 51k come from one task whose target
 function is very large (`get_context` always includes the target). These are
 tool-response tokens, not a model's total token use.
+
+## Documentation
+
+- `README.md` / `README_ja.md` rewritten around what Ark is for: the
+  confidence model, a worked example with real output, language levels,
+  measured performance, security and limitations.
+- New in `docs/`: `getting-started.md`, `mcp-tools.md` (every tool's
+  parameters, generated from the server's schema and checked by a test),
+  `resolution-model.md`, `language-support.md`, `cli.md`, `operations.md`,
+  `performance.md` (with `docs/scripts/ark-mcp-timing.py` to reproduce the
+  measurements), `troubleshooting.md`.
+- `SECURITY.md` now states the data boundary (which tools mask secrets), the
+  files Ark writes, the HTTP transport's protections and lack of
+  authentication, and a cache mitigation that is actually available
+  (`--no-cache`).
+- Corrected: the comment-stripping flag is `--delete-comment` (`-D`); the dump
+  file is `ark-output.<ext>`; generated skills grant 19 of the 21 tools;
+  JavaScript class methods are not extracted (previously undocumented).
+- `ark --help` describes Ark as a code intelligence engine for AI coding
+  agents, states the real dump defaults (`ark-output.txt`, line numbers
+  `off`) and links `https://github.com/magicdrive/ark#readme`; the Homebrew
+  formula description matches. A test checks the help's defaults against the
+  flags.
 
 ## Known limitations
 
@@ -211,7 +302,24 @@ tool-response tokens, not a model's total token use.
 - A function passed as a value (`ids: symbol.NewDeclarationID`) is no call:
   `analyze_change_impact` does not list the code that calls it through the
   value.
-- Python methods are not extracted; Terraform `.tf.json` is not read.
+- Python and JavaScript class methods are not extracted; Terraform
+  `.tf.json` is not read.
+- Secret masking is pattern-based: it misses formats its rules do not know
+  (a JSON `"api_key": "…"` member, `Authorization: Bearer …`, passwords in
+  connection URLs), masks some ordinary code (`token := next()`), and never
+  masks paths or symbol names. It is not data-loss prevention (`SECURITY.md`).
+- The repository dump (CLI) reads ignore files under its working directory,
+  not under the directory it dumps, and with `.gitignore` handling on reads a
+  directory's `.arkignore` only if it has no `.gitignore`; the MCP server
+  applies every `.arkignore`. The dump also stops at a symlink to a
+  directory (`read …: is a directory`). All predate v6.
+- With `--allow-external-symlinks on`, walks still do not descend into a
+  directory symlink; files below it are readable by naming them. A symlink
+  retargeted between the check and the read can be read through (TOCTOU).
+- `get_file_content`'s `withLineNumbers` argument has no effect (predates
+  v6); responses carry no line numbers.
+- The extraction cache in `<root>/.ark/index` gains an entry per edited file
+  version and is never pruned; deleting it is always safe (predates v6).
 
 ## Changelog (v5.0.1 → v6.0.0)
 
@@ -233,7 +341,11 @@ item order; order-dependent declaration ordinals for conflicting drafts;
 `mcp-server --help/--version`; README install instructions; Go dot imports
 were read as ordinary imports; `var x I = &T{}` proved type T for x.
 
-**Security** — symlink escapes through tool path arguments are refused.
+**Security** — symlink escapes through tool path arguments are refused, and
+walks skip symlinks leading outside the root unless
+`mcp-server --allow-external-symlinks on`;
+detected secrets are masked in MCP responses by default (tools, resources,
+errors); `.arkignore` exclusions are enforced by the MCP server.
 
 **Deprecated / Removed** — none.
 

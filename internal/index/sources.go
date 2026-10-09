@@ -16,12 +16,19 @@ import (
 	"github.com/magicdrive/ark/internal/source"
 )
 
+// Exclude reports whether the file or directory at path (absolute, below the
+// index root; d is its walk entry, a symlink included) is left out of an
+// index: an excluded directory is not entered, an excluded file is not read.
+// The MCP server passes its .arkignore access policy; nil excludes nothing.
+type Exclude func(path string, d fs.DirEntry) bool
+
 // walkSources visits, in lexical (filepath.WalkDir) order, every file an index
 // built over root reads: files with a provider extension, outside skipped
-// directories (SkipDirName). visit receives the file's content, or the error
-// reading it. Building an index and fingerprinting its sources use this one
-// walk, so they always see the same set of files.
-func walkSources(ctx context.Context, root string, providers []language.Provider,
+// directories (SkipDirName) and not excluded. visit receives the file's
+// content, or the error reading it. Building an index and fingerprinting its
+// sources use this one walk, so they always see the same set of files — which
+// is why a change of what exclude leaves out changes the fingerprint.
+func walkSources(ctx context.Context, root string, providers []language.Provider, exclude Exclude,
 	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) error {
 	extMap := make(map[string]language.Provider)
 	for _, p := range providers {
@@ -37,13 +44,16 @@ func walkSources(ctx context.Context, root string, providers []language.Provider
 			return ctx.Err()
 		}
 		if d.IsDir() {
-			if SkipDirName(d.Name()) {
+			if SkipDirName(d.Name()) || (exclude != nil && path != root && exclude(path, d)) {
 				return filepath.SkipDir
 			}
 			return nil
 		}
 		prov, ok := extMap[strings.ToLower(filepath.Ext(path))]
 		if !ok {
+			return nil
+		}
+		if exclude != nil && exclude(path, d) {
 			return nil
 		}
 		src, err := os.ReadFile(path)
@@ -83,11 +93,17 @@ func (d *sourceDigest) sum() string { return hex.EncodeToString(d.h.Sum(nil)) }
 // providers would carry (RepositoryIndex.Fingerprint). It reads every source
 // file — content, not metadata, decides freshness — but parses nothing.
 func SourceFingerprint(ctx context.Context, root string, providers []language.Provider) (string, error) {
+	return SourceFingerprintExcluding(ctx, root, providers, nil)
+}
+
+// SourceFingerprintExcluding is SourceFingerprint of an index built with
+// NewWithCacheExcluding and the same exclude.
+func SourceFingerprintExcluding(ctx context.Context, root string, providers []language.Provider, exclude Exclude) (string, error) {
 	if err := checkRoot(root); err != nil {
 		return "", err
 	}
 	d := newSourceDigest(providers)
-	err := walkSources(ctx, root, providers, func(_, rel string, _ language.Provider, src []byte, readErr error) {
+	err := walkSources(ctx, root, providers, exclude, func(_, rel string, _ language.Provider, src []byte, readErr error) {
 		d.add(rel, src, readErr)
 	})
 	if ctx.Err() != nil {

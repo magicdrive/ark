@@ -95,6 +95,9 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 	deleteCommentsFlagOpt := fs.Bool("delete-comment", false, "Specify flag delete code comments.")
 	fs.BoolVar(deleteCommentsFlagOpt, "D", false, "Specify flag delete code comments.")
 
+	// --allow-external-symlinks
+	allowExternalSymlinksOpt := fs.String("allow-external-symlinks", "off", "Allow reading files through symlinks in the repository that lead outside it.")
+
 	// --no-cache
 	noCacheFlagOpt := fs.Bool("no-cache", false, "Disable persistent index cache.")
 
@@ -155,6 +158,14 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 		HttpPort:           strconv.Itoa(*httpPortOpt),
 		NoCache:            *noCacheFlagOpt,
 		GeneralOption:      generalOpt,
+	}
+
+	switch *allowExternalSymlinksOpt {
+	case "on":
+		generalOpt.AllowExternalSymlinks = true
+	case "off":
+	default:
+		return optLength, nil, fmt.Errorf("--allow-external-symlinks %q: must be 'on' or 'off'", *allowExternalSymlinksOpt)
 	}
 
 	if err := common.JoinErrors(result.Normalize(), generalOpt.Normalize()); err != nil {

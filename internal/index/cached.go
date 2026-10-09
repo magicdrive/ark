@@ -23,10 +23,18 @@ var ArkVersion = "0.1.0"
 // On any cache read error the file is re-extracted (cache-miss semantics).
 // Panic is never used for cache failures.
 func NewWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*RepositoryIndex, error) {
-	return newWithCache(ctx, root, providers, store, symbol.NewDeclarationID)
+	return newWithCache(ctx, root, providers, store, symbol.NewDeclarationID, nil)
 }
 
-func newWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store, ids IDFunc) (*RepositoryIndex, error) {
+// NewWithCacheExcluding is NewWithCache over the files exclude does not leave
+// out: an excluded file is never read, so it is not parsed, not looked up in
+// or written to store, and contributes no symbol, reference, edge, diagnostic
+// or fingerprint input.
+func NewWithCacheExcluding(ctx context.Context, root string, providers []language.Provider, store cache.Store, exclude Exclude) (*RepositoryIndex, error) {
+	return newWithCache(ctx, root, providers, store, symbol.NewDeclarationID, exclude)
+}
+
+func newWithCache(ctx context.Context, root string, providers []language.Provider, store cache.Store, ids IDFunc, exclude Exclude) (*RepositoryIndex, error) {
 	if err := checkRoot(root); err != nil {
 		return nil, err
 	}
@@ -37,7 +45,7 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 	b.ids = ids
 	digest := newSourceDigest(providers)
 
-	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
+	err := walkSources(ctx, root, providers, exclude, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
 		if readErr != nil {
 			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))

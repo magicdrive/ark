@@ -294,11 +294,17 @@ func IsTextFile(path string) bool {
 	return true
 }
 
+// keyBlockPattern matches a whole PEM private-key block, across lines.
+var keyBlockPattern = regexp.MustCompile(`(?ms)-----BEGIN (?:RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----.*?-----END (?:RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`)
+
 func MaskSecretKeyBlocks(content string) string {
-	re := regexp.MustCompile(`(?ms)-----BEGIN (?:RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----.*?-----END (?:RSA|DSA|EC|OPENSSH|PRIVATE|ENCRYPTED) PRIVATE KEY-----`)
-	return re.ReplaceAllString(content, "*****MASKED*****")
+	return keyBlockPattern.ReplaceAllString(content, "*****MASKED*****")
 }
 
+// MaskAll returns content with every secret the default rules detect
+// replaced by "*****MASKED*****": whole private-key blocks, the value of
+// every secret-like assignment, and every match of a secret pattern. It is a
+// pure function of content, safe for concurrent use.
 func MaskAll(content string) string {
 	content = MaskSecretKeyBlocks(content)
 	rules := DefaultRuleSet()

@@ -46,7 +46,7 @@ brews:
       name: homebrew-tap
       branch: main
     homepage: "https://github.com/magicdrive/ark"
-    description: "Yet another alternate [directory | repository] text generator tool — with code intelligence MCP tools"
+    description: "Code intelligence engine for AI coding agents (MCP server), with a repository text dump"
     license: "MIT"
     ids: [tar.gz]
     install: |

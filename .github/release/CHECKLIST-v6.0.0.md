@@ -8,15 +8,45 @@ on macOS x86_64; re-run what changed since.
 - [x] Module path stays `github.com/magicdrive/ark` (decided): Ark ships as a
       CLI / MCP server through Homebrew and GitHub Releases; README documents
       `go install …@main` and why `@latest` gives v1.2.3.
+- [x] Positioning: `ark --help` and the Homebrew formula description say
+      "Code intelligence engine for AI coding agents"; help defaults and URL
+      corrected (`TestHelp_*`).
+- [x] Secret masking: on by default for every MCP response;
+      `mcp-server --mask-secrets off` turns it off with a warning
+      (`TestMCPSecretMasking_*`).
+- [x] Per-request `maskSecrets` cannot override the server setting (decided;
+      `TestFileContent_SecurityOverridesStillIgnored`,
+      `TestMCPSecretMasking_Settings`).
+- [x] `.arkignore` access policy: each request reads every rule file once,
+      named paths read only the rule files above them, compiled rules reused
+      by SHA-256 fingerprint; fail-closed (`TestAccessPolicyCache_*`,
+      `TestIgnoreReader_*`, `TestIgnoreFiles_*`, `TestMatchesRel_*`).
+- [x] Symlinks leading outside the root: refused and skipped by default;
+      `mcp-server --allow-external-symlinks on` allows them, `.arkignore`
+      still applies (`TestMCPExternalSymlinks_*`).
+- [ ] Confirm for v6.0.0 that walks and the index no longer read files
+      through symlinks leading outside the root by default (NOTES, Breaking
+      changes).
+- [ ] `.arkignore` now hides files from the MCP server (NOTES, Breaking
+      changes): confirm for v6.0.0.
+- [ ] Decide whether to align the dump with the MCP `.arkignore` policy
+      (rules under the dumped directory, every `.arkignore` read) and fix its
+      crash on a directory symlink, or keep them for a later release.
 - [ ] Optional: re-run the Go oracle on a repository of your choice
       (`ARK_GO_ORACLE_ROOT=<repo> go test -run TestGoOracleMeasure -v ./internal/languages/golang/`):
       `FP 0` expected.
 
 ## Repository
 
-- [ ] Review and commit the cross-language isolation changes (`git status`):
-      name-space keyed lookups (resolver), `language.Dialect` (TSX),
-      `FileIndex.NameSpace` (index), tests, docs.
+- [ ] Review and commit the documentation overhaul and the MCP secret
+      masking (`git status`): README, README_ja, `docs/`, SECURITY,
+      ARCHITECTURE pointers, release notes, `internal/mcp/sanitize.go`,
+      help text, `.goreleaser.yml`, tests (`docs_test.go`,
+      `mcp_secret_masking_integration_test.go`, `mcp_arkignore_integration_test.go`,
+      `internal/mcp/sanitize_test.go`, `internal/commandline/help_test.go`).
+- [ ] After tagging, check the README's Quick start on a clean machine
+      (`brew install`, `ark setup <client>`) and that `ark --version`
+      prints `v6.0.0`.
 - [ ] `git diff v5.0.1..HEAD` matches the changelog in `NOTES-v6.0.0.md`.
 - [ ] No untracked artifacts (`dist/`, `.ark/`).
 
