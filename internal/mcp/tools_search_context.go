@@ -13,6 +13,7 @@ import (
 	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/search"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -90,7 +91,7 @@ func SearchContextToolDefinitions() []Tool {
 				"Candidates are ranked by how closely the name matches the query (matchType: exact, exact_case_insensitive, prefix, " +
 				"word_boundary, qualified, substring) — a rank is not evidence of what any code refers to, and every candidate is a separate symbol: " +
 				"check the other candidates before assuming rank 1 is the one you need. For another candidate's context, raise contextLimit or call get_context " +
-				"with its qualifiedName and filePattern=its path. maxTokens bounds the whole response; context that does not fit is marked omitted_budget.",
+				"with its qualifiedName, filePattern=its path and symbolId=its id (path \".\"). maxTokens bounds the whole response; context that does not fit is marked omitted_budget.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -238,6 +239,25 @@ func marshalCompact(v any) ([]byte, error) {
 	return bytes.TrimRight(buf.Bytes(), "\n"), nil
 }
 
+// sharedIDs returns the IDs carried by more than one declaration.
+func sharedIDs(syms []symbol.Symbol) map[symbol.SymbolID]bool {
+	type decl struct {
+		file string
+		pos  source.Position
+	}
+	first := make(map[symbol.SymbolID]decl, len(syms))
+	out := map[symbol.SymbolID]bool{}
+	for _, s := range syms {
+		d := decl{string(s.Location.File), s.Location.Range.Start}
+		if prev, ok := first[s.ID]; !ok {
+			first[s.ID] = d
+		} else if prev != d {
+			out[s.ID] = true
+		}
+	}
+	return out
+}
+
 // setCounts derives ReturnedMatches and Truncated from Results.
 func (r *scResponse) setCounts() {
 	r.ReturnedMatches = len(r.Results)
@@ -360,13 +380,10 @@ func (h *ToolsHandler) searchContext(args map[string]interface{}) (*CallToolResu
 		syms = append(syms, idx.SymbolsByFile(f)...)
 	}
 	matches := search.MatchSymbols(query, syms)
-	// A SymbolID is derived from (language, file, kind, qualified name), so
-	// two such declarations in one file share it and the index merges them.
-	// Their context would mix both: it is never built for them.
-	idCount := make(map[symbol.SymbolID]int, len(syms))
-	for _, s := range syms {
-		idCount[s.ID]++
-	}
+	// Every declaration has its own SymbolID (symbol.NewDeclarationID). Should
+	// two ever share one, the index would hold one merged symbol and their
+	// context would mix both: it is then never built (fail closed).
+	shared := sharedIDs(syms)
 
 	resp := &scResponse{
 		Query:        query,
@@ -391,7 +408,7 @@ func (h *ToolsHandler) searchContext(args map[string]interface{}) (*CallToolResu
 			ctx = scContext{Status: contextNotRequested}
 		case i >= contextLimit:
 			ctx = scContext{Status: contextNotRequested, Reason: reasonContextLimit}
-		case idCount[m.Symbol.ID] > 1:
+		case shared[m.Symbol.ID]:
 			ctx = scContext{Status: contextUnavailable, Reason: reasonSharedID}
 		}
 		resp.Results = append(resp.Results, scResult{

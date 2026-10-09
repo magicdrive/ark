@@ -194,6 +194,19 @@ improvement and is not.
    Tests: `TestRelations_CandidateSampleBounded`, `TestFindSymbol_TruncationAndOrder`,
    `TestTargetTruncatedFlagSet`, `TestReExport_DepthBounded`, `TestReExport_CycleIsSafe`.
 
+8. **A declaration is its own symbol.** A `SymbolID` is derived from
+   (language, file, kind, qualified name), plus — for the second and later of
+   a file's namesakes (several Go `init`, a function defined twice) — their
+   position-ordered ordinal (`symbol.NewDeclarationID`); no position enters
+   it otherwise, so editing other code never changes an ID. A reference's
+   container is the declaration of that name whose range contains it, and
+   only if exactly one does. Identity is not resolution: a reference to a name
+   declared twice stays ambiguous. The cache stores extraction drafts, never
+   IDs. Tests: `TestDeclarationIdentity_*`, `TestSymbolIdentity_*`,
+   `FuzzDeclarationIdentity`.
+   Danger: keying anything by (file, qualified name) alone — it merges
+   namesakes, mixing their sources, callees and callers.
+
 **Diagnostics are what the index reports, not a completeness proof.** A
 diagnostic says Ark could not analyze part of a file (`parse_error`: the
 parser rejected a region, which is then not analyzed as written — the source
@@ -330,8 +343,8 @@ symbols by how their names match a partial identifier
 input order) and attaches each top candidate's context, built by the engine
 from that candidate's `SymbolID`. A rank never selects a target, never
 enters target lookup, the resolver or confidence, and same-named candidates
-stay separate — including two declarations behind one shared `SymbolID`,
-which get no context since the index cannot attribute it. `contextLimit`
+stay separate; should two declarations ever share a `SymbolID` (§3.8), or
+the engine return context about another declaration, none is given. `contextLimit`
 (default 1) only chooses how many top candidates get context; the others
 keep their rank, ID and location (`not_requested`, `context_limit`).
 `maxTokens` bounds the whole serialized response: metadata first, then
@@ -339,7 +352,7 @@ contexts in rank order, trimmed or marked `omitted_budget`.
 Authority: `mcp/tools_search_context.go` (header comment). Tests:
 `TestSearchContext_SameNameNeverMerged`, `TestSearchContext_BudgetIsNeverExceeded`,
 `TestSearchContext_MatchesGetContext`, `TestMatchSymbols_DeterministicUnderInputOrder`,
-`TestSearchContext_ContextLimitSemantics`, `TestSearchContext_SharedSymbolIDIsNotAttributed`.
+`TestSearchContext_ContextLimitSemantics`, `TestSearchContext_IdentityGuards`.
 Danger: resolving the query text to "the best match" and building context
 for it, treating context on rank 1 as a verdict, or passing the
 per-response budget to each candidate.

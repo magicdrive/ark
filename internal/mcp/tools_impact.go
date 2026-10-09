@@ -21,6 +21,7 @@ func ImpactToolDefinitions() []Tool {
 						"type":        "string",
 						"description": "Repository root or directory path",
 					},
+					"symbolId": symbolIDProperty,
 					"symbol": map[string]interface{}{
 						"type":        "string",
 						"description": "Symbol name or qualified name to analyze (e.g. 'Save' or 'Repository.Save')",
@@ -87,12 +88,9 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 
 	// Resolve the target symbol. Impact analysis MUST NOT run on an arbitrary
 	// first candidate: a false target produces a plausible but wrong report.
-	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
-	if !tl.Found {
-		return targetNotFoundResult(symName, path), nil
-	}
-	if tl.Ambiguous {
-		return ambiguousTargetResult(symName, tl.Candidates), nil
+	tl, errRes := lookupToolTarget(idx, args, symName, filePattern, path)
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	g := graph.New(idx)

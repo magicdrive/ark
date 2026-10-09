@@ -1,15 +1,20 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
 	arkctx "github.com/magicdrive/ark/internal/context"
+	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/symbol"
 )
 
 // contextLimit separates how many candidates are returned (limit) from how
@@ -357,29 +362,59 @@ func TestSearchContext_NeededSymbolBelowRankOne(t *testing.T) {
 	}
 }
 
-// Case D, the known limit: two declarations with the same kind and qualified
-// name in one file (Go init functions) share a SymbolID, and the index merges
-// them. search_context returns both, never folded, and builds no context for
-// either, since the index cannot say which one it would describe.
-func TestSearchContext_SharedSymbolIDIsNotAttributed(t *testing.T) {
+// Case D: two Go init functions in one file. Each declaration has its own
+// SymbolID, so each gets its own context — its own source and its own callee,
+// never the other's.
+func TestSearchContext_NamesakeDeclarationsGetTheirOwnContext(t *testing.T) {
 	h := NewToolsHandler(rankingFixture(t), createTestOption())
-	rec := &buildRecorder{}
-	h.buildContext = rec.hook(nil)
-	r := searchOK(t, h, map[string]interface{}{"query": "init", "contextLimit": 2})
+	r := searchOK(t, h, map[string]interface{}{"query": "init", "contextLimit": 2, "maxTokens": 8000})
 	if len(r.Results) != 2 || r.TotalMatches != 2 {
 		t.Fatalf("want both init declarations: %v", ranking(r))
 	}
 	a, b := r.Results[0], r.Results[1]
-	if a.Symbol.ID != b.Symbol.ID || a.Symbol.StartLine == b.Symbol.StartLine {
-		t.Fatalf("fixture: want one ID, two locations: %+v / %+v", a.Symbol, b.Symbol)
+	if a.Symbol.ID == b.Symbol.ID || a.Symbol.StartLine != 3 || b.Symbol.StartLine != 5 {
+		t.Fatalf("want two IDs at lines 3 and 5: %+v / %+v", a.Symbol, b.Symbol)
 	}
-	for _, x := range r.Results {
-		if x.Context.Status != contextUnavailable || x.Context.Reason != reasonSharedID {
-			t.Errorf("line %d: %+v", x.Symbol.StartLine, x.Context)
+	for _, c := range []struct {
+		res          scResult
+		want, absent string
+	}{{a, "first", "second"}, {b, "second", "first"}} {
+		ctx := c.res.Context
+		if ctx.Status != contextIncluded || ctx.Items[0].Reason != "target" || ctx.Items[0].StartLine != c.res.Symbol.StartLine {
+			t.Fatalf("init@%d: %+v", c.res.Symbol.StartLine, ctx)
+		}
+		var syms []string
+		for _, it := range ctx.Items {
+			syms = append(syms, it.Symbol)
+		}
+		if !slices.Contains(syms, c.want) || slices.Contains(syms, c.absent) {
+			t.Errorf("init@%d context items %v: want %s, never %s", c.res.Symbol.StartLine, syms, c.want, c.absent)
 		}
 	}
-	if len(rec.calls) != 0 {
-		t.Errorf("%d builds for declarations with a shared ID", len(rec.calls))
+}
+
+// The fail-closed guards stay: should two declarations ever share an ID, or
+// the engine return context about another declaration, no context is given.
+func TestSearchContext_IdentityGuards(t *testing.T) {
+	one := symbol.Symbol{ID: "x", Location: source.Location{File: "a.go", Range: source.Range{Start: source.Position{Line: 3}}}}
+	two := one
+	two.Location.Range.Start.Line = 7
+	other := symbol.Symbol{ID: "y", Location: one.Location}
+	if got := sharedIDs([]symbol.Symbol{one, two, other, one}); !got["x"] || got["y"] || len(got) != 1 {
+		t.Errorf("sharedIDs = %v", got)
+	}
+
+	h := NewToolsHandler(rankingFixture(t), createTestOption())
+	h.buildContext = func(idx *index.RepositoryIndex, root string, req arkctx.Request) (*arkctx.Result, error) {
+		res, err := arkctx.New(idx, root).Build(context.Background(), req)
+		if err == nil && len(res.Items) > 0 {
+			res.Items[0].Symbol.Location.Range.Start.Line += 100 // a different declaration
+		}
+		return res, err
+	}
+	r := searchOK(t, h, map[string]interface{}{"query": "getUser"})
+	if c := r.Results[0].Context; c.Status != contextUnavailable || !strings.Contains(c.Reason, "not about this declaration") {
+		t.Errorf("mismatched context accepted: %+v", c)
 	}
 }
 

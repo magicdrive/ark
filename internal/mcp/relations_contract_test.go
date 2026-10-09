@@ -38,8 +38,8 @@ class Svc
 		"app/Config.php":  "<?php\nnamespace App;\nclass Config { const LIMIT = 10; }\n",
 		"app/AB.php":      "<?php\nnamespace App;\nclass A { public function render() {} }\nclass B { public function render() {} }\nclass Other { public function target() {} }\n",
 		"app/Callers.php": "<?php\nnamespace App;\nclass TypedCaller { public function run(Svc $s) { return $s->target(new Repo(), null); } }\nclass UntypedCaller { public function run($s) { return $s->target(null, null); } }\n",
-		// A property and a method share the name Cmd.cache: the code calling
-		// save() is no one identified symbol.
+		// A property and a method share the name Cmd.cache: the call to save()
+		// lies in the method's source range, which identifies it.
 		"app/Cmd.php": "<?php\nnamespace App;\nclass Cmd\n{\n    protected $cache;\n    public function cache(Repo $r) { return $r->save(); }\n}\n",
 	})
 	return root
@@ -143,22 +143,47 @@ func TestRelations_OutgoingCandidatesAreListed(t *testing.T) {
 	}
 }
 
-// A relation from code that is no one symbol is listed by that code's name,
-// marked, never attributed to one of the same-named symbols, and counted as
-// unattributed.
-func TestRelations_UnidentifiedSource(t *testing.T) {
+// Namesake containers (a property and a method both App\Cmd.cache) are told
+// apart by lexical containment: the call lies in the method's range, so the
+// method is the caller — an edge, nothing unattributed.
+func TestRelations_NamesakeContainerIdentifiedByContainment(t *testing.T) {
 	h := NewToolsHandler(relationsRepo(t), nil)
 	got := relationsFor(t, h, `App\Repo.save`)
 	want := []string{
-		`called_by App\Cmd.cache call exact | receiver type "App\\Repo" [source unidentified]`,
+		`called_by App\Cmd.cache call exact | receiver type "App\\Repo"`,
 		`called_by App\Svc.target call exact | receiver type "App\\Repo"`,
 	}
 	if lines := relationLines(got.Relations); !reflect.DeepEqual(lines, want) {
 		t.Errorf("relations:\n%s\nwant:\n%s", strings.Join(lines, "\n"), strings.Join(want, "\n"))
 	}
 	out, _, _ := callGraphTool(t, h.rootDir, "get_callers", map[string]interface{}{"path": ".", "symbol": `App\Repo.save`})
-	if len(out.Edges) != 1 || *out.Unattributed != 1 {
-		t.Errorf("get_callers: edges %v unattributed %d, want only Svc.target and 1 unattributed", out.Edges, *out.Unattributed)
+	if len(out.Edges) != 2 || *out.Unattributed != 0 {
+		t.Errorf("get_callers: edges %v unattributed %d, want Cmd.cache and Svc.target, none unattributed", out.Edges, *out.Unattributed)
+	}
+}
+
+// A relation from code that is no one symbol is listed by that code's name,
+// marked, never attributed to a symbol, and counted as unattributed. (The
+// Python provider does not extract methods: the container x names no symbol.)
+func TestRelations_UnidentifiedSource(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"p.py": "def save():\n    pass\n\nclass A:\n    def x(self):\n        return save()\n",
+	})
+	h := NewToolsHandler(root, nil)
+	got := relationsFor(t, h, "save")
+	var marked []relationEntry
+	for _, r := range got.Relations {
+		if r.SourceUnidentified {
+			marked = append(marked, r)
+		}
+	}
+	if len(marked) != 1 || marked[0].Qualified != "x" || marked[0].Direction != "called_by" {
+		t.Errorf("relations: %+v", got.Relations)
+	}
+	out, _, _ := callGraphTool(t, h.rootDir, "get_callers", map[string]interface{}{"path": ".", "symbol": "save"})
+	if len(out.Edges) != 0 || *out.Unattributed != 1 {
+		t.Errorf("get_callers: edges %v unattributed %d, want none and 1 unattributed", out.Edges, *out.Unattributed)
 	}
 }
 

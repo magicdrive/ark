@@ -187,6 +187,12 @@ func sortTargetCandidates(s []symbol.Symbol) {
 		if s[i].Kind != s[j].Kind {
 			return s[i].Kind < s[j].Kind
 		}
+		if a, b := s[i].Location.Range.Start, s[j].Location.Range.Start; a != b {
+			if a.Line != b.Line {
+				return a.Line < b.Line
+			}
+			return a.Column < b.Column
+		}
 		return s[i].ID < s[j].ID
 	})
 }
@@ -196,13 +202,14 @@ func sortTargetCandidates(s []symbol.Symbol) {
 func ambiguousTargetResult(name string, cands []symbol.Symbol) *CallToolResult {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Ambiguous symbol %q — %d matches found. "+
-		"Narrow with filePattern, or retry with one of the qualified names below:\n", name, len(cands))
+		"Narrow with filePattern, retry with one of the qualified names below, "+
+		"or pass its symbolId to select one declaration:\n", name, len(cands))
 	shown := cands
 	if len(shown) > maxAmbiguousCandidates {
 		shown = shown[:maxAmbiguousCandidates]
 	}
 	for _, s := range shown {
-		fmt.Fprintf(&b, "  %s  (%s)  %s\n", s.Qualified, s.Kind, s.Location.File)
+		fmt.Fprintf(&b, "  %s  (%s)  %s:%d  symbolId=%s\n", s.Qualified, s.Kind, s.Location.File, s.Location.Range.Start.Line, s.ID)
 	}
 	if rest := len(cands) - len(shown); rest > 0 {
 		fmt.Fprintf(&b, "  ... and %d more\n", rest)
@@ -211,6 +218,54 @@ func ambiguousTargetResult(name string, cands []symbol.Symbol) *CallToolResult {
 		Content: []Content{{Type: "text", Text: b.String()}},
 		IsError: true,
 	}
+}
+
+// symbolIDProperty is the optional input schema property of the tools that
+// take a target symbol: it selects one declaration among namesakes.
+var symbolIDProperty = map[string]interface{}{
+	"type": "string",
+	"description": "Optional SymbolID selecting one declaration when several share the name " +
+		"(from search_context or an ambiguity listing). It must belong to `symbol`, and IDs " +
+		"depend on the indexed path: search_context's IDs are for path \".\"",
+}
+
+// lookupToolTarget resolves a tool's target: by its symbolId when the call
+// gives one, else by name (resolveTarget). The result is one symbol or an
+// error result — never a pick among several. A symbolId must name a symbol
+// of this index whose Name or Qualified is the given symbol: an ID is a
+// selector among the name's declarations, never a way around the name.
+func lookupToolTarget(idx *index.RepositoryIndex, args map[string]interface{}, name, filePattern, path string) (targetLookup, *CallToolResult) {
+	if raw, ok := args["symbolId"]; ok && raw != nil {
+		id, isStr := raw.(string)
+		if !isStr {
+			return targetLookup{}, toolError("symbolId must be a string")
+		}
+		if id != "" {
+			s, found := idx.GetSymbol(symbol.SymbolID(id))
+			if !found {
+				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q is not a symbol of the index of %s (IDs depend on the indexed path; search_context's IDs are for path \".\")", id, path))
+			}
+			if s.Name != name && s.Qualified != name {
+				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q names %s (%s:%d), not %q", id, s.Qualified, s.Location.File, s.Location.Range.Start.Line, name))
+			}
+			if filePattern != "" && !strings.Contains(string(s.Location.File), filePattern) {
+				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q is in %s, which does not match filePattern %q", id, s.Location.File, filePattern))
+			}
+			return targetLookup{Symbol: s, Found: true}, nil
+		}
+	}
+	tl := resolveTarget(targetCandidatesFromIndex(idx, name), filePattern)
+	if !tl.Found {
+		return tl, targetNotFoundResult(name, path)
+	}
+	if tl.Ambiguous {
+		return tl, ambiguousTargetResult(name, tl.Candidates)
+	}
+	return tl, nil
+}
+
+func toolError(msg string) *CallToolResult {
+	return &CallToolResult{Content: []Content{{Type: "text", Text: msg}}, IsError: true}
 }
 
 // maxAmbiguousCandidates bounds the candidates listed in an ambiguity error;

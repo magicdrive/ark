@@ -27,6 +27,10 @@ package cache
 // extractors began reading ambiguous generic syntax by the languages' rules
 // (go-5, javascript 4, python 4, ts-5, php-14, terraform-7), and when those
 // readings took only what a file proves (go-6, ts-6).
+//
+// SymbolIDs are not cached: the index derives them from the cached drafts
+// (index.NewFileIndex), so a change of identity scheme (declaration ordinals)
+// needs no bump — an entry can never carry an old ID.
 const CurrentSchemaVersion = "2"
 
 // IsCompatible reports whether a CacheKey was written with the current schema.

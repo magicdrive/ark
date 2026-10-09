@@ -20,6 +20,7 @@ func ContextToolDefinitions() []Tool {
 						"type":        "string",
 						"description": "Repository root or directory path to index",
 					},
+					"symbolId": symbolIDProperty,
 					"symbol": map[string]interface{}{
 						"type":        "string",
 						"description": "Symbol name or qualified name to get context for (e.g. 'Create' or 'UserService.Create')",
@@ -105,12 +106,9 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 
 	// Resolve the target symbol. Never silently pick among multiple viable
 	// targets — ambiguity returns candidate evidence instead.
-	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
-	if !tl.Found {
-		return targetNotFoundResult(symName, path), nil
-	}
-	if tl.Ambiguous {
-		return ambiguousTargetResult(symName, tl.Candidates), nil
+	tl, errRes := lookupToolTarget(idx, args, symName, filePattern, path)
+	if errRes != nil {
+		return errRes, nil
 	}
 
 	eng := arkctx.New(idx, fullPath)

@@ -25,6 +25,7 @@ func RelationsToolDefinitions() []Tool {
 						"type":        "string",
 						"description": "Directory to index (repository root or a subdirectory)",
 					},
+					"symbolId": symbolIDProperty,
 					"symbol": map[string]interface{}{
 						"type":        "string",
 						"description": "Symbol name or qualified name (e.g. UserService.Create; a namespace prefix is optional)",
@@ -146,12 +147,9 @@ func (h *ToolsHandler) getRelations(args map[string]interface{}) (*CallToolResul
 
 	// Resolve exactly one target symbol. A short name matching several symbols
 	// must NOT merge their relations into one answer — return ambiguity instead.
-	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
-	if !tl.Found {
-		return targetNotFoundResult(symName, path), nil
-	}
-	if tl.Ambiguous {
-		return ambiguousTargetResult(symName, tl.Candidates), nil
+	tl, errRes := lookupToolTarget(idx, args, symName, filePattern, path)
+	if errRes != nil {
+		return errRes, nil
 	}
 	target := tl.Symbol
 	relations, totals := relationsOf(idx, target)

@@ -24,6 +24,7 @@ func CallersToolDefinitions() []Tool {
 						"type":        "string",
 						"description": "Directory to index (repository root or a subdirectory)",
 					},
+					"symbolId": symbolIDProperty,
 					"symbol": map[string]interface{}{
 						"type":        "string",
 						"description": "Symbol name or qualified name (e.g. greet, UserService.Create, LoginScreenPolicy::showsSsoButton; a namespace prefix is optional)",
@@ -56,6 +57,7 @@ func CallersToolDefinitions() []Tool {
 						"type":        "string",
 						"description": "Directory to index (repository root or a subdirectory)",
 					},
+					"symbolId": symbolIDProperty,
 					"symbol": map[string]interface{}{
 						"type":        "string",
 						"description": "Symbol name or qualified name to look up",
@@ -214,12 +216,9 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 
 	// Resolve exactly one target symbol via the shared single-target contract.
 	// Multiple matches never merge: return deterministic candidate evidence.
-	tl := resolveTarget(targetCandidatesFromIndex(idx, symName), filePattern)
-	if !tl.Found {
-		return targetNotFoundResult(symName, path), nil
-	}
-	if tl.Ambiguous {
-		return ambiguousTargetResult(symName, tl.Candidates), nil
+	tl, errRes := lookupToolTarget(idx, args, symName, filePattern, path)
+	if errRes != nil {
+		return errRes, nil
 	}
 	syms := []symbol.Symbol{tl.Symbol}
 

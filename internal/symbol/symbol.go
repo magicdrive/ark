@@ -76,10 +76,28 @@ type Symbol struct {
 }
 
 // NewSymbolID returns a deterministic ID derived from (lang, repoRelPath, kind, qualified).
-// Collision behaviour: distinct symbols with identical inputs produce the same ID.
-// Callers that need disambiguation should include a structural discriminator in qualified.
+// It is the ID of the first (or only) declaration with those inputs; the
+// others in the same file get NewDeclarationID's ordinal IDs.
 func NewSymbolID(lang, repoRelPath string, kind SymbolKind, qualified string) SymbolID {
+	return NewDeclarationID(lang, repoRelPath, kind, qualified, 1)
+}
+
+// NewDeclarationID returns the ID of one declaration: the ordinal-th (1-based,
+// in source order) of a file's declarations that share (lang, repoRelPath,
+// kind, qualified) — several Go init functions, a Python or JavaScript
+// function defined twice. A declaration is its own symbol, so they must not
+// share an ID: the index would merge them into one.
+//
+// The first keeps the NewSymbolID of its inputs, so a symbol without a
+// namesake has the same ID whatever else the file declares, and no position
+// enters the ID: editing other code never changes it. Only the second and
+// later declarations of one name carry their ordinal, which changes when a
+// namesake is inserted before them.
+func NewDeclarationID(lang, repoRelPath string, kind SymbolKind, qualified string, ordinal int) SymbolID {
 	raw := fmt.Sprintf("%s\x00%s\x00%s\x00%s", lang, repoRelPath, kind, qualified)
+	if ordinal > 1 {
+		raw += fmt.Sprintf("\x00#%d", ordinal)
+	}
 	sum := sha256.Sum256([]byte(raw))
 	return SymbolID(hex.EncodeToString(sum[:8]))
 }

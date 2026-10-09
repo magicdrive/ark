@@ -102,11 +102,14 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 // resolver (repository indexing and MCP relations), so symbol identity,
 // containment and reference evidence cannot diverge between surfaces.
 func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) resolver.FileIndex {
-	// Build symbols.
+	// Build symbols. Each declaration is its own symbol: namesakes in one file
+	// (same kind and qualified name) get distinct ordinal IDs.
+	drafts := uniqueDeclarations(ex.Symbols)
+	ordinals := declarationOrdinals(drafts)
 	var fileSymbols []symbol.Symbol
-	for _, sd := range ex.Symbols {
+	for i, sd := range drafts {
 		sym := symbol.Symbol{
-			ID:        symbol.NewSymbolID(lang, string(fileID), sd.Kind, sd.Qualified),
+			ID:        symbol.NewDeclarationID(lang, string(fileID), sd.Kind, sd.Qualified, ordinals[i]),
 			Name:      sd.Name,
 			Qualified: sd.Qualified,
 			Kind:      sd.Kind,
@@ -178,6 +181,68 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 	}
 }
 
+// uniqueDeclarations drops a draft that repeats an earlier one exactly (kind,
+// qualified name and location): the same declaration stated twice is one
+// symbol, not two namesakes.
+func uniqueDeclarations(drafts []language.SymbolDraft) []language.SymbolDraft {
+	type key struct {
+		kind      symbol.SymbolKind
+		qualified string
+		loc       source.Location
+	}
+	seen := make(map[key]bool, len(drafts))
+	out := drafts[:0:0]
+	for _, d := range drafts {
+		k := key{d.Kind, d.Qualified, d.Location}
+		if seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, d)
+	}
+	return out
+}
+
+// declarationOrdinals numbers each draft among the file's drafts with the
+// same kind and qualified name, 1-based in source order (start, then end
+// position). Ordering by position, never by the provider's emission order,
+// keeps the IDs a function of the file's content.
+func declarationOrdinals(drafts []language.SymbolDraft) []int {
+	type key struct {
+		kind      symbol.SymbolKind
+		qualified string
+	}
+	groups := make(map[key][]int)
+	for i, d := range drafts {
+		k := key{d.Kind, d.Qualified}
+		groups[k] = append(groups[k], i)
+	}
+	ordinals := make([]int, len(drafts))
+	for _, idxs := range groups {
+		sort.SliceStable(idxs, func(a, b int) bool {
+			return positionBefore(drafts[idxs[a]].Location.Range, drafts[idxs[b]].Location.Range)
+		})
+		for n, i := range idxs {
+			ordinals[i] = n + 1
+		}
+	}
+	return ordinals
+}
+
+func positionBefore(a, b source.Range) bool {
+	if a.Start != b.Start {
+		return lessPosition(a.Start, b.Start)
+	}
+	return lessPosition(a.End, b.End)
+}
+
+func lessPosition(a, b source.Position) bool {
+	if a.Line != b.Line {
+		return a.Line < b.Line
+	}
+	return a.Column < b.Column
+}
+
 // resolve runs the resolver and builds graph edges.
 func (b *builder) resolve() {
 	if len(b.resolverFiles) == 0 {
@@ -209,7 +274,7 @@ func (b *builder) resolve() {
 		}
 		// The container is identified by (file, qualified) — never by a
 		// repository-global qualified name, which may be declared in many files.
-		containerID, hasContainer := b.containerSymbol(meta.file, meta.ref.Container)
+		containerID, hasContainer := b.containerSymbol(meta.file, meta.ref.Container, meta.ref.Location)
 
 		// Record what the graph will not show: references that may involve a
 		// symbol but do not become an edge (see completeness.go).
@@ -271,7 +336,7 @@ func (b *builder) resolve() {
 			if ref.Container == "" {
 				continue
 			}
-			cid, ok := b.containerSymbol(fi.FileID, ref.Container)
+			cid, ok := b.containerSymbol(fi.FileID, ref.Container, ref.Location)
 			if !ok {
 				continue
 			}
@@ -280,11 +345,14 @@ func (b *builder) resolve() {
 	}
 }
 
-// containerSymbol identifies the enclosing symbol of a reference by
-// (file, qualified). It reports false when no symbol or more than one distinct
-// symbol in that file carries the qualified name: an unidentifiable container
-// produces no edge rather than an arbitrarily chosen one.
-func (b *builder) containerSymbol(file source.FileID, qualified string) (symbol.SymbolID, bool) {
+// containerSymbol identifies the enclosing symbol of a reference at loc by
+// (file, qualified). Several symbols of the file may carry the qualified name
+// (namesake declarations, or one name declared with several kinds); then the
+// container is the one whose source range contains the reference — lexical
+// containment, which is what "enclosing" means — and only if exactly one does.
+// It reports false otherwise: an unidentifiable container produces no edge
+// rather than an arbitrarily chosen one.
+func (b *builder) containerSymbol(file source.FileID, qualified string, loc source.Location) (symbol.SymbolID, bool) {
 	if qualified == "" {
 		return "", false
 	}
@@ -302,10 +370,29 @@ func (b *builder) containerSymbol(file source.FileID, qualified string) (symbol.
 		b.containers[file] = byQual
 	}
 	ids := byQual[qualified]
-	if len(ids) != 1 {
+	switch len(ids) {
+	case 0:
+		return "", false
+	case 1:
+		return ids[0], true
+	}
+	var found symbol.SymbolID
+	n := 0
+	for _, id := range ids {
+		if s, ok := b.symbolsByID[id]; ok && s.Location.File == file && rangeContains(s.Location.Range, loc.Range.Start) {
+			found = id
+			n++
+		}
+	}
+	if n != 1 {
 		return "", false
 	}
-	return ids[0], true
+	return found, true
+}
+
+// rangeContains reports whether p lies in the half-open range r.
+func rangeContains(r source.Range, p source.Position) bool {
+	return !lessPosition(p, r.Start) && lessPosition(p, r.End)
 }
 
 // freeze converts builder state into an immutable RepositoryIndex.
