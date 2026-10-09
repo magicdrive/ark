@@ -1,6 +1,7 @@
 package index
 
 import (
+	"fmt"
 	"slices"
 	"sort"
 
@@ -125,12 +126,12 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 			ParameterScope: sd.ParameterScope,
 			MembersOutside: sd.MembersOutside,
 		}
-		if sd.Parent != "" {
-			sym.Parent = symbol.NewSymbolID(lang, string(fileID), symbol.KindUnknown, sd.Parent)
-			sym.ParentQualified = sd.Parent
-		}
+		// ParentQualified is the provider's statement, kept as is for the
+		// resolver's name rules; Parent, the identity, is resolved below.
+		sym.ParentQualified = sd.Parent
 		fileSymbols = append(fileSymbols, sym)
 	}
+	resolveParents(fileSymbols)
 
 	// Build references. Container stays as a qualified-name string (reference.Reference.Container is string).
 	var fileRefs []reference.Reference
@@ -181,23 +182,88 @@ func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) res
 	}
 }
 
-// uniqueDeclarations drops a draft that repeats an earlier one exactly (kind,
-// qualified name and location): the same declaration stated twice is one
-// symbol, not two namesakes.
-func uniqueDeclarations(drafts []language.SymbolDraft) []language.SymbolDraft {
-	type key struct {
-		kind      symbol.SymbolKind
-		qualified string
-		loc       source.Location
+// resolveParents sets each symbol's Parent to the SymbolID of the declaration
+// its provider names as its enclosing symbol (SymbolDraft.Parent, a qualified
+// name in the same file — a provider reads one file). The parent is the one
+// declaration of the file that carries that qualified name and whose range
+// contains the child's: the name is the provider's evidence, containment is
+// what "enclosing" means and tells namesakes apart. Parent stays empty when no
+// declaration or several qualify, and for every symbol of a parent cycle: an
+// unknown parent is stated as unknown, never invented.
+func resolveParents(syms []symbol.Symbol) {
+	byQualified := make(map[string][]int)
+	for i, s := range syms {
+		byQualified[s.Qualified] = append(byQualified[s.Qualified], i)
 	}
-	seen := make(map[key]bool, len(drafts))
-	out := drafts[:0:0]
-	for _, d := range drafts {
-		k := key{d.Kind, d.Qualified, d.Location}
-		if seen[k] {
+	for i := range syms {
+		c := &syms[i]
+		if c.ParentQualified == "" {
 			continue
 		}
-		seen[k] = true
+		found := -1
+		for _, j := range byQualified[c.ParentQualified] {
+			if j == i || syms[j].ID == c.ID || !rangeEncloses(syms[j].Location.Range, c.Location.Range) {
+				continue
+			}
+			if found >= 0 {
+				found = -2 // several enclosing namesakes: unknown
+				break
+			}
+			found = j
+		}
+		if found >= 0 {
+			c.Parent = syms[found].ID
+		}
+	}
+	breakParentCycles(syms)
+}
+
+// breakParentCycles clears Parent on every symbol that lies on a parent
+// cycle. Which symbols are cleared depends only on the cycle, never on the
+// order the symbols are visited in.
+func breakParentCycles(syms []symbol.Symbol) {
+	index := make(map[symbol.SymbolID]int, len(syms))
+	for i, s := range syms {
+		index[s.ID] = i
+	}
+	var onCycle []int
+	for i := range syms {
+		// Walk at most len(syms) steps from i; returning to i means i is on
+		// a cycle.
+		cur := i
+		for range syms {
+			p, ok := index[syms[cur].Parent]
+			if syms[cur].Parent == "" || !ok {
+				break
+			}
+			if cur = p; cur == i {
+				onCycle = append(onCycle, i)
+				break
+			}
+		}
+	}
+	for _, i := range onCycle {
+		syms[i].Parent = ""
+	}
+}
+
+// rangeEncloses reports whether outer contains inner.
+func rangeEncloses(outer, inner source.Range) bool {
+	return !lessPosition(inner.Start, outer.Start) && !lessPosition(outer.End, inner.End)
+}
+
+// uniqueDeclarations drops a draft that repeats an earlier one exactly: the
+// same declaration stated twice is one symbol, not two namesakes. Drafts
+// that differ in anything are all kept — choosing one of two conflicting
+// statements would depend on which came first.
+func uniqueDeclarations(drafts []language.SymbolDraft) []language.SymbolDraft {
+	seen := make(map[language.SymbolDraft]bool, len(drafts))
+	out := drafts[:0:0]
+	for _, d := range drafts {
+		if seen[d] {
+			continue
+		}
+		seen[d] = true
 		out = append(out, d)
 	}
 	return out
@@ -205,8 +271,9 @@ func uniqueDeclarations(drafts []language.SymbolDraft) []language.SymbolDraft {
 
 // declarationOrdinals numbers each draft among the file's drafts with the
 // same kind and qualified name, 1-based in source order (start, then end
-// position). Ordering by position, never by the provider's emission order,
-// keeps the IDs a function of the file's content.
+// position, then the draft's content for drafts at the same range). Never by
+// the provider's emission order: the IDs are a function of the file's
+// content.
 func declarationOrdinals(drafts []language.SymbolDraft) []int {
 	type key struct {
 		kind      symbol.SymbolKind
@@ -219,8 +286,12 @@ func declarationOrdinals(drafts []language.SymbolDraft) []int {
 	}
 	ordinals := make([]int, len(drafts))
 	for _, idxs := range groups {
-		sort.SliceStable(idxs, func(a, b int) bool {
-			return positionBefore(drafts[idxs[a]].Location.Range, drafts[idxs[b]].Location.Range)
+		sort.Slice(idxs, func(a, b int) bool {
+			da, db := drafts[idxs[a]], drafts[idxs[b]]
+			if da.Location.Range != db.Location.Range {
+				return positionBefore(da.Location.Range, db.Location.Range)
+			}
+			return fmt.Sprintf("%+v", da) < fmt.Sprintf("%+v", db)
 		})
 		for n, i := range idxs {
 			ordinals[i] = n + 1

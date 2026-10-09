@@ -77,3 +77,77 @@ func TestMCPIdentity_NamesakeDeclarations(t *testing.T) {
 		}
 	}
 }
+
+// Symbol.Parent through the real binary: search_code's JSON exposes each
+// symbol's Parent, which must be the ID of the enclosing declaration in the
+// same answer — never a fabricated one. get_symbol's "parent" stays the
+// provider's qualified name.
+func TestMCPIdentity_ParentRoundTrip(t *testing.T) {
+	bin := buildArk(t)
+	proj := t.TempDir()
+	for p, c := range map[string]string{
+		"svc.ts":  "export class UserService {\n  getUser() {\n    return this.loadUser();\n  }\n\n  loadUser() {\n    return null;\n  }\n}\n",
+		"a.php":   "<?php\nnamespace App;\nclass Cmd\n{\n    protected $cache;\n    public function cache() {}\n}\n",
+		"go.mod":  "module example.com/x\n\ngo 1.22\n",
+		"boot.go": "package example\n\nfunc init() {}\n\nfunc init() {}\n",
+	} {
+		if err := os.WriteFile(filepath.Join(proj, p), []byte(c), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := startServer(t, proj, t.TempDir(), bin, "mcp-server", "--root", "./", "--no-cache")
+	c.handshake()
+
+	type sym struct {
+		ID, Name, Qualified, Kind, Parent, ParentQualified string
+	}
+	text, isErr := c.tool("search_code", map[string]any{"path": ".", "format": "json"})
+	if isErr {
+		t.Fatalf("search_code: %s", text)
+	}
+	var out struct {
+		Matches []struct{ Symbol *sym } `json:"matches"`
+	}
+	if err := json.Unmarshal([]byte(text), &out); err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]sym{}
+	for _, m := range out.Matches {
+		if m.Symbol != nil {
+			byID[m.Symbol.ID] = *m.Symbol
+		}
+	}
+	parents := map[string]string{}
+	for _, s := range byID {
+		if s.Parent == "" {
+			continue
+		}
+		p, ok := byID[s.Parent]
+		if !ok || p.Qualified != s.ParentQualified || p.ID == s.ID {
+			t.Errorf("%s: parent %s is not the declaration %s", s.Qualified, s.Parent, s.ParentQualified)
+		}
+		parents[s.Qualified+"/"+s.Kind] = p.Qualified + "/" + p.Kind
+	}
+	for child, parent := range map[string]string{
+		"UserService.getUser/method": "UserService/class", "UserService.loadUser/method": "UserService/class",
+		`App\Cmd.cache/method`: `App\Cmd/class`, `App\Cmd.cache/property`: `App\Cmd/class`,
+	} {
+		if parents[child] != parent {
+			t.Errorf("%s: parent %q, want %q", child, parents[child], parent)
+		}
+	}
+	for _, s := range byID {
+		if s.Name == "init" && s.Parent != "" {
+			t.Errorf("init has parent %s", s.Parent)
+		}
+	}
+	// Same answer on a repeated call.
+	if again, _ := c.tool("search_code", map[string]any{"path": ".", "format": "json"}); again != text {
+		t.Error("search_code output is not deterministic")
+	}
+	// get_symbol keeps reporting the provider's parent name.
+	gs, isErr := c.tool("get_symbol", map[string]any{"path": "svc.ts", "name": "loadUser", "includeSource": false})
+	if isErr || !strings.Contains(gs, `"parent": "UserService"`) {
+		t.Errorf("get_symbol: %s", gs)
+	}
+}

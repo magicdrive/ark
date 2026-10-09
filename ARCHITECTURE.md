@@ -204,8 +204,13 @@ improvement and is not.
    declared twice stays ambiguous. The cache stores extraction drafts, never
    IDs. Tests: `TestDeclarationIdentity_*`, `TestSymbolIdentity_*`,
    `FuzzDeclarationIdentity`.
+   `Symbol.Parent` is an identity too: the ID of the one declaration of the
+   file that carries the provider's parent name and encloses the symbol, or
+   empty (no such declaration, several, or a cycle); `ParentQualified` keeps
+   the provider's statement for the resolver. Tests: `TestParentIdentity_*`, `FuzzParentIdentity`.
    Danger: keying anything by (file, qualified name) alone — it merges
-   namesakes, mixing their sources, callees and callers.
+   namesakes, mixing their sources, callees and callers; deriving an ID from
+   a name instead of finding the declaration.
 
 **Diagnostics are what the index reports, not a completeness proof.** A
 diagnostic says Ark could not analyze part of a file (`parse_error`: the

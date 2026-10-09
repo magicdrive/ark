@@ -392,3 +392,26 @@ func FuzzDeclarationIdentity(f *testing.F) {
 		}
 	})
 }
+
+// Two drafts of one kind, name and range that differ in anything else are
+// two declarations, and which ID each gets depends on its content, never on
+// which the provider emitted first. (Found by FuzzParentIdentity: keeping
+// "the first" of conflicting drafts made the result order-dependent.)
+func TestDeclarationIdentity_ConflictingDraftsAtOneRange(t *testing.T) {
+	plain := draftAt("A", symbol.KindClass, 1, 1)
+	withParent := plain
+	withParent.Parent = "A"
+	view := func(ds []language.SymbolDraft) map[symbol.SymbolID]string {
+		idx := buildFakeIndex(t, fakeProvider{symbols: ds})
+		out := map[symbol.SymbolID]string{}
+		for _, s := range idx.SymbolsByFile("x.fake") {
+			out[s.ID] = s.ParentQualified
+		}
+		return out
+	}
+	a := view([]language.SymbolDraft{plain, withParent})
+	b := view([]language.SymbolDraft{withParent, plain})
+	if len(a) != 2 || !reflect.DeepEqual(a, b) {
+		t.Errorf("order-dependent identities: %v vs %v", a, b)
+	}
+}

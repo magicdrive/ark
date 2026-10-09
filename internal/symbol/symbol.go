@@ -55,7 +55,12 @@ type Symbol struct {
 	Kind      SymbolKind
 	Language  string
 
-	Location        source.Location
+	Location source.Location
+	// Parent is the SymbolID of the declaration the provider names as this
+	// symbol's enclosing symbol (ParentQualified), when exactly one
+	// declaration of the file carries that name and encloses this one; ""
+	// otherwise. It is the declaration hierarchy, not the call graph's
+	// container.
 	Parent          SymbolID
 	ParentQualified string // qualified name of the parent container, preserved for resolver matching
 
