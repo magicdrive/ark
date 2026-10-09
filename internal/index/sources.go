@@ -99,6 +99,14 @@ func SourceFingerprint(ctx context.Context, root string, providers []language.Pr
 	return d.sum(), nil
 }
 
+// rootDirName is the base name of the repository root directory.
+func rootDirName(root string) string {
+	if abs, err := filepath.Abs(root); err == nil {
+		return filepath.Base(abs)
+	}
+	return filepath.Base(root)
+}
+
 func checkRoot(root string) error {
 	info, err := os.Stat(root)
 	if err != nil {

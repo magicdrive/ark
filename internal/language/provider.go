@@ -297,6 +297,21 @@ type Extraction struct {
 	// can never reach them by similarity. Conversely a reference of this file
 	// without qualified identity evidence is Unresolved.
 	IdentityOnly bool
+
+	// Package names the package the file's top-level declarations belong to
+	// within its directory ("" when the language has no such notion). Two
+	// files of one directory with different Packages share no scope (Go: a
+	// package and its external test package foo_test).
+	Package string
+
+	// PackageScoped declares package scoping by the language's rules: a name
+	// without a receiver denotes a declaration of the file's own package
+	// (same directory and Package) or of a package imported with Alias "."
+	// — never a declaration elsewhere in the repository, however unique its
+	// name — and an ImportDraft path names the repository directory whose
+	// path ends the import path, under the repository's import-path prefix.
+	// A receiver naming an import denotes that package's declarations only.
+	PackageScoped bool
 }
 
 // Provider extracts code intelligence from a single source file.

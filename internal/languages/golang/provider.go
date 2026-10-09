@@ -24,7 +24,7 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "go-6" }
+func (p *Provider) CacheVersion() string        { return "go-7" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
@@ -39,7 +39,27 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 	root := tree.RootNode()
 	drafts := extractGoSymbols(root, lang, src, file)
 	refs, imports := extractGoReferences(root, lang, src, file)
-	return language.Extraction{Symbols: drafts, References: refs, Imports: imports, Diagnostics: treediag.ParseErrors(root, lang, file)}, nil
+	return language.Extraction{
+		Symbols: drafts, References: refs, Imports: imports, Diagnostics: treediag.ParseErrors(root, lang, file),
+		// Go's package scoping: an unqualified name is a declaration of this
+		// package (or of a dot import); pkg.Name is the imported package's.
+		Package:       goPackageName(root, lang, src),
+		PackageScoped: true,
+	}, nil
+}
+
+// goPackageName is the file's package clause name.
+func goPackageName(root *ts.Node, lang *ts.Language, src []byte) string {
+	for i := 0; i < root.ChildCount(); i++ {
+		if c := root.Child(i); c.Type(lang) == "package_clause" {
+			for j := 0; j < c.ChildCount(); j++ {
+				if id := c.Child(j); id.Type(lang) == "package_identifier" {
+					return id.Text(src)
+				}
+			}
+		}
+	}
+	return ""
 }
 
 func extractGoSymbols(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
@@ -292,9 +312,10 @@ type goRefCollector struct {
 	file    source.FileID
 	refs    []language.ReferenceDraft
 	imports []language.ImportDraft
-	fields  goStructFields  // same-file struct field types (receiver evidence)
-	locals  map[string]int  // goDeclCounts of the enclosing function; nil outside
-	values  map[string]bool // package-level var / const names of this file
+	fields  goStructFields       // same-file struct field types (receiver evidence)
+	locals  map[string]int       // goDeclCounts of the enclosing function; nil outside
+	scopes  map[string][]goScope // local declarations of the enclosing function by scope
+	values  map[string]bool      // package-level var / const names of this file
 }
 
 // goNamed returns the named children of n.
@@ -340,10 +361,11 @@ func (c *goRefCollector) walkFunction(node *ts.Node, container string) {
 	goDeclCounts(node, c.lang, c.src, counts)
 	env := goFunctionTypeEnv(node, c.lang, c.src, counts)
 	c.locals = counts
+	c.scopes = goLocalScopes(node, c.lang, c.src)
 	for i := 0; i < node.ChildCount(); i++ {
 		c.walk(node.Child(i), container, env)
 	}
-	c.locals = nil
+	c.locals, c.scopes = nil, nil
 }
 
 // walk collects references. env carries the proven receiver types of the
@@ -381,7 +403,8 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 			// initializer) declares its own locals.
 			c.locals = make(map[string]int)
 			goDeclCounts(node, c.lang, c.src, c.locals)
-			defer func() { c.locals = nil }()
+			c.scopes = goLocalScopes(node, c.lang, c.src)
+			defer func() { c.locals, c.scopes = nil, nil }()
 		}
 	case "call_expression":
 		c.collectCall(node, container, env)
@@ -418,7 +441,8 @@ func (c *goRefCollector) walkImportNode(node *ts.Node) {
 					path = goStringLiteralContent(gc, c.lang, c.src)
 				case "package_identifier":
 					alias = gc.Text(c.src)
-				case ".":
+				case ".", "dot":
+					// The grammar names the dot-import token "dot".
 					alias = "."
 				case "blank_identifier":
 					alias = "_"
@@ -569,16 +593,38 @@ func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices [
 		}
 		kinds = goGenericKinds
 	}
+	recvType := env.receiverType(recv, funcNode.StartByte(), c.fields)
 	c.refs = append(c.refs, language.ReferenceDraft{
-		Name:         name,
-		Kind:         "call",
-		Container:    container,
-		Location:     nodeLocation(funcNode, c.file),
-		ReceiverExpr: recv,
-		ReceiverType: env.receiverType(recv, funcNode.StartByte(), c.fields),
-		IsCall:       true,
-		TargetKinds:  kinds,
+		Name:          name,
+		Kind:          "call",
+		Container:     container,
+		Location:      nodeLocation(funcNode, c.file),
+		ReceiverExpr:  recv,
+		ReceiverType:  recvType,
+		IsCall:        true,
+		TargetKinds:   kinds,
+		ConfidenceCap: c.localCap(name, recv, recvType, funcNode.StartByte()),
 	})
+}
+
+// localCap caps a reference that a local declaration in scope at its
+// position shadows (scopes.go): a called name, or the root of a receiver
+// without a proven type. The call is then of a local function value, or the
+// receiver a variable hiding an import or a type of the same name: never an
+// edge to a package-level declaration, though a same-named one may be listed
+// as a Candidate.
+func (c *goRefCollector) localCap(name, recv, recvType string, at uint32) string {
+	if recv == "" {
+		if goShadowed(c.scopes, name, at) {
+			return "candidate"
+		}
+		return ""
+	}
+	root, _, _ := strings.Cut(recv, ".")
+	if recvType == "" && goShadowed(c.scopes, root, at) {
+		return "candidate"
+	}
+	return ""
 }
 
 // goGenericKinds are the declarations f in f[x](...) can be: a generic
@@ -671,21 +717,30 @@ func (c *goRefCollector) collectComposite(node *ts.Node, container string) {
 		// T[X]{...} constructs T.
 		typeNode = typeNode.Child(0)
 	}
-	var name string
+	var name, recv string
 	switch typeNode.Type(c.lang) {
 	case "type_identifier":
 		name = typeNode.Text(c.src)
 	case "qualified_type":
-		// pkg.Type → use full text
-		name = typeNode.Text(c.src)
+		// pkg.Type: the package is the receiver, as in pkg.F().
+		for i := 0; i < typeNode.ChildCount(); i++ {
+			switch ch := typeNode.Child(i); ch.Type(c.lang) {
+			case "package_identifier":
+				recv = ch.Text(c.src)
+			case "type_identifier":
+				name = ch.Text(c.src)
+			}
+		}
 	}
 	if name == "" {
 		return
 	}
 	c.refs = append(c.refs, language.ReferenceDraft{
-		Name:      name,
-		Kind:      "construction",
-		Container: container,
-		Location:  nodeLocation(typeNode, c.file),
+		Name:          name,
+		Kind:          "construction",
+		Container:     container,
+		Location:      nodeLocation(typeNode, c.file),
+		ReceiverExpr:  recv,
+		ConfidenceCap: c.localCap(name, recv, "", typeNode.StartByte()),
 	})
 }

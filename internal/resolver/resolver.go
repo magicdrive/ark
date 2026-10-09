@@ -29,6 +29,9 @@ type FileIndex struct {
 	// IdentityOnly: the file's symbols are reached only by qualified
 	// identity (see language.Extraction.IdentityOnly).
 	IdentityOnly bool
+	// Package / PackageScoped: package scoping (see language.Extraction).
+	Package       string
+	PackageScoped bool
 }
 
 // Resolver resolves syntactic references to candidate symbols using
@@ -63,13 +66,23 @@ type Resolver struct {
 	// lookup through supertypes and traits (see inheritance.go).
 	structural structuralIndex
 
+	// packages: package scoping (packagescope.go), built on first use;
+	// rootName is the repository root directory's name ("" if unknown).
+	packages packageScope
+	rootName string
+
 	members    map[string][]*symbol.Symbol // Name → symbols with Qualified and Receiver
 	suffixes   map[string][]*symbol.Symbol // text after any "." in Qualified → symbols
 	dirSymbols map[string]map[string][]dirSymbol
 }
 
 // New builds a Resolver from a set of file indexes.
-func New(files []FileIndex) *Resolver {
+func New(files []FileIndex) *Resolver { return NewInRoot(files, "") }
+
+// NewInRoot builds a Resolver for the files of a repository whose root
+// directory is named rootName (package scoping uses it as evidence for a
+// repository's import-path prefix; see packagescope.go).
+func NewInRoot(files []FileIndex, rootName string) *Resolver {
 	r := &Resolver{
 		files:       files,
 		byName:      make(map[string][]symbol.Symbol),
@@ -77,6 +90,7 @@ func New(files []FileIndex) *Resolver {
 		byFile:      make(map[source.FileID]*FileIndex),
 		byID:        make(map[symbol.SymbolID]symbol.Symbol),
 		exportMemo:  make(map[string]bindResult),
+		rootName:    rootName,
 	}
 	for i := range files {
 		fi := &files[i]
@@ -205,6 +219,11 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 	if fi.IdentityOnly {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceIdentityOnly, Detail: fmt.Sprintf("%s resolves names only by qualified identity", fi.FileID)}}
 		return res
+	}
+	// A package-scoped file resolves by its language's package scoping
+	// (packagescope.go), never by repository-wide name similarity.
+	if fi.PackageScoped {
+		return r.resolvePackageScoped(res, ref, fi)
 	}
 	if ref.ReceiverExpr == "" {
 		return r.resolveByName(res, ref, fi)

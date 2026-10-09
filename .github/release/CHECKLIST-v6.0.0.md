@@ -5,19 +5,17 @@ on macOS x86_64; re-run what changed since.
 
 ## Decide before tagging
 
-- [ ] Module path: keep `github.com/magicdrive/ark` (README documents that
-      `go install …@latest` gives v1.2.3) **or** move to
-      `github.com/magicdrive/ark/v6` so `go install github.com/magicdrive/ark/v6@latest`
-      works (rewrites every internal import; GoReleaser `main: ./main.go` is
-      unaffected).
-- [ ] Accept the Go unique-name Strong limitation for v6.0.0 (release notes,
-      "Known limitations") or schedule the Go cap first.
+- [x] Module path stays `github.com/magicdrive/ark` (decided): Ark ships as a
+      CLI / MCP server through Homebrew and GitHub Releases; README documents
+      `go install …@main` and why `@latest` gives v1.2.3.
+- [ ] Optional: re-run the Go oracle on a repository of your choice
+      (`ARK_GO_ORACLE_ROOT=<repo> go test -run TestGoOracleMeasure -v ./internal/languages/golang/`):
+      `FP 0` expected.
 
 ## Repository
 
-- [ ] Review and commit the audit changes (`git status`): CI fuzz anchors,
-      ranker determinism, `serverInfo.version`, `mcp-server --help/--version`,
-      README / help text, release notes.
+- [ ] Review and commit the Go resolution changes (`git status`): package
+      scoping (resolver, Go provider go-7), oracle tests, docs.
 - [ ] `git diff v5.0.1..HEAD` matches the changelog in `NOTES-v6.0.0.md`.
 - [ ] No untracked artifacts (`dist/`, `.ark/`).
 

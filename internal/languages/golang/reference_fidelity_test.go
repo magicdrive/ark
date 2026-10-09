@@ -78,7 +78,12 @@ func checkPackage(t *testing.T, fset *token.FileSet, files []*ast.File, srcs map
 			case "call":
 				calls[at] = append(calls[at], r)
 			case "construction":
-				constructions[at] = append(constructions[at], r.Name)
+				// pkg.T{} is recorded as name T on receiver pkg, like pkg.F().
+				name := r.Name
+				if r.ReceiverExpr != "" {
+					name = r.ReceiverExpr + "." + r.Name
+				}
+				constructions[at] = append(constructions[at], name)
 			}
 		}
 		text := func(n ast.Node) string {
@@ -351,10 +356,10 @@ const Name = "n"
 	// declaration — no reference.
 	want := map[string]string{
 		// fns[i](1), fns[0](1): elements of a parameter — no reference.
-		"call .Make L17":            "function/method/type only",
-		"call lib.Make L18":         "function/method/type only",
-		"construction .Set L19":     "",
-		"construction .lib.Box L20": "",
+		"call .Make L17":           "function/method/type only",
+		"call lib.Make L18":        "function/method/type only",
+		"construction .Set L19":    "",
+		"construction lib.Box L20": "",
 		// handlers[Mode](1): handlers is a var of the file — no reference.
 		"call lib.Make L26": "function/method/type only", // int: a predeclared type
 		"call lib.Make L27": "function/method/type only", // T: a type parameter in scope

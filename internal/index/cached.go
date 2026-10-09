@@ -32,6 +32,7 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 	}
 
 	b := newBuilder()
+	b.rootName = rootDirName(root)
 	b.ids = ids
 	digest := newSourceDigest(providers)
 
@@ -59,6 +60,9 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 				Exports:      cached.Exports,
 				ModuleScoped: cached.ModuleScoped,
 				IdentityOnly: cached.IdentityOnly,
+
+				Package:       cached.Package,
+				PackageScoped: cached.PackageScoped,
 			})
 			return
 		}
@@ -87,6 +91,9 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 			Exports:      extraction.Exports,
 			ModuleScoped: extraction.ModuleScoped,
 			IdentityOnly: extraction.IdentityOnly,
+
+			Package:       extraction.Package,
+			PackageScoped: extraction.PackageScoped,
 		})
 	})
 

@@ -213,14 +213,22 @@ func goFunctionTypeEnv(fn *ts.Node, lang *ts.Language, src []byte, counts map[st
 						if len(ids) != 1 {
 							continue
 						}
-						typ := ""
+						// A written type is the variable's type — even one
+						// recorded as unproven (pkg.T, an interface): then
+						// the initializer's type says nothing (var x I = &T{}
+						// may later hold another I).
+						typ, declared := "", false
 						for j := 0; j < vs.ChildCount(); j++ {
 							c := vs.Child(j)
-							if t := goNamedType(c, lang, src); t != "" {
-								typ = t
-							}
-							if c.Type(lang) == "expression_list" && c.ChildCount() == 1 && typ == "" {
-								typ = goConstructedType(c.Child(0), lang, src)
+							switch c.Type(lang) {
+							case "identifier", ",", "=":
+							case "expression_list":
+								if !declared && c.ChildCount() == 1 {
+									typ = goConstructedType(c.Child(0), lang, src)
+								}
+							default:
+								declared = true
+								typ = goNamedType(c, lang, src)
 							}
 						}
 						set(ids[0].Text(src), typ, vs.EndByte())

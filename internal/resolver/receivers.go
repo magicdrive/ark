@@ -171,7 +171,12 @@ func (r *Resolver) resolveTypeName(name string, ref reference.Reference, fi File
 		Location:  ref.Location,
 		Container: ref.Container,
 	}
-	sub := r.resolveByName(Resolution{Confidence: ConfidenceUnresolved}, probe, fi)
+	var sub Resolution
+	if fi.PackageScoped {
+		sub = r.resolvePackageName(Resolution{Confidence: ConfidenceUnresolved}, probe, fi)
+	} else {
+		sub = r.resolveByName(Resolution{Confidence: ConfidenceUnresolved}, probe, fi)
+	}
 	var types []symbol.Symbol
 	for _, c := range sub.Candidates {
 		if s, ok := r.byID[c.SymbolID]; ok && isTypeLike(s.Kind) {

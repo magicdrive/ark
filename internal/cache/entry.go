@@ -22,6 +22,11 @@ type CachedExtraction struct {
 	// IdentityOnly (language.Extraction.IdentityOnly) is optional like the
 	// omitempty draft fields: an entry without it decodes false, which is
 	// what every provider that predates it produces.
-	IdentityOnly bool      `json:"identityOnly,omitempty"`
-	CachedAt     time.Time `json:"cachedAt"`
+	IdentityOnly bool `json:"identityOnly,omitempty"`
+	// Package / PackageScoped (language.Extraction) follow the same rule:
+	// optional, and the provider that emits them bumped its CacheVersion
+	// (go-7), so no entry without them is read for it.
+	Package       string    `json:"package,omitempty"`
+	PackageScoped bool      `json:"packageScoped,omitempty"`
+	CachedAt      time.Time `json:"cachedAt"`
 }

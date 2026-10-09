@@ -55,6 +55,10 @@ type builder struct {
 	// (identity.go).
 	ids      IDFunc
 	collided map[symbol.SymbolID]bool
+
+	// rootName is the repository root directory's name (resolver evidence
+	// for package-scoped import paths).
+	rootName string
 }
 
 func newBuilder() *builder {
@@ -190,6 +194,9 @@ func newFileIndex(lang string, fileID source.FileID, ex language.Extraction, ids
 		Exports:      ex.Exports,
 		ModuleScoped: ex.ModuleScoped,
 		IdentityOnly: ex.IdentityOnly,
+
+		Package:       ex.Package,
+		PackageScoped: ex.PackageScoped,
 	}
 }
 
@@ -330,7 +337,7 @@ func (b *builder) resolve() {
 	if len(b.resolverFiles) == 0 {
 		return
 	}
-	r := resolver.New(b.resolverFiles)
+	r := resolver.NewInRoot(b.resolverFiles, b.rootName)
 	resolutions := r.Resolve()
 
 	// Build lookup: referenceID → (file, reference)

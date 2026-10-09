@@ -25,7 +25,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
@@ -94,7 +94,7 @@ untyped receiver, module scope, unknown participant) only lower it.
 | Class | Known | Unknown | Graph edge |
 |---|---|---|---|
 | Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding, qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
-| Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
+| Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap — except in package-scoped files, where only the file's own package (directory and `Package`) is Strong evidence. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
 | Candidate | Plausible targets (one or several), kept as evidence. | Which one, or whether another unseen target exists. | **never** |
 | Unresolved | No candidate. | The target. This is a correct, sound answer — not a gap to fill. | never |
 | `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding, a receiver whose members are declared outside) places the referent outside the repository's declarations. An identity that names a repository scope (`IdentityInRepository`) never does. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
@@ -105,6 +105,25 @@ exists: a vendor `Request` must never become the repository's own `Request`.
 Authority: `resolver/confidence.go`, `resolver/result.go`
 (`HasUniqueTarget`), `resolver/evidence.go`, `TestConfidenceCap_OnlyLowers`,
 `TestOutsideRepository`, `TestR4_*`, `TestModuleScoped_*`.
+
+**Package-scoped files (Go) resolve by package scoping, never by spelling.**
+A provider that sets `PackageScoped` states its language's rules: a name
+without a receiver is a declaration of the file's own package (same file:
+Exact; same directory and `Package`: Strong) or of a dot-imported package
+(Exact, exported only); a receiver naming an import is that package (Exact,
+exported, non-test files only; an import path naming no repository package is
+`OutsideRepository`). An import path names the repository directory it ends
+with, under a prefix two import paths establish (or the only candidate prefix
+ending in the root directory's name). No repository-wide name stage applies:
+a local function value, a builtin or an external declaration is never a
+same-named repository declaration. The provider caps (Candidate) a name a
+local declaration shadows at its position (`languages/golang/scopes.go`).
+Measured against an independent `go/types` oracle
+(`languages/golang/oracle_test.go`). Authority: `resolver/packagescope.go`.
+Tests: `TestPackageScope_*`, `TestGoOracle_SyntheticModule`,
+`TestScopes_ShadowingFollowsGoScopes`.
+Danger: "it is the only `cancel` in the repository" — in Go an unqualified
+name never denotes another package's declaration.
 
 ## 3. Soundness invariants
 

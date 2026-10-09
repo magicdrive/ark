@@ -51,6 +51,25 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 
 ## Reliability & correctness
 
+- **Go reference resolution follows Go's scoping.** An unqualified name is a
+  declaration of its own package (or a dot import), never "the only
+  declaration with that name" elsewhere; `pkg.Name` is looked up in the package
+  the import names (mapped by import path, exported, non-test files); a name a
+  local declaration shadows at the call is never an edge. Measured against an
+  independent `go/types` oracle (Strong/Exact resolutions the type checker
+  confirms, over those it can verify):
+
+  | Repository | Precision before → after | Wrong Strong/Exact | Correct resolutions | Recall |
+  |---|---|---|---|---|
+  | Ark | 98.15% → 100% | 132 → 0 | 7,010 → 7,741 | 78.1% → 86.3% |
+  | golang.org/x/tools v0.36.0 | 75.96% → 100% | 3,968 → 0 | 12,540 → 13,684 | 76.1% → 83.0% |
+  | fzf | 95.76% → 100% | 121 → 0 | 2,732 → 2,751 | 77.7% → 78.3% |
+
+  19 correct resolutions were lost (x/tools 15, fzf 4): name-only matches that
+  happened to be right (a variable shadowing an import, a variable named like
+  a type); 1,913 were gained, mostly package-qualified calls and composite
+  literals (`pkg.T{}`) the old import matching missed.
+
 - Namesake declarations are separate symbols (`symbol.NewDeclarationID`: the
   first keeps its v5 ID; later ones carry a position-ordered ordinal).
 - A reference's enclosing declaration is identified by lexical containment
@@ -88,6 +107,8 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 | SymbolIDs | — | Unchanged for every declaration except the 2nd+ namesake in a file | Re-read IDs of namesakes |
 | `Symbol.Parent` (in `search_code` JSON) | Hash of a name (no such symbol) | Real parent ID or `""` | Treat as an ID reference |
 | Containers named by several declarations | Unattributed | Attributed when exactly one contains the call | — (more edges, all lexically proven) |
+| Go call graph | A unique name anywhere was Strong (x/tools: 2,437 cross-package edges); imports matched by path substring | Package scoping; on x/tools Go edges 11,179 → 9,604 with zero oracle-contradicted Strong/Exact | Expect fewer, correct edges; some former callers become Candidates |
+| Go `pkg.Name` to a package outside the repository | Unresolved | `outsideRepository` | — |
 | Error text | Root shown as given (`./`) | Absolute root; ambiguity listing has `file:line symbolId=` | Do not parse error text |
 
 No CLI flag, MCP tool, required parameter or output field was removed.
@@ -102,9 +123,9 @@ No CLI flag, MCP tool, required parameter or output field was removed.
    configuration written by v5.0.1 is "No changes required" for v6.0.0, and other
    servers in the file are preserved. Restart the client so it re-reads the tool
    list (`search_context`).
-3. **Cache: no action needed.** The extraction cache format is unchanged; a
-   cache written by v5.0.1 gives v6.0.0 the same answers as a cold build
-   (measured). `--no-cache` and deleting `<root>/.ark/index` remain safe.
+3. **Cache: no action needed.** The first run re-extracts Go files (the Go
+   provider's cache version changed); other entries are reused, and a cache
+   gives the same answers as a cold build (measured). `--no-cache` and deleting `<root>/.ark/index` remain safe.
 4. **Agents:** regenerate instructions/skills (`ark instruction <target>`,
    `ark setup <client> --force` for skills) to pick up `search_context`
    guidance — optional.
@@ -121,7 +142,11 @@ No CLI flag, MCP tool, required parameter or output field was removed.
 | golang.org/x/tools v0.36.0 | 1216 | 14.7–16.1 → 15.2–15.9 s | 79 → 74 ms | 2.15 → 2.25 s | 832–947 → 781–1029 MB |
 
 Timings and RSS overlap between versions across repeated runs (RSS varies with
-GC timing). In-process on x/tools: allocations +1.6% (3.64M → 3.70M), heap
+GC timing). Go package scoping (measured against the v6 audit build, same
+corpora): resolver time 1.31 s → 0.19 s on x/tools (268 → 54 ms on Ark: the
+repository-wide name stages no longer run for Go), index build 14.9 → 13.6 s,
+heap retained by the index unchanged (70.5 → 68.4 MB on x/tools); warm tool
+latency within run-to-run variation. In-process on x/tools: allocations +1.6% (3.64M → 3.70M), heap
 304 → 305 MB. `search_context` warm latency: 0.5 ms / 32 ms / 8 ms / 96 ms on the
 four corpora.
 
@@ -148,13 +173,13 @@ tool-response tokens, not a model's total token use.
   The module path has no major-version suffix, so `@vX` tags above v1 are not
   installable with `go install` (this predates v6). Use Homebrew, a release
   archive, or `@main` (reports a pseudo-version).
-- **Go: a unique repository-wide name is Strong evidence.** An unqualified Go
-  call to a name declared once in the repository resolves to it at Strong even
-  in another package (e.g. a local `cancel()` variable call to a `cancel` type
-  elsewhere). On golang.org/x/tools, 2,437 such edges exist; 2,333 already in
-  v5.0.1, 104 newly visible because their enclosing declaration is now
-  identified. Strong is a closed-world claim (ARCHITECTURE §2); a Go-specific
-  cap is a candidate follow-up.
+- **Go: what still stays a Candidate or Unresolved** (never a wrong edge):
+  method calls on a variable whose type is not written down locally (or is
+  package-qualified: `var s pkg.T; s.M()`), methods of named non-struct types
+  (`type g map[...]`), interface dispatch, promoted (embedded) methods, and
+  declarations duplicated across build-tagged files. With one internal import
+  only, imports map into the repository only if the root directory is named
+  like the module path's last element.
 - A SymbolID collision makes the whole index unavailable (every index tool
   answers `SymbolID collision`) until the colliding declarations change;
   file tools keep working. Never observed; tested by injection.
@@ -174,7 +199,9 @@ tool-response tokens, not a model's total token use.
 tools; `symbol_id_collision` diagnostic code; `serverInfo.version` from the
 binary; CLI help documents `--no-cache`.
 
-**Changed** — namesake declarations are separate symbols; containment
+**Changed** — Go references resolve by package scoping (no repository-wide
+unique-name stage; import paths mapped to directories; local shadowing
+capped); namesake declarations are separate symbols; containment
 identifies enclosing namesakes; `Symbol.Parent` is a real ID; `--root` is
 validated and made absolute at startup; ambiguity listings show
 `file:line symbolId=`; error messages show the absolute root.
@@ -182,7 +209,8 @@ validated and made absolute at startup; ambiguity listings show
 **Fixed** — absolute in-root paths rejected under a relative root; merged
 namesakes' sources and edges; dangling `Parent` IDs; nondeterministic context
 item order; order-dependent declaration ordinals for conflicting drafts;
-`mcp-server --help/--version`; README install instructions.
+`mcp-server --help/--version`; README install instructions; Go dot imports
+were read as ordinary imports; `var x I = &T{}` proved type T for x.
 
 **Security** — symlink escapes through tool path arguments are refused.
 
@@ -190,7 +218,10 @@ item order; order-dependent declaration ordinals for conflicting drafts;
 
 **Performance** — no measurable change (see above).
 
-**Internal** — `index.IDFunc` / `index.NewWithIDs` (collision tests);
+**Internal** — `language.Extraction.Package` / `PackageScoped`,
+`resolver.NewInRoot`; Go provider cache version go-7 (re-extracts Go files
+once); a `go/types` oracle test for Go resolution; `index.IDFunc` /
+`index.NewWithIDs` (collision tests);
 `common.ResolveRootDir` shared by `setup` and `mcp-server`; total order in
 `index.sortSymbols`; CI fuzz smoke anchored and extended to the new fuzz tests.
 
