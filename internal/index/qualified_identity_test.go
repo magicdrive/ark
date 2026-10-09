@@ -5,6 +5,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/source"
 )
 
@@ -12,7 +13,7 @@ import (
 // identity evidence reaches the normalized reference unchanged, and drafts that
 // carry none produce references that carry none.
 func TestNewFileIndex_PropagatesQualifiedIdentity(t *testing.T) {
-	fi := index.NewFileIndex("php", source.FileID("app/C.php"), language.Extraction{
+	fi := index.NewFileIndex(php.NewProvider(), source.FileID("app/C.php"), language.Extraction{
 		References: []language.ReferenceDraft{
 			{Name: "make", Kind: "call", ReceiverExpr: "Bar", ReceiverType: "Bar", ReceiverTypeQualified: `App\Services\Foo`, IsCall: true},
 			{Name: "Foo", Kind: "construction", NameQualified: `App\Services\Foo`,

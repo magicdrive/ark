@@ -51,6 +51,21 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 
 ## Reliability & correctness
 
+- **Names no longer cross languages.** A Python, JavaScript or PHP call
+  resolved to the repository's only declaration of its name even in another
+  language (Python `GoOnly()` → Go `GoOnly`, Strong), and a Go method call on
+  a value of unknown type listed other languages' methods as Candidates.
+  Every name-based rule now considers only declarations of the referencing
+  file's language (TSX and TypeScript are one); explicit evidence (module
+  bindings, qualified identity) is unchanged. Measured on the v6 corpora
+  (Ark, ky, zod, express, requests, Slim, guzzle, terraform-aws-vpc/-eks and
+  mixed-language fixtures): cross-language Strong edges 8 → 0, cross-language
+  candidate pairs 991 → 0 (all name coincidences, e.g. zod's
+  `entry.name.endsWith()` in a build script → `ZodString.endsWith`);
+  same-language resolutions unchanged except one Candidate set reached by a
+  later rule once a cross-language match no longer stopped it; TSX → TypeScript
+  imports kept (9 Exact edges).
+
 - **Go reference resolution follows Go's scoping.** An unqualified name is a
   declaration of its own package (or a dot import), never "the only
   declaration with that name" elsewhere; `pkg.Name` is looked up in the package
@@ -109,6 +124,7 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 | Containers named by several declarations | Unattributed | Attributed when exactly one contains the call | — (more edges, all lexically proven) |
 | Go call graph | A unique name anywhere was Strong (x/tools: 2,437 cross-package edges); imports matched by path substring | Package scoping; on x/tools Go edges 11,179 → 9,604 with zero oracle-contradicted Strong/Exact | Expect fewer, correct edges; some former callers become Candidates |
 | Go `pkg.Name` to a package outside the repository | Unresolved | `outsideRepository` | — |
+| A name declared only in another language | Strong / Candidate to that declaration | Unresolved | Expect no callers, impact or context across languages |
 | Error text | Root shown as given (`./`) | Absolute root; ambiguity listing has `file:line symbolId=` | Do not parse error text |
 
 No CLI flag, MCP tool, required parameter or output field was removed.
@@ -180,6 +196,10 @@ tool-response tokens, not a model's total token use.
   declarations duplicated across build-tagged files. With one internal import
   only, imports map into the repository only if the root directory is named
   like the module path's last element.
+- **No explicit cross-language references yet.** Names resolve only within
+  one language (TSX shares TypeScript's); JavaScript emits no module bindings,
+  so a JavaScript `import { f } from './util'` of a TypeScript `util.ts` does
+  not resolve (it used to, by name coincidence, at Strong).
 - A SymbolID collision makes the whole index unavailable (every index tool
   answers `SymbolID collision`) until the colliding declarations change;
   file tools keep working. Never observed; tested by injection.
@@ -199,7 +219,8 @@ tool-response tokens, not a model's total token use.
 tools; `symbol_id_collision` diagnostic code; `serverInfo.version` from the
 binary; CLI help documents `--no-cache`.
 
-**Changed** — Go references resolve by package scoping (no repository-wide
+**Changed** — name-based resolution stays within one language (TSX with
+TypeScript); Go references resolve by package scoping (no repository-wide
 unique-name stage; import paths mapped to directories; local shadowing
 capped); namesake declarations are separate symbols; containment
 identifies enclosing namesakes; `Symbol.Parent` is a real ID; `--root` is
@@ -218,7 +239,10 @@ were read as ordinary imports; `var x I = &T{}` proved type T for x.
 
 **Performance** — no measurable change (see above).
 
-**Internal** — `language.Extraction.Package` / `PackageScoped`,
+**Internal** — `language.Dialect` / `language.NameSpace`,
+`resolver.FileIndex.NameSpace` (set by the index; no cache change);
+`index.NewFileIndex` takes the provider instead of a language name;
+`language.Extraction.Package` / `PackageScoped`,
 `resolver.NewInRoot`; Go provider cache version go-7 (re-extracts Go files
 once); a `go/types` oracle test for Go resolution; `index.IDFunc` /
 `index.NewWithIDs` (collision tests);

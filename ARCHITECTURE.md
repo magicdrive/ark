@@ -25,7 +25,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
@@ -124,6 +124,30 @@ Tests: `TestPackageScope_*`, `TestGoOracle_SyntheticModule`,
 `TestScopes_ShadowingFollowsGoScopes`.
 Danger: "it is the only `cancel` in the repository" — in Go an unqualified
 name never denotes another package's declaration.
+
+**Names resolve within one name space.** Every name-based stage (same
+directory, receiver-name match, type receiver, repository-wide uniqueness and
+candidate sets, qualified-name suffix, legacy import paths, members attached
+by receiver name, package scoping) sees only declarations of files of the
+referencing file's name space: its language, or — for a provider implementing
+`language.Dialect` — the language it is a dialect of (TSX: TypeScript). The
+lookups are keyed by name space (`resolver/lookup.go`, `nameKey`), so another
+language's declaration is never a candidate at any confidence and never
+counts toward a candidate set; a reference only another language declares is
+Unresolved. Explicit evidence names its targets itself: module bindings
+resolve to the files the provider lists (TypeScript lists `.ts`/`.tsx`, so
+TypeScript and JavaScript files do not import each other) and qualified
+identity is keyed by language. `FileIndex.NameSpace` is
+`language.NameSpace` of the file's provider, set by the one conversion
+(`index/builder.go`, `newFileIndex`) that the index builder and
+`index.NewFileIndex` (which takes the provider) share; a hand-built
+`FileIndex` without it has its language as its name space. Tests: `TestNameSpace_*`,
+`TestNameSpaces_SameForEveryFileIndexPath`,
+`TestNameSpaces_NoRelationJoinsTwoNameSpaces`,
+`TestMCPNameSpaces_NoCrossLanguageRelations`.
+Danger: "JavaScript and TypeScript interoperate, so let names match across
+them" — a name match is no import; a JavaScript `run()` is not a TypeScript
+`run`.
 
 ## 3. Soundness invariants
 
@@ -453,6 +477,8 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
 
 **Not implemented yet** (may be added if the invariants above still hold):
 general type inference and return-type propagation; control/data-flow analysis;
+explicit cross-language references (JavaScript importing a TypeScript file —
+JavaScript emits no module bindings — or any other language pair);
 `ReferenceKind × SymbolKind` compatibility in name-based stages; trait
 adaptations (`insteadof`/`as`) beyond stopping; reverse typed-relation context
 (`extended_by`, ...); relation-aware ranking weights; deeper context traversal.

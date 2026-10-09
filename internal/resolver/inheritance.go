@@ -271,7 +271,7 @@ func (l *inheritedLookup) merge(sub inheritedLookup, what string) {
 // callable ones (methods, constructors) for a call, the others otherwise.
 func (r *Resolver) declaredMembers(t symbol.Symbol, name string, call bool) []symbol.Symbol {
 	var out []symbol.Symbol
-	for _, s := range r.byName[name] {
+	for _, s := range r.byName[nameKey{r.spaceOf[t.Location.File], name}] {
 		if s.ParentQualified != t.Qualified || s.Location.File != t.Location.File {
 			continue
 		}

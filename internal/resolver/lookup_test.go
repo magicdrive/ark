@@ -56,7 +56,7 @@ func extractTree(t *testing.T, root string) []resolver.FileIndex {
 		if err != nil {
 			return nil // partial failure is tolerated, as in indexing
 		}
-		files = append(files, index.NewFileIndex(string(providers[i].Language()), source.FileID(rel), ex))
+		files = append(files, index.NewFileIndex(providers[i], source.FileID(rel), ex))
 		return nil
 	})
 	if err != nil {

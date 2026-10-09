@@ -314,6 +314,24 @@ type Extraction struct {
 	PackageScoped bool
 }
 
+// Dialect is implemented by a provider whose language is a dialect of
+// another language: the files of both share one name space (TSX of
+// TypeScript). Without it a provider's language is its own name space.
+type Dialect interface {
+	DialectOf() Language
+}
+
+// NameSpace returns the name space of p's files. A reference is resolved by
+// name only among the declarations of files of its own name space: a name
+// shared with another language's declaration is no evidence. Explicit
+// evidence (bindings, qualified identity) names its targets itself.
+func NameSpace(p Provider) Language {
+	if d, ok := p.(Dialect); ok {
+		return d.DialectOf()
+	}
+	return p.Language()
+}
+
 // Provider extracts code intelligence from a single source file.
 // Implementations own their parser state; Tree-sitter (or any other parser)
 // must not escape through this interface.

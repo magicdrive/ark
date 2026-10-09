@@ -450,7 +450,7 @@ func arkGo(root string) (map[siteKey]arkSite, map[string][]symbol.Symbol, error)
 		if err != nil {
 			return nil
 		}
-		files = append(files, index.NewFileIndex(string(prov.Language()), fid, ex))
+		files = append(files, index.NewFileIndex(prov, fid, ex))
 		return nil
 	})
 	if err != nil {

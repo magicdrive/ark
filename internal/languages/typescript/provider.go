@@ -37,6 +37,10 @@ func NewTSXProvider() *Provider {
 
 func (p *Provider) Language() language.Language { return p.lang }
 
+// DialectOf: TSX is TypeScript with JSX; .ts and .tsx files share one name
+// space (language.Dialect).
+func (p *Provider) DialectOf() language.Language { return "typescript" }
+
 func (p *Provider) Extensions() []string {
 	if p.lang == "tsx" {
 		return []string{".tsx"}

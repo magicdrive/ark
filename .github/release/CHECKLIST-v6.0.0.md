@@ -14,8 +14,9 @@ on macOS x86_64; re-run what changed since.
 
 ## Repository
 
-- [ ] Review and commit the Go resolution changes (`git status`): package
-      scoping (resolver, Go provider go-7), oracle tests, docs.
+- [ ] Review and commit the cross-language isolation changes (`git status`):
+      name-space keyed lookups (resolver), `language.Dialect` (TSX),
+      `FileIndex.NameSpace` (index), tests, docs.
 - [ ] `git diff v5.0.1..HEAD` matches the changelog in `NOTES-v6.0.0.md`.
 - [ ] No untracked artifacts (`dist/`, `.ark/`).
 

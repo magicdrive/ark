@@ -32,15 +32,30 @@ type FileIndex struct {
 	// Package / PackageScoped: package scoping (see language.Extraction).
 	Package       string
 	PackageScoped bool
+	// NameSpace is the file's name space (language.NameSpace); "" means its
+	// Language. Name-based stages see only declarations of files of the
+	// referencing file's name space.
+	NameSpace string
 }
+
+// nameSpace returns fi's name space.
+func (fi *FileIndex) nameSpace() string {
+	if fi.NameSpace != "" {
+		return fi.NameSpace
+	}
+	return fi.Language
+}
+
+// nameKey keys the name-based lookups: a name within one name space.
+type nameKey struct{ space, name string }
 
 // Resolver resolves syntactic references to candidate symbols using
 // static evidence without a compiler.
 type Resolver struct {
 	files []FileIndex
 
-	// byName maps bare symbol name → symbols across all files.
-	byName map[string][]symbol.Symbol
+	// byName maps (name space, bare symbol name) → symbols.
+	byName map[nameKey][]symbol.Symbol
 	// byQualified maps qualified name → symbols.
 	byQualified map[string][]symbol.Symbol
 	// byFile maps FileID → FileIndex.
@@ -71,9 +86,13 @@ type Resolver struct {
 	packages packageScope
 	rootName string
 
-	members    map[string][]*symbol.Symbol // Name → symbols with Qualified and Receiver
-	suffixes   map[string][]*symbol.Symbol // text after any "." in Qualified → symbols
-	dirSymbols map[string]map[string][]dirSymbol
+	// Keyed by name space (nameKey), like byName.
+	members    map[nameKey][]*symbol.Symbol // Name → symbols with Qualified and Receiver
+	suffixes   map[nameKey][]*symbol.Symbol // text after any "." in Qualified → symbols
+	dirSymbols map[string]map[nameKey][]dirSymbol
+
+	// spaceOf maps each file to its name space (FileIndex.nameSpace).
+	spaceOf map[source.FileID]string
 }
 
 // New builds a Resolver from a set of file indexes.
@@ -85,16 +104,18 @@ func New(files []FileIndex) *Resolver { return NewInRoot(files, "") }
 func NewInRoot(files []FileIndex, rootName string) *Resolver {
 	r := &Resolver{
 		files:       files,
-		byName:      make(map[string][]symbol.Symbol),
+		byName:      make(map[nameKey][]symbol.Symbol),
 		byQualified: make(map[string][]symbol.Symbol),
 		byFile:      make(map[source.FileID]*FileIndex),
 		byID:        make(map[symbol.SymbolID]symbol.Symbol),
 		exportMemo:  make(map[string]bindResult),
 		rootName:    rootName,
+		spaceOf:     make(map[source.FileID]string, len(files)),
 	}
 	for i := range files {
 		fi := &files[i]
 		r.byFile[fi.FileID] = fi
+		r.spaceOf[fi.FileID] = fi.nameSpace()
 		for _, sym := range fi.Symbols {
 			r.byID[sym.ID] = sym
 			if fi.IdentityOnly {
@@ -102,7 +123,8 @@ func NewInRoot(files []FileIndex, rootName string) *Resolver {
 				// (identity.go), never through a name-based stage.
 				continue
 			}
-			r.byName[sym.Name] = append(r.byName[sym.Name], sym)
+			k := nameKey{fi.nameSpace(), sym.Name}
+			r.byName[k] = append(r.byName[k], sym)
 			if sym.Qualified != "" {
 				r.byQualified[sym.Qualified] = append(r.byQualified[sym.Qualified], sym)
 			}
@@ -233,7 +255,7 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 		return r.resolveViaReceiverBinding(res, ref, fi)
 	case ref.ReceiverType != "":
 		return r.resolveViaReceiverType(res, ref, fi)
-	case r.isModuleReceiver(ref.ReceiverExpr, fi), r.isTypeReceiver(ref.ReceiverExpr):
+	case r.isModuleReceiver(ref.ReceiverExpr, fi), r.isTypeReceiver(ref.ReceiverExpr, fi):
 		return r.resolveByName(res, ref, fi)
 	default:
 		return capUntypedReceiver(r.resolveByName(res, ref, fi), ref)
@@ -249,7 +271,7 @@ func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi Fil
 	// class), the target MUST be a member of that type. We constrain every
 	// name-based candidate stage so an explicit type receiver can never be
 	// ignored in favour of a weaker bare-name match on an unrelated member.
-	typeRecv := ref.ReceiverExpr != "" && r.isTypeReceiver(ref.ReceiverExpr)
+	typeRecv := ref.ReceiverExpr != "" && r.isTypeReceiver(ref.ReceiverExpr, fi)
 	// A receiverless name never denotes a receiver-attached member: members are
 	// reached through a receiver (R1–R4), never by their bare name.
 	free := ref.ReceiverExpr == ""
@@ -301,10 +323,10 @@ func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi Fil
 	}
 
 	// Stage 6/7: repository-wide search.
-	all := r.byName[ref.Name]
+	all := r.byName[nameKey{fi.nameSpace(), ref.Name}]
 	if len(all) == 0 {
 		// Stage 6a: try unqualified tail of qualified names.
-		all = r.byNameSuffix(ref.Name)
+		all = r.byNameSuffix(ref.Name, fi)
 	}
 	// An explicit type receiver must not fall back to an incompatible member.
 	all = narrow(all)
@@ -336,11 +358,12 @@ func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi Fil
 	return capModuleScope(res, fi)
 }
 
-// isTypeReceiver reports whether expr names a repository type-like symbol
-// (class/interface/struct/enum/trait). This is a language-neutral check over
-// existing symbol identity — it does not interpret any language's syntax.
-func (r *Resolver) isTypeReceiver(expr string) bool {
-	for _, s := range r.byName[expr] {
+// isTypeReceiver reports whether expr names a type-like symbol
+// (class/interface/struct/enum/trait) of fi's name space. This is a
+// language-neutral check over existing symbol identity — it does not
+// interpret any language's syntax.
+func (r *Resolver) isTypeReceiver(expr string, fi FileIndex) bool {
+	for _, s := range r.byName[nameKey{fi.nameSpace(), expr}] {
 		switch s.Kind {
 		case symbol.KindClass, symbol.KindInterface, symbol.KindStruct, symbol.KindEnum, symbol.KindTrait:
 			return true
@@ -445,7 +468,7 @@ func (r *Resolver) importMatch(ref reference.Reference, fi FileIndex) []symbol.S
 	importBase := filepath.Base(importPath)
 	var out []symbol.Symbol
 	for _, f := range r.files {
-		if f.IdentityOnly {
+		if f.IdentityOnly || f.nameSpace() != fi.nameSpace() {
 			continue
 		}
 		fid := string(f.FileID)
@@ -469,10 +492,10 @@ func (r *Resolver) importMatch(ref reference.Reference, fi FileIndex) []symbol.S
 // there is a local var/param named "repo" of type UserRepository.
 // As a heuristic without a type system, we search for symbols named "ReceiverType.Name"
 // where ReceiverType is any type containing the receiver expression as a suffix.
-func (r *Resolver) receiverMatch(ref reference.Reference, _ FileIndex) []symbol.Symbol {
+func (r *Resolver) receiverMatch(ref reference.Reference, fi FileIndex) []symbol.Symbol {
 	var out []symbol.Symbol
 	// r.members holds exactly the qualified, receiver-attached symbols per name.
-	for _, s := range r.members[ref.Name] {
+	for _, s := range r.members[nameKey{fi.nameSpace(), ref.Name}] {
 		// Accept if receiver type name contains the receiver expr (case-insensitive heuristic).
 		if strings.EqualFold(s.Receiver, ref.ReceiverExpr) ||
 			strings.HasSuffix(strings.ToLower(s.Receiver), strings.ToLower(ref.ReceiverExpr)) {
@@ -485,7 +508,7 @@ func (r *Resolver) receiverMatch(ref reference.Reference, _ FileIndex) []symbol.
 // samePackageMatch finds symbols by name in files sharing the same directory.
 func (r *Resolver) samePackageMatch(ref reference.Reference, fi FileIndex) []symbol.Symbol {
 	var out []symbol.Symbol
-	for _, ds := range r.dirSymbols[filepath.Dir(string(fi.FileID))][ref.Name] {
+	for _, ds := range r.dirSymbols[filepath.Dir(string(fi.FileID))][nameKey{fi.nameSpace(), ref.Name}] {
 		if ds.file != fi.FileID {
 			out = append(out, *ds.sym)
 		}
@@ -493,10 +516,11 @@ func (r *Resolver) samePackageMatch(ref reference.Reference, fi FileIndex) []sym
 	return out
 }
 
-// byNameSuffix finds symbols where ref.Name matches the suffix of a qualified name.
-func (r *Resolver) byNameSuffix(name string) []symbol.Symbol {
+// byNameSuffix finds symbols of fi's name space where name matches the
+// suffix of a qualified name.
+func (r *Resolver) byNameSuffix(name string, fi FileIndex) []symbol.Symbol {
 	var out []symbol.Symbol
-	for _, s := range r.suffixes[name] {
+	for _, s := range r.suffixes[nameKey{fi.nameSpace(), name}] {
 		out = append(out, *s)
 	}
 	return out

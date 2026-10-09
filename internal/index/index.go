@@ -104,6 +104,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 
 	b := newBuilder()
 	b.rootName = rootDirName(root)
+	b.nameSpaces = nameSpaces(providers)
 	digest := newSourceDigest(providers)
 
 	err := walkSources(ctx, root, providers, func(path, relPath string, prov language.Provider, src []byte, readErr error) {

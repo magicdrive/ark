@@ -59,6 +59,19 @@ type builder struct {
 	// rootName is the repository root directory's name (resolver evidence
 	// for package-scoped import paths).
 	rootName string
+
+	// nameSpaces maps a language to its files' name space
+	// (language.NameSpace of its provider).
+	nameSpaces map[string]string
+}
+
+// nameSpaces returns each provider's language's name space.
+func nameSpaces(providers []language.Provider) map[string]string {
+	out := make(map[string]string, len(providers))
+	for _, p := range providers {
+		out[string(p.Language())] = string(language.NameSpace(p))
+	}
+	return out
 }
 
 func newBuilder() *builder {
@@ -93,7 +106,7 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 		b.stats.Languages[lang]++
 	}
 
-	fi := newFileIndex(lang, fileID, ex, b.ids)
+	fi := newFileIndex(lang, b.nameSpaces[lang], fileID, ex, b.ids)
 	for _, sym := range fi.Symbols {
 		b.observeID(sym)
 		b.symbolsByFile[fileID] = append(b.symbolsByFile[fileID], sym)
@@ -109,15 +122,18 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 	b.resolverFiles = append(b.resolverFiles, fi)
 }
 
-// NewFileIndex converts one file's provider Extraction into the resolver's
-// FileIndex. It is the single conversion used by every pipeline that feeds the
-// resolver (repository indexing and MCP relations), so symbol identity,
-// containment and reference evidence cannot diverge between surfaces.
-func NewFileIndex(lang string, fileID source.FileID, ex language.Extraction) resolver.FileIndex {
-	return newFileIndex(lang, fileID, ex, symbol.NewDeclarationID)
+// NewFileIndex converts one file's Extraction by provider p into the
+// resolver's FileIndex, exactly as repository indexing does (newFileIndex):
+// symbol identity, containment, reference evidence and the name space
+// (language.NameSpace of p) cannot diverge between the index and a resolver
+// fed directly.
+func NewFileIndex(p language.Provider, fileID source.FileID, ex language.Extraction) resolver.FileIndex {
+	return newFileIndex(string(p.Language()), string(language.NameSpace(p)), fileID, ex, symbol.NewDeclarationID)
 }
 
-func newFileIndex(lang string, fileID source.FileID, ex language.Extraction, ids IDFunc) resolver.FileIndex {
+// newFileIndex is the one conversion; space is the file's name space
+// (language.NameSpace of its provider).
+func newFileIndex(lang, space string, fileID source.FileID, ex language.Extraction, ids IDFunc) resolver.FileIndex {
 	// Build symbols. Each declaration is its own symbol: namesakes in one file
 	// (same kind and qualified name) get distinct ordinal IDs.
 	drafts := uniqueDeclarations(ex.Symbols)
@@ -197,6 +213,7 @@ func newFileIndex(lang string, fileID source.FileID, ex language.Extraction, ids
 
 		Package:       ex.Package,
 		PackageScoped: ex.PackageScoped,
+		NameSpace:     space,
 	}
 }
 

@@ -29,9 +29,9 @@ type dirSymbol struct {
 }
 
 func (r *Resolver) buildLookupIndexes() {
-	r.members = make(map[string][]*symbol.Symbol)
-	r.suffixes = make(map[string][]*symbol.Symbol)
-	r.dirSymbols = make(map[string]map[string][]dirSymbol)
+	r.members = make(map[nameKey][]*symbol.Symbol)
+	r.suffixes = make(map[nameKey][]*symbol.Symbol)
+	r.dirSymbols = make(map[string]map[nameKey][]dirSymbol)
 	for i := range r.files {
 		fi := &r.files[i]
 		if fi.IdentityOnly {
@@ -39,15 +39,17 @@ func (r *Resolver) buildLookupIndexes() {
 			continue
 		}
 		dir := filepath.Dir(string(fi.FileID))
+		space := fi.nameSpace()
 		byName := r.dirSymbols[dir]
 		if byName == nil {
-			byName = make(map[string][]dirSymbol)
+			byName = make(map[nameKey][]dirSymbol)
 			r.dirSymbols[dir] = byName
 		}
 		for k := range fi.Symbols {
 			sym := &fi.Symbols[k]
+			key := nameKey{space, sym.Name}
 			// samePackageMatch: every symbol of every file, by (directory, name).
-			byName[sym.Name] = append(byName[sym.Name], dirSymbol{file: fi.FileID, sym: sym})
+			byName[key] = append(byName[key], dirSymbol{file: fi.FileID, sym: sym})
 
 			// receiverMatch and byNameSuffix scanned r.byQualified, which holds
 			// only symbols with a qualified name.
@@ -55,14 +57,15 @@ func (r *Resolver) buildLookupIndexes() {
 				continue
 			}
 			if sym.Receiver != "" {
-				r.members[sym.Name] = append(r.members[sym.Name], sym)
+				r.members[key] = append(r.members[key], sym)
 			}
 			// strings.HasSuffix(q, "."+name) holds exactly when name is the text
 			// after one of q's dots; each dot gives a distinct suffix.
 			q := sym.Qualified
 			for j := 0; j < len(q); j++ {
 				if q[j] == '.' {
-					r.suffixes[q[j+1:]] = append(r.suffixes[q[j+1:]], sym)
+					sk := nameKey{space, q[j+1:]}
+					r.suffixes[sk] = append(r.suffixes[sk], sym)
 				}
 			}
 		}

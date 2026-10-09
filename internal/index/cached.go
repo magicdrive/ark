@@ -33,6 +33,7 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 
 	b := newBuilder()
 	b.rootName = rootDirName(root)
+	b.nameSpaces = nameSpaces(providers)
 	b.ids = ids
 	digest := newSourceDigest(providers)
 

@@ -180,7 +180,7 @@ func (r *Resolver) resolvePackageName(res Resolution, ref reference.Reference, f
 		if dir == "" {
 			continue
 		}
-		if c := r.importableDecls(dir, "", ref.Name); len(c) > 0 {
+		if c := r.importableDecls(dir, "", ref.Name, fi); len(c) > 0 {
 			dotted = append(dotted, c...)
 			from = append(from, imp.Path)
 		}
@@ -200,7 +200,7 @@ func (r *Resolver) resolvePackageName(res Resolution, ref reference.Reference, f
 func (r *Resolver) packageMembers(name string, fi FileIndex) []symbol.Symbol {
 	inTest := testfiles.IsTestFile(string(fi.FileID))
 	var out []symbol.Symbol
-	for _, ds := range r.dirSymbols[filepath.Dir(string(fi.FileID))][name] {
+	for _, ds := range r.dirSymbols[filepath.Dir(string(fi.FileID))][nameKey{fi.nameSpace(), name}] {
 		if ds.file == fi.FileID || isMember(*ds.sym) {
 			continue
 		}
@@ -236,9 +236,9 @@ func (r *Resolver) packageTypes(name string, fi FileIndex) []symbol.Symbol {
 // importableDecls returns the Exported non-member declarations named name of
 // the non-test files of directory dir in package pkg ("" for any package of
 // the directory).
-func (r *Resolver) importableDecls(dir, pkg, name string) []symbol.Symbol {
+func (r *Resolver) importableDecls(dir, pkg, name string, fi FileIndex) []symbol.Symbol {
 	var out []symbol.Symbol
-	for _, ds := range r.dirSymbols[filepath.FromSlash(dir)][name] {
+	for _, ds := range r.dirSymbols[filepath.FromSlash(dir)][nameKey{fi.nameSpace(), name}] {
 		other := r.byFile[ds.file]
 		if other == nil || !other.PackageScoped || isMember(*ds.sym) || !ds.sym.Exported || testfiles.IsTestFile(string(ds.file)) {
 			continue
@@ -296,7 +296,7 @@ func (r *Resolver) resolveImportedName(res Resolution, ref reference.Reference, 
 		res.OutsideRepository = true
 		return res
 	}
-	c := r.importableDecls(imp.dir, imp.pkg, ref.Name)
+	c := r.importableDecls(imp.dir, imp.pkg, ref.Name, fi)
 	if len(c) == 0 {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceExplicitImport, Detail: fmt.Sprintf("package %s (%s) declares no %q", imp.path, imp.dir, ref.Name)}}
 		return res

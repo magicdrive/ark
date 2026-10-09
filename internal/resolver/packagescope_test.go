@@ -160,3 +160,32 @@ func TestPackageScope_OnlyForPackageScopedFiles(t *testing.T) {
 		t.Errorf("unscoped file: %s", got)
 	}
 }
+
+// A package-scoped file reaches only package-scoped files: a declaration of a
+// file without package scoping (another language) is never its target, in its
+// own directory, in an imported directory, or as the repository's only
+// declaration of the name. The other file's own resolution is unchanged.
+func TestPackageScope_OtherFilesNeverInScope(t *testing.T) {
+	files := psIndex(psRepo, true)
+	for _, other := range []psFile{
+		{path: "app/view.ts", decls: []string{"Widget"}},    // same directory
+		{path: "lib/client.js", decls: []string{"Greeter"}}, // imported directory, exported
+		{path: "php/Caller.php", decls: []string{"Caller"}}, // only declaration of the name
+		{path: "dot/extra.js", decls: []string{"DotLike"}},  // dot-imported directory
+	} {
+		fi := psIndex([]psFile{other}, false)[0]
+		fi.Language = "y"
+		files = append(files, fi)
+	}
+	for _, c := range []struct{ ref, recv string }{
+		{"Widget", ""}, {"Greeter", "lib"}, {"Caller", ""}, {"DotLike", ""},
+	} {
+		if got := target(psResolve(t, files, "m", "app/main.go", c.ref, c.recv)); got != "unresolved" {
+			t.Errorf("%s.%s from a package-scoped file: %s", c.recv, c.ref, got)
+		}
+	}
+	// Package scoping does not change how the other file resolves.
+	if got := target(psResolve(t, files, "m", "php/Caller.php", "Caller", "")); got != "php/Caller.php#Caller exact" {
+		t.Errorf("unscoped file: %s", got)
+	}
+}

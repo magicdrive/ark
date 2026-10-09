@@ -110,7 +110,7 @@ func capModuleScope(res Resolution, fi FileIndex) Resolution {
 func (r *Resolver) membersOf(t symbol.Symbol, name string) (members []symbol.Symbol, contained bool) {
 	var attached []symbol.Symbol
 	dir := filepath.Dir(string(t.Location.File))
-	for _, s := range r.byName[name] {
+	for _, s := range r.byName[nameKey{r.spaceOf[t.Location.File], name}] {
 		switch {
 		case s.ParentQualified != "":
 			if s.ParentQualified == t.Qualified && s.Location.File == t.Location.File {
