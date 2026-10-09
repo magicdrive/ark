@@ -1,6 +1,8 @@
 package context
 
 import (
+	"sort"
+
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/symbol"
 )
@@ -70,9 +72,17 @@ func (DefaultRanker) Rank(c candidate, sourceLen int) Score {
 		bd["kind_bonus"] = 3
 	}
 
+	// Sum in a fixed (key) order: float addition is not associative, and a
+	// map's iteration order changes from call to call — summing in it let
+	// near-equal totals differ in the last bit and swap items between calls.
+	keys := make([]string, 0, len(bd))
+	for k := range bd {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
 	total := 0.0
-	for _, v := range bd {
-		total += v
+	for _, k := range keys {
+		total += bd[k]
 	}
 	return Score{Total: total, Breakdown: bd}
 }

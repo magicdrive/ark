@@ -71,8 +71,25 @@ jobs:
             ./internal/impact/... \
             ./internal/search/...
 
+      # -fuzz is a regexp that must match exactly one fuzz test per run:
+      # anchor every pattern.
       - name: Run fuzz smoke (path containment)
-        run: go test -fuzz=FuzzResolveToolPath -fuzztime=10s ./internal/mcp/
+        run: go test -run '^$' -fuzz='^FuzzResolveToolPath$' -fuzztime=10s ./internal/mcp/
+
+      - name: Run fuzz smoke (path containment, physical root)
+        run: go test -run '^$' -fuzz='^FuzzResolveToolPath_PhysicalRoot$' -fuzztime=10s ./internal/mcp/
+
+      - name: Run fuzz smoke (symbol search matching)
+        run: go test -run '^$' -fuzz='^FuzzMatchSymbols$' -fuzztime=10s ./internal/search/
+
+      - name: Run fuzz smoke (declaration identity)
+        run: go test -run '^$' -fuzz='^FuzzDeclarationIdentity$' -fuzztime=10s ./internal/index/
+
+      - name: Run fuzz smoke (parent identity)
+        run: go test -run '^$' -fuzz='^FuzzParentIdentity$' -fuzztime=10s ./internal/index/
+
+      - name: Run fuzz smoke (SymbolID collision detection)
+        run: go test -run '^$' -fuzz='^FuzzIdentityCollision$' -fuzztime=10s ./internal/index/
 
       - name: Run fuzz smoke (cache decode)
         run: go test -fuzz=FuzzCacheDecoding -fuzztime=10s ./internal/cache/

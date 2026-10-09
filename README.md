@@ -19,10 +19,6 @@ It supports **plaintext**, **markdown**, **XML**, and **arklite** outputs, full 
 
 ### 1. Install
 
-```bash
-go install github.com/magicdrive/ark@latest
-```
-
 Using Homebrew:
 
 ```bash
@@ -30,6 +26,17 @@ brew install magicdrive/tap/ark
 ```
 
 Or download a pre-built binary from [Releases](https://github.com/magicdrive/ark/releases).
+
+With the Go toolchain, install from `main`:
+
+```bash
+go install github.com/magicdrive/ark@main
+```
+
+> `go install github.com/magicdrive/ark@latest` does **not** install the current release: the
+> module path carries no major-version suffix, so the Go module proxy resolves `@latest` to the
+> legacy v1 line, and `@v5.x` tags are not installable with `go install`. A binary installed from
+> `@main` reports a pseudo-version (`v0.0.0-<date>-<commit>`) in `ark --version`.
 
 ---
 
@@ -309,8 +316,8 @@ ark mcp-init --force
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--root <dir>` | `-r` | Serve directory root | `$PWD` |
-| `--type <stdio\|http>` | `-t` | HTTP listen port | `stdio` |
+| `--root <dir>` | `-r` | Serve directory root; a relative path is resolved against the launch directory at startup, and a missing or non-directory root stops the server | `$PWD` |
+| `--type <stdio\|http>` | `-t` | Transport (`stdio`, or `http` on `--http-port`, endpoint `/mcp`) | `stdio` |
 | `--http-port <port>` | `-p` | HTTP listen port | `8522` |
 | `--scan-buffer <size>` | `-b` | Read buffer size (`10M`, `500K`, …) | `10M` |
 | `--mask-secrets <on/off>` | `-m` | Detect & mask secrets | `on` |
@@ -325,7 +332,7 @@ ark mcp-init --force
 | `--exclude-dir <names>` | `-E` | Exclude dirs by name | – |
 | `--skip-non-utf8` | `-s` | Ignore non‑UTF‑8 files | – |
 | `--delete-comments` | `-D` | Strip comments (language‑aware) | – |
-| `--no-cache` | – | Disable persistent index cache | – |
+| `--no-cache` | – | Disable the persistent extraction cache (otherwise kept in `<root>/.ark/index`; add `.ark/` to `.gitignore`) | – |
 
 ---
 

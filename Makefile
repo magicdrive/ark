@@ -70,11 +70,16 @@ lint: vet test race staticcheck
 # Run fuzz smoke tests (short, for local use)
 .PHONY: fuzz
 fuzz:
-	@$(GO) test -fuzz=FuzzResolveToolPath -fuzztime=10s $(CURDIR)/internal/mcp/
+	@$(GO) test -run '^$$' -fuzz='^FuzzResolveToolPath$$' -fuzztime=10s $(CURDIR)/internal/mcp/
+	@$(GO) test -run '^$$' -fuzz='^FuzzResolveToolPath_PhysicalRoot$$' -fuzztime=10s $(CURDIR)/internal/mcp/
 	@$(GO) test -fuzz=FuzzCacheDecoding   -fuzztime=10s $(CURDIR)/internal/cache/
 	@$(GO) test -fuzz=FuzzExtract         -fuzztime=10s $(CURDIR)/internal/languages/golang/
 	@$(GO) test -run '^$$' -fuzz=FuzzExtractTerraform -fuzztime=10s $(CURDIR)/internal/languages/terraform/
 	@$(GO) test -run '^$$' -fuzz='^FuzzTypeArgParser$$' -fuzztime=10s $(CURDIR)/internal/languages/typescript/
+	@$(GO) test -run '^$$' -fuzz='^FuzzMatchSymbols$$' -fuzztime=10s $(CURDIR)/internal/search/
+	@$(GO) test -run '^$$' -fuzz='^FuzzDeclarationIdentity$$' -fuzztime=10s $(CURDIR)/internal/index/
+	@$(GO) test -run '^$$' -fuzz='^FuzzParentIdentity$$' -fuzztime=10s $(CURDIR)/internal/index/
+	@$(GO) test -run '^$$' -fuzz='^FuzzIdentityCollision$$' -fuzztime=10s $(CURDIR)/internal/index/
 
 # Run the TypeScript compiler differential against the pinned compiler
 # (needs Node.js and npm; CI runs it in its own job)

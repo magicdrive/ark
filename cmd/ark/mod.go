@@ -162,6 +162,10 @@ func runMCPServer(version string) {
 		opt.GeneralOption.FlagSet.Usage()
 		os.Exit(0)
 	}
+	if opt.GeneralOption.VersionFlag {
+		fmt.Printf("ark version %s\n", version)
+		os.Exit(0)
+	}
 	mcp.RunMCPServe(opt.RootDir, opt)
 }
 

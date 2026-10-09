@@ -140,6 +140,15 @@ func (s *MCPServer) processNotification(n *MCPNotification) {
 	}
 }
 
+// version is the Ark version the server reports to clients ("unknown" when
+// the binary carries none).
+func (s *MCPServer) version() string {
+	if s.serverOpt != nil && s.serverOpt.ThisVersion != "" {
+		return s.serverOpt.ThisVersion
+	}
+	return "unknown"
+}
+
 // handleInitialize handles the MCP initialize request
 func (s *MCPServer) handleInitialize(request *MCPRequest) *MCPResponse {
 	result := InitializeResult{
@@ -155,7 +164,7 @@ func (s *MCPServer) handleInitialize(request *MCPRequest) *MCPResponse {
 		},
 		ServerInfo: ServerInfo{
 			Name:    "ark-mcp-server",
-			Version: "0.1.0",
+			Version: s.version(),
 		},
 	}
 

@@ -434,12 +434,26 @@ func copyEdges(edges []GraphEdge) []GraphEdge {
 	return out
 }
 
+// sortSymbols orders symbols by file and qualified name, then — for
+// namesakes, which FindSymbols gathers from a map in no fixed order — by
+// position, kind and SymbolID: a total order, so every query returns the same
+// sequence for the same index.
 func sortSymbols(syms []symbol.Symbol) {
 	sort.Slice(syms, func(i, j int) bool {
-		if syms[i].Location.File != syms[j].Location.File {
-			return syms[i].Location.File < syms[j].Location.File
+		a, b := syms[i], syms[j]
+		if a.Location.File != b.Location.File {
+			return a.Location.File < b.Location.File
 		}
-		return syms[i].Qualified < syms[j].Qualified
+		if a.Qualified != b.Qualified {
+			return a.Qualified < b.Qualified
+		}
+		if a.Location.Range != b.Location.Range {
+			return positionBefore(a.Location.Range, b.Location.Range)
+		}
+		if a.Kind != b.Kind {
+			return a.Kind < b.Kind
+		}
+		return a.ID < b.ID
 	})
 }
 

@@ -58,7 +58,7 @@ mcp-init options:
   -f, --force                                      Overwrite existing MCP server entry. (optional.)
 
 mcp-server options:
-  -r, --root <dirname>                             Specify the mcp-server serve root dirname(optional. default: $pwd)
+  -r, --root <dirname>                             Specify the mcp-server serve root dirname; resolved against the launch directory, must be an existing directory. (optional. default: $pwd)
   -t, --type <http|stdio>                          Specify the mcp-server serve type. (optional. default: 'stdio')
   -p, --http-port <number>                         Specify the mcp-server port. (optional. default: 8522)
   -b, --scan-buffer <number|byte-string>           Specify the line scan buffer size. (optional. default: '10M')
@@ -74,6 +74,7 @@ mcp-server options:
   -E, --exclude-dir <dirname>                      Specify watch exclude dirname. Allows comma separated list. (optional.)
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
+  --no-cache                                       Disable the persistent extraction cache in <root>/.ark/index. (optional.)
 
 instruction options:
   <target>                                         Instruction target: claude, codex, cursor, cline, copilot-vscode, copilot-cli.

@@ -143,6 +143,8 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 		DeleteCommentsFlag:              *deleteCommentsFlagOpt,
 		WithLineNumberFlagValue:         "off",
 		OutputFormatValue:               "auto",
+		HelpFlag:                        *helpFlagOpt,
+		VersionFlag:                     *versionFlagOpt,
 		FlagSet:                         fs,
 	}
 

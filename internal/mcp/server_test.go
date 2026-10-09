@@ -66,6 +66,7 @@ func TestNewMCPServer(t *testing.T) {
 
 func TestHandleInitialize(t *testing.T) {
 	serverOpt := createTestServerOption()
+	serverOpt.ThisVersion = "v6.0.0-test"
 	server := NewMCPServer(serverOpt.RootDir, serverOpt)
 
 	request := &MCPRequest{
@@ -114,8 +115,9 @@ func TestHandleInitialize(t *testing.T) {
 		t.Errorf("Expected server name 'ark-mcp-server', got '%s'", result.ServerInfo.Name)
 	}
 
-	if result.ServerInfo.Version != "0.1.0" {
-		t.Errorf("Expected server version '0.1.0', got '%s'", result.ServerInfo.Version)
+	// The server reports the binary's version, not a placeholder.
+	if result.ServerInfo.Version != "v6.0.0-test" {
+		t.Errorf("Expected server version 'v6.0.0-test', got '%s'", result.ServerInfo.Version)
 	}
 }
 
@@ -292,5 +294,15 @@ func TestJSONSerialization(t *testing.T) {
 
 	if unmarshaledResponse.JSONRPC != response.JSONRPC {
 		t.Errorf("JSONRPC mismatch: expected '%s', got '%s'", response.JSONRPC, unmarshaledResponse.JSONRPC)
+	}
+}
+
+func TestHandleInitialize_UnknownVersion(t *testing.T) {
+	serverOpt := createTestServerOption()
+	serverOpt.ThisVersion = ""
+	server := NewMCPServer(serverOpt.RootDir, serverOpt)
+	resp := server.processRequest(&MCPRequest{JSONRPC: "2.0", ID: 1, Method: "initialize"})
+	if r, ok := resp.Result.(InitializeResult); !ok || r.ServerInfo.Version != "unknown" {
+		t.Errorf("version without build info: %+v", resp.Result)
 	}
 }

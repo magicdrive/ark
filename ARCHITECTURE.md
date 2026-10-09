@@ -400,7 +400,7 @@ Not a rule: "sort everything". Iterate maps freely where the result does not
 depend on order; sort or use a defined order where it does — at outputs, at
 "first N" bounds, and at tie-breaks.
 Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
-`TestEngine_Deterministic`, `TestMCP_Ambiguity_Deterministic`,
+`TestEngine_Deterministic`, `TestDefaultRanker_TotalIsBitIdentical` (a score is summed in key order, never map order), `TestMCP_Ambiguity_Deterministic`,
 `TestIndexReuse_Deterministic`, `internal/golden` (`go test ./internal/golden -update` rewrites snapshots; review every diff as a behavior change).
 
 ## 7. Limits: non-goals vs. not yet implemented

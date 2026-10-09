@@ -415,3 +415,39 @@ func TestDeclarationIdentity_ConflictingDraftsAtOneRange(t *testing.T) {
 		t.Errorf("order-dependent identities: %v vs %v", a, b)
 	}
 }
+
+// Namesakes come back from every query in one order, call after call
+// (FindSymbols gathers them from a map).
+func TestDeclarationIdentity_QueryOrderIsTotal(t *testing.T) {
+	root := writeFiles(t, map[string]string{
+		"go.mod":  "module x\n\ngo 1.22\n",
+		"boot.go": "package x\n\nfunc init() {}\n\nfunc init() {}\n\nfunc init() {}\n",
+		"a.php":   "<?php\nnamespace App;\nclass Cmd { protected $cache; public function cache() {} }\n",
+	})
+	idx, err := index.New(context.Background(), root, languages.Registry().Providers())
+	if err != nil {
+		t.Fatal(err)
+	}
+	ids := func(syms []symbol.Symbol) []symbol.SymbolID {
+		var out []symbol.SymbolID
+		for _, s := range syms {
+			out = append(out, s.ID)
+		}
+		return out
+	}
+	first, firstQ := ids(idx.FindSymbols("")), ids(idx.FindSymbolsByQualified(`App\Cmd.cache`))
+	for range 50 {
+		if got := ids(idx.FindSymbols("")); !reflect.DeepEqual(got, first) {
+			t.Fatal("FindSymbols order varies between calls")
+		}
+		if got := ids(idx.FindSymbolsByQualified(`App\Cmd.cache`)); !reflect.DeepEqual(got, firstQ) {
+			t.Fatal("FindSymbolsByQualified order varies between calls")
+		}
+	}
+	inits := idx.FindSymbolsByQualified("init")
+	for i := 1; i < len(inits); i++ {
+		if inits[i-1].Location.Range.Start.Line >= inits[i].Location.Range.Start.Line {
+			t.Errorf("namesakes not in source order: %v", ids(inits))
+		}
+	}
+}

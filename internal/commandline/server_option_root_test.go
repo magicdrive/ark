@@ -95,3 +95,21 @@ func TestServerOptParse_InvalidRootIsAnError(t *testing.T) {
 		}
 	}
 }
+
+// --help and --version reach the caller, which prints them instead of
+// starting a server.
+func TestServerOptParse_HelpAndVersionFlags(t *testing.T) {
+	t.Chdir(t.TempDir())
+	for _, c := range []struct {
+		arg           string
+		help, version bool
+	}{{"--help", true, false}, {"-h", true, false}, {"--version", false, true}, {"-v", false, true}} {
+		_, opt, err := ServerOptParse("test", []string{c.arg})
+		if err != nil {
+			t.Fatalf("%s: %v", c.arg, err)
+		}
+		if opt.GeneralOption.HelpFlag != c.help || opt.GeneralOption.VersionFlag != c.version {
+			t.Errorf("%s: help=%v version=%v", c.arg, opt.GeneralOption.HelpFlag, opt.GeneralOption.VersionFlag)
+		}
+	}
+}

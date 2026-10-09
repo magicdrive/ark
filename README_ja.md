@@ -18,10 +18,6 @@
 
 ### 1. Install
 
-```bash
-go install github.com/magicdrive/ark@latest
-```
-
 Homebrew を使う場合:
 
 ```bash
@@ -29,6 +25,17 @@ brew install magicdrive/tap/ark
 ```
 
 または [Releases](https://github.com/magicdrive/ark/releases) からビルド済みバイナリをダウンロードできます。
+
+Go ツールチェーンを使う場合は `main` からインストールします:
+
+```bash
+go install github.com/magicdrive/ark@main
+```
+
+> `go install github.com/magicdrive/ark@latest` では現在のリリースは**インストールされません**。モジュールパスに
+> メジャーバージョンの接尾辞がないため、Go のモジュールプロキシは `@latest` を旧 v1 系に解決し、`@v5.x` の
+> タグは `go install` で指定できません。`@main` からインストールしたバイナリの `ark --version` は疑似バージョン
+> （`v0.0.0-<日付>-<コミット>`）を表示します。
 
 ---
 
@@ -307,8 +314,8 @@ ark mcp-init --force
 
 | Option | Alias | Description | Default |
 |--------|-------|-------------|---------|
-| `--root <dir>` | `-r` | 提供するディレクトリのルート | `$PWD` |
-| `--type <stdio\|http>` | `-t` | サーバータイプ | `stdio` |
+| `--root <dir>` | `-r` | 提供するディレクトリのルート。相対パスは起動時のディレクトリを基準に解決され、存在しない・ディレクトリでないルートではサーバーは起動しない | `$PWD` |
+| `--type <stdio\|http>` | `-t` | トランスポート（`stdio`、または `--http-port` 上の `http`。エンドポイントは `/mcp`） | `stdio` |
 | `--http-port <port>` | `-p` | HTTP リスンポート | `8522` |
 | `--scan-buffer <size>` | `-b` | 読み込みバッファサイズ | `10M` |
 | `--mask-secrets <on/off>` | `-m` | シークレットを検出してマスク | `on` |
@@ -323,7 +330,7 @@ ark mcp-init --force
 | `--exclude-dir <names>` | `-E` | ディレクトリ名で除外 | – |
 | `--skip-non-utf8` | `-s` | 非 UTF-8 ファイルを無視 | – |
 | `--delete-comments` | `-D` | コメントを除去 | – |
-| `--no-cache` | – | 永続インデックスキャッシュを無効化 | – |
+| `--no-cache` | – | 永続的な抽出キャッシュを無効化（無効化しない場合は `<root>/.ark/index` に保存。`.gitignore` に `.ark/` を追加してください） | – |
 
 ---
 
