@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/magicdrive/ark/internal/common"
 )
 
 // Result describes the outcome of a setup run for reporting (plan §18).
@@ -90,28 +92,7 @@ func Run(opts Options) (*Result, error) {
 // and is a directory (plan §17). A missing or non-directory root is a hard
 // error — failure is never deferred to MCP start time.
 func resolveRoot(root string) (string, error) {
-	if strings.TrimSpace(root) == "" {
-		cwd, err := os.Getwd()
-		if err != nil {
-			return "", fmt.Errorf("cannot determine current directory: %w", err)
-		}
-		root = cwd
-	}
-	abs, err := filepath.Abs(root)
-	if err != nil {
-		return "", fmt.Errorf("cannot resolve root %q: %w", root, err)
-	}
-	info, err := os.Stat(abs)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", fmt.Errorf("root directory does not exist: %s", abs)
-		}
-		return "", fmt.Errorf("cannot access root %q: %w", abs, err)
-	}
-	if !info.IsDir() {
-		return "", fmt.Errorf("root is not a directory: %s", abs)
-	}
-	return abs, nil
+	return common.ResolveRootDir(root)
 }
 
 // resolveArkPath defaults the ark command and validates it (plan §16).

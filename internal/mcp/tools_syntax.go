@@ -12,26 +12,73 @@ import (
 )
 
 // resolveToolPath normalises a path argument from an MCP tool call and enforces
-// repository root containment.  Both relative and absolute inputs are accepted;
-// both must resolve to a path that is contained within h.rootDir.
+// repository root containment. It is the single path gate for every tool.
 //
-// The containment check uses filepath.Rel so that prefix collisions like
-// /repo vs /repo-other are handled correctly.  String-prefix checks are
-// intentionally not used.
+// A relative path is resolved against h.rootDir (absolute since construction,
+// so never against the process CWD); an absolute path is taken as is. The
+// result must be inside the root:
+//
+//   - lexically: filepath.Rel, so /repo-other is not inside /repo and ../ is
+//     refused. String-prefix checks are intentionally not used.
+//   - physically, when the path exists: its symlink-resolved form must be
+//     inside the symlink-resolved root, so a symlink in the repository cannot
+//     expose what lies outside it. A symlink that stays inside the root works.
+//
+// An absolute path that names an in-root location through another spelling of
+// a symlinked root (macOS /var vs /private/var) is accepted and returned in the
+// root's own spelling. The check is made when the request arrives; it is not a
+// guarantee against the repository changing under a running request.
 func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, err error) {
+	root := h.rootDir
 	var candidate string
 	if filepath.IsAbs(path) {
 		candidate = path
 	} else {
-		candidate = filepath.Join(h.rootDir, path)
+		candidate = filepath.Join(root, path)
 	}
 	candidate = filepath.Clean(candidate)
 
-	rel, relErr := filepath.Rel(h.rootDir, candidate)
-	if relErr != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", "", fmt.Errorf("path %q is outside the server root %q; use a path inside the repository", path, h.rootDir)
+	rel, inside := relInside(root, candidate)
+	if !inside {
+		// The only way back in is an absolute path through another spelling
+		// of the root, which can be seen only on the resolved forms.
+		realRoot, rootErr := filepath.EvalSymlinks(root)
+		real, realErr := filepath.EvalSymlinks(candidate)
+		if !filepath.IsAbs(path) || rootErr != nil || realErr != nil {
+			return "", "", outsideRootError(path, root)
+		}
+		if rel, inside = relInside(realRoot, real); !inside {
+			return "", "", outsideRootError(path, root)
+		}
+		return filepath.Join(root, rel), rel, nil
+	}
+
+	// Physical containment. A path that does not resolve (missing, dangling)
+	// is left to the tool, which reports it as not found; nothing is read
+	// through it.
+	if real, realErr := filepath.EvalSymlinks(candidate); realErr == nil {
+		realRoot, rootErr := filepath.EvalSymlinks(root)
+		if rootErr != nil {
+			return "", "", outsideRootError(path, root)
+		}
+		if _, ok := relInside(realRoot, real); !ok {
+			return "", "", fmt.Errorf("path %q resolves through a symlink to %q, outside the server root %q; use a path inside the repository", path, real, root)
+		}
 	}
 	return candidate, rel, nil
+}
+
+// relInside reports p relative to root and whether it is root or below it.
+func relInside(root, p string) (string, bool) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
+}
+
+func outsideRootError(path, root string) error {
+	return fmt.Errorf("path %q is outside the server root %q; use a path inside the repository", path, root)
 }
 
 // SyntaxToolDefinitions returns tool definitions for syntax-related tools

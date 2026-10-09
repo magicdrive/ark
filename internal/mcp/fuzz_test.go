@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -44,6 +46,54 @@ func FuzzResolveToolPath(f *testing.F) {
 		}
 		if strings.HasPrefix(rel, "/../") || rel == "/.." {
 			t.Errorf("resolveToolPath(%q) = %q escapes root via ..", input, fullPath)
+		}
+	})
+}
+
+// FuzzResolveToolPath_PhysicalRoot runs the path gate against a real root that
+// contains symlinks both inside and out of it. Invariant: an accepted path is
+// lexically inside the root and, when it exists, physically inside it too.
+func FuzzResolveToolPath_PhysicalRoot(f *testing.F) {
+	for _, s := range []string{"main.go", "alias.go", "leak.go", "leakdir/x.go", "sub/../main.go", "../outside/x.go", "."} {
+		f.Add(s)
+	}
+	base := f.TempDir()
+	root := filepath.Join(base, "root")
+	outside := filepath.Join(base, "outside")
+	for _, d := range []string{root, outside} {
+		if err := os.MkdirAll(d, 0o755); err != nil {
+			f.Fatal(err)
+		}
+	}
+	for p, c := range map[string]string{filepath.Join(root, "main.go"): "package main\n", filepath.Join(outside, "x.go"): "package x\n"} {
+		if err := os.WriteFile(p, []byte(c), 0o644); err != nil {
+			f.Fatal(err)
+		}
+	}
+	links := map[string]string{"alias.go": filepath.Join(root, "main.go"), "leak.go": filepath.Join(outside, "x.go"), "leakdir": outside}
+	for name, target := range links {
+		if err := os.Symlink(target, filepath.Join(root, name)); err != nil {
+			f.Skip("symlinks unavailable:", err)
+		}
+	}
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		f.Fatal(err)
+	}
+	h := NewToolsHandler(root, nil)
+
+	f.Fuzz(func(t *testing.T, input string) {
+		full, _, err := h.resolveToolPath(input)
+		if err != nil {
+			return
+		}
+		if _, ok := relInside(root, full); !ok {
+			t.Fatalf("resolveToolPath(%q) = %q, outside %q", input, full, root)
+		}
+		if real, err := filepath.EvalSymlinks(full); err == nil {
+			if _, ok := relInside(realRoot, real); !ok {
+				t.Fatalf("resolveToolPath(%q) = %q resolves to %q, outside %q", input, full, real, realRoot)
+			}
 		}
 	})
 }

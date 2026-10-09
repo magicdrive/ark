@@ -231,6 +231,11 @@ Ark MCP サーバーを手動で追加してください。コマンドは常に
 }
 ```
 
+Claude Code は `CLAUDE_PROJECT_DIR` をサーバーの環境にしか設定しないため、この引数は `./`
+に展開され、Ark は Claude Code が起動したディレクトリ（プロジェクト）を基準に解決します。
+別のディレクトリを固定する場合やグローバル設定では、絶対パスの `--root` を使ってください。
+`CLAUDE_PROJECT_DIR` が提供ルートと異なる場合、Ark は警告をログに出します。
+
 **Cursor** — `.cursor/mcp.json`（project）または `~/.cursor/mcp.json`（global）:
 
 ```json
@@ -265,6 +270,7 @@ Ark MCP サーバーを手動で追加してください。コマンドは常に
 | `cannot parse <file>` | 設定が壊れている。手動で修正（Ark は壊れたファイルに触れません）。 |
 | `the Codex CLI (codex) was not found` | Codex（`codex`）をインストールするか手動設定（上記参照）。 |
 | `root directory does not exist` | 存在する `--root` を指定（Ark は事前に検証します）。 |
+| `path ... is outside the server root` | 提供ルート内のパス（ルート相対または絶対パス）を指定。メッセージ中のルートを確認してください。相対の `--root` はサーバー起動時のディレクトリ基準です。 |
 | Permission denied | 設定ファイル/ディレクトリが書き込み不可。権限を修正するか `--global` を使用。 |
 
 ---

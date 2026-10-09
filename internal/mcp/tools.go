@@ -49,7 +49,15 @@ func NewToolsHandler(rootDir string, opt *commandline.Option) *ToolsHandler {
 
 // NewToolsHandlerWithCache creates a ToolsHandler that persists extraction
 // results in store. Pass cache.NopStore{} to disable caching.
+//
+// A relative rootDir is made absolute against the current directory now, so
+// the root means the same directory for the handler's whole life whatever the
+// process CWD later becomes. (The server resolves and validates --root at
+// startup; this keeps every other constructor caller equally safe.)
 func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cache.Store) *ToolsHandler {
+	if abs, err := filepath.Abs(rootDir); err == nil {
+		rootDir = abs
+	}
 	return &ToolsHandler{
 		rootDir:    rootDir,
 		opt:        opt,

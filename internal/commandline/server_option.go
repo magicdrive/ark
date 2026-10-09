@@ -115,10 +115,19 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 		return optLength, nil, err
 	}
 
+	// The root is resolved once, here, against the launch CWD. Every later use
+	// (tools, ignore rules, cache) sees the same absolute directory, so neither
+	// a relative --root nor a later CWD change can alter what is served, and an
+	// in-root absolute path can be compared with it.
+	rootDir, err := common.ResolveRootDir(*rootDirOpt)
+	if err != nil {
+		return optLength, nil, fmt.Errorf("--root: %w", err)
+	}
+
 	generalOpt := &Option{
 		// Ignore rules belong to the served repository, not to the directory
 		// the server process happened to be started from.
-		WorkingDir:                      *rootDirOpt,
+		WorkingDir:                      rootDir,
 		ScanBufferValue:                 *scanBufferValueOpt,
 		MaskSecretsFlagValue:            *maskSecretsFlagOpt,
 		AllowGitignoreFlagValue:         *allowGitignoreFlagOpt,
@@ -139,7 +148,7 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 
 	result := &ServeOption{
 		ThisVersion:        version,
-		RootDir:            *rootDirOpt,
+		RootDir:            rootDir,
 		McpServerTypeValue: *mcpServerTypeOpt,
 		HttpPort:           strconv.Itoa(*httpPortOpt),
 		NoCache:            *noCacheFlagOpt,

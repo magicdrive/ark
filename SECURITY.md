@@ -19,8 +19,16 @@ programmatic API.
 
 ## Repository boundary enforcement
 
-All filesystem access requested through the MCP adapter is validated
-against the configured repository root using `filepath.Rel`.
+The MCP server resolves `--root` once, at startup: a relative root is
+resolved against the launch working directory, and the result is an
+absolute, clean path that must be an existing directory (otherwise the
+server exits with an error). Later working-directory changes do not alter
+the root.
+
+Every path argument of every MCP tool (and the `file://` / `directory://`
+resources) goes through one gate, `resolveToolPath`. Relative paths are
+resolved against the root; absolute paths are accepted when they lie inside
+it.
 
 **Containment invariant:**
 
@@ -42,20 +50,29 @@ String-prefix checks (`strings.HasPrefix(path, root)`) are intentionally
 
 ## Symlink policy
 
-Ark currently performs **lexical** path containment only. A symlink
-inside the repository root that points to a file outside the root will
-be followed by the OS and the resulting path will pass lexical
-containment.
+When the requested path exists, its symlink-resolved form must also lie
+inside the symlink-resolved root. A symlink inside the repository that
+points outside it is therefore refused when it is named as a tool's path
+argument (directly, or as a component of the path); a symlink that stays
+inside the repository keeps working. An absolute path that reaches the root
+through another spelling of a symlinked prefix (for example macOS
+`/var` vs `/private/var`) is accepted and reported in the root's own
+spelling. Index-based tools additionally build their index over the
+canonical directory (`canonicalDir`).
 
-**Known limitation:** Ark does not perform `filepath.EvalSymlinks` before
-the containment check. Symlink-based escapes are theoretically possible
-on systems where the repository contains attacker-controlled symlinks.
+**Known limitations:**
+
+- The check is made when a request arrives. It does not guard against the
+  repository being changed concurrently (time-of-check/time-of-use).
+- Directory walks started from an accepted path (for example
+  `search_in_files`, `list_files`, `get_project_stats`, `find_symbol`,
+  `find_references`, and index building) do not descend into symlinked
+  directories, but they may read a symlinked *file* found during the walk,
+  even if it points outside the repository.
 
 Mitigation: run Ark in an environment where the repository tree is not
 controlled by an untrusted party (e.g., read-only checkout, container
 with restricted filesystem).
-
-A dedicated follow-up is required to harden symlink handling.
 
 ## Oversized file handling
 

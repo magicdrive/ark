@@ -232,6 +232,12 @@ the Ark MCP server yourself. The command is always `ark mcp-server --root <path>
 }
 ```
 
+Claude Code sets `CLAUDE_PROJECT_DIR` only in the server's environment, so this argument
+expands to `./`, which Ark resolves against the directory Claude Code launches it from
+(the project). To pin a different directory, or for the global file, use an absolute
+`--root`. Ark logs a warning when `CLAUDE_PROJECT_DIR` names a different directory than
+the one it serves.
+
 **Cursor** — `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global):
 
 ```json
@@ -266,6 +272,7 @@ the Ark MCP server yourself. The command is always `ark mcp-server --root <path>
 | `cannot parse <file>` | The config is malformed; fix it by hand — Ark will not touch a broken file. |
 | `the Codex CLI (codex) was not found` | Install Codex (`codex`), or configure manually (see above). |
 | `root directory does not exist` | Pass a `--root` that exists; Ark validates it up front. |
+| `path ... is outside the server root` | Use a path inside the served root (relative to it, or absolute). Check the root in the message; a relative `--root` means the directory the server was launched from. |
 | Permission denied | The config file/dir is not writable; fix permissions or use `--global`. |
 
 ---

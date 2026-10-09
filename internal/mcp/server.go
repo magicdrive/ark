@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/cache"
@@ -12,6 +13,9 @@ import (
 
 // RunMCPServe starts the MCP server with the given root directory and options
 func RunMCPServe(rootDir string, serverOpt *commandline.ServeOption) {
+	if w := rootMismatchWarning(rootDir, os.Getenv("CLAUDE_PROJECT_DIR")); w != "" {
+		log.Print(w)
+	}
 	server := NewMCPServer(rootDir, serverOpt)
 
 	var transport Transport
@@ -35,6 +39,27 @@ func RunMCPServe(rootDir string, serverOpt *commandline.ServeOption) {
 	if err := transport.Start(handler); err != nil {
 		log.Fatalf("Transport error: %v", err)
 	}
+}
+
+// rootMismatchWarning returns a warning when the client says which project it
+// launched the server for and the served root is a different directory, or ""
+// when there is nothing to report.
+//
+// Claude Code sets CLAUDE_PROJECT_DIR in the server's environment (not in its
+// own, so ${CLAUDE_PROJECT_DIR:-.} in .mcp.json args expands to "."); the root
+// then comes from the launch CWD, which Claude Code does not document. The
+// root is never changed here — --root stays the contract — but a mismatch is
+// made visible in the client's MCP log.
+func rootMismatchWarning(root, projectDir string) string {
+	if projectDir == "" {
+		return ""
+	}
+	realRoot, err1 := filepath.EvalSymlinks(root)
+	realProject, err2 := filepath.EvalSymlinks(projectDir)
+	if err1 == nil && err2 == nil && realRoot == realProject {
+		return ""
+	}
+	return fmt.Sprintf("ark: warning: serving root %q, but CLAUDE_PROJECT_DIR is %q; pass --root with the project directory to serve it", root, projectDir)
 }
 
 // MCPServer represents the main MCP server

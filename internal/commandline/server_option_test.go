@@ -7,8 +7,10 @@ import (
 )
 
 func TestServerOptParse_Basic(t *testing.T) {
+	// The root must exist: a root that cannot be served is a startup error.
+	root := t.TempDir()
 	args := []string{
-		"--root", "/my/project",
+		"--root", root,
 		"--type", "http",
 		"--http-port", "12345",
 		"--scan-buffer", "20M",
@@ -31,7 +33,7 @@ func TestServerOptParse_Basic(t *testing.T) {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
 
-	if opt.RootDir != "/my/project" {
+	if opt.RootDir != root {
 		t.Errorf("RootDir mismatch. got=%s", opt.RootDir)
 	}
 	if opt.McpServerTypeValue != "http" {
