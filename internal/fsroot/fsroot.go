@@ -128,6 +128,10 @@ type handle interface {
 	exactNames(name string) bool
 	// stat describes the directory itself (fstat of its handle).
 	stat() (fs.FileInfo, error)
+	// lstatInfo describes name itself (a symlink is not followed), with
+	// what lstat reports of it (identity included), in one call.
+	lstatInfo(name string) (fs.FileInfo, error)
+	lstatBoth(name string) (fs.FileInfo, objInfo, error)
 	// scanNames lists the directory's names, unsorted, through a
 	// description of its own, until stop reports true; it returns the names
 	// seen and whether it stopped.

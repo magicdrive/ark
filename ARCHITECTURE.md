@@ -415,7 +415,23 @@ read by path. The access is released when the request ends
 `TestB5_*`, `TestB6_*`. Danger: checking with the snapshot and then
 opening by path — the window is the one this closes; or building the whole
 tree's snapshot per request — tens of milliseconds per file read on a
-large repository. Walks, the index and the dump are not migrated yet.
+large repository.
+
+**Walks, the index and the dump see only what the policy decided.** They
+keep their own logic and output but reach files through
+`commandline.Option.FS` — a walker of `internal/safewalk` over a pinned tree
+and a policy snapshot (the request's, an index build's own, the dump's) —
+in the shapes they used (`Walk`, `WalkDir`, `ReadDir`, `ReadFile`, `Stat`):
+entries listed through directory handles are decided before the caller
+sees them, and a reported file is read through the walk's resolution
+(`fsroot.Entry.Resolved`, `Snapshot.ReadResolved`). The index reads its
+sources the same way (`index.WithFS`); a request's freshness check walks
+under the request's snapshot, so an index is served only when its
+fingerprint is what the request may read. Tests: `TestC3_*`,
+`TestWalkMatchesFilepathWalk`. Danger: deciding a walk entry and then
+reading its path again (`os.ReadFile(path)` in a walk callback) — the window
+this closes; or serving an index on its build-time check alone after the
+rules changed.
 
 **The rules are read for every request, once, and never trusted from a
 cache.** Each request (`ToolsHandler.forRequest`) has one

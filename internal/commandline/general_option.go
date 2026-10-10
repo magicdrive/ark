@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,6 +32,11 @@ type Option struct {
 	// reports paths that are never listed or read, whatever the other
 	// filters say. The CLI leaves it nil.
 	AccessExclude func(path string) bool
+	// FS, when set, is how walks, listings and reads reach the files: through
+	// a pinned tree under a policy snapshot (internal/safewalk), which
+	// decides every entry before it is reported and reads the object it
+	// decided. The MCP server and the dump set it; nil means by path.
+	FS FileAccess
 	// AllowExternalSymlinks (mcp-server --allow-external-symlinks on) lets
 	// the MCP server read files through symlinks in the repository that lead
 	// outside it. Only the operator sets it; the CLI leaves it false.
@@ -302,6 +308,41 @@ func (cr *Option) Normalize() error {
 	} else {
 		return errors.New(strings.Join(errorMessages, "\n"))
 	}
+}
+
+// FileAccess is the file access of a walk, a listing or a read
+// (internal/safewalk.Walker): the shapes of filepath.Walk, filepath.WalkDir,
+// os.ReadDir, os.ReadFile and os.Stat.
+type FileAccess interface {
+	Walk(start string, fn filepath.WalkFunc) error
+	WalkDir(start string, fn fs.WalkDirFunc) error
+	ReadDir(path string) ([]fs.DirEntry, error)
+	ReadFile(path string) ([]byte, error)
+	Stat(path string) (fs.FileInfo, error)
+}
+
+// ReadFile reads path through FS, or by path without it.
+func (cr *Option) ReadFile(path string) ([]byte, error) {
+	if cr != nil && cr.FS != nil {
+		return cr.FS.ReadFile(path)
+	}
+	return os.ReadFile(path)
+}
+
+// ReadDir lists path through FS, or by path without it.
+func (cr *Option) ReadDir(path string) ([]fs.DirEntry, error) {
+	if cr != nil && cr.FS != nil {
+		return cr.FS.ReadDir(path)
+	}
+	return os.ReadDir(path)
+}
+
+// Stat describes path (followed) through FS, or by path without it.
+func (cr *Option) Stat(path string) (fs.FileInfo, error) {
+	if cr != nil && cr.FS != nil {
+		return cr.FS.Stat(path)
+	}
+	return os.Stat(path)
 }
 
 // dirExists reports whether dir is an existing directory. A missing target is

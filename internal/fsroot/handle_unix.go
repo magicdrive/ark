@@ -173,6 +173,19 @@ func (d *unixDir) scanNames(stop func(string) bool) ([]string, bool, error) {
 
 func (d *unixDir) identity() (Identity, error) { return d.id, nil }
 
+func (d *unixDir) lstatInfo(name string) (fs.FileInfo, error) {
+	fi, _, err := d.lstatBoth(name)
+	return fi, err
+}
+
+func (d *unixDir) lstatBoth(name string) (fs.FileInfo, objInfo, error) {
+	var st unix.Stat_t
+	if err := unix.Fstatat(d.fd, name, &st, unix.AT_SYMLINK_NOFOLLOW); err != nil {
+		return nil, objInfo{}, &fs.PathError{Op: "lstat", Path: name, Err: err}
+	}
+	return statInfo(name, &st), objInfo{mode: modeOf(&st), size: st.Size, id: statIdentity(&st)}, nil
+}
+
 func (d *unixDir) stat() (fs.FileInfo, error) {
 	fd, err := unix.FcntlInt(uintptr(d.fd), unix.F_DUPFD_CLOEXEC, 0)
 	if err != nil {

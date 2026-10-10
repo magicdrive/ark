@@ -309,9 +309,31 @@ func (p accessPolicy) excludedPathError(path string) error {
 	return fmt.Errorf("path %q does not exist", path)
 }
 
+// readWalked reads a file a walk (walkFrom) reported: through the request's
+// walker, as decided; outside a request, by path.
+func (h *ToolsHandler) readWalked(path string) ([]byte, error) {
+	if h.req != nil {
+		w, err := h.walker()
+		if err != nil {
+			return nil, err
+		}
+		return w.ReadFile(path)
+	}
+	return os.ReadFile(path)
+}
+
 // walkFrom walks start like filepath.Walk, entering it when it is the server
 // root given through a symlink (common.WalkRoot).
 func (h *ToolsHandler) walkFrom(start string, fn filepath.WalkFunc) error {
+	if h.req != nil {
+		// The request's walker (internal/safewalk): entries decided by the
+		// request's snapshot before fn sees them.
+		w, err := h.walker()
+		if err != nil {
+			return err
+		}
+		return w.Walk(start, fn)
+	}
 	if common.SamePath(start, h.rootDir) {
 		return common.WalkRoot(start, fn)
 	}

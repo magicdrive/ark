@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -12,6 +13,8 @@ import (
 	"github.com/magicdrive/ark/internal/accesspolicy"
 	arkctx "github.com/magicdrive/ark/internal/context"
 	"github.com/magicdrive/ark/internal/fsroot"
+	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/safewalk"
 	"github.com/magicdrive/ark/internal/source"
 )
 
@@ -49,6 +52,9 @@ type requestAccess struct {
 	// opens the object the gate resolved — verified identity by identity
 	// (Snapshot.ReadResolved) — instead of resolving the path again.
 	resolved map[string]fsroot.Resolved
+	// walker walks and reads the request's tree under its snapshot
+	// (internal/safewalk): every walk of the request.
+	walker *safewalk.Walker
 	// indexed holds the index files read for the request's snippets: read
 	// once through the snapshot, decided once; a second snippet of the same
 	// file is cut from the same bytes.
@@ -127,6 +133,44 @@ func (h *ToolsHandler) snapshot() (*accesspolicy.Snapshot, error) {
 		a.tree, a.snap = tree, snap
 	})
 	return a.snap, a.err
+}
+
+// walker returns the request's walker (internal/safewalk): the file tools'
+// walks, listings and reads, decided by the request's snapshot on its pinned
+// tree.
+func (h *ToolsHandler) walker() (*safewalk.Walker, error) {
+	snap, err := h.snapshot()
+	if err != nil {
+		return nil, err
+	}
+	a := &h.req.access
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.walker == nil {
+		a.walker = safewalk.New(snap, h.rootDir)
+	}
+	return a.walker, nil
+}
+
+// detachedFS returns ctx carrying a walker of its own — the root pinned
+// now, a policy snapshot over it — for work that runs detached from any
+// request (an index build, its post-build check), and the function that
+// releases them.
+func (h *ToolsHandler) detachedFS(ctx context.Context) (context.Context, func(), error) {
+	tree, err := fsroot.Pin(h.rootDir, fsroot.Options{AllowExternalSymlinks: h.opt != nil && h.opt.AllowExternalSymlinks})
+	if err != nil {
+		return nil, nil, err
+	}
+	var extra []string
+	if h.opt != nil {
+		extra = h.opt.AdditionallyIgnoreRuleFilenameList
+	}
+	snap, err := accesspolicy.BuildScoped(tree, accesspolicy.Options{AdditionalRuleFiles: extra})
+	if err != nil {
+		tree.Close()
+		return nil, nil, err
+	}
+	return index.WithFS(ctx, safewalk.New(snap, h.rootDir)), func() { snap.Close(); tree.Close() }, nil
 }
 
 // close releases the access: the snapshot, then the tree (which waits for

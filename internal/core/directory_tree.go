@@ -14,7 +14,7 @@ import (
 )
 
 func GenerateTreeString(path string, indent string, allowedFileListMap map[string]bool, opt *commandline.Option) (string, map[string]bool, error) {
-	files, err := os.ReadDir(path)
+	files, err := opt.ReadDir(path)
 	if err != nil {
 		return "", nil, fmt.Errorf("Error reading directory %s: %v", path, err)
 	}
@@ -69,7 +69,7 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 			}
 			b.WriteString(file.Name())
 			b.WriteString("\n")
-			if readableEntry(fullPath, file) {
+			if readableEntry(opt, fullPath, file) {
 				allowedFileListMap[fullPath] = true
 			}
 		}
@@ -83,11 +83,11 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 // to dump. A symlink is listed but its content is read only when it leads to a
 // file: a link to a directory is not followed (walks never descend into
 // symlinked directories), and a dangling or looping link has nothing to read.
-func readableEntry(fullPath string, entry os.DirEntry) bool {
+func readableEntry(opt *commandline.Option, fullPath string, entry os.DirEntry) bool {
 	if entry.Type()&os.ModeSymlink == 0 {
 		return true
 	}
-	fi, err := os.Stat(fullPath)
+	fi, err := opt.Stat(fullPath)
 	return err == nil && !fi.IsDir()
 }
 
@@ -98,6 +98,9 @@ func readableEntry(fullPath string, entry os.DirEntry) bool {
 func aliasIgnored(opt *commandline.Option, fullPath string, entry os.DirEntry) bool {
 	if entry.Type()&os.ModeSymlink == 0 || opt.GitIgnoreRule == nil {
 		return false
+	}
+	if opt.FS != nil {
+		return false // the listing (Option.FS) decided the link and its target
 	}
 	real, err := filepath.EvalSymlinks(fullPath)
 	if err != nil {
@@ -161,6 +164,9 @@ func relUnder(root, p string) (string, bool) {
 // processed root given through a symlink (common.WalkDirRoot). A directory
 // link named as any other start is not entered.
 func walkFrom(opt *commandline.Option, start string, fn fs.WalkDirFunc) error {
+	if opt.FS != nil {
+		return opt.FS.WalkDir(start, fn)
+	}
 	if common.SamePath(start, opt.IgnoreRoot()) {
 		return common.WalkDirRoot(start, fn)
 	}

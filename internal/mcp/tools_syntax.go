@@ -398,7 +398,7 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 		}
 
 		// Read and parse file
-		source, err := os.ReadFile(filePath)
+		source, err := h.readWalked(filePath)
 		if err != nil {
 			statsParseErr++
 			return nil

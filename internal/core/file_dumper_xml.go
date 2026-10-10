@@ -52,7 +52,7 @@ func WriteAllFilesAsXML(treeStr string, root string, outputPath string, allowedF
 }
 
 func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[string]bool, opt *commandline.Option) error {
-	entries, err := os.ReadDir(dir)
+	entries, err := opt.ReadDir(dir)
 	if err != nil {
 		return err
 	}
@@ -87,7 +87,7 @@ func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[
 				return err
 			}
 		} else {
-			data, err := os.ReadFile(fpath)
+			data, err := opt.ReadFile(fpath)
 			if err != nil {
 				return err
 			}

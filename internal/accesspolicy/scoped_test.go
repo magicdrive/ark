@@ -89,17 +89,30 @@ func TestScopedDecidesAsFull(t *testing.T) {
 // Entries of a walk are decided as by the full snapshot too.
 func TestScopedCheckEntry(t *testing.T) {
 	_, root, _ := policyRepo(t)
-	tr := pinTree(t, root, fsroot.Options{})
-	full, scoped := snapshotOf(t, tr), scopedOf(t, tr)
-	tr.Walk(".", func(e fsroot.Entry) error {
-		if e.IsDir() && e.Name() == ".git" {
-			return fsroot.SkipDir
+	roots := []string{root}
+	for _, env := range []string{"ARK_POLICY_BENCH_ROOT", "ARK_POLICY_DIFF_ROOT2"} {
+		if r := os.Getenv(env); r != "" {
+			roots = append(roots, r)
 		}
-		if got, want := kind(scoped.CheckEntry(e)), kind(full.CheckEntry(e)); got != want {
-			t.Errorf("%s: scoped %s, full %s", e.Rel(), got, want)
+	}
+	for _, root := range roots {
+		for _, start := range []string{".", "a"} {
+			tr := pinTree(t, root, fsroot.Options{})
+			full, scoped := snapshotOf(t, tr), scopedOf(t, tr)
+			n := 0
+			tr.Walk(start, func(e fsroot.Entry) error {
+				if e.IsDir() && e.Name() == ".git" {
+					return fsroot.SkipDir
+				}
+				n++
+				if got, want := kind(scoped.CheckEntry(e)), kind(full.CheckEntry(e)); got != want {
+					t.Errorf("%s from %s: %s: scoped %s, full %s", filepath.Base(root), start, e.Rel(), got, want)
+				}
+				return nil
+			})
+			t.Logf("%s from %s: %d entries", filepath.Base(root), start, n)
 		}
-		return nil
-	})
+	}
 }
 
 // Only the rule files above the path are read.
@@ -265,5 +278,36 @@ func TestB4_SwapBackBeforeTheDecision(t *testing.T) {
 	})
 	if strings.Contains(string(b), "D_SECRET") || !errors.Is(err, ErrDirectoryChanged) {
 		t.Errorf("read %q %v (want ErrDirectoryChanged)", b, err)
+	}
+}
+
+// B5 / C3-3 during a walk: a directory's rule file is rewritten while the
+// walk captures it from its handle (between the two readings): the capture
+// starts over and decides by one version — the new one.
+func TestC3_3_RuleRewrittenDuringWalkCapture(t *testing.T) {
+	w := ruleRepo(t)
+	tr := pinTree(t, w.path("repo"), fsroot.Options{})
+	s := scopedOf(t, tr)
+	n := 0
+	withHook(t, func(event, rel string) {
+		if event == "verify" && rel == "d" && n == 0 {
+			n++
+			w.write(t, "repo/d/.arkignore", "ok.txt\n") // now ok.txt, not x.txt
+		}
+	})
+	got := map[string]string{}
+	tr.Walk(".", func(e fsroot.Entry) error {
+		// Every entry decided, as a walk decides them.
+		k := kind(s.CheckEntry(e))
+		if strings.HasPrefix(e.Rel(), "d/") && !e.IsDir() {
+			got[e.Rel()] = k
+		}
+		return nil
+	})
+	if n == 0 {
+		t.Fatal("the rewrite did not happen")
+	}
+	if got["d/ok.txt"] != "excluded" || got["d/x.txt"] != "admit" {
+		t.Errorf("decisions %v, want the new version (ok.txt excluded, x.txt admitted)", got)
 	}
 }

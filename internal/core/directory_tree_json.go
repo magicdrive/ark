@@ -2,7 +2,6 @@ package core
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/commandline"
@@ -28,7 +27,7 @@ func GenerateTreeJSONString(rootPath string, allowedFileMap map[string]bool, opt
 // GenerateTreeJSON generates a filtered directory tree in JSON format,
 // along with the allowed file map used for output filtering.
 func generateTreeJSON(path string, allowedFileMap map[string]bool, opt *commandline.Option) (*TreeEntry, map[string]bool, error) {
-	files, err := os.ReadDir(path)
+	files, err := opt.ReadDir(path)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -67,7 +66,7 @@ func generateTreeJSON(path string, allowedFileMap map[string]bool, opt *commandl
 				Name: file.Name(),
 				Type: "file",
 			})
-			if readableEntry(fullPath, file) {
+			if readableEntry(opt, fullPath, file) {
 				allowedFileMap[fullPath] = true
 			}
 		}

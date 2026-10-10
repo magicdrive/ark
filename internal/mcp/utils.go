@@ -33,6 +33,15 @@ func skipMetadata(root, current string, info os.FileInfo) (bool, error) {
 // working directory); nil applies none. exclude is the .arkignore access
 // policy (Option.AccessExclude); nil excludes nothing.
 func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.RuleSet, exclude func(string) bool) (string, error) {
+	return directoryTreeJSON(path, ignore, exclude, nil, treeLimits{})
+}
+
+// directoryTreeJSON is GenerateBoundedDirectoryTreeJSON listing through fsys
+// (the request's walker) when it is set.
+func directoryTreeJSON(path string, ignore *libgitignore.RuleSet, exclude func(string) bool, fsys commandline.FileAccess, limits treeLimits) (string, error) {
+	if !limits.none() {
+		return boundedTreeJSON(path, ignore, exclude, fsys, limits)
+	}
 	// Create a temporary option with default values
 	opt := &commandline.Option{
 		WorkingDir:                      ".",
@@ -60,6 +69,7 @@ func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.RuleSet, exclud
 	}
 	opt.GitIgnoreRule = ignore
 	opt.AccessExclude = exclude
+	opt.FS = fsys
 
 	allowedFileMap := map[string]bool{}
 	jsonStr, _, err := core.GenerateTreeJSONString(path, allowedFileMap, opt)
@@ -103,15 +113,17 @@ type boundedTreeEntry struct {
 // the same entries in the same order under the same filters, stopping at the
 // limits instead of filtering afterwards.
 func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.RuleSet, exclude func(string) bool, limits treeLimits) (string, error) {
-	if limits.none() {
-		return GenerateDirectoryTreeJSON(path, ignore, exclude)
-	}
+	return directoryTreeJSON(path, ignore, exclude, nil, limits)
+}
+
+func boundedTreeJSON(path string, ignore *libgitignore.RuleSet, exclude func(string) bool, fsys commandline.FileAccess, limits treeLimits) (string, error) {
 	opt := &commandline.Option{AllowGitignoreFlagValue: "on", IgnoreDotFileFlagValue: "off"}
 	if err := opt.NormalizeFileFilters(); err != nil {
 		return "", err
 	}
 	opt.GitIgnoreRule = ignore
 	opt.AccessExclude = exclude
+	opt.FS = fsys
 	tree, err := boundedTree(path, "", 0, opt, limits)
 	if err != nil {
 		return "", err
@@ -121,7 +133,7 @@ func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.RuleSet,
 }
 
 func boundedTree(path, rel string, depth int, opt *commandline.Option, limits treeLimits) (*boundedTreeEntry, error) {
-	files, err := os.ReadDir(path)
+	files, err := opt.ReadDir(path)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +159,7 @@ func boundedTree(path, rel string, depth int, opt *commandline.Option, limits tr
 			continue
 		}
 		if limits.maxDepth > 0 && depth+1 >= limits.maxDepth {
-			entries, _ := os.ReadDir(fullPath)
+			entries, _ := opt.ReadDir(fullPath)
 			node.Children = append(node.Children, &boundedTreeEntry{Name: file.Name(), Type: "directory", Truncated: len(entries) > 0})
 			continue
 		}
@@ -235,7 +247,7 @@ func ListFilteredFiles(path string, opt *commandline.Option) ([]string, error) {
 
 		// Skip non-UTF8 files if requested
 		if opt.SkipNonUTF8Flag {
-			data, err := os.ReadFile(currentPath)
+			data, err := opt.ReadFile(currentPath)
 			if err == nil && core.IsBinary(data) {
 				return nil
 			}
@@ -297,8 +309,8 @@ func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *comman
 			return nil
 		}
 
-		// Read file content
-		data, err := os.ReadFile(currentPath)
+		// Read file content: the file the walk decided (Option.FS).
+		data, err := opt.ReadFile(currentPath)
 		if err != nil {
 			return nil
 		}
@@ -552,6 +564,9 @@ func generateArklite(files []arkliteFile, opt *commandline.Option) (string, erro
 // any other start is not entered: below it, paths would not be the paths the
 // .arkignore rules name.
 func walkFrom(opt *commandline.Option, start string, fn filepath.WalkFunc) error {
+	if opt != nil && opt.FS != nil {
+		return opt.FS.Walk(start, fn)
+	}
 	if opt != nil && common.SamePath(start, opt.IgnoreRoot()) {
 		return common.WalkRoot(start, fn)
 	}

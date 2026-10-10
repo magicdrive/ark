@@ -76,7 +76,8 @@ jobs:
             ./internal/impact/... \
             ./internal/search/... \
             ./internal/fsroot/... \
-            ./internal/accesspolicy/...
+            ./internal/accesspolicy/... \
+            ./internal/safewalk/...
 
       # -fuzz is a regexp that must match exactly one fuzz test per run:
       # anchor every pattern.
@@ -157,8 +158,8 @@ jobs:
           ARK_REQUIRE_CASE_FOLDING: "1"
         run: |
           set -o pipefail
-          go test -race -count=1 -v ./internal/fsroot ./internal/accesspolicy | tee fsroot-test.log
-          go test -count=1 -v -race -run 'TestCase_|TestB[0-9]|TestMCPCase_|TestCLICase_' ./internal/mcp . | tee -a fsroot-test.log
+          go test -race -count=1 -v ./internal/fsroot ./internal/accesspolicy ./internal/safewalk | tee fsroot-test.log
+          go test -count=1 -v -race -run 'TestCase_|TestB[0-9]|TestC3_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core . | tee -a fsroot-test.log
 
       - name: List skipped tests
         if: always()

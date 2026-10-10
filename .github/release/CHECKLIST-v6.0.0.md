@@ -51,8 +51,10 @@ on macOS x86_64; re-run what changed since.
 - [x] Phase 3-B: the files a client names, and snippets, are decided and read
       in one operation on the request's pinned root (`TestB1_*`…`TestB10_*`,
       `TestScoped*`); verified on macOS.
-- [ ] Phase 3-C: walks, the index and the dump (still read by path after
-      the check; `SECURITY.md`, Concurrent changes).
+- [x] Phase 3-C: walks, the index and the dump read through the pinned root
+      and a policy snapshot (`internal/safewalk`; `TestC3_*`); verified on
+      macOS.
+- [ ] Final security audit before tagging (TOCTOU work of Phases 3-A…3-C).
 - [ ] Decide on the TOCTOU limitation: ship with the documented trust model
       (the access policy is not a boundary against writers of the
       repository or its root link; `SECURITY.md`), or close it before the

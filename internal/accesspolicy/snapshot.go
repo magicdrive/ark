@@ -374,18 +374,37 @@ func (s *Snapshot) Check(r fsroot.Resolved) error {
 	if real := r.Real(); real != "" && real != "." && real != canonical {
 		paths = append(paths, real)
 	}
-	return s.decide(paths...)
+	return s.decideAs(r.IsDir(), paths...)
+}
+
+// Decide applies the rules to rel (and the directories above it) by name
+// alone — for a path nothing can be read through (a dangling or looping
+// symlink), which has no object to resolve.
+func (s *Snapshot) Decide(rel string) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+	if rel == "." || rel == "" {
+		return nil
+	}
+	return s.decide(rel)
 }
 
 // decide applies the rules to paths (each with the directories above it):
 // ErrExcluded if they exclude one, ErrRuleUnavailable if they could not be
 // read.
 func (s *Snapshot) decide(paths ...string) error {
+	return s.decideAs(true, paths...)
+}
+
+// decideAs is decide knowing whether the paths are directories (a file has
+// no rule file of its own to capture).
+func (s *Snapshot) decideAs(isDir bool, paths ...string) error {
 	if s.ruleErr != nil {
 		return fmt.Errorf("%w: %v", ErrRuleUnavailable, s.ruleErr)
 	}
 	if s.scope != nil {
-		ex, err := s.scopedExcluded(paths...)
+		ex, err := s.scopedExcluded(isDir, paths...)
 		if err != nil {
 			return err
 		}
@@ -421,11 +440,24 @@ func (s *Snapshot) CheckEntry(e fsroot.Entry) error {
 	if !e.Valid() {
 		return fsroot.ErrClosed
 	}
+	if s.scope != nil {
+		// Rules captured from the walk's own handles (no walk from the
+		// root again); what this cannot capture, the chain capture does.
+		if err := s.captureFromEntry(e); err != nil {
+			return err
+		}
+	}
 	if err := e.EachDir(s.verifyDir); err != nil {
 		return err
 	}
 	if e.IsSymlink() {
 		r, err := s.tree.Resolve(e.Rel())
+		if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fsroot.ErrSymlinkLoop) || errors.Is(err, fsroot.ErrNotDir) {
+			// Dangling, looping, or through a file: nothing is reached
+			// through it, so it is decided by its own name (as walks
+			// always decided it); a read through it fails.
+			return s.decide(e.Rel())
+		}
 		if err != nil {
 			return err
 		}
@@ -437,7 +469,7 @@ func (s *Snapshot) CheckEntry(e fsroot.Entry) error {
 	if e.Rel() == "." {
 		return nil
 	}
-	return s.decide(e.Rel())
+	return s.decideAs(e.IsDir(), e.Rel())
 }
 
 // ReadEntry reads a regular-file entry if the policy admits it — in one

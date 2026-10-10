@@ -50,6 +50,11 @@ func withSpinner(opt *commandline.Option) error {
 }
 
 func createDumpFile(opt *commandline.Option) error {
+	release, err := attachFileAccess(opt)
+	if err != nil {
+		return err
+	}
+	defer release()
 	firstIndent := ""
 	var firstAllowdFileListMap = map[string]bool{}
 

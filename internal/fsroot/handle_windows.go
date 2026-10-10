@@ -122,6 +122,16 @@ func (d *winDir) identity() (Identity, error) { return Identity{fi: d.fi}, nil }
 
 func (d *winDir) stat() (fs.FileInfo, error) { return d.fi, nil }
 
+func (d *winDir) lstatInfo(name string) (fs.FileInfo, error) { return d.r.Lstat(name) }
+
+func (d *winDir) lstatBoth(name string) (fs.FileInfo, objInfo, error) {
+	fi, err := d.r.Lstat(name)
+	if err != nil {
+		return nil, objInfo{}, err
+	}
+	return fi, infoOf(fi), nil
+}
+
 // exactNames: NTFS names are case-insensitive by default (and a directory
 // may be made case-sensitive, or reached by an 8.3 short name): every name
 // is canonicalized.

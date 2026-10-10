@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/repomap"
 	"github.com/magicdrive/ark/internal/source"
@@ -105,6 +106,16 @@ func (h *ToolsHandler) getRepositoryMap(args map[string]interface{}) (*CallToolR
 		// Files are read through the request's pinned tree and policy
 		// snapshot (request_access.go).
 		ReadFile: func(fid source.FileID) ([]byte, error) { return h.readIndexed(rel, fid) },
+		// Whether a directory exists, as the request's snapshot decides
+		// (an excluded one does not).
+		Exists: func(candidate string) bool {
+			w, err := h.walker()
+			if err != nil {
+				return false
+			}
+			_, err = w.Stat(filepath.Join(fullPath, candidate))
+			return err == nil
+		},
 	}
 	rm := repomap.Build(idx, fullPath, opts)
 

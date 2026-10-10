@@ -254,14 +254,13 @@ read with `.arkignore`.
   spelled in another case (`alias -> SECRET.TXT`, or an absolute link
   through the root's path in another case) exposed its target to walks and
   to the dump. No race was needed. Names are now decided as listed (above).
-- **Concurrent changes (time-of-check/time-of-use): closed for the files a
-  client names, open for walks.** Whoever can change the repository tree,
+- **Concurrent changes (time-of-check/time-of-use).** Whoever can change the repository tree,
   or retarget a symlinked root, *while requests run* could win the race
   between the check of a path and its opening by path: a file swapped for
   a symlink was read through — including one outside the root, with
   `--allow-external-symlinks off` — and a root link retargeted during a
   request was read with the rules of the directory it led to before.
-  - *Closed:* the tools that read a file the client names —
+  - *Files a client names:* the tools that read a file the client names —
     `get_file_content`, `get_files_arklite`, `file://`, `get_file_info`,
     `get_symbols`, `get_symbol`, `find_references` on a file — and the
     source text index-based tools read back (`get_context` and
@@ -272,21 +271,42 @@ read with `.arkignore`.
     returns nothing when any of its files is refused. Reproduced before,
     none since: continuous swapping (root link, symlink to an outside file,
     symlink to an excluded file) while requesting.
-  - *Still open:* walks — `list_files`, `search_in_files`,
-    `get_directory_tree`, `get_project_stats`, `find_symbol`,
-    `find_references` on a directory, `directory://` — and the repository
-    index (and so what index-based tools report) still read files by path
-    after the policy check; so does the repository dump. A writer racing a
-    walk can still make it read an excluded file or one outside the root
-    (`search_in_files`, reproduced).
+  - *Walks:* `list_files`, `search_in_files`, `get_directory_tree`,
+    `get_project_stats`, `find_symbol`, `find_references` on a directory and
+    `directory://` walk the request's pinned root through directory handles
+    under the request's policy snapshot (`internal/safewalk`): every entry
+    is decided before the tool sees it — an excluded one is not reported,
+    name included — and every file is read as the walk decided it (the
+    directories and the file reached again, identity by identity), never
+    opened by path again. An entry that changes while it is walked is left
+    out. Reproduced before (`search_in_files`, `find_symbol`), none since.
+  - *The index:* a build reads every source through a walker of its own
+    (the root pinned for the build, a snapshot of the rules); a request
+    serves an index only when the index's fingerprint — every source's path
+    and content — equals the fingerprint of what that request may read,
+    computed by a walk under the request's own snapshot. A file a rule
+    excludes, or that a race swapped out, changes that fingerprint: the
+    index is rebuilt, never served with it. (An index whose post-build check
+    began after the request arrived is served without the request's own
+    walk: its check used a snapshot taken then.) Reproduced before
+    (`search_code`), none since.
+  - *The dump:* the target is pinned once and its ignore files captured once
+    (`.arkignore`, the additional rule files and, with `-a on`,
+    `.gitignore`); the tree it prints and the files it writes are listed and
+    read through them (reproduced before, none since).
+  - *Special files:* FIFOs, sockets and devices are never opened for reading
+    (a FIFO used to block the server or the dump indefinitely).
   - *Within a request,* the `.arkignore` files that apply to a path are
     read once, the first time a decision needs them, and that version
     decides for the rest of the request; an edit made later applies from
     the next request.
 
-  All of this needs write access to the repository tree or to the
-  directory holding the root link, and the results go to the MCP client the
-  operator runs; Ark itself never writes there.
+  What remains is by design: the policy decides by name, so a writer who
+  renames an excluded file to an admitted name, or hard links it there,
+  makes it admitted — it is the file at that name. All of this needs write
+  access to the repository tree or to the directory holding the root link,
+  and the results go to the MCP client the operator runs; Ark itself never
+  writes there.
 
 The access policy (`.arkignore`, symlinks) protects files from the agent
 and the MCP client. It is not a boundary against someone who can write to

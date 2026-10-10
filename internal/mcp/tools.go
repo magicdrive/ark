@@ -115,10 +115,6 @@ func (h *ToolsHandler) newRequestReader() *libgitignore.IgnoreReader {
 	return r
 }
 
-// sourceListingKey carries a request's repository listing (listedSources) in
-// its context.
-type sourceListingKey struct{}
-
 // sourceListing is the request's walk of the server root: the root as the
 // reader spelled it, and the entries in walk order.
 type sourceListing struct {
@@ -316,6 +312,17 @@ func (h *ToolsHandler) fileToolOption(args map[string]interface{}) (*commandline
 		return nil, fmt.Errorf("allowGitignore %w", err)
 	}
 	opt.GitIgnoreRule = h.ignoreRule(opt.AllowGitignoreFlag.Bool())
+	// Walks, listings and reads go through the request's walker: every
+	// entry decided by the request's snapshot before it is reported, every
+	// file read as decided (internal/safewalk). Without it, nothing is
+	// walked. The walk policy stays as a filter on top: it can only exclude
+	// more (and keeps a walk's rule that unreadable rules anywhere refuse
+	// every path but the root).
+	w, err := h.walker()
+	if err != nil {
+		return nil, fmt.Errorf("file access: %v", err)
+	}
+	opt.FS = w
 	opt.AccessExclude = h.accessPolicy().excludesWalked
 	return &opt, nil
 }
@@ -351,9 +358,15 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 	s := h.shared()
 	if h.req != nil {
 		ctx = context.WithValue(ctx, policyKey{}, h.accessPolicy())
-		if listing, ok := h.requestListing(); ok {
-			ctx = context.WithValue(ctx, sourceListingKey{}, listing)
+		// The request's freshness check walks and reads the sources
+		// through the request's walker: an index is served only if its
+		// fingerprint — every source's path and content — equals what this
+		// request may read under its own snapshot (index_cache.go).
+		w, err := h.walker()
+		if err != nil {
+			return nil, fmt.Errorf("file access: %v", err)
 		}
+		ctx = index.WithFS(ctx, w)
 	}
 	s.indexOnce.Do(func() {
 		providers := defaultProviders()
@@ -365,7 +378,15 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 		// excludes: each build and each freshness fingerprint walks the
 		// sources with the policy current at that moment, so a policy change
 		// that alters the file set alters the fingerprint and forces a rebuild.
+		// A build runs detached from the request that started it: it pins
+		// the root and takes a policy snapshot of its own, and reads every
+		// source through them (detachedFS).
 		build := func(ctx context.Context, root string, providers []language.Provider, store cache.Store) (*index.RepositoryIndex, error) {
+			ctx, release, err := s.detachedFS(ctx)
+			if err != nil {
+				return nil, err
+			}
+			defer release()
 			return index.NewWithCacheExcluding(ctx, root, providers, store, s.accessPolicy().indexExclude)
 		}
 		if h.newIndex != nil {
@@ -388,11 +409,15 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 			s.indexes.fingerprint = func(ctx context.Context, root string) (string, error) {
 				policy, ok := ctx.Value(policyKey{}).(accessPolicy)
 				if !ok {
+					// The post-build check, detached: its own pinned
+					// root and snapshot, as the build.
 					policy = s.accessPolicy()
-				} else if listing, ok := ctx.Value(sourceListingKey{}).(sourceListing); ok {
-					if entries, ok := listing.listedSources(root); ok {
-						return index.SourceFingerprintListed(ctx, root, providers, policy.indexExclude, entries)
+					var release func()
+					var err error
+					if ctx, release, err = s.detachedFS(ctx); err != nil {
+						return "", err
 					}
+					defer release()
 				}
 				return index.SourceFingerprintExcluding(ctx, root, providers, policy.indexExclude)
 			}
@@ -760,7 +785,11 @@ func (h *ToolsHandler) getDirectoryTree(args map[string]interface{}) (*CallToolR
 			}
 		}
 	}
-	tree, err := GenerateBoundedDirectoryTreeJSON(fullPath, h.ignoreRule(true), h.accessPolicy().excludesWalked, limits)
+	w, err := h.walker()
+	if err != nil {
+		return &CallToolResult{Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: file access: %v", err)}}, IsError: true}, nil
+	}
+	tree, err := directoryTreeJSON(fullPath, h.ignoreRule(true), h.accessPolicy().excludesWalked, w, limits)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},

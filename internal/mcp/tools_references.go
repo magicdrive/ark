@@ -185,7 +185,7 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 			if fi.IsDir() {
 				return nil
 			}
-			collect(p, func() ([]byte, error) { return os.ReadFile(p) })
+			collect(p, func() ([]byte, error) { return h.readWalked(p) })
 			return nil
 		})
 	} else {

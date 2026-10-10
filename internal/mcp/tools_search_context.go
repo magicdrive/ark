@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -454,23 +453,29 @@ func (h *ToolsHandler) searchContext(args map[string]interface{}) (*CallToolResu
 // index is built over the symlink-resolved root, so the scope is taken from
 // the resolved forms too.
 func (h *ToolsHandler) searchScope(p string) (string, error) {
-	full, _, err := h.resolveToolPath(p)
+	full, rel, err := h.resolveToolPath(p)
 	if err != nil {
 		return "", err
 	}
-	if _, err := os.Stat(full); err != nil {
+	// Whether it exists, and where it leads inside the root, as the
+	// request's snapshot decides it on the request's pinned tree.
+	if _, gateErr, err := h.statGated(p, full, rel); gateErr != nil || err != nil {
+		if gateErr != nil {
+			return "", gateErr
+		}
 		return "", fmt.Errorf("path %q does not exist", p)
 	}
-	realFull, err1 := filepath.EvalSymlinks(full)
-	realRoot, err2 := filepath.EvalSymlinks(h.rootDir)
-	if err1 != nil || err2 != nil {
+	if treeRel(rel) == "." {
+		return ".", nil
+	}
+	r, ok := h.gateResolution(rel)
+	if !ok {
 		return "", fmt.Errorf("path %q cannot be resolved", p)
 	}
-	rel, ok := relInside(realRoot, realFull)
-	if !ok {
+	if r.Real() == "" {
 		return "", outsideRootError(p, h.rootDir)
 	}
-	return filepath.ToSlash(rel), nil
+	return r.Real(), nil
 }
 
 // inScope reports whether file (a FileID) is scope or lies below it, at a

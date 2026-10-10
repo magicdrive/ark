@@ -157,6 +157,23 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
   refused. The rules stay case-sensitive; outputs for paths spelled as
   listed are unchanged (compared over four corpora). The broader
   time-of-check/time-of-use limitation below remains.
+- **Walks, the index and the dump read what the policy decided.** Listings,
+  searches, trees, statistics, symbol and reference search, `directory://`,
+  the repository index and the dump walked by path and opened each file by
+  path after the policy check: a writer swapping a file for a symlink (to
+  an excluded file, outside the root) or retargeting the root during a walk
+  could make `search_in_files`, `find_symbol`, `search_code` or the dump
+  return the other file (reproduced). They now walk the pinned root through
+  directory handles under a policy snapshot (`internal/safewalk`) — an
+  entry is decided before it is reported, a file read as decided — and an
+  index is served only when its fingerprint equals what the request may
+  read under its own snapshot (the same swapping: no leak). FIFOs and other
+  special files are no longer opened (a FIFO blocked the server and the
+  dump indefinitely). Outputs for unchanging repositories are unchanged,
+  with one deliberate exception: in the dump's tree drawing, an entry the
+  ignore rules exclude no longer counts when drawing its siblings — the
+  last entry shown is drawn `└──` even when an excluded entry follows it
+  (it was drawn `├──`, which showed that something hidden came after).
 - **Files a client names are decided and read in one operation.** The path
   gate checked a path, then the tool opened it by path: a writer swapping a
   file for a symlink, or retargeting a symlinked root, during a request
@@ -385,16 +402,14 @@ tool-response tokens, not a model's total token use.
   exclude it. A misspelled path to a file with two hard links in one
   directory, or below a directory that can be entered but not listed, is
   refused on a case-insensitive file system.
-- Walks (listings, text and symbol search, trees, statistics, the index)
-  and the repository dump still open files by path after the policy check;
-  the files a client names, and snippets, no longer do (Security). A writer
-  racing a walk can still make it return an excluded file or one outside
-  the root.
-- The access policy is checked before files are opened by path: someone who
-  can write to the repository, or retarget a symlinked root, while requests
-  run can make a request return an excluded file or a file outside the root
-  (reproduced; `SECURITY.md`, Symlink policy). It protects files from the
-  agent, not from writers of the repository tree.
+- Within one request (and one index build, one dump), the `.arkignore`
+  files that apply are read once; an edit made while it runs applies from
+  the next one.
+- The access policy decides by name: someone who can write to the
+  repository can still rename an excluded file to an admitted name, or hard
+  link it there, and it is then admitted — it is the file at an admitted
+  name. The policy protects files from the agent, not from writers of the
+  repository tree (`SECURITY.md`).
 - `get_file_content`'s `withLineNumbers` argument has no effect (predates
   v6); responses carry no line numbers.
 - The extraction cache in `<root>/.ark/index` gains an entry per edited file

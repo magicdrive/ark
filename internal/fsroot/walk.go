@@ -257,6 +257,43 @@ func (t *Tree) Walk(start string, fn func(Entry) error) error {
 	if len(comps) > 0 {
 		clean = strings.Join(comps, "/")
 	}
+	return t.walkOpened(root, dir, held, comps, clean, fn)
+}
+
+// WalkVerified is Walk from the directory chain names (from the root's
+// child down to the start, as a walk reported them): each directory is
+// reached by its name, without following anything, and must be the object
+// the chain recorded (ErrChanged otherwise) — no name is looked up in a
+// listing again. For a caller that walks again a directory a walk reported.
+func (t *Tree) WalkVerified(chain []DirRef, fn func(Entry) error) error {
+	root, release, err := t.acquire()
+	if err != nil {
+		return err
+	}
+	defer release()
+	comps := make([]string, 0, len(chain))
+	ids := make([]Identity, 0, len(chain))
+	for i, d := range chain {
+		_, cs, err := splitRel(d.Rel)
+		if err != nil || len(cs) != i+1 || (i > 0 && strings.Join(cs[:i], "/") != chain[i-1].Rel) {
+			return &fs.PathError{Op: "walk", Path: d.Rel, Err: ErrInvalidPath}
+		}
+		comps = append(comps, cs[i])
+		ids = append(ids, d.ID)
+	}
+	dir, held, err := t.walkDirs(root, comps, ids)
+	if err != nil {
+		return err
+	}
+	clean := "."
+	if len(comps) > 0 {
+		clean = strings.Join(comps, "/")
+	}
+	return t.walkOpened(root, dir, held, comps, clean, fn)
+}
+
+// walkOpened walks dir (the start, reached through held below root).
+func (t *Tree) walkOpened(root, dir handle, held []handle, comps []string, clean string, fn func(Entry) error) error {
 	// The chain of directories from the root to the start, as opened.
 	rootID, err := root.identity()
 	if err != nil {

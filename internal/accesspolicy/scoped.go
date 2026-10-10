@@ -48,6 +48,14 @@ type scope struct {
 	caps    map[string]capture         // the rule file captured in a directory
 	failed  map[string]error           // directories whose rules could not be read
 	chains  map[string]bool            // paths whose chains were captured
+
+	compiled map[string]*libgitignore.GitIgnore // rules compiled, by the directories whose rule files they hold
+
+	// dirExcluded memoizes whether a directory, or one above it, is
+	// excluded: it depends only on the rule files of that directory and
+	// those above it, all captured — for good — before anything below it
+	// is decided.
+	dirExcluded sync.Map // string → bool
 }
 
 // BuildScoped returns a snapshot of tree that captures rule files as
@@ -66,6 +74,8 @@ func BuildScoped(tree *fsroot.Tree, opts Options) (*Snapshot, error) {
 		caps:    map[string]capture{},
 		failed:  map[string]error{},
 		chains:  map[string]bool{},
+
+		compiled: map[string]*libgitignore.GitIgnore{},
 	}}, nil
 }
 
@@ -255,7 +265,7 @@ func (s *Snapshot) ensurePaths(r fsroot.Resolved) error {
 		if p == "" {
 			continue
 		}
-		if err := s.ensure(p); err != nil {
+		if err := s.ensure(chainOf(p, r.IsDir())); err != nil {
 			return err
 		}
 	}
@@ -305,16 +315,18 @@ func (s *Snapshot) knownDir(d fsroot.DirRef) error {
 // scopedExcluded decides the paths of one resolution (its canonical form and
 // the file it leads to, each with the directories above it) by the rule
 // files of the directories above them.
-func (s *Snapshot) scopedExcluded(paths ...string) (bool, error) {
+func (s *Snapshot) scopedExcluded(isDir bool, paths ...string) (bool, error) {
 	sc := s.scope
 	dirs := map[string]bool{".": true}
 	for _, p := range paths {
-		// The path itself too, when it is a directory: its own rule file
-		// can match it (as IgnoreReader.For reads it).
-		if err := s.ensure(p); err != nil {
+		// The directories above the path, and the path itself when it is
+		// a directory: its own rule file can match it (as
+		// IgnoreReader.For reads it). A file has no rule file of its own.
+		top := chainOf(p, isDir)
+		if err := s.ensure(top); err != nil {
 			return false, err
 		}
-		for d := p; d != "."; d = parentOf(d) {
+		for d := top; d != "."; d = parentOf(d) {
 			dirs[d] = true
 		}
 	}
@@ -329,9 +341,20 @@ func (s *Snapshot) scopedExcluded(paths ...string) (bool, error) {
 			caps = append(caps, c)
 		}
 	}
-	sc.mu.Unlock()
 	// Parents before children, siblings by name: the walk's order.
 	sort.Slice(caps, func(i, j int) bool { return walkOrderLess(caps[i].dir, caps[j].dir) })
+	// The rule of these rule files, compiled once: what is captured never
+	// changes for the snapshot's life.
+	keyParts := make([]string, len(caps))
+	for i, c := range caps {
+		keyParts[i] = c.dir
+	}
+	key := strings.Join(keyParts, "\x00")
+	ark, cached := sc.compiled[key]
+	sc.mu.Unlock()
+	if cached {
+		return s.scopedMatch(ark, paths), nil
+	}
 	files := make([]libgitignore.CapturedFile, 0, len(caps))
 	for _, c := range caps {
 		f := c.file
@@ -342,16 +365,53 @@ func (s *Snapshot) scopedExcluded(paths ...string) (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", ErrRuleUnavailable, err)
 	}
-	ark, err := set.CompileSource(libgitignore.ArkSource)
+	ark, err = set.CompileSource(libgitignore.ArkSource)
 	if err != nil {
 		return false, fmt.Errorf("%w: %v", ErrRuleUnavailable, err)
 	}
+	sc.mu.Lock()
+	sc.compiled[key] = ark
+	sc.mu.Unlock()
+	return s.scopedMatch(ark, paths), nil
+}
+
+// scopedMatch reports whether ark (the rules of the directories above the
+// paths, and of the paths that are directories) excludes a path or a
+// directory above it.
+func (s *Snapshot) scopedMatch(ark *libgitignore.GitIgnore, paths []string) bool {
 	for _, p := range paths {
-		if matchesWithParents(ark, p) {
-			return true, nil
+		if d := parentOf(p); d != "." && s.scopedDirExcluded(ark, d) {
+			return true
+		}
+		if ark.MatchesRel(p) {
+			return true
 		}
 	}
-	return false, nil
+	return false
+}
+
+func (s *Snapshot) scopedDirExcluded(ark *libgitignore.GitIgnore, d string) bool {
+	sc := s.scope
+	if v, ok := sc.dirExcluded.Load(d); ok {
+		return v.(bool)
+	}
+	ex := ark.MatchesRel(d)
+	if !ex {
+		if p := parentOf(d); p != "." {
+			ex = s.scopedDirExcluded(ark, p)
+		}
+	}
+	sc.dirExcluded.Store(d, ex)
+	return ex
+}
+
+// chainOf is the deepest directory whose rule file can decide p: p itself
+// when it is a directory, else the directory it is in.
+func chainOf(p string, isDir bool) string {
+	if isDir {
+		return p
+	}
+	return parentOf(p)
 }
 
 func matchesWithParents(ark *libgitignore.GitIgnore, rel string) bool {
@@ -376,4 +436,112 @@ func walkOrderLess(a, b string) bool {
 		}
 	}
 	return len(as) < len(bs)
+}
+
+// captureFromEntry captures, from a walk's own handles, the rule files a
+// decision on e needs: those of the directory e was listed from and, for a
+// directory, its own — each read twice (the same object, the same bytes)
+// and recorded with the identity of the directory read, exactly as a chain
+// capture records them, without walking from the root again. A directory
+// whose ancestors are not captured yet is left to the chain capture
+// (ensure), as are .git and .ark directories.
+func (s *Snapshot) captureFromEntry(e fsroot.Entry) error {
+	sc := s.scope
+	dirs := e.Dirs()
+	if len(dirs) == 0 || e.IsStart() {
+		return nil
+	}
+	parent := dirs[len(dirs)-1]
+	sc.mu.Lock()
+	ancestorsKnown := true
+	for _, d := range dirs[:len(dirs)-1] {
+		if _, ok := sc.dirs[d.Rel]; !ok {
+			ancestorsKnown = false
+		}
+	}
+	_, parentKnown := sc.dirs[parent.Rel]
+	sc.mu.Unlock()
+	if !ancestorsKnown || (parent.Rel != "." && skippedName(parent.Rel)) {
+		return nil
+	}
+	if !parentKnown {
+		if err := s.captureListed(
+			func() (fsroot.ChainDir, error) { return e.ReadSiblingFile(".arkignore") },
+			func() (fsroot.ChainDir, error) { return e.RereadSiblingFile(".arkignore") }); err != nil {
+			return err
+		}
+	}
+	if e.IsDir() && !e.IsSymlink() && !skippedName(e.Rel()) {
+		sc.mu.Lock()
+		_, known := sc.dirs[e.Rel()]
+		sc.mu.Unlock()
+		if !known {
+			return s.captureListed(
+				func() (fsroot.ChainDir, error) { return e.ReadDirFile(".arkignore") },
+				func() (fsroot.ChainDir, error) { return e.RereadDirFile(".arkignore") })
+		}
+	}
+	return nil
+}
+
+func skippedName(rel string) bool {
+	name := rel[strings.LastIndexByte(rel, '/')+1:]
+	return name == ".git" || name == ".ark"
+}
+
+// captureListed captures one directory's rule file, read by read (twice:
+// the same object with the same bytes, or a rewrite was in progress).
+func (s *Snapshot) captureListed(read, reread func() (fsroot.ChainDir, error)) error {
+	var last error
+	for i := 0; i < maxAttempts; i++ {
+		d, err := read()
+		if err != nil {
+			if errors.Is(err, fsroot.ErrChanged) {
+				last = err
+				continue
+			}
+			return fmt.Errorf("%w: %v", ErrRuleUnavailable, err)
+		}
+		c, err := s.scopedCapture(d)
+		if errors.Is(err, errRetry) {
+			last = err
+			continue
+		}
+		if err != nil {
+			return err
+		}
+		hook("verify", d.Rel)
+		if c != nil && c.file.Err == nil && !d.File.Link {
+			again, err := reread()
+			if err != nil || !again.File.Present || again.File.Link || !again.ID.Same(d.ID) || !again.File.ID.Same(d.File.ID) || !bytes.Equal(again.File.Data, d.File.Data) {
+				last = errRetry
+				continue
+			}
+		} else if c != nil && c.file.Err == nil {
+			if err := verifyRule(s.tree, *c); err != nil {
+				last = err
+				continue
+			}
+		}
+		sc := s.scope
+		sc.mu.Lock()
+		if want, ok := sc.dirs[d.Rel]; ok {
+			sc.mu.Unlock()
+			if !want.Same(d.ID) {
+				return fmt.Errorf("%w: %s", ErrDirectoryChanged, d.Rel)
+			}
+			return nil
+		}
+		sc.dirs[d.Rel] = d.ID
+		if c != nil {
+			sc.caps[c.dir] = *c
+			if c.file.Err != nil {
+				sc.failed[c.dir] = c.file.Err
+			}
+		}
+		sc.chains[d.Rel] = true // its ancestors were captured before it
+		sc.mu.Unlock()
+		return nil
+	}
+	return fmt.Errorf("%w (%d attempts): %v", ErrRuleChanged, maxAttempts, last)
 }

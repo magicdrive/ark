@@ -22,6 +22,29 @@ import (
 // The MCP server passes its .arkignore access policy; nil excludes nothing.
 type Exclude func(path string, d fs.DirEntry) bool
 
+// FS is how an index's sources are walked and read when they must not be
+// raced (internal/safewalk.Walker): filepath.WalkDir's shape, and a read of a
+// file the walk reported. With it, a file is read as the walk decided it —
+// never opened by path again.
+type FS interface {
+	WalkDir(root string, fn fs.WalkDirFunc) error
+	ReadFile(path string) ([]byte, error)
+}
+
+type fsKey struct{}
+
+// WithFS returns ctx carrying fsys: index builds and fingerprints under ctx
+// walk and read their sources through it. Without it, they use the file
+// system by path.
+func WithFS(ctx context.Context, fsys FS) context.Context {
+	return context.WithValue(ctx, fsKey{}, fsys)
+}
+
+func fsFrom(ctx context.Context) FS {
+	fsys, _ := ctx.Value(fsKey{}).(FS)
+	return fsys
+}
+
 // walkSources visits, in lexical (filepath.WalkDir) order, every file an index
 // built over root reads: files with a provider extension, outside skipped
 // directories (SkipDirName) and not excluded. visit receives the file's
@@ -30,8 +53,12 @@ type Exclude func(path string, d fs.DirEntry) bool
 // is why a change of what exclude leaves out changes the fingerprint.
 func walkSources(ctx context.Context, root string, providers []language.Provider, exclude Exclude,
 	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) error {
-	step := sourceStep(root, providers, exclude, visit)
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
+	walkDir, read := filepath.WalkDir, os.ReadFile
+	if fsys := fsFrom(ctx); fsys != nil {
+		walkDir, read = fsys.WalkDir, fsys.ReadFile
+	}
+	step := sourceStep(root, providers, exclude, read, visit)
+	return walkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil // skip unreadable dirs
 		}
@@ -46,7 +73,7 @@ func walkSources(ctx context.Context, root string, providers []language.Provider
 // directory (filepath.SkipDir if not) and, for a file, whether to read and
 // visit it. walkSources and listedSources share it, so a listed walk decides
 // exactly as a walk does.
-func sourceStep(root string, providers []language.Provider, exclude Exclude,
+func sourceStep(root string, providers []language.Provider, exclude Exclude, read func(string) ([]byte, error),
 	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) func(path string, d fs.DirEntry) error {
 	extMap := make(map[string]language.Provider)
 	for _, p := range providers {
@@ -68,7 +95,7 @@ func sourceStep(root string, providers []language.Provider, exclude Exclude,
 		if exclude != nil && exclude(path, d) {
 			return nil
 		}
-		src, err := os.ReadFile(path)
+		src, err := read(path)
 		relPath, _ := filepath.Rel(root, path)
 		visit(path, relPath, prov, src, err)
 		return nil
@@ -88,7 +115,7 @@ type WalkEntry struct {
 // provided the listing is complete below every directory walkSources enters.
 func listedSources(ctx context.Context, root string, providers []language.Provider, exclude Exclude, entries []WalkEntry,
 	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) error {
-	step := sourceStep(root, providers, exclude, visit)
+	step := sourceStep(root, providers, exclude, os.ReadFile, visit)
 	skipping := ""
 	for _, e := range entries {
 		if ctx.Err() != nil {

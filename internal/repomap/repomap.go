@@ -32,6 +32,10 @@ type Options struct {
 	// packages) instead of opening it below the map's root by path — for a
 	// caller whose reads must pass its own access checks.
 	ReadFile func(fileID source.FileID) ([]byte, error)
+	// Exists, when set, reports whether rel (below the map's root) exists,
+	// instead of a stat by path — to map import paths to directories — for
+	// a caller whose access checks must decide what exists.
+	Exists func(rel string) bool
 }
 
 func (o *Options) withDefaults() Options {
@@ -207,7 +211,7 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 					continue
 				}
 				// ref.Name is the import path; derive the package dir.
-				toPkg := importPathToRelDir(root, string(ref.Name))
+				toPkg := importPathToRelDir(root, string(ref.Name), opts.Exists)
 				if toPkg != "" && toPkg != pkg {
 					key := [2]string{pkg, toPkg}
 					depSet[key] = true
@@ -473,13 +477,19 @@ func isEntryPoint(pkg string, idx *index.RepositoryIndex, files []source.FileID)
 
 // importPathToRelDir converts an import path to a repo-relative directory, best-effort.
 // For internal paths like "github.com/magicdrive/ark/internal/mcp" → "internal/mcp".
-func importPathToRelDir(root, importPath string) string {
+func importPathToRelDir(root, importPath string, exists func(string) bool) string {
+	if exists == nil {
+		exists = func(rel string) bool {
+			_, err := os.Stat(filepath.Join(root, rel))
+			return err == nil
+		}
+	}
 	// Try to find a matching subdirectory under root.
 	// Split on "/" and walk from the last component backward.
 	parts := strings.Split(importPath, "/")
 	for i := 0; i < len(parts); i++ {
 		candidate := strings.Join(parts[i:], string(filepath.Separator))
-		if _, err := os.Stat(filepath.Join(root, candidate)); err == nil {
+		if exists(candidate) {
 			return candidate
 		}
 	}

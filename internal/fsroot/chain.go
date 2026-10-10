@@ -166,3 +166,68 @@ func (t *Tree) chainFile(dir handle, d *ChainDir, name string, read func(string)
 	d.File.Data, d.File.ID = b, oi.id
 	return nil
 }
+
+// ReadSiblingFile reads name in the directory e was listed from, through
+// the handle the walk holds, as ReadChain reads a file: a ChainDir naming
+// that directory (as the walk opened it). For a capture during a walk,
+// without walking from the root again.
+func (e Entry) ReadSiblingFile(name string) (ChainDir, error) { return e.readSiblingFile(name, true) }
+
+// RereadSiblingFile is ReadSiblingFile for a second reading (RereadChain):
+// the name is not looked up in the listing again.
+func (e Entry) RereadSiblingFile(name string) (ChainDir, error) {
+	return e.readSiblingFile(name, false)
+}
+
+func (e Entry) readSiblingFile(name string, listed bool) (ChainDir, error) {
+	if e.dir == nil || len(e.dir.chain) == 0 {
+		return ChainDir{}, ErrClosed
+	}
+	d := ChainDir{DirRef: e.dir.chain[len(e.dir.chain)-1]}
+	if e.name == "" || e.rel == d.Rel {
+		// The walk's start: it was not listed from a directory the walk
+		// holds.
+		return ChainDir{}, &fs.PathError{Op: "read", Path: e.rel, Err: ErrInvalidPath}
+	}
+	err := e.dir.use(func(h handle) error {
+		return e.dir.tree.chainFile(h, &d, name, nil, listed)
+	})
+	return d, err
+}
+
+// ReadDirFile reads name in the directory entry e itself: the directory is
+// opened through the handle e was listed from, without following anything,
+// verified to be the object listed now (lstat), and name is read as
+// ReadChain reads a file. The ChainDir names the directory as opened.
+func (e Entry) ReadDirFile(name string) (ChainDir, error) { return e.readDirFile(name, true) }
+
+// RereadDirFile is ReadDirFile for a second reading (RereadChain).
+func (e Entry) RereadDirFile(name string) (ChainDir, error) { return e.readDirFile(name, false) }
+
+func (e Entry) readDirFile(name string, listed bool) (ChainDir, error) {
+	if !e.IsDir() || e.IsSymlink() || e.dir == nil {
+		return ChainDir{}, &fs.PathError{Op: "read", Path: e.rel, Err: ErrNotDir}
+	}
+	var d ChainDir
+	err := e.dir.use(func(h handle) error {
+		info, err := h.lstat(e.name)
+		if err != nil {
+			return err
+		}
+		if info.mode&fs.ModeSymlink != 0 || !info.mode.IsDir() {
+			return ErrChanged
+		}
+		sub, err := h.openDir(e.name, info.id)
+		if err != nil {
+			return err
+		}
+		defer sub.close()
+		id, err := sub.identity()
+		if err != nil {
+			return err
+		}
+		d = ChainDir{DirRef: DirRef{Rel: e.rel, ID: id}}
+		return e.dir.tree.chainFile(sub, &d, name, nil, listed)
+	})
+	return d, err
+}

@@ -58,7 +58,7 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 			return nil
 		}
 
-		data, err := os.ReadFile(fpath)
+		data, err := opt.ReadFile(fpath)
 		if err != nil {
 			return err
 		}

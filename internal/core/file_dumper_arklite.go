@@ -50,7 +50,7 @@ func WriteAllFilesAsArklite(treeStr, root, outputPath string, allowedFileListMap
 			}
 		}
 
-		data, err := os.ReadFile(path)
+		data, err := opt.ReadFile(path)
 		if err != nil {
 			log.Println(err.Error())
 			return err
