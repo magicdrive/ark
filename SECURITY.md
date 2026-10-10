@@ -88,6 +88,20 @@ The MCP server never returns anything from a file the repository's
   re-includes what an earlier pattern excluded; matching is case-sensitive).
   A path is excluded when it or a directory above it matches. `.gitignore`
   files play no part.
+- **Names as the file system lists them.** The rules match the names the
+  file system lists, not the spelling a request uses. On a case-insensitive
+  file system (macOS by default, Windows) `SECRET.TXT`, `Secrets/key.txt`
+  for `secrets/key.txt`, a Unicode name in another normalization, a Windows
+  8.3 short name or a name with trailing dots or spaces reach the same file
+  as the listed name and are decided as that name; so is the target of a
+  symlink whose text spells it in another case, or reaches the root through
+  another spelling of its path. A path whose listed name cannot be
+  established — the tree changed during the lookup, two hard links in one
+  directory fit a misspelled name, a directory that can be entered but not
+  listed, a Windows alternate data stream (`file.txt::$DATA`) — is refused.
+  A rule itself must spell a name as the file is listed: a rule in another
+  case, or another Unicode normalization, than the file does not match it,
+  on any file system.
 - **Direct access.** A tool path or `file://` resource naming an excluded
   file or directory, or a symlink that resolves to one, is answered like a
   path that does not exist.
@@ -228,6 +242,18 @@ read with `.arkignore`.
 
 **Known limitations:**
 
+- **Fixed in v6.0.0: other spellings of an excluded path.** Before v6.0.0
+  (and in v6.0.0 drafts until the fix), the MCP server and the repository
+  dump matched the rules against the path as the request or the symlink
+  spelled it. On a case-insensitive file system `get_file_content`,
+  `get_files_arklite` and `file://` returned an excluded file named in
+  another case (`SECRET.TXT` for `secret.txt`, `SECRETS/key.txt` below
+  `Secrets/`, `SRC/PRIVATE.TXT` against `src/.arkignore`); a walk started
+  from a directory named in another case (`search_in_files`, `list_files`)
+  applied no nested `.arkignore` of it; and a symlink whose target was
+  spelled in another case (`alias -> SECRET.TXT`, or an absolute link
+  through the root's path in another case) exposed its target to walks and
+  to the dump. No race was needed. Names are now decided as listed (above).
 - **Concurrent changes (time-of-check/time-of-use).** Rules, symlinks and
   the root are checked when a request reads them, and files are opened by
   path afterwards. Whoever can change the repository tree, or retarget a

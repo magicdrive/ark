@@ -56,7 +56,11 @@ func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, e
 		if policy := h.pathPolicy(rel); policy.excludesRel(rel) {
 			return "", "", policy.excludedPathError(path)
 		}
-		return filepath.Join(root, rel), rel, nil
+		canonical, err := h.canonicalCheck(path, rel)
+		if err != nil {
+			return "", "", err
+		}
+		return filepath.Join(root, canonical), canonical, nil
 	}
 
 	// The .arkignore access policy (access_policy.go): the path as named
@@ -66,6 +70,15 @@ func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, e
 		if policy := h.pathPolicy(rel); policy.excludesRel(rel) {
 			return "", "", policy.excludedPathError(path)
 		}
+	}
+	// The same, for the path as the file system names it; the tool is given
+	// that path, so a walk from it names entries as the rules expect.
+	canonical, err := h.canonicalCheck(path, rel)
+	if err != nil {
+		return "", "", err
+	}
+	if canonical != rel {
+		candidate, rel = filepath.Join(root, canonical), canonical
 	}
 
 	// Physical containment. A path that does not resolve (missing, dangling)
@@ -92,6 +105,27 @@ func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, e
 		}
 	}
 	return candidate, rel, nil
+}
+
+// canonicalCheck applies the access policy to rel (relative to the root) as
+// the file system names it — on a case-insensitive file system "SECRET.TXT"
+// is the file "secret.txt" — and to the symlink-free path it leads to, so
+// named (access_policy.go). It returns the canonical path.
+func (h *ToolsHandler) canonicalCheck(path, rel string) (string, error) {
+	allowExternal := h.opt != nil && h.opt.AllowExternalSymlinks
+	canonical, real, err := fsCanonicalPath(h.rootDir, rel, allowExternal)
+	if err != nil {
+		return "", fmt.Errorf("path %q: %w", path, errNotCanonical)
+	}
+	for _, p := range []string{canonical, real} {
+		if p == "" || p == "." || p == rel {
+			continue
+		}
+		if policy := h.pathPolicy(p); policy.excludesRel(p) {
+			return "", policy.excludedPathError(path)
+		}
+	}
+	return canonical, nil
 }
 
 // relInside reports p relative to root and whether it is root or below it.

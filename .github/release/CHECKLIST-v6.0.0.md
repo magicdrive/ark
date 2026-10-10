@@ -42,6 +42,12 @@ on macOS x86_64; re-run what changed since.
 - [x] A symlinked root (MCP `--root`, dump target) answers as its directory:
       four root spellings compared over 21 tools and every dump format
       (`TestSymlinkedRoot_*`).
+- [x] C1 (another spelling of an excluded path on case-insensitive file
+      systems) fixed in the MCP path gate, MCP walks and the dump; verified on
+      macOS (APFS, case-insensitive and case-sensitive volumes): `TestC1_*`,
+      `TestCase_PathGate`, `TestMCPCase_*`, `TestCLICase_*`.
+- [ ] C1 on Windows, macOS and Linux: the `filesystem-security` CI jobs and
+      the `test` job green (not yet run).
 - [ ] Decide on the TOCTOU limitation: ship with the documented trust model
       (the access policy is not a boundary against writers of the
       repository or its root link; `SECURITY.md`), or close it before the

@@ -138,6 +138,25 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
   turn it off: `maskSecrets` on `get_file_content` / `get_files_arklite`
   stays accepted without effect, as before. Analysis, index and cache are
   unaffected.
+- **Fixed: excluded files reachable by another spelling of their path (C1).**
+  On a case-insensitive file system (macOS by default, Windows) the
+  `.arkignore` rules were matched against the path as a request spelled it,
+  so `get_file_content "SECRET.TXT"` returned the file `secret.txt` the
+  rules exclude — also through `get_files_arklite`, `file://`, a parent
+  directory in another case (`SECRETS/key.txt` below `Secrets/`) and nested
+  rules (`SRC/PRIVATE.TXT`); walks started from a directory named in another
+  case (`search_in_files`, `list_files`) skipped its nested rules; and a
+  symlink whose text spelled its target in another case exposed the target
+  to walks and to the dump. No race was needed (v5.0.1 and earlier v6.0.0
+  drafts). Paths are now decided by the names the file system lists — each
+  component renamed, through directory handles, to the entry whose identity
+  the lookup reached (`internal/fsroot`) — and the tool is handed that path;
+  symlink targets in walks and in the dump are decided the same way. Paths
+  whose listed name cannot be established (ambiguous hard links, Windows
+  alternate data streams, names only the Windows path API accepts) are
+  refused. The rules stay case-sensitive; outputs for paths spelled as
+  listed are unchanged (compared over four corpora). The broader
+  time-of-check/time-of-use limitation below remains.
 - **`.arkignore` is enforced by the MCP server.** Every `.arkignore` under the
   root (with the dump's pattern syntax and matcher) now decides what the
   server may read: an excluded path, or a symlink to one, is answered as not
@@ -345,6 +364,11 @@ tool-response tokens, not a model's total token use.
 - With `--allow-external-symlinks on`, walks still do not descend into a
   directory symlink; files below it are readable by naming them. A symlink
   retargeted between the check and the read can be read through (TOCTOU).
+- `.arkignore` rules match names as the file system lists them; a rule must
+  spell a name as the file is listed (case, Unicode normalization) to
+  exclude it. A misspelled path to a file with two hard links in one
+  directory, or below a directory that can be entered but not listed, is
+  refused on a case-insensitive file system.
 - The access policy is checked before files are opened by path: someone who
   can write to the repository, or retarget a symlinked root, while requests
   run can make a request return an excluded file or a file outside the root

@@ -5,7 +5,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -26,9 +25,7 @@ type fixture struct{ ws string }
 
 func newFixture(t testing.TB) fixture {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixture: needs symlink privileges; Windows not covered here")
-	}
+	requireSymlinks(t)
 	ws := t.TempDir()
 	f := fixture{ws: ws}
 	f.write(t, "A/s.txt", "A_PUBLIC")
@@ -79,13 +76,8 @@ func (f fixture) link(t testing.TB, target, rel string) {
 	}
 }
 
-// swapLink atomically points link at target.
-func swapLink(target, link string) {
-	tmp := link + ".swap"
-	os.Remove(tmp)
-	os.Symlink(target, tmp)
-	os.Rename(tmp, link)
-}
+// swapLink atomically points link at target (stress loops: errors ignored).
+func swapLink(target, link string) { swapLinkChecked(target, link) }
 
 // excludedBy returns the allow function of a rule set of exact paths and
 // directory prefixes ("dir/"), applied — as Ark's path gate applies

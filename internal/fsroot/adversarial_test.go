@@ -41,7 +41,7 @@ func TestA1_RootSwap(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swapLink(f.path("B"), f.path("root"))
+	mutate(t, "retarget the root link", swapLinkChecked(f.path("B"), f.path("root")))
 	if got, err := readResolved(t, tr, r); got != "A_PUBLIC" || err != nil {
 		t.Errorf("checked before the swap, read after: %q %v", got, err)
 	}
@@ -52,9 +52,7 @@ func TestA1_RootSwap(t *testing.T) {
 		t.Error("the pinned root changed")
 	}
 	// The directory moved: the Tree follows it.
-	if err := os.Rename(f.path("A"), f.path("A-moved")); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, "rename the pinned root directory", os.Rename(f.path("A"), f.path("A-moved")))
 	if got := outcome(tr.ReadFile("sub/f.txt", nil)); got != "A_SUB" {
 		t.Errorf("after the root directory moved: %s", got)
 	}
@@ -71,7 +69,7 @@ func TestA2_FileSwappedForExternalLink(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		swapLink(f.path("outside/secret.txt"), f.path("A/x.txt"))
+		mutate(t, "replace a file by an external link", swapLinkChecked(f.path("outside/secret.txt"), f.path("A/x.txt")))
 		got, err := readResolved(t, tr, r)
 		if strings.Contains(got, "OUTSIDE") || err == nil {
 			t.Errorf("external %v: read %q after the swap (err %v)", allowExt, got, err)
@@ -103,9 +101,7 @@ func TestA3_RenameOntoCheckedPath(t *testing.T) {
 	if err != nil || !allow(r) {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f.path("A/secret.txt"), f.path("A/allowed.txt")); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, "rename over the checked file", os.Rename(f.path("A/secret.txt"), f.path("A/allowed.txt")))
 	if got, err := readResolved(t, tr, r); !errors.Is(err, ErrChanged) {
 		t.Errorf("read the renamed file through the checked path: %q %v", got, err)
 	}
@@ -151,9 +147,7 @@ func TestA4_RuleFileSnapshot(t *testing.T) {
 		t.Error("bytes read earlier changed")
 	}
 	f.write(t, "A/.arkignore.new", "other\n")
-	if err := os.Rename(f.path("A/.arkignore.new"), f.path("A/.arkignore")); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, "replace the rule file", os.Rename(f.path("A/.arkignore.new"), f.path("A/.arkignore")))
 	if _, id3 := read(); id3.Same(id2) {
 		t.Error("a replaced rule file kept its identity")
 	}
@@ -171,9 +165,7 @@ func TestA5_DirectorySwappedForLink(t *testing.T) {
 	if err != nil || !allow(r) {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f.path("A/sub"), f.path("A/sub-real")); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, "move the checked directory", os.Rename(f.path("A/sub"), f.path("A/sub-real")))
 	f.link(t, "secretdir", "A/sub")
 	if got, err := readResolved(t, tr, r); strings.Contains(got, "SECRETDIR") || err == nil {
 		t.Errorf("read through the swapped directory: %q %v", got, err)
@@ -204,7 +196,7 @@ func TestA5_DirectorySwappedDuringWalk(t *testing.T) {
 	tr.Walk(".", func(e Entry) error {
 		switch {
 		case e.Rel() == "sub" && e.Err() == nil:
-			os.Rename(f.path("A/sub"), f.path("A/sub-real"))
+			mutate(t, "move the listed directory", os.Rename(f.path("A/sub"), f.path("A/sub-real")))
 			f.link(t, "secretdir", "A/sub")
 		case e.Rel() == "sub" && e.Err() != nil:
 			refused = true
@@ -233,7 +225,7 @@ func TestA6_LinkRetargeted(t *testing.T) {
 	if err != nil || r.Real() != "ok.txt" || !allow(r) {
 		t.Fatalf("resolved %q %v", r.Real(), err)
 	}
-	swapLink("hidden.txt", f.path("A/in.txt"))
+	mutate(t, "retarget the link", swapLinkChecked("hidden.txt", f.path("A/in.txt")))
 	if got, err := readResolved(t, tr, r); got != "OK_CONTENT" || err != nil {
 		t.Errorf("after the retarget: %q %v", got, err)
 	}
@@ -256,9 +248,7 @@ func TestA7_ConcealedNestedRules(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Rename(f.path("A/nested"), f.path("A/nested-old")); err != nil {
-		t.Fatal(err)
-	}
+	mutate(t, "move the nested directory", os.Rename(f.path("A/nested"), f.path("A/nested-old")))
 	f.write(t, "A/nested/private.txt", "NESTED_PRIVATE")
 	after, err := tr.DirIdentity("nested")
 	if err != nil {

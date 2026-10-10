@@ -109,7 +109,21 @@ func (d *winDir) readDir(bool) ([]dirent, error) {
 	return out, nil
 }
 
+func (d *winDir) scanNames(stop func(string) bool) ([]string, bool, error) {
+	f, err := d.r.Open(".")
+	if err != nil {
+		return nil, false, err
+	}
+	defer f.Close()
+	return scanFile(f, stop)
+}
+
 func (d *winDir) identity() (Identity, error) { return Identity{fi: d.fi}, nil }
+
+// exactNames: NTFS names are case-insensitive by default (and a directory
+// may be made case-sensitive, or reached by an 8.3 short name): every name
+// is canonicalized.
+func (d *winDir) exactNames(string) bool { return false }
 
 func (d *winDir) close() error { return d.r.Close() }
 

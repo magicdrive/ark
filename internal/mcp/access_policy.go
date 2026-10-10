@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/magicdrive/ark/internal/fsroot"
 	"github.com/magicdrive/ark/internal/libgitignore"
 )
 
@@ -52,6 +53,16 @@ import (
 // .arkignore rules still apply — to the path in the repository the link is
 // reached by, and to the target when it lies inside the root. A path outside
 // the root that no symlink in the repository leads to is never reachable.
+//
+// Names are matched as the file system lists them. On a case-insensitive
+// file system (macOS by default, Windows) "SECRET.TXT" reaches the file
+// "secret.txt", and the rules are case-sensitive: a path named by the client
+// is therefore decided — and handed to the tool — by its canonical form, each
+// component renamed to the name its directory lists for the object reached
+// (fsroot, fsCanonicalPath), and so is the target of a symlink a walk meets.
+// Walks name entries as listed. A path whose canonical form cannot be
+// established (the tree changed during the lookup, two hard links fit the
+// name, a name the file system does not take as a plain path) is refused.
 //
 // The policy is independent of secret masking: turning masking off never
 // widens it. If the rules cannot be read, every path but the root is refused.
@@ -189,6 +200,58 @@ func (p accessPolicy) empty() bool {
 	return p.err == nil && (p.rule == nil || len(p.rule.Patterns()) == 0)
 }
 
+// errNotCanonical marks a refusal because a path's canonical form could not
+// be established.
+var errNotCanonical = errors.New("the path could not be verified against the file system")
+
+// fsCanonicalPath returns rel (relative to the root, as the path gate computed
+// it) as the file system names it: canonical, each component as its
+// directory lists it, and real, the symlink-free path inside the root it
+// leads to ("" when outside the root or unknown). A path that does not
+// resolve (missing, dangling, looping, below a file, outside the root when
+// that is refused) is returned as is with real "": the gate's own checks
+// decide it, and nothing can be read through it — unless the path API still
+// reaches a file by it (Windows drops trailing dots and spaces from names),
+// which is refused. Any other failure is an error: the path is refused.
+func fsCanonicalPath(root, rel string, allowExternal bool) (canonical, real string, err error) {
+	if rel == "." || rel == "" {
+		return ".", ".", nil
+	}
+	canonical, real, err = fsroot.Canonicalize(root, filepath.ToSlash(rel), fsroot.Options{AllowExternalSymlinks: allowExternal})
+	switch {
+	case err == nil:
+		return filepath.FromSlash(canonical), filepath.FromSlash(real), nil
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, fsroot.ErrNotDir):
+		if _, statErr := os.Stat(filepath.Join(root, rel)); statErr == nil {
+			return "", "", fmt.Errorf("%q names a file only by the path API's own rewriting: %w", rel, err)
+		}
+		return rel, "", nil
+	case errors.Is(err, fsroot.ErrOutsideRoot), errors.Is(err, fsroot.ErrSymlinkLoop):
+		return rel, "", nil
+	}
+	return "", "", err
+}
+
+// excludesCanonical reports whether the walk entry path (a symlink) leads,
+// as the file system names it, to an excluded file inside the root — the
+// link's own text may spell the target in another case, or reach the root by
+// another spelling of its path. A target that cannot be verified is
+// excluded; one that cannot be reached is not (nothing is read through it).
+func (p accessPolicy) excludesCanonical(path string) bool {
+	for _, root := range p.roots {
+		rel, ok := relInside(root, filepath.Clean(path))
+		if !ok {
+			continue
+		}
+		_, real, err := fsCanonicalPath(root, rel, p.allowExternal)
+		if err != nil {
+			return true
+		}
+		return real != "" && p.excludesRel(real)
+	}
+	return false
+}
+
 // excludesEntry reports whether a walk entry is excluded: by its own path or,
 // for a symlink, by where it leads — outside the root unless external
 // symlinks are allowed, or to an excluded file inside it, which a link must
@@ -207,9 +270,13 @@ func (p accessPolicy) excludesEntry(path string, symlink bool) bool {
 		return false // dangling or looping: nothing can be read through it
 	}
 	if !p.inside(real) {
-		return !p.allowExternal
+		if !p.allowExternal {
+			return true
+		}
+		// Outside by its spelling; inside, perhaps, by identity.
+		return !p.empty() && p.excludesCanonical(path)
 	}
-	return !p.empty() && p.excludes(real)
+	return !p.empty() && (p.excludes(real) || p.excludesCanonical(path))
 }
 
 // excludesWalked is excludesEntry for a path whose entry type is unknown

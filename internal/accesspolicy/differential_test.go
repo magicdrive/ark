@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -17,9 +16,7 @@ type ws struct{ dir string }
 
 func newWS(t testing.TB) ws {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("symlink fixtures: Windows not covered here")
-	}
+	requireSymlinks(t)
 	return ws{dir: t.TempDir()}
 }
 

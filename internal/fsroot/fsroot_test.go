@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Without concurrent changes a Tree decides as Ark's path gate does today:
@@ -267,4 +268,45 @@ func TestReadFile_RefusesNonRegular(t *testing.T) {
 		t.Errorf("link to a FIFO: %s", got)
 	}
 	_ = os.Remove
+}
+
+// Operations nested in a walk callback (Resolve, ReadFile) while Close waits
+// for the walk: the nested ones fail with ErrClosed instead of waiting, the
+// walk ends, Close returns — no deadlock.
+func TestCloseDuringNestedOperations(t *testing.T) {
+	f := newFixture(t)
+	tr, err := Pin(f.path("root"), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inWalk := make(chan struct{})
+	closing := make(chan struct{})
+	walkDone := make(chan error)
+	go func() {
+		first := true
+		walkDone <- tr.Walk(".", func(e Entry) error {
+			if first {
+				first = false
+				close(inWalk)
+				<-closing
+				time.Sleep(10 * time.Millisecond) // Close is now waiting
+			}
+			if _, err := tr.Resolve("hop1"); err != nil && !errors.Is(err, ErrClosed) {
+				t.Errorf("nested Resolve: %v", err)
+			}
+			return nil
+		})
+	}()
+	<-inWalk
+	closed := make(chan error)
+	go func() { closed <- tr.Close() }()
+	close(closing)
+	select {
+	case <-walkDone:
+	case <-time.After(10 * time.Second):
+		t.Fatal("deadlock: the walk did not finish while Close waited")
+	}
+	if err := <-closed; err != nil {
+		t.Errorf("Close: %v", err)
+	}
 }

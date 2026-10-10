@@ -50,6 +50,11 @@ jobs:
         run: go test ./...
 
       - name: Run tests with race detector
+        # The descriptor-anchored file access tests (internal/fsroot,
+        # internal/accesspolicy) need symlinks: make their absence a failure,
+        # not a skip.
+        env:
+          ARK_REQUIRE_SYMLINKS: "1"
         run: go test -race ./...
 
       - name: Install staticcheck
@@ -69,7 +74,9 @@ jobs:
             ./internal/reference/... \
             ./internal/repomap/... \
             ./internal/impact/... \
-            ./internal/search/...
+            ./internal/search/... \
+            ./internal/fsroot/... \
+            ./internal/accesspolicy/...
 
       # -fuzz is a regexp that must match exactly one fuzz test per run:
       # anchor every pattern.
@@ -111,6 +118,52 @@ jobs:
 
       - name: Run fuzz smoke (Terraform extraction)
         run: go test -run '^$' -fuzz=FuzzExtractTerraform -fuzztime=10s ./internal/languages/terraform/
+
+  # The descriptor-anchored file access foundation (internal/fsroot,
+  # internal/accesspolicy) and the case-insensitive name tests (C1: the MCP
+  # path gate, MCP walks, the dump) on the systems whose file systems fold
+  # names: Windows (os.Root and object identities instead of openat; NTFS)
+  # and macOS (APFS, case-insensitive by default, plus a case-sensitive
+  # volume for the C1-6 tests). Linux runs the same tests in the test job,
+  # where the case-folding ones skip (ext4 is case-sensitive). Symlinks and
+  # case folding are required here: a skip for either fails the job; skips
+  # for attacks the system itself refuses are listed.
+  filesystem-security:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Create a case-sensitive volume (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          hdiutil create -size 64m -fs "Case-sensitive APFS" -volname arkcs "$RUNNER_TEMP/cs.dmg"
+          hdiutil attach -nobrowse -mountpoint "$RUNNER_TEMP/csvol" "$RUNNER_TEMP/cs.dmg"
+          echo "ARK_CASE_SENSITIVE_DIR=$RUNNER_TEMP/csvol" >> "$GITHUB_ENV"
+
+      - name: Run file access security tests (race detector)
+        shell: bash
+        env:
+          ARK_REQUIRE_SYMLINKS: "1"
+          ARK_REQUIRE_CASE_FOLDING: "1"
+        run: |
+          set -o pipefail
+          go test -race -count=1 -v ./internal/fsroot ./internal/accesspolicy | tee fsroot-test.log
+          go test -count=1 -v -run 'TestCase_|TestMCPCase_|TestCLICase_' ./internal/mcp . | tee -a fsroot-test.log
+
+      - name: List skipped tests
+        if: always()
+        shell: bash
+        run: grep -E -- '--- SKIP|SKIP:|KNOWN-GAP' fsroot-test.log || echo "no skipped tests or known gaps"
 
   # The TypeScript compiler differential: Ark's TypeScript readings compared
   # with the pinned compiler (.github/ts-oracle). Node.js and TypeScript are

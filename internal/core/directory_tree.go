@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/common"
+	"github.com/magicdrive/ark/internal/fsroot"
 )
 
 func GenerateTreeString(path string, indent string, allowedFileListMap map[string]bool, opt *commandline.Option) (string, map[string]bool, error) {
@@ -111,9 +113,32 @@ func aliasIgnored(opt *commandline.Option, fullPath string, entry os.DirEntry) b
 			rel, ok = relUnder(realRoot, real)
 		}
 	}
-	if !ok || rel == "." {
+	if ok && rel != "." && ignoredWithParents(opt, rel) {
+		return true
+	}
+	// The rules match names as the file system lists them: the link's text
+	// may spell its target in another case, or reach the root by another
+	// spelling of its path, on a case-insensitive file system.
+	linkRel, inRoot := relUnder(root, fullPath)
+	if !inRoot {
 		return false
 	}
+	_, canonReal, err := fsroot.Canonicalize(root, filepath.ToSlash(linkRel), fsroot.Options{AllowExternalSymlinks: true})
+	switch {
+	case err == nil:
+		return canonReal != "" && canonReal != "." && ignoredWithParents(opt, canonReal)
+	case errors.Is(err, fs.ErrNotExist), errors.Is(err, fsroot.ErrNotDir):
+		_, statErr := os.Stat(fullPath)
+		return statErr == nil // reached only by the path API's rewriting: not dumped
+	case errors.Is(err, fsroot.ErrSymlinkLoop):
+		return false // nothing is read through it
+	}
+	return true // cannot be verified: not dumped
+}
+
+// ignoredWithParents reports whether rel (relative to the rules' root) or a
+// directory above it matches the ignore rules.
+func ignoredWithParents(opt *commandline.Option, rel string) bool {
 	rel = filepath.ToSlash(rel)
 	for i := 0; i < len(rel); i++ {
 		if rel[i] == '/' && opt.GitIgnoreRule.MatchesRel(rel[:i]) {

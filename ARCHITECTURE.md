@@ -379,6 +379,25 @@ is independent of masking. Tests: `TestMCPArkignore_ExcludedFilesAreUnreachable`
 Danger: filtering excluded files out of responses — callers, counts,
 candidates, search hits and context would still be derived from them.
 
+**The rules match names as the file system lists them.** The rules are
+case-sensitive; a case-insensitive file system (macOS by default, Windows)
+reaches `secret.txt` by `SECRET.TXT`. So the path gate decides — and hands
+the tool — the path's canonical form, and walks decide a symlink's target
+by its canonical form (`fsroot.Canonicalize`, used by `canonicalCheck`,
+`accessPolicy.excludesCanonical` and `core.aliasIgnored`): each component
+is renamed, through the directory handle the lookup used, to the listed
+entry whose identity the lookup reached (`internal/fsroot/canon.go`); the
+comparison of names is the file system's own, never guessed. Directories
+known to compare names exactly (a case-sensitive volume and an ASCII name on
+macOS; ext4, xfs, btrfs, tmpfs without casefolding on Linux) are not
+listed. A name no entry, or two entries, account for is refused. Walk
+entries are named from listings, so a walk is canonical once its start is.
+Tests: `TestC1_*`, `TestCase_PathGate`, `TestMCPCase_ExcludedFilesUnreachable`,
+`TestCLICase_DumpExcludes`. Danger: lower-casing names or rules — Unicode
+case and normalization, 8.3 short names and per-directory case sensitivity
+are the file system's to decide; or canonicalizing a string and opening
+another path — the name decided would not be the object read.
+
 **The rules are read for every request, once, and never trusted from a
 cache.** Each request (`ToolsHandler.forRequest`) has one
 `libgitignore.IgnoreReader`, which reads every rule file at most once: the

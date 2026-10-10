@@ -123,6 +123,13 @@ type handle interface {
 	readDir(owned bool) ([]dirent, error)
 	// identity of the directory, taken when it was opened.
 	identity() (Identity, error)
+	// exactNames reports whether a lookup of name in this directory can
+	// only reach an entry spelled exactly name (canon.go).
+	exactNames(name string) bool
+	// scanNames lists the directory's names, unsorted, through a
+	// description of its own, until stop reports true; it returns the names
+	// seen and whether it stopped.
+	scanNames(stop func(name string) bool) ([]string, bool, error)
 	close() error
 }
 
@@ -131,16 +138,21 @@ type dirent struct {
 	typ  fs.FileMode
 }
 
-// Tree is a pinned repository root. Its methods are safe for concurrent use;
-// Close waits for operations in progress, and later operations fail with
-// ErrClosed.
+// Tree is a pinned repository root. Its methods are safe for concurrent use,
+// including from a Walk callback. Close waits for operations in progress;
+// operations that start once Close has begun — including ones nested in an
+// operation in progress — fail with ErrClosed instead of waiting (a nested
+// wait would deadlock).
 type Tree struct {
 	logical string // the root as given, absolute and clean
 	real    string // its resolved path when pinned: maps absolute link targets
 	opts    Options
 
-	mu   sync.RWMutex
-	root handle // nil once closed
+	mu       sync.Mutex
+	idle     *sync.Cond // signalled when inflight drops to zero
+	inflight int
+	closing  bool
+	root     handle // nil once closed
 }
 
 // Pin resolves logicalRoot once and opens the directory it leads to.
@@ -175,29 +187,45 @@ func Pin(logicalRoot string, opts Options) (*Tree, error) {
 		h.close()
 		return nil, err
 	}
-	return &Tree{logical: abs, real: real, opts: opts, root: h}, nil
+	t := &Tree{logical: abs, real: real, opts: opts, root: h}
+	t.idle = sync.NewCond(&t.mu)
+	return t, nil
 }
 
 // Close releases the root. It waits for operations in progress.
 func (t *Tree) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.root == nil {
+	if t.closing {
 		return ErrClosed
+	}
+	t.closing = true
+	for t.inflight > 0 {
+		t.idle.Wait()
 	}
 	err := t.root.close()
 	t.root = nil
 	return err
 }
 
-// acquire returns the root for one operation; release must be called.
+// acquire returns the root for one operation; release must be called. It
+// never waits: once Close has begun it fails.
 func (t *Tree) acquire() (handle, func(), error) {
-	t.mu.RLock()
-	if t.root == nil {
-		t.mu.RUnlock()
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.closing {
 		return nil, nil, ErrClosed
 	}
-	return t.root, t.mu.RUnlock, nil
+	t.inflight++
+	return t.root, t.release, nil
+}
+
+func (t *Tree) release() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.inflight--; t.inflight == 0 {
+		t.idle.Broadcast()
+	}
 }
 
 // Logical returns rel (root-relative, "/"-separated) under the root as the
@@ -248,6 +276,7 @@ func splitRel(rel string) (clean string, comps []string, err error) {
 type Resolved struct {
 	tree     *Tree
 	logical  string     // the path as asked for, cleaned
+	canon    []string   // logical, each component as its directory lists it
 	real     []string   // symlink-free components below the root (nil: external)
 	dirIDs   []Identity // identity of each directory of real, root excluded
 	external string     // absolute path outside the root, reached through allowed links
@@ -259,8 +288,19 @@ type Resolved struct {
 // Logical returns the path as asked for (cleaned, root-relative).
 func (r Resolved) Logical() string { return r.logical }
 
+// Canonical returns the path as asked for with every component spelled as
+// its directory lists it (canon.go): on a case-insensitive file system,
+// "SRC/Secret.TXT" asked for is "src/secret.txt". Policies that match names
+// must match this path, not Logical.
+func (r Resolved) Canonical() string {
+	if len(r.canon) == 0 {
+		return "."
+	}
+	return strings.Join(r.canon, "/")
+}
+
 // Real returns the symlink-free root-relative path of the object, or "" if
-// it lies outside the root.
+// it lies outside the root. Its components are canonical.
 func (r Resolved) Real() string {
 	if r.real == nil {
 		return ""
@@ -356,13 +396,32 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 		res.info = objInfo{mode: fs.ModeDir, id: id}
 		return res, nil, nil
 	}
-	external := func(abs string) (Resolved, *os.File, error) {
-		r, err := t.resolveExternal(res, abs)
-		if err != nil || !open || !r.info.mode.IsRegular() {
-			return r, nil, err
+	rootID, err := root.identity()
+	if err != nil {
+		return Resolved{}, nil, err
+	}
+	// The canonical logical path: each component of the path asked for,
+	// renamed to the name its directory lists (canon.go). origin maps a
+	// component being resolved to the one of the path asked for it stands
+	// for (-1: it comes from a symlink target).
+	res.canon = append([]string(nil), comps...)
+	origin := make([]int, len(comps))
+	for i := range origin {
+		origin[i] = i
+	}
+	fromTarget := func(n int) []int {
+		o := make([]int, n)
+		for i := range o {
+			o[i] = -1
 		}
-		f, err := openExternal(r)
-		return r, f, err
+		return o
+	}
+	name := func(dir handle, i int, c string, id Identity) (string, error) {
+		n, err := canonicalName(dir, c, id)
+		if err == nil && origin[i] >= 0 {
+			res.canon[origin[i]] = n
+		}
+		return n, err
 	}
 
 	var held []handle // directory handles below the root, closed on return
@@ -374,6 +433,7 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 		closeAll(held)
 		held, ids, cur, real = nil, nil, root, nil
 		for _, c := range to {
+			// Names of real are canonical already.
 			next, err := cur.openDir(c, Identity{})
 			if err != nil {
 				return err
@@ -389,10 +449,49 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 		}
 		return nil
 	}
+	// leave continues a resolution that left the root at base, with rest
+	// still to resolve. It returns re-entry components when the path comes
+	// back into the root (a target such as ../root/x, or the root spelled
+	// otherwise); otherwise the external result.
+	leave := func(base string, rest []string, restOrigin []int) ([]string, []int, Resolved, *os.File, error) {
+		at := filepath.Clean(base)
+		if inside, ok := t.rootRelative(at, rootID, true); ok {
+			return append(inside, rest...), append(fromTarget(len(inside)), restOrigin...), Resolved{}, nil, nil
+		}
+		for j, c := range rest {
+			switch c {
+			case "", ".":
+				continue
+			case "..":
+				at = filepath.Dir(at)
+			default:
+				n := c
+				if t.opts.AllowExternalSymlinks {
+					if n, err = externalName(at, c); err != nil {
+						return nil, nil, Resolved{}, nil, err
+					}
+					if restOrigin[j] >= 0 {
+						res.canon[restOrigin[j]] = n
+					}
+				}
+				at = filepath.Join(at, n)
+			}
+			if inside, ok := t.rootRelative(at, rootID, false); ok {
+				return append(inside, rest[j+1:]...), append(fromTarget(len(inside)), restOrigin[j+1:]...), Resolved{}, nil, nil
+			}
+		}
+		r, err := t.resolveExternal(res, at)
+		if err != nil || !open || !r.info.mode.IsRegular() {
+			return nil, nil, r, nil, err
+		}
+		f, err := openExternal(r)
+		return nil, nil, r, f, err
+	}
 
 	links := 0
 	for i := 0; i < len(comps); {
 		c := comps[i]
+		var outBase string
 		switch c {
 		case "", ".":
 			i++
@@ -401,7 +500,8 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 			// Only a symlink target brings ".." here; it means the physical
 			// parent of the directory reached so far.
 			if len(real) == 0 {
-				return external(filepath.Join(append([]string{t.real, ".."}, comps[i+1:]...)...))
+				outBase = filepath.Join(t.real, "..")
+				break
 			}
 			if err := reanchor(real[:len(real)-1]); err != nil {
 				return Resolved{}, nil, err
@@ -409,7 +509,7 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 			i++
 			continue
 		}
-		if i < len(comps)-1 {
+		if outBase == "" && i < len(comps)-1 {
 			// A directory on the way: opened without following; only if
 			// that fails is it examined (a symlink to follow by hand).
 			if next, err := cur.openDir(c, Identity{}); err == nil {
@@ -418,68 +518,95 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 					next.close()
 					return Resolved{}, nil, err
 				}
+				n, err := name(cur, i, c, id)
+				if err != nil {
+					next.close()
+					return Resolved{}, nil, err
+				}
 				held = append(held, next)
 				ids = append(ids, id)
-				cur, real = next, append(real, c)
+				cur, real = next, append(real, n)
 				i++
 				continue
 			}
 		}
-		info, err := cur.lstat(c)
-		if err != nil {
-			return Resolved{}, nil, err
-		}
-		if info.mode&fs.ModeSymlink != 0 {
-			if links++; links > maxLinks {
-				return Resolved{}, nil, ErrSymlinkLoop
-			}
-			target, err := cur.readlink(c)
+		var rest []string
+		var restOrigin []int
+		if outBase == "" {
+			info, err := cur.lstat(c)
 			if err != nil {
 				return Resolved{}, nil, err
 			}
-			res.links = append(res.links, strings.Join(append(append([]string{}, real...), c), "/"))
+			n, err := name(cur, i, c, info.id)
+			if err != nil {
+				return Resolved{}, nil, err
+			}
+			if info.mode&fs.ModeSymlink == 0 {
+				if i < len(comps)-1 {
+					if !info.mode.IsDir() {
+						return Resolved{}, nil, &fs.PathError{Op: "resolve", Path: clean, Err: ErrNotDir}
+					}
+					// It is a directory, yet opening it failed: it changed.
+					return Resolved{}, nil, &fs.PathError{Op: "resolve", Path: clean, Err: ErrChanged}
+				}
+				res.real = append(append([]string{}, real...), n)
+				res.dirIDs = append([]Identity(nil), ids...)
+				res.info = info
+				if !open || !info.mode.IsRegular() {
+					return res, nil, nil
+				}
+				f, oi, err := cur.openFile(n, info.id)
+				if err != nil {
+					return Resolved{}, nil, &fs.PathError{Op: "open", Path: clean, Err: err}
+				}
+				res.info.size = oi.size
+				return res, f, nil
+			}
+			if links++; links > maxLinks {
+				return Resolved{}, nil, ErrSymlinkLoop
+			}
+			target, err := cur.readlink(n)
+			if err != nil {
+				return Resolved{}, nil, err
+			}
+			res.links = append(res.links, strings.Join(append(append([]string{}, real...), n), "/"))
 			dirID, err := cur.identity()
 			if err != nil {
 				return Resolved{}, nil, err
 			}
 			res.linkDirs = append(res.linkDirs, DirRef{Rel: relOf(real), ID: dirID})
-			rest := comps[i+1:]
+			rest, restOrigin = comps[i+1:], origin[i+1:]
 			var next []string
 			if filepath.IsAbs(target) || filepath.VolumeName(target) != "" {
-				inside, ok := t.rootRelative(target)
+				inside, ok := t.rootRelative(target, rootID, true)
 				if !ok {
-					return external(filepath.Join(append([]string{target}, rest...)...))
+					outBase = target
 				}
 				next = inside
 			} else {
 				next = append(append([]string{}, real...), strings.Split(filepath.ToSlash(target), "/")...)
 			}
-			comps = append(next, rest...)
-			i = 0
-			if err := reanchor(nil); err != nil {
-				return Resolved{}, nil, err
+			if outBase == "" {
+				comps = append(next, rest...)
+				origin = append(fromTarget(len(next)), restOrigin...)
+				i = 0
+				if err := reanchor(nil); err != nil {
+					return Resolved{}, nil, err
+				}
+				continue
 			}
-			continue
+		} else {
+			rest, restOrigin = comps[i+1:], origin[i+1:]
 		}
-		if i < len(comps)-1 {
-			if !info.mode.IsDir() {
-				return Resolved{}, nil, &fs.PathError{Op: "resolve", Path: clean, Err: ErrNotDir}
-			}
-			// It is a directory, yet opening it failed: it changed.
-			return Resolved{}, nil, &fs.PathError{Op: "resolve", Path: clean, Err: ErrChanged}
+		// The resolution leaves the root at outBase.
+		back, backOrigin, r, f, err := leave(outBase, rest, restOrigin)
+		if err != nil || back == nil {
+			return r, f, err
 		}
-		res.real = append(append([]string{}, real...), c)
-		res.dirIDs = append([]Identity(nil), ids...)
-		res.info = info
-		if !open || !info.mode.IsRegular() {
-			return res, nil, nil
+		comps, origin, i = back, backOrigin, 0
+		if err := reanchor(nil); err != nil {
+			return Resolved{}, nil, err
 		}
-		f, oi, err := cur.openFile(c, info.id)
-		if err != nil {
-			return Resolved{}, nil, &fs.PathError{Op: "open", Path: clean, Err: err}
-		}
-		res.info.size = oi.size
-		return res, f, nil
 	}
 	// The path ended at a directory reached through a symlink or "..".
 	id, err := cur.identity()
@@ -515,9 +642,14 @@ func (t *Tree) resolveExternal(res Resolved, abs string) (Resolved, error) {
 	return res, nil
 }
 
-// rootRelative maps an absolute symlink target to components below the root.
-// It computes a name only: the name is walked again through handles.
-func (t *Tree) rootRelative(target string) ([]string, bool) {
+// rootRelative maps an absolute path to components below the root. It
+// computes a name only: the name is walked again through handles. The root
+// is recognised by its spellings (as given, as resolved) and, failing that,
+// by identity — another case or normalization of its name, another link to
+// it: with ancestors, every directory above target is examined, else only
+// target itself. A path that only names the root by identity is mapped by
+// the components below it as spelled; they are canonicalized when walked.
+func (t *Tree) rootRelative(target string, rootID Identity, ancestors bool) ([]string, bool) {
 	cands := []string{filepath.Clean(target)}
 	if dir, err := filepath.EvalSymlinks(filepath.Dir(target)); err == nil {
 		cands = append(cands, filepath.Join(dir, filepath.Base(target)))
@@ -534,7 +666,23 @@ func (t *Tree) rootRelative(target string) ([]string, bool) {
 			return strings.Split(filepath.ToSlash(rel), "/"), true
 		}
 	}
-	return nil, false
+	p := filepath.Clean(target)
+	var below []string
+	for {
+		if id, err := pathIdentity(p); err == nil && id.Same(rootID) {
+			out := make([]string, 0, len(below))
+			for k := len(below) - 1; k >= 0; k-- {
+				out = append(out, below[k])
+			}
+			return out, true
+		}
+		parent := filepath.Dir(p)
+		if !ancestors || parent == p {
+			return nil, false
+		}
+		below = append(below, filepath.Base(p))
+		p = parent
+	}
 }
 
 // Open opens the regular file r names: the object Resolve checked, reached
@@ -650,8 +798,17 @@ func (t *Tree) ReadFileChecked(rel string, check func(Resolved) error) ([]byte, 
 	return readAllSized(f, r.info.size)
 }
 
-// readAllSized reads f to the end, sized for an expected length.
+// readAllSized reads f to the end, sized for an expected length. On error it
+// returns no bytes: a partial read is never disclosed.
 func readAllSized(f *os.File, size int64) ([]byte, error) {
+	b, err := readAllSizedPartial(f, size)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+func readAllSizedPartial(f *os.File, size int64) ([]byte, error) {
 	if size <= 0 || size > 1<<30 {
 		return io.ReadAll(f)
 	}
@@ -683,7 +840,7 @@ func (t *Tree) DirIdentity(rel string) (Identity, error) {
 	if err != nil {
 		return Identity{}, err
 	}
-	dir, held, err := t.strictDirs(root, comps)
+	dir, held, _, err := t.strictDirs(root, comps)
 	if err != nil {
 		return Identity{}, err
 	}
@@ -692,9 +849,11 @@ func (t *Tree) DirIdentity(rel string) (Identity, error) {
 }
 
 // strictDirs opens comps below root as directories; a symlink is ErrSymlink.
-func (t *Tree) strictDirs(root handle, comps []string) (handle, []handle, error) {
+// It returns the components as their directories list them (canon.go).
+func (t *Tree) strictDirs(root handle, comps []string) (handle, []handle, []string, error) {
 	cur := root
 	var held []handle
+	names := make([]string, 0, len(comps))
 	for _, c := range comps {
 		info, err := cur.lstat(c)
 		if err == nil && info.mode&fs.ModeSymlink != 0 {
@@ -702,18 +861,23 @@ func (t *Tree) strictDirs(root handle, comps []string) (handle, []handle, error)
 		} else if err == nil && !info.mode.IsDir() {
 			err = ErrNotDir
 		}
+		var n string
+		if err == nil {
+			n, err = canonicalName(cur, c, info.id)
+		}
 		var next handle
 		if err == nil {
-			next, err = cur.openDir(c, info.id)
+			next, err = cur.openDir(n, info.id)
 		}
 		if err != nil {
 			closeAll(held)
-			return nil, nil, &fs.PathError{Op: "open", Path: c, Err: err}
+			return nil, nil, nil, &fs.PathError{Op: "open", Path: c, Err: err}
 		}
 		held = append(held, next)
+		names = append(names, n)
 		cur = next
 	}
-	return cur, held, nil
+	return cur, held, names, nil
 }
 
 func closeAll(hs []handle) {

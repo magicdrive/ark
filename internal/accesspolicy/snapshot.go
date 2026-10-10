@@ -37,6 +37,7 @@ import (
 	"io/fs"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 
@@ -98,6 +99,11 @@ type Snapshot struct {
 	skipped map[string]fsroot.Identity // .git and .ark: not walked (no rules apply in them)
 	rules   map[string][]byte          // the captured bytes, by rule file (root-relative)
 	closed  atomic.Bool
+
+	// dirExcluded memoizes whether a directory, or one above it, is
+	// excluded: immutable rules, so each directory is decided once per
+	// snapshot (at most one entry per directory).
+	dirExcluded sync.Map // string → bool
 }
 
 // Build captures the access policy of tree.
@@ -341,19 +347,79 @@ func (s *Snapshot) Check(r fsroot.Resolved) error {
 			return err
 		}
 	}
-	if r.Logical() == "." {
+	// Names as the directories list them, not as asked for: on a
+	// case-insensitive file system "SECRET.TXT" is the file "secret.txt".
+	canonical := r.Canonical()
+	if canonical == "." {
 		return nil
 	}
 	if s.ruleErr != nil {
 		return fmt.Errorf("%w: %v", ErrRuleUnavailable, s.ruleErr)
 	}
-	if s.excluded(r.Logical()) {
+	if s.excluded(canonical) {
 		return ErrExcluded
 	}
-	if real := r.Real(); real != "" && real != "." && real != r.Logical() && s.excluded(real) {
+	if real := r.Real(); real != "" && real != "." && real != canonical && s.excluded(real) {
 		return ErrExcluded
 	}
 	return nil
+}
+
+// CheckEntry decides a walk entry of the snapshot's tree as Check decides
+// the same path resolved: nil, ErrExcluded, or why it cannot be decided. It
+// reuses what the walk holds — the identities of the directories the entry
+// was listed through, verified against the snapshot — instead of resolving
+// the path from the root. A directory entry's own identity is verified when
+// the walk enters it (its entries list it among their directories).
+//
+// A symlink entry is decided by where it leads (resolved through the tree),
+// as Check decides it; the symlink must still be the entry listed.
+func (s *Snapshot) CheckEntry(e fsroot.Entry) error {
+	if s.closed.Load() {
+		return ErrClosed
+	}
+	if !e.From(s.tree) {
+		return ErrTreeMismatch
+	}
+	if !e.Valid() {
+		return fsroot.ErrClosed
+	}
+	if err := e.EachDir(s.verifyDir); err != nil {
+		return err
+	}
+	if e.IsSymlink() {
+		r, err := s.tree.Resolve(e.Rel())
+		if err != nil {
+			return err
+		}
+		if links := r.Links(); len(links) == 0 || links[0] != e.Rel() {
+			return fsroot.ErrChanged // no longer the symlink listed
+		}
+		return s.Check(r)
+	}
+	if e.Rel() == "." {
+		return nil
+	}
+	if s.ruleErr != nil {
+		return fmt.Errorf("%w: %v", ErrRuleUnavailable, s.ruleErr)
+	}
+	if s.excluded(e.Rel()) {
+		return ErrExcluded
+	}
+	return nil
+}
+
+// ReadEntry reads a regular-file entry if the policy admits it — in one
+// operation: the object at the entry's name is examined through the handle
+// it was listed from, decided (CheckEntry), and that object is read
+// (fsroot.Entry.ReadChecked). It never resolves the path again. A symlink
+// entry is not followed here (walks never follow symlinks): read it by path
+// with ReadFile, which resolves and checks it.
+func (s *Snapshot) ReadEntry(e fsroot.Entry) ([]byte, error) {
+	if e.IsSymlink() {
+		return nil, fsroot.ErrSymlink
+	}
+	return e.ReadChecked(func(fsroot.Identity) error { return s.CheckEntry(e) })
 }
 
 // verifyDir checks that d is the directory the snapshot walked (or, below
@@ -381,12 +447,25 @@ func (s *Snapshot) verifyDir(d fsroot.DirRef) error {
 
 // excluded applies the .arkignore rules to rel and its parent directories.
 func (s *Snapshot) excluded(rel string) bool {
-	for i := 0; i < len(rel); i++ {
-		if rel[i] == '/' && s.ark.MatchesRel(rel[:i]) {
-			return true
-		}
+	if p := parentOf(rel); p != "." && s.dirExcludedMemo(p) {
+		return true
 	}
 	return s.ark.MatchesRel(rel)
+}
+
+// dirExcludedMemo reports whether directory rel or one above it is excluded.
+func (s *Snapshot) dirExcludedMemo(rel string) bool {
+	if v, ok := s.dirExcluded.Load(rel); ok {
+		return v.(bool)
+	}
+	ex := s.ark.MatchesRel(rel)
+	if !ex {
+		if p := parentOf(rel); p != "." {
+			ex = s.dirExcludedMemo(p)
+		}
+	}
+	s.dirExcluded.Store(rel, ex)
+	return ex
 }
 
 // ReadFile reads rel through the snapshot's tree if the policy admits it.

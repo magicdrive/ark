@@ -3,6 +3,7 @@ package accesspolicy
 import (
 	"errors"
 	"os"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -435,7 +436,9 @@ func TestUnreadableRules(t *testing.T) {
 			t.Errorf("root refused: %v", err)
 		}
 	}
-	if os.Geteuid() != 0 {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Logf("SKIP part: permission bits do not make a file unreadable here (%s)", runtime.GOOS)
+	} else {
 		w2 := ruleRepo(t)
 		os.Chmod(w2.path("repo/d/.arkignore"), 0)
 		defer os.Chmod(w2.path("repo/d/.arkignore"), 0o644)

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"sort"
+	"sync/atomic"
 
 	"golang.org/x/sys/unix"
 )
@@ -15,10 +16,16 @@ import (
 // the one component named, atomically; nothing is resolved by path.
 
 type unixDir struct {
-	fd   int
-	id   Identity // of the directory opened (fstat when opened)
-	name string   // for messages and os.File names only
+	fd    int
+	id    Identity     // of the directory opened (fstat when opened)
+	name  string       // for messages and os.File names only
+	exact atomic.Int32 // exactNames, once known: exactYes or exactNo
 }
+
+const (
+	exactYes = 1
+	exactNo  = 2
+)
 
 func openRootDir(path string) (handle, error) {
 	fd, err := unix.Open(path, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
@@ -152,6 +159,16 @@ func (d *unixDir) readDir(owned bool) ([]dirent, error) {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].name < out[j].name })
 	return out, nil
+}
+
+func (d *unixDir) scanNames(stop func(string) bool) ([]string, bool, error) {
+	fd, err := unix.Openat(d.fd, ".", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_CLOEXEC, 0)
+	if err != nil {
+		return nil, false, &fs.PathError{Op: "openat", Path: d.name, Err: err}
+	}
+	f := os.NewFile(uintptr(fd), d.name)
+	defer f.Close()
+	return scanFile(f, stop)
 }
 
 func (d *unixDir) identity() (Identity, error) { return d.id, nil }
