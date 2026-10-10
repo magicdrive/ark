@@ -5,6 +5,7 @@ package fsroot
 import (
 	"io/fs"
 	"os"
+	"path/filepath"
 	"sort"
 )
 
@@ -20,8 +21,9 @@ import (
 // documented behaviour and os.SameFile.
 
 type winDir struct {
-	r  *os.Root
-	fi fs.FileInfo // of the directory opened
+	r    *os.Root
+	fi   fs.FileInfo // of the directory opened (os.Root names it ".")
+	name string      // its name, as the Unix handle's stat reports it
 }
 
 func openRootDir(path string) (handle, error) {
@@ -34,7 +36,7 @@ func openRootDir(path string) (handle, error) {
 		r.Close()
 		return nil, err
 	}
-	return &winDir{r: r, fi: fi}, nil
+	return &winDir{r: r, fi: fi, name: filepath.Base(path)}, nil
 }
 
 func infoOf(fi fs.FileInfo) objInfo {
@@ -71,7 +73,7 @@ func (d *winDir) openDir(name string, want Identity) (handle, error) {
 		sub.Close()
 		return nil, &fs.PathError{Op: "open", Path: name, Err: ErrChanged}
 	}
-	return &winDir{r: sub, fi: after}, nil
+	return &winDir{r: sub, fi: after, name: name}, nil
 }
 
 func (d *winDir) openFile(name string, want Identity) (*os.File, objInfo, error) {
@@ -120,7 +122,10 @@ func (d *winDir) scanNames(stop func(string) bool) ([]string, bool, error) {
 
 func (d *winDir) identity() (Identity, error) { return Identity{fi: d.fi}, nil }
 
-func (d *winDir) stat() (fs.FileInfo, error) { return d.fi, nil }
+// stat describes the directory under its name (Root.Stat(".") calls it
+// "."), as os.Stat and the Unix handle do; identity keeps d.fi itself for
+// os.SameFile.
+func (d *winDir) stat() (fs.FileInfo, error) { return renamed{d.fi, d.name}, nil }
 
 func (d *winDir) lstatInfo(name string) (fs.FileInfo, error) { return d.r.Lstat(name) }
 
