@@ -27,7 +27,9 @@ func TestCase_PathGate(t *testing.T) {
 		}
 		t.Skipf("SKIP: the file system at %s is case-sensitive: a case-folding bypass is not possible here", root)
 	}
-	h := serverHandler(t, root, root).forRequest()
+	// Each call is a request of its own, which releases the pinned root when
+	// it ends (CallTool); the gate is asked in a request the test ends.
+	h := serverHandler(t, root, root)
 	refused := []string{"SECRET.TXT", "Secret.txt", "SECRETS/key.txt", "secrets/KEY.TXT", "SRC/PRIVATE.TXT", "src/Private.txt"}
 	if runtime.GOOS == "windows" {
 		refused = append(refused, "secret.txt::$DATA", "SECRET.TXT::$DATA", "secret.txt:x", `SECRETS\key.txt`,
@@ -44,7 +46,7 @@ func TestCase_PathGate(t *testing.T) {
 			t.Errorf("%s: %q (error %v)", p, text, isErr)
 		}
 	}
-	if _, rel, err := h.resolveToolPath("SRC/OPEN.TXT"); err != nil || rel != filepath.FromSlash("src/open.txt") {
+	if _, rel, err := request(t, h).resolveToolPath("SRC/OPEN.TXT"); err != nil || rel != filepath.FromSlash("src/open.txt") {
 		t.Errorf("resolveToolPath(SRC/OPEN.TXT) = %q %v, want src/open.txt", rel, err)
 	}
 }

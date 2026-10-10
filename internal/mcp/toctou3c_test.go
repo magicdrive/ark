@@ -300,6 +300,10 @@ func TestC3_12_ToolsAgree(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &sc); err != nil || len(sc.Matches) == 0 {
 		t.Fatalf("search_code: %v:\n%.300s", err, out)
 	}
+	// The index names a file as list_files does — relative to the root, in
+	// the operating system's form (d\shown.go on Windows) — so the two are
+	// compared as they are, not normalized: a file each names differently
+	// is a disagreement. Each indexed file is also one the path gate admits.
 	indexed := map[string]bool{}
 	for _, m := range sc.Matches {
 		indexed[m.File] = true
@@ -307,11 +311,17 @@ func TestC3_12_ToolsAgree(t *testing.T) {
 	for f := range indexed {
 		found := false
 		for _, l := range listed {
-			found = found || filepath.ToSlash(l) == f
+			found = found || l == f
 		}
 		if !found {
-			t.Errorf("the index has %s, which list_files does not list", f)
+			t.Errorf("the index has %q, which list_files does not list: %q", f, listed)
 		}
+		if res, _ := h.CallTool("get_file_content", map[string]interface{}{"path": f}); res.IsError {
+			t.Errorf("the index has %q; get_file_content refuses it: %s", f, res.Content[0].Text)
+		}
+	}
+	if shown := filepath.FromSlash("d/shown.go"); !indexed[shown] {
+		t.Errorf("the index does not name %q: %v", shown, indexed)
 	}
 	for _, bad := range []string{"WALK_SECRET", "Hidden", "SecretFn"} {
 		if strings.Contains(out, bad) {

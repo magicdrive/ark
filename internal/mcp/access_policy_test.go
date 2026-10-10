@@ -150,12 +150,12 @@ func TestAccessPolicyCache_UnreadableRulesFailClosed(t *testing.T) {
 			t.Errorf("%s unreadable: list_files lists a.go: %s", tc.unreadable, line)
 		}
 		for _, rel := range tc.refused {
-			if _, _, err := h.forRequest().resolveToolPath(rel); err == nil || !strings.Contains(err.Error(), "could not be read") {
+			if _, _, err := request(t, h).resolveToolPath(rel); err == nil || !strings.Contains(err.Error(), "could not be read") {
 				t.Errorf("%s unreadable: path gate admitted %s: %v", tc.unreadable, rel, err)
 			}
 		}
 		for _, rel := range tc.admitted {
-			if _, _, err := h.forRequest().resolveToolPath(rel); err != nil {
+			if _, _, err := request(t, h).resolveToolPath(rel); err != nil {
 				t.Errorf("%s unreadable: path gate refused %s: %v", tc.unreadable, rel, err)
 			}
 		}
@@ -165,7 +165,7 @@ func TestAccessPolicyCache_UnreadableRulesFailClosed(t *testing.T) {
 		if excluded(h, "src/a.go") {
 			t.Errorf("%s readable again: a.go still excluded", tc.unreadable)
 		}
-		if _, _, err := h.forRequest().resolveToolPath("sub/b.go"); err != nil {
+		if _, _, err := request(t, h).resolveToolPath("sub/b.go"); err != nil {
 			t.Errorf("%s readable again: sub/b.go refused: %v", tc.unreadable, err)
 		}
 	}
@@ -177,7 +177,7 @@ func TestAccessPolicyCache_RequestSnapshot(t *testing.T) {
 	root := policyRepo(t, "a.go", "b.go")
 	write(t, root, ".arkignore", "a.go\n")
 	h := NewToolsHandlerWithCache(root, nil, nil)
-	req := h.forRequest()
+	req := request(t, h)
 	if !req.accessPolicy().excludes("a.go") {
 		t.Fatal("rule not applied")
 	}
@@ -194,7 +194,7 @@ func TestAccessPolicyCache_RequestSnapshot(t *testing.T) {
 
 	// The path gate and the walks of one request read the same version,
 	// whichever reads first.
-	req = h.forRequest()
+	req = request(t, h)
 	if _, _, err := req.resolveToolPath("a.go"); err != nil {
 		t.Fatalf("gate refused a.go: %v", err)
 	}

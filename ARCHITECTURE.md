@@ -412,10 +412,12 @@ decide and read the same object. The gate stays in front (its messages,
 its checks); the snapshot has the last word, and nothing falls back to a
 read by path. The access is released when the request ends
 (`beginRequest`). Tests: `TestB1_*`…`TestB10_*`, `TestB4_SwapBackBeforeTheDecision`,
-`TestB5_*`, `TestB6_*`. Danger: checking with the snapshot and then
-opening by path — the window is the one this closes; or building the whole
-tree's snapshot per request — tens of milliseconds per file read on a
-large repository.
+`TestB5_*`, `TestB6_*`, `TestRequestAccess_ReleasedWhenRequestEnds`. Danger:
+checking with the snapshot and then opening by path — the window is the one
+this closes; building the whole tree's snapshot per request — tens of
+milliseconds per file read on a large repository; or a request that never
+ends (a handler from `forRequest` without `beginRequest`'s end) — its pinned
+root stays open, which on Windows keeps the repository from being deleted.
 
 **Walks, the index and the dump see only what the policy decided.** They
 keep their own logic and output but reach files through
