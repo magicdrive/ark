@@ -42,6 +42,10 @@ on macOS x86_64; re-run what changed since.
 - [x] A symlinked root (MCP `--root`, dump target) answers as its directory:
       four root spellings compared over 21 tools and every dump format
       (`TestSymlinkedRoot_*`).
+- [ ] Decide on the TOCTOU limitation: ship with the documented trust model
+      (the access policy is not a boundary against writers of the
+      repository or its root link; `SECURITY.md`), or close it before the
+      release (request-pinned root and descriptor-based reads).
 - [ ] Optional: re-run the Go oracle on a repository of your choice
       (`ARK_GO_ORACLE_ROOT=<repo> go test -run TestGoOracleMeasure -v ./internal/languages/golang/`):
       `FP 0` expected.

@@ -345,6 +345,11 @@ tool-response tokens, not a model's total token use.
 - With `--allow-external-symlinks on`, walks still do not descend into a
   directory symlink; files below it are readable by naming them. A symlink
   retargeted between the check and the read can be read through (TOCTOU).
+- The access policy is checked before files are opened by path: someone who
+  can write to the repository, or retarget a symlinked root, while requests
+  run can make a request return an excluded file or a file outside the root
+  (reproduced; `SECURITY.md`, Symlink policy). It protects files from the
+  agent, not from writers of the repository tree.
 - `get_file_content`'s `withLineNumbers` argument has no effect (predates
   v6); responses carry no line numbers.
 - The extraction cache in `<root>/.ark/index` gains an entry per edited file

@@ -228,14 +228,25 @@ read with `.arkignore`.
 
 **Known limitations:**
 
-- Checks are made when a request arrives and when a walk reaches an entry.
-  They do not guard against the repository being changed concurrently
-  (time-of-check/time-of-use): a symlink retargeted between the check and
-  the read can be read through.
+- **Concurrent changes (time-of-check/time-of-use).** Rules, symlinks and
+  the root are checked when a request reads them, and files are opened by
+  path afterwards. Whoever can change the repository tree, or retarget a
+  symlinked root, *while requests run* can win that race: a file swapped
+  for a symlink between the check and the read is read through — including
+  one outside the root, with `--allow-external-symlinks off` — and a root
+  link retargeted during a request can be read with the rules of the
+  directory it led to before, returning a file the new directory's
+  `.arkignore` excludes. This was reproduced by swapping continuously while
+  requesting (`get_file_content`, `get_files_arklite`, `file://`,
+  `search_in_files`). It needs write access to the repository tree or to
+  the directory holding the root link, and the results go to the MCP
+  client the operator runs; Ark itself never writes there.
 
-Mitigation: run Ark in an environment where the repository tree is not
-controlled by an untrusted party (e.g., read-only checkout, container
-with restricted filesystem).
+The access policy (`.arkignore`, symlinks) protects files from the agent
+and the MCP client. It is not a boundary against someone who can write to
+the repository or its root link: run Ark where neither is writable by an
+untrusted party (your own checkout, a read-only checkout, a container with
+a restricted filesystem).
 
 ## HTTP transport
 
