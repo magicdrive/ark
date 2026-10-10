@@ -398,6 +398,25 @@ case and normalization, 8.3 short names and per-directory case sensitivity
 are the file system's to decide; or canonicalizing a string and opening
 another path — the name decided would not be the object read.
 
+**A file a client names is decided and read in one operation.** The path
+gate decides a path by name; opening it by path afterwards could open
+another object (a symlink swapped in, a root link retargeted). So the tools
+that read a named file, and the snippets index-based tools read back, read
+through the request's access (`mcp/request_access.go`): the root pinned once
+per request (`fsroot.Pin`) and a scoped policy snapshot over it
+(`accesspolicy.BuildScoped`), which captures the `.arkignore` files of the
+directories a decision passes through those directories' handles
+(`fsroot.ReadChain`) and decides as the whole tree's rules would
+(`TestScopedDecidesAsFull`); `Snapshot.ReadFile` / `Stat` resolve, open,
+decide and read the same object. The gate stays in front (its messages,
+its checks); the snapshot has the last word, and nothing falls back to a
+read by path. The access is released when the request ends
+(`beginRequest`). Tests: `TestB1_*`…`TestB10_*`, `TestB4_SwapBackBeforeTheDecision`,
+`TestB5_*`, `TestB6_*`. Danger: checking with the snapshot and then
+opening by path — the window is the one this closes; or building the whole
+tree's snapshot per request — tens of milliseconds per file read on a
+large repository. Walks, the index and the dump are not migrated yet.
+
 **The rules are read for every request, once, and never trusted from a
 cache.** Each request (`ToolsHandler.forRequest`) has one
 `libgitignore.IgnoreReader`, which reads every rule file at most once: the

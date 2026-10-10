@@ -173,6 +173,16 @@ func (d *unixDir) scanNames(stop func(string) bool) ([]string, bool, error) {
 
 func (d *unixDir) identity() (Identity, error) { return d.id, nil }
 
+func (d *unixDir) stat() (fs.FileInfo, error) {
+	fd, err := unix.FcntlInt(uintptr(d.fd), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return nil, &fs.PathError{Op: "dup", Path: d.name, Err: err}
+	}
+	f := os.NewFile(uintptr(fd), d.name)
+	defer f.Close()
+	return f.Stat()
+}
+
 func (d *unixDir) close() error { return unix.Close(d.fd) }
 
 func pathIdentity(path string) (Identity, error) {

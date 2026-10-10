@@ -106,7 +106,16 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 
 	var results []referenceResult
 
-	info, err := os.Stat(fullPath)
+	// A named file is described and read through the request's pinned tree
+	// and policy snapshot (request_access.go); a directory is walked
+	// (Phase 3-C: walks still read by path, under the access policy).
+	info, gateErr, err := h.statGated(path, fullPath, relBase)
+	if gateErr != nil {
+		return &CallToolResult{
+			Content: []Content{{Type: "text", Text: gateErr.Error()}},
+			IsError: true,
+		}, nil
+	}
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -114,7 +123,7 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 		}, nil
 	}
 
-	collect := func(filePath string) {
+	collect := func(filePath string, read func() ([]byte, error)) {
 		if len(results) >= maxResults {
 			return
 		}
@@ -123,7 +132,7 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 		if !ok {
 			return
 		}
-		src, err := os.ReadFile(filePath)
+		src, err := read()
 		if err != nil {
 			return
 		}
@@ -176,11 +185,22 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 			if fi.IsDir() {
 				return nil
 			}
-			collect(p)
+			collect(p, func() ([]byte, error) { return os.ReadFile(p) })
 			return nil
 		})
 	} else {
-		collect(fullPath)
+		var readGateErr error
+		collect(fullPath, func() ([]byte, error) {
+			data, gateErr, err := h.readGated(path, fullPath, relBase)
+			if gateErr != nil {
+				readGateErr = gateErr
+				return nil, gateErr
+			}
+			return data, err
+		})
+		if readGateErr != nil {
+			return &CallToolResult{Content: []Content{{Type: "text", Text: readGateErr.Error()}}, IsError: true}, nil
+		}
 	}
 
 	// Sort for stable, deterministic output regardless of filesystem traversal order.

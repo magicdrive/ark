@@ -99,6 +99,7 @@ type Snapshot struct {
 	skipped map[string]fsroot.Identity // .git and .ark: not walked (no rules apply in them)
 	rules   map[string][]byte          // the captured bytes, by rule file (root-relative)
 	closed  atomic.Bool
+	scope   *scope // non-nil: captures rules on demand (BuildScoped)
 
 	// dirExcluded memoizes whether a directory, or one above it, is
 	// excluded: immutable rules, so each directory is decided once per
@@ -310,7 +311,13 @@ func (s *Snapshot) Tree() *fsroot.Tree { return s.tree }
 
 // Fingerprint identifies the rule files' paths and captured contents
 // (libgitignore.IgnoreFiles.Fingerprint).
-func (s *Snapshot) Fingerprint() string { return s.files.Fingerprint() }
+// A scoped snapshot has none: "".
+func (s *Snapshot) Fingerprint() string {
+	if s.scope != nil {
+		return ""
+	}
+	return s.files.Fingerprint()
+}
 
 // Err reports why the rules could not be read (nil if they were).
 func (s *Snapshot) Err() error { return s.ruleErr }
@@ -320,6 +327,9 @@ func (s *Snapshot) Err() error { return s.ruleErr }
 func (s *Snapshot) RuleSet(allowGitignore bool) (*libgitignore.RuleSet, error) {
 	if s.closed.Load() {
 		return nil, ErrClosed
+	}
+	if s.scope != nil {
+		return nil, ErrScoped
 	}
 	return s.files.CompileRuleSet(allowGitignore)
 }
@@ -342,6 +352,13 @@ func (s *Snapshot) Check(r fsroot.Resolved) error {
 	if !r.From(s.tree) {
 		return ErrTreeMismatch
 	}
+	if s.scope != nil {
+		// One walk per path the decision needs captures the rules of every
+		// directory above it; the directories are verified below.
+		if err := s.ensurePaths(r); err != nil {
+			return err
+		}
+	}
 	for _, d := range r.Dirs() {
 		if err := s.verifyDir(d); err != nil {
 			return err
@@ -353,14 +370,34 @@ func (s *Snapshot) Check(r fsroot.Resolved) error {
 	if canonical == "." {
 		return nil
 	}
+	paths := []string{canonical}
+	if real := r.Real(); real != "" && real != "." && real != canonical {
+		paths = append(paths, real)
+	}
+	return s.decide(paths...)
+}
+
+// decide applies the rules to paths (each with the directories above it):
+// ErrExcluded if they exclude one, ErrRuleUnavailable if they could not be
+// read.
+func (s *Snapshot) decide(paths ...string) error {
 	if s.ruleErr != nil {
 		return fmt.Errorf("%w: %v", ErrRuleUnavailable, s.ruleErr)
 	}
-	if s.excluded(canonical) {
-		return ErrExcluded
+	if s.scope != nil {
+		ex, err := s.scopedExcluded(paths...)
+		if err != nil {
+			return err
+		}
+		if ex {
+			return ErrExcluded
+		}
+		return nil
 	}
-	if real := r.Real(); real != "" && real != "." && real != canonical && s.excluded(real) {
-		return ErrExcluded
+	for _, p := range paths {
+		if s.excluded(p) {
+			return ErrExcluded
+		}
 	}
 	return nil
 }
@@ -400,13 +437,7 @@ func (s *Snapshot) CheckEntry(e fsroot.Entry) error {
 	if e.Rel() == "." {
 		return nil
 	}
-	if s.ruleErr != nil {
-		return fmt.Errorf("%w: %v", ErrRuleUnavailable, s.ruleErr)
-	}
-	if s.excluded(e.Rel()) {
-		return ErrExcluded
-	}
-	return nil
+	return s.decide(e.Rel())
 }
 
 // ReadEntry reads a regular-file entry if the policy admits it — in one
@@ -425,6 +456,9 @@ func (s *Snapshot) ReadEntry(e fsroot.Entry) ([]byte, error) {
 // verifyDir checks that d is the directory the snapshot walked (or, below
 // .git or .ark, that the skipped directory above it is).
 func (s *Snapshot) verifyDir(d fsroot.DirRef) error {
+	if s.scope != nil {
+		return s.scopedVerifyDir(d)
+	}
 	if want, ok := s.dirs[d.Rel]; ok {
 		if !want.Same(d.ID) {
 			return fmt.Errorf("%w: %s", ErrDirectoryChanged, d.Rel)
@@ -468,7 +502,44 @@ func (s *Snapshot) dirExcludedMemo(rel string) bool {
 	return ex
 }
 
+// ReadResolved reads the regular file r (resolved by the snapshot's tree) if
+// the policy admits it: the decision is Check's, and the file is opened by
+// fsroot.Tree.Open — every directory and the file reached again through
+// handles and verified against the identities r recorded — so the object
+// read is the object decided, or nothing is (ErrChanged). For a caller that
+// already resolved the path (to decide by its canonical form) and must not
+// resolve it twice.
+func (s *Snapshot) ReadResolved(r fsroot.Resolved) ([]byte, error) {
+	if err := s.Check(r); err != nil {
+		return nil, &fs.PathError{Op: "read", Path: r.Logical(), Err: err}
+	}
+	if !r.IsRegular() {
+		return nil, &fs.PathError{Op: "read", Path: r.Logical(), Err: fsroot.ErrNotRegular}
+	}
+	f, err := s.tree.Open(r)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	return fsroot.ReadAll(f, r.Size())
+}
+
 // ReadFile reads rel through the snapshot's tree if the policy admits it.
 func (s *Snapshot) ReadFile(rel string) ([]byte, error) {
 	return s.tree.ReadFileChecked(rel, s.Check)
+}
+
+// StatResolved describes r (resolved by the snapshot's tree) if the policy
+// admits it, without resolving it again (fsroot.Tree.StatResolved).
+func (s *Snapshot) StatResolved(r fsroot.Resolved) (fs.FileInfo, error) {
+	if err := s.Check(r); err != nil {
+		return nil, &fs.PathError{Op: "stat", Path: r.Logical(), Err: err}
+	}
+	return s.tree.StatResolved(r)
+}
+
+// Stat describes rel through the snapshot's tree if the policy admits it
+// (fsroot.Tree.StatChecked): the object described is the object decided.
+func (s *Snapshot) Stat(rel string) (fs.FileInfo, error) {
+	return s.tree.StatChecked(rel, s.Check)
 }

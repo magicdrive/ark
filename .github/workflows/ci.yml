@@ -158,7 +158,7 @@ jobs:
         run: |
           set -o pipefail
           go test -race -count=1 -v ./internal/fsroot ./internal/accesspolicy | tee fsroot-test.log
-          go test -count=1 -v -run 'TestCase_|TestMCPCase_|TestCLICase_' ./internal/mcp . | tee -a fsroot-test.log
+          go test -count=1 -v -race -run 'TestCase_|TestB[0-9]|TestMCPCase_|TestCLICase_' ./internal/mcp . | tee -a fsroot-test.log
 
       - name: List skipped tests
         if: always()

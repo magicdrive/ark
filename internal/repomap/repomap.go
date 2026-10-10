@@ -28,6 +28,10 @@ type Options struct {
 	DetailLevel DetailLevel
 	MaxSymbols  int // symbols per package (default 10)
 	MaxPackages int // maximum packages (default 50)
+	// ReadFile, when set, reads a file of the index (to recognise generated
+	// packages) instead of opening it below the map's root by path — for a
+	// caller whose reads must pass its own access checks.
+	ReadFile func(fileID source.FileID) ([]byte, error)
 }
 
 func (o *Options) withDefaults() Options {
@@ -150,7 +154,7 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 		entry.IsVendor = strings.Contains(pkg, "vendor/") || strings.HasPrefix(pkg, "vendor")
 		entry.IsTest = isTestPackage(pkg, files)
 		if !entry.IsVendor {
-			entry.IsGenerated = isGeneratedPackage(root, files)
+			entry.IsGenerated = isGeneratedPackage(root, files, opts.ReadFile)
 		}
 		entry.IsEntry = isEntryPoint(pkg, idx, files)
 
@@ -430,10 +434,12 @@ func isTestPackage(pkgPath string, files []source.FileID) bool {
 	return true
 }
 
-func isGeneratedPackage(root string, files []source.FileID) bool {
+func isGeneratedPackage(root string, files []source.FileID, read func(source.FileID) ([]byte, error)) bool {
+	if read == nil {
+		read = func(fid source.FileID) ([]byte, error) { return os.ReadFile(filepath.Join(root, string(fid))) }
+	}
 	for _, fid := range files {
-		full := filepath.Join(root, string(fid))
-		data, err := os.ReadFile(full)
+		data, err := read(fid)
 		if err != nil {
 			continue
 		}

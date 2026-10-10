@@ -48,6 +48,11 @@ on macOS x86_64; re-run what changed since.
       `TestCase_PathGate`, `TestMCPCase_*`, `TestCLICase_*`.
 - [ ] C1 on Windows, macOS and Linux: the `filesystem-security` CI jobs and
       the `test` job green (not yet run).
+- [x] Phase 3-B: the files a client names, and snippets, are decided and read
+      in one operation on the request's pinned root (`TestB1_*`…`TestB10_*`,
+      `TestScoped*`); verified on macOS.
+- [ ] Phase 3-C: walks, the index and the dump (still read by path after
+      the check; `SECURITY.md`, Concurrent changes).
 - [ ] Decide on the TOCTOU limitation: ship with the documented trust model
       (the access policy is not a boundary against writers of the
       repository or its root link; `SECURITY.md`), or close it before the

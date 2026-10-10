@@ -88,7 +88,7 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 		filePattern = v
 	}
 
-	fullPath, _, err := h.resolveToolPath(path)
+	fullPath, rel, err := h.resolveToolPath(path)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: err.Error()}},
@@ -97,6 +97,7 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 	}
 
 	idx, err := h.buildIndex(context.Background(), fullPath)
+	hookIndex()
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error building index: %v", err)}},
@@ -111,7 +112,9 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 		return errRes, nil
 	}
 
-	eng := arkctx.New(idx, fullPath)
+	// Snippets are read through the request's pinned tree and policy
+	// snapshot, not reopened by path (request_access.go).
+	eng := arkctx.New(idx, fullPath).WithSourceReader(h.sourceReader(rel))
 	result, err := eng.Build(context.Background(), arkctx.Request{
 		Target:       tl.Symbol.ID,
 		MaxTokens:    maxTokens,

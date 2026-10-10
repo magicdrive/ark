@@ -120,6 +120,8 @@ func (d *winDir) scanNames(stop func(string) bool) ([]string, bool, error) {
 
 func (d *winDir) identity() (Identity, error) { return Identity{fi: d.fi}, nil }
 
+func (d *winDir) stat() (fs.FileInfo, error) { return d.fi, nil }
+
 // exactNames: NTFS names are case-insensitive by default (and a directory
 // may be made case-sensitive, or reached by an 8.3 short name): every name
 // is canonicalized.

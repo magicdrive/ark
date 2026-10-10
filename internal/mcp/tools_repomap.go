@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/magicdrive/ark/internal/repomap"
+	"github.com/magicdrive/ark/internal/source"
 )
 
 // RepomapToolDefinitions returns the get_repository_map tool definition.
@@ -56,7 +57,7 @@ func (h *ToolsHandler) getRepositoryMap(args map[string]interface{}) (*CallToolR
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath, _, pathErr := h.resolveToolPath(path)
+	fullPath, rel, pathErr := h.resolveToolPath(path)
 	if pathErr != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: pathErr.Error()}},
@@ -89,6 +90,7 @@ func (h *ToolsHandler) getRepositoryMap(args map[string]interface{}) (*CallToolR
 	}
 
 	idx, err := h.buildIndex(context.Background(), fullPath)
+	hookIndex()
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error building index: %v", err)}},
@@ -100,6 +102,9 @@ func (h *ToolsHandler) getRepositoryMap(args map[string]interface{}) (*CallToolR
 		DetailLevel: detail,
 		MaxSymbols:  maxSymbols,
 		MaxPackages: maxPackages,
+		// Files are read through the request's pinned tree and policy
+		// snapshot (request_access.go).
+		ReadFile: func(fid source.FileID) ([]byte, error) { return h.readIndexed(rel, fid) },
 	}
 	rm := repomap.Build(idx, fullPath, opts)
 

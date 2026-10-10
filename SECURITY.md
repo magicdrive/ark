@@ -254,19 +254,39 @@ read with `.arkignore`.
   spelled in another case (`alias -> SECRET.TXT`, or an absolute link
   through the root's path in another case) exposed its target to walks and
   to the dump. No race was needed. Names are now decided as listed (above).
-- **Concurrent changes (time-of-check/time-of-use).** Rules, symlinks and
-  the root are checked when a request reads them, and files are opened by
-  path afterwards. Whoever can change the repository tree, or retarget a
-  symlinked root, *while requests run* can win that race: a file swapped
-  for a symlink between the check and the read is read through — including
-  one outside the root, with `--allow-external-symlinks off` — and a root
-  link retargeted during a request can be read with the rules of the
-  directory it led to before, returning a file the new directory's
-  `.arkignore` excludes. This was reproduced by swapping continuously while
-  requesting (`get_file_content`, `get_files_arklite`, `file://`,
-  `search_in_files`). It needs write access to the repository tree or to
-  the directory holding the root link, and the results go to the MCP
-  client the operator runs; Ark itself never writes there.
+- **Concurrent changes (time-of-check/time-of-use): closed for the files a
+  client names, open for walks.** Whoever can change the repository tree,
+  or retarget a symlinked root, *while requests run* could win the race
+  between the check of a path and its opening by path: a file swapped for
+  a symlink was read through — including one outside the root, with
+  `--allow-external-symlinks off` — and a root link retargeted during a
+  request was read with the rules of the directory it led to before.
+  - *Closed:* the tools that read a file the client names —
+    `get_file_content`, `get_files_arklite`, `file://`, `get_file_info`,
+    `get_symbols`, `get_symbol`, `find_references` on a file — and the
+    source text index-based tools read back (`get_context` and
+    `search_context` snippets, `get_repository_map`'s generated-package
+    check) pin the root once per request and decide and read each file in
+    one operation, through directory handles: the object read is the object
+    the policy admitted, or nothing is returned. `get_files_arklite`
+    returns nothing when any of its files is refused. Reproduced before,
+    none since: continuous swapping (root link, symlink to an outside file,
+    symlink to an excluded file) while requesting.
+  - *Still open:* walks — `list_files`, `search_in_files`,
+    `get_directory_tree`, `get_project_stats`, `find_symbol`,
+    `find_references` on a directory, `directory://` — and the repository
+    index (and so what index-based tools report) still read files by path
+    after the policy check; so does the repository dump. A writer racing a
+    walk can still make it read an excluded file or one outside the root
+    (`search_in_files`, reproduced).
+  - *Within a request,* the `.arkignore` files that apply to a path are
+    read once, the first time a decision needs them, and that version
+    decides for the rest of the request; an edit made later applies from
+    the next request.
+
+  All of this needs write access to the repository tree or to the
+  directory holding the root link, and the results go to the MCP client the
+  operator runs; Ark itself never writes there.
 
 The access policy (`.arkignore`, symlinks) protects files from the agent
 and the MCP client. It is not a boundary against someone who can write to

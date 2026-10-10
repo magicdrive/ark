@@ -163,8 +163,14 @@ func boundedTree(path, rel string, depth int, opt *commandline.Option, limits tr
 // ReadAndProcessFile reads a file and applies processing options
 func ReadAndProcessFile(path string, opt *commandline.Option) (string, error) {
 	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
+	return processFileContent(data, err, path, opt)
+}
+
+// processFileContent applies the processing options to a file's content
+// read (data) or the error reading it (readErr).
+func processFileContent(data []byte, readErr error, path string, opt *commandline.Option) (string, error) {
+	if readErr != nil {
+		return "", readErr
 	}
 
 	// Skip non-UTF8 if requested
@@ -493,6 +499,27 @@ func GetProjectStats(path string, opt *commandline.Option) (map[string]interface
 
 // GenerateArkliteForFiles generates arklite format for multiple files
 func GenerateArkliteForFiles(paths []string, opt *commandline.Option) (string, error) {
+	files := make([]arkliteFile, 0, len(paths))
+	for _, p := range paths {
+		data, err := os.ReadFile(p)
+		files = append(files, arkliteFile{path: p, data: data, err: err})
+	}
+	return generateArklite(files, opt)
+}
+
+// arkliteFile is one file of an arklite dump: its path and content, or the
+// error reading it.
+type arkliteFile struct {
+	path string
+	data []byte
+	err  error
+}
+
+func generateArklite(files []arkliteFile, opt *commandline.Option) (string, error) {
+	paths := make([]string, len(files))
+	for i, f := range files {
+		paths[i] = f.path
+	}
 	var result strings.Builder
 
 	// Write header
@@ -504,8 +531,9 @@ func GenerateArkliteForFiles(paths []string, opt *commandline.Option) (string, e
 
 	// Write file dump
 	result.WriteString("## File Dump\n")
-	for _, path := range paths {
-		content, err := ReadAndProcessFile(path, opt)
+	for _, f := range files {
+		path := f.path
+		content, err := processFileContent(f.data, f.err, path, opt)
 		if err != nil {
 			result.WriteString(fmt.Sprintf("@%s\nError: %v\n", path, err))
 			continue

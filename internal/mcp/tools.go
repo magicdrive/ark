@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -68,6 +67,8 @@ type requestScope struct {
 
 	policyOnce sync.Once
 	policy     accessPolicy
+
+	access requestAccess // the pinned root and policy snapshot (request_access.go)
 }
 
 // forRequest returns the handler for one request: the same server state,
@@ -677,7 +678,8 @@ func (h *ToolsHandler) ListTools() []Tool {
 // with the secrets in its repository-derived text masked (sanitize.go),
 // unless masking is turned off (masking.go).
 func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (*CallToolResult, error) {
-	h = h.forRequest()
+	h, end := h.beginRequest()
+	defer end()
 	result, err := h.callTool(name, arguments)
 	if !h.masking(name, arguments) {
 		return result, err
@@ -777,10 +779,12 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath, _, err := h.resolveToolPath(path)
-	if err != nil {
+	// Decided and read in one operation on the request's pinned tree
+	// (request_access.go).
+	data, fullPath, _, gateErr, readErr := h.readToolFile(path)
+	if gateErr != nil {
 		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: err.Error()}},
+			Content: []Content{{Type: "text", Text: gateErr.Error()}},
 			IsError: true,
 		}, nil
 	}
@@ -805,7 +809,7 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 		}
 	}
 
-	content, err := ReadAndProcessFile(fullPath, &opt)
+	content, err := processFileContent(data, readErr, fullPath, &opt)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -903,15 +907,14 @@ func (h *ToolsHandler) getFileInfo(args map[string]interface{}) (*CallToolResult
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath, _, err := h.resolveToolPath(path)
-	if err != nil {
+	// The object described is the object decided (request_access.go).
+	info, fullPath, gateErr, err := h.statToolFile(path)
+	if gateErr != nil {
 		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: err.Error()}},
+			Content: []Content{{Type: "text", Text: gateErr.Error()}},
 			IsError: true,
 		}, nil
 	}
-
-	info, err := os.Stat(fullPath)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -1029,20 +1032,23 @@ func (h *ToolsHandler) getFilesArklite(args map[string]interface{}) (*CallToolRe
 		opt.DeleteCommentsFlag = deleteComments
 	}
 
-	// Resolve and validate each path against the repository root.
-	fullPaths := make([]string, 0, len(paths))
+	// Every path is decided and read on the request's pinned tree under its
+	// one policy snapshot (request_access.go) before anything is written: a
+	// refusal of any path — at the gate, or while it is read — answers the
+	// whole call, so no content goes out with it.
+	files := make([]arkliteFile, 0, len(paths))
 	for _, path := range paths {
-		fullPath, _, pathErr := h.resolveToolPath(path)
-		if pathErr != nil {
+		data, fullPath, _, gateErr, readErr := h.readToolFile(path)
+		if gateErr != nil {
 			return &CallToolResult{
-				Content: []Content{{Type: "text", Text: pathErr.Error()}},
+				Content: []Content{{Type: "text", Text: gateErr.Error()}},
 				IsError: true,
 			}, nil
 		}
-		fullPaths = append(fullPaths, fullPath)
+		files = append(files, arkliteFile{path: fullPath, data: data, err: readErr})
 	}
 
-	content, err := GenerateArkliteForFiles(fullPaths, &opt)
+	content, err := generateArklite(files, &opt)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},

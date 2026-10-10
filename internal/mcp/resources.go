@@ -65,8 +65,11 @@ func (h *ResourcesHandler) readFileResource(uri string) (*ReadResourceResult, er
 		return nil, fmt.Errorf("file path is required")
 	}
 
-	// Use tools handler to get file content
-	toolsHandler := NewToolsHandler(h.rootDir, h.opt).forRequest()
+	// Use tools handler to get file content: one request, whose file
+	// access ends with it (request_access.go). The path is the URI's text
+	// after "file://", as is: nothing is percent-decoded.
+	toolsHandler, end := NewToolsHandler(h.rootDir, h.opt).beginRequest()
+	defer end()
 	args := map[string]interface{}{
 		"path": path,
 	}
@@ -99,7 +102,8 @@ func (h *ResourcesHandler) readDirectoryResource(uri string) (*ReadResourceResul
 	}
 
 	// Use tools handler to get directory tree
-	toolsHandler := NewToolsHandler(h.rootDir, h.opt).forRequest()
+	toolsHandler, end := NewToolsHandler(h.rootDir, h.opt).beginRequest()
+	defer end()
 	args := map[string]interface{}{
 		"path": path,
 	}

@@ -318,7 +318,9 @@ func (h *ToolsHandler) contextBuild(idx *index.RepositoryIndex, req arkctx.Reque
 	if h.buildContext != nil {
 		return h.buildContext(idx, h.rootDir, req)
 	}
-	return arkctx.New(idx, h.rootDir).Build(context.Background(), req)
+	// Snippets are read through the request's pinned tree and policy
+	// snapshot, not reopened by path (request_access.go).
+	return arkctx.New(idx, h.rootDir).WithSourceReader(h.sourceReader(".")).Build(context.Background(), req)
 }
 
 func (h *ToolsHandler) searchContext(args map[string]interface{}) (*CallToolResult, error) {
@@ -368,6 +370,7 @@ func (h *ToolsHandler) searchContext(args map[string]interface{}) (*CallToolResu
 	}
 
 	idx, err := h.buildIndex(context.Background(), h.rootDir)
+	hookIndex()
 	if err != nil {
 		return searchContextError(scErrIndexUnavailable, "building the index failed: %v", err), nil
 	}

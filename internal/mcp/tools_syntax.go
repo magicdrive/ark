@@ -112,8 +112,7 @@ func (h *ToolsHandler) resolveToolPath(path string) (fullPath, relPath string, e
 // is the file "secret.txt" — and to the symlink-free path it leads to, so
 // named (access_policy.go). It returns the canonical path.
 func (h *ToolsHandler) canonicalCheck(path, rel string) (string, error) {
-	allowExternal := h.opt != nil && h.opt.AllowExternalSymlinks
-	canonical, real, err := fsCanonicalPath(h.rootDir, rel, allowExternal)
+	canonical, real, err := h.canonicalize(rel)
 	if err != nil {
 		return "", fmt.Errorf("path %q: %w", path, errNotCanonical)
 	}
@@ -226,16 +225,15 @@ func (h *ToolsHandler) getSymbols(args map[string]interface{}) (*CallToolResult,
 		return nil, fmt.Errorf("path parameter is required")
 	}
 
-	fullPath, path, err := h.resolveToolPath(path)
-	if err != nil {
+	// Decided and read in one operation on the request's pinned tree
+	// (request_access.go).
+	source, fullPath, path, gateErr, err := h.readToolFile(path)
+	if gateErr != nil {
 		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: err.Error()}},
+			Content: []Content{{Type: "text", Text: gateErr.Error()}},
 			IsError: true,
 		}, nil
 	}
-
-	// Read file
-	source, err := os.ReadFile(fullPath)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error reading file: %v", err)}},
@@ -520,16 +518,15 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 		includeSource = val
 	}
 
-	fullPath, path, err := h.resolveToolPath(path)
-	if err != nil {
+	// Decided and read in one operation on the request's pinned tree
+	// (request_access.go).
+	source, fullPath, path, gateErr, err := h.readToolFile(path)
+	if gateErr != nil {
 		return &CallToolResult{
-			Content: []Content{{Type: "text", Text: err.Error()}},
+			Content: []Content{{Type: "text", Text: gateErr.Error()}},
 			IsError: true,
 		}, nil
 	}
-
-	// Read file
-	source, err := os.ReadFile(fullPath)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error reading file: %v", err)}},

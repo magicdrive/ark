@@ -57,3 +57,18 @@ func IgnoreFilesFromCaptured(root string, captured []CapturedFile, additionallyF
 	f.fingerprint = f.digest()
 	return f, nil
 }
+
+// WithCaptured returns the IgnoreFiles of the same root and additional rule
+// files as f — read once, by the call that made f — with captured as its
+// directories' files instead (in the walk order of their directories). A
+// caller that captures directories as it needs them compiles each decision's
+// rules without reading the additional rule files again.
+func (f *IgnoreFiles) WithCaptured(captured []CapturedFile) (*IgnoreFiles, error) {
+	g, err := IgnoreFilesFromCaptured(f.root, captured, nil)
+	if err != nil {
+		return nil, err
+	}
+	g.extra = f.extra
+	g.fingerprint = g.digest()
+	return g, nil
+}

@@ -214,10 +214,18 @@ var errNotCanonical = errors.New("the path could not be verified against the fil
 // reaches a file by it (Windows drops trailing dots and spaces from names),
 // which is refused. Any other failure is an error: the path is refused.
 func fsCanonicalPath(root, rel string, allowExternal bool) (canonical, real string, err error) {
+	return canonicalBy(root, rel, func(rel string) (string, string, error) {
+		return fsroot.Canonicalize(root, rel, fsroot.Options{AllowExternalSymlinks: allowExternal})
+	})
+}
+
+// canonicalBy is fsCanonicalPath with the resolution given: a tree pinned
+// for the call, or the request's (requestCanonical).
+func canonicalBy(root, rel string, resolve func(rel string) (canonical, real string, err error)) (canonical, real string, err error) {
 	if rel == "." || rel == "" {
 		return ".", ".", nil
 	}
-	canonical, real, err = fsroot.Canonicalize(root, filepath.ToSlash(rel), fsroot.Options{AllowExternalSymlinks: allowExternal})
+	canonical, real, err = resolve(filepath.ToSlash(rel))
 	switch {
 	case err == nil:
 		return filepath.FromSlash(canonical), filepath.FromSlash(real), nil

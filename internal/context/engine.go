@@ -2,8 +2,10 @@ package context
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -37,6 +39,16 @@ func NewWithRanker(idx *index.RepositoryIndex, root string, ranker Ranker) *Engi
 		ranker:     ranker,
 		readSource: readSourceLines,
 	}
+}
+
+// WithSourceReader makes the engine read the source text of the items it
+// selects with read instead of opening the files below its root by path —
+// for a caller whose reads must pass its own access checks (the MCP server
+// reads through the request's pinned tree and policy). An item whose source
+// read refuses is left out.
+func (e *Engine) WithSourceReader(read func(root string, fileID source.FileID, startLine, endLine uint32) (string, error)) *Engine {
+	e.readSource = read
+	return e
 }
 
 // Build collects, ranks, and selects context items within the token budget.
@@ -283,9 +295,18 @@ func readSourceLines(root string, fileID source.FileID, startLine, endLine uint3
 		return "", fmt.Errorf("open %s: %w", path, err)
 	}
 	defer f.Close()
+	return sourceLines(f, startLine, endLine)
+}
 
+// SourceLines returns lines [startLine, endLine] (1-based, inclusive) of
+// data, as the engine's own file reading does.
+func SourceLines(data []byte, startLine, endLine uint32) (string, error) {
+	return sourceLines(bytes.NewReader(data), startLine, endLine)
+}
+
+func sourceLines(r io.Reader, startLine, endLine uint32) (string, error) {
 	var lines []string
-	scanner := bufio.NewScanner(f)
+	scanner := bufio.NewScanner(r)
 	lineNum := uint32(1)
 	for scanner.Scan() {
 		if lineNum >= startLine && lineNum <= endLine {

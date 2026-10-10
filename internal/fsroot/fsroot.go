@@ -126,6 +126,8 @@ type handle interface {
 	// exactNames reports whether a lookup of name in this directory can
 	// only reach an entry spelled exactly name (canon.go).
 	exactNames(name string) bool
+	// stat describes the directory itself (fstat of its handle).
+	stat() (fs.FileInfo, error)
 	// scanNames lists the directory's names, unsorted, through a
 	// description of its own, until stop reports true; it returns the names
 	// seen and whether it stopped.
@@ -797,6 +799,10 @@ func (t *Tree) ReadFileChecked(rel string, check func(Resolved) error) ([]byte, 
 	}
 	return readAllSized(f, r.info.size)
 }
+
+// ReadAll reads f (a file a Tree opened) to the end, sized for an expected
+// length; on error it returns no bytes: a partial read is never disclosed.
+func ReadAll(f *os.File, size int64) ([]byte, error) { return readAllSized(f, size) }
 
 // readAllSized reads f to the end, sized for an expected length. On error it
 // returns no bytes: a partial read is never disclosed.

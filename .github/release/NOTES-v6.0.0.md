@@ -157,6 +157,22 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
   refused. The rules stay case-sensitive; outputs for paths spelled as
   listed are unchanged (compared over four corpora). The broader
   time-of-check/time-of-use limitation below remains.
+- **Files a client names are decided and read in one operation.** The path
+  gate checked a path, then the tool opened it by path: a writer swapping a
+  file for a symlink, or retargeting a symlinked root, during a request
+  could make `get_file_content`, `get_files_arklite`, `file://`,
+  `get_symbols` or `get_symbol` return an excluded file or a file outside
+  the root (reproduced: hundreds of leaks in seconds of continuous
+  swapping). These tools, `get_file_info`, `find_references` on a file, and
+  the source text index-based tools read back (`get_context` and
+  `search_context` snippets, `get_repository_map`'s generated-package
+  check) now pin the root once per request and read each file through
+  directory handles under a policy snapshot of that request, which reads
+  only the `.arkignore` files that apply to the paths decided: the file read
+  is the file admitted, or nothing is returned (the same swapping: none).
+  `get_files_arklite` refuses the whole call when one of its files is
+  refused while being read. Walks, the index and the dump are not migrated
+  yet (Known limitations).
 - **`.arkignore` is enforced by the MCP server.** Every `.arkignore` under the
   root (with the dump's pattern syntax and matcher) now decides what the
   server may read: an excluded path, or a symlink to one, is answered as not
@@ -369,6 +385,11 @@ tool-response tokens, not a model's total token use.
   exclude it. A misspelled path to a file with two hard links in one
   directory, or below a directory that can be entered but not listed, is
   refused on a case-insensitive file system.
+- Walks (listings, text and symbol search, trees, statistics, the index)
+  and the repository dump still open files by path after the policy check;
+  the files a client names, and snippets, no longer do (Security). A writer
+  racing a walk can still make it return an excluded file or one outside
+  the root.
 - The access policy is checked before files are opened by path: someone who
   can write to the repository, or retarget a symlinked root, while requests
   run can make a request return an excluded file or a file outside the root
