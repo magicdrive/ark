@@ -252,6 +252,7 @@ type Resolved struct {
 	dirIDs   []Identity // identity of each directory of real, root excluded
 	external string     // absolute path outside the root, reached through allowed links
 	links    []string   // root-relative real paths of the symlinks followed, in order
+	linkDirs []DirRef   // the directory each of those symlinks was read from
 	info     objInfo    // the object reached
 }
 
@@ -286,6 +287,45 @@ func (r Resolved) Size() int64 { return r.info.size }
 
 // Identity is the identity of the object reached.
 func (r Resolved) Identity() Identity { return r.info.id }
+
+// From reports whether r was resolved by t.
+func (r Resolved) From(t *Tree) bool { return r.tree != nil && r.tree == t }
+
+// DirRef is a directory below or at the root and its identity.
+type DirRef struct {
+	Rel string // root-relative, "/"-separated; "." for the root
+	ID  Identity
+}
+
+// Dirs returns every directory the resolution passed through, with the
+// identity it had: the directories containing each symlink followed, the
+// directories of the real path (not the root) and, for a directory, the
+// directory itself. A caller that read rules from directories can verify
+// that these are the directories it read them from.
+func (r Resolved) Dirs() []DirRef {
+	out := append([]DirRef(nil), r.linkDirs...)
+	n := len(r.real)
+	if r.real == nil {
+		return out
+	}
+	if !r.info.mode.IsDir() {
+		n--
+	}
+	for i := 0; i < n && i < len(r.dirIDs); i++ {
+		out = append(out, DirRef{Rel: strings.Join(r.real[:i+1], "/"), ID: r.dirIDs[i]})
+	}
+	if r.info.mode.IsDir() && len(r.real) > 0 && len(r.dirIDs) < len(r.real) {
+		out = append(out, DirRef{Rel: strings.Join(r.real, "/"), ID: r.info.id})
+	}
+	return out
+}
+
+func relOf(comps []string) string {
+	if len(comps) == 0 {
+		return "."
+	}
+	return strings.Join(comps, "/")
+}
 
 // Resolve resolves rel, following symlinks below the root by hand.
 func (t *Tree) Resolve(rel string) (Resolved, error) {
@@ -398,6 +438,11 @@ func (t *Tree) resolve(rel string, open bool) (Resolved, *os.File, error) {
 				return Resolved{}, nil, err
 			}
 			res.links = append(res.links, strings.Join(append(append([]string{}, real...), c), "/"))
+			dirID, err := cur.identity()
+			if err != nil {
+				return Resolved{}, nil, err
+			}
+			res.linkDirs = append(res.linkDirs, DirRef{Rel: relOf(real), ID: dirID})
 			rest := comps[i+1:]
 			var next []string
 			if filepath.IsAbs(target) || filepath.VolumeName(target) != "" {
@@ -574,6 +619,21 @@ func openExternal(r Resolved) (*os.File, error) {
 // handle it was found in, before allow runs; nothing is read unless allow
 // agrees.
 func (t *Tree) ReadFile(rel string, allow func(Resolved) bool) ([]byte, error) {
+	var check func(Resolved) error
+	if allow != nil {
+		check = func(r Resolved) error {
+			if !allow(r) {
+				return ErrDenied
+			}
+			return nil
+		}
+	}
+	return t.ReadFileChecked(rel, check)
+}
+
+// ReadFileChecked is ReadFile with a check that can tell why it refuses: its
+// error is returned (wrapped) and nothing is read. A nil check allows.
+func (t *Tree) ReadFileChecked(rel string, check func(Resolved) error) ([]byte, error) {
 	r, f, err := t.resolve(rel, true)
 	if err != nil {
 		return nil, err
@@ -582,8 +642,10 @@ func (t *Tree) ReadFile(rel string, allow func(Resolved) bool) ([]byte, error) {
 		return nil, &fs.PathError{Op: "read", Path: r.logical, Err: ErrNotRegular}
 	}
 	defer f.Close()
-	if allow != nil && !allow(r) {
-		return nil, &fs.PathError{Op: "read", Path: r.logical, Err: ErrDenied}
+	if check != nil {
+		if err := check(r); err != nil {
+			return nil, &fs.PathError{Op: "read", Path: r.logical, Err: err}
+		}
 	}
 	return readAllSized(f, r.info.size)
 }
