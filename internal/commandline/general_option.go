@@ -26,7 +26,7 @@ type Option struct {
 	AllowGitignoreFlag                 model.OnOffSwitch
 	AdditionallyIgnoreRuleFilenames    string
 	AdditionallyIgnoreRuleFilenameList []string
-	GitIgnoreRule                      *libgitignore.GitIgnore
+	GitIgnoreRule                      *libgitignore.RuleSet
 	// AccessExclude, when set (the MCP server's .arkignore access policy),
 	// reports paths that are never listed or read, whatever the other
 	// filters say. The CLI leaves it nil.
@@ -286,7 +286,15 @@ func (cr *Option) Normalize() error {
 	// Only an accepted value may be read back: Bool() panics on an unset switch,
 	// and the invalid value is already reported through errorMessages below.
 	if allowGitignoreValid {
-		cr.GitIgnoreRule, _ = libgitignore.GenerateIntegratedGitIgnore(cr.AllowGitignoreFlag.Bool(), cr.WorkingDir, cr.AdditionallyIgnoreRuleFilenameList)
+		rules, err := libgitignore.GenerateRuleSet(cr.AllowGitignoreFlag.Bool(), cr.IgnoreRoot(), cr.AdditionallyIgnoreRuleFilenameList)
+		if err != nil && cr.TargetDirname != "" && dirExists(cr.IgnoreRoot()) {
+			// The dump never selects files without its rules: an ignore file
+			// that cannot be read must not let what it excludes through.
+			// (The MCP server reads the rules for every request and fails
+			// closed there.)
+			errorMessages = append(errorMessages, fmt.Sprintf("ignore rules: %s", err.Error()))
+		}
+		cr.GitIgnoreRule = rules
 	}
 
 	if len(errorMessages) == 0 {
@@ -294,6 +302,28 @@ func (cr *Option) Normalize() error {
 	} else {
 		return errors.New(strings.Join(errorMessages, "\n"))
 	}
+}
+
+// dirExists reports whether dir is an existing directory. A missing target is
+// reported by the command itself ("a directory not found").
+func dirExists(dir string) bool {
+	fi, err := os.Stat(dir)
+	return err == nil && fi.IsDir()
+}
+
+// IgnoreRoot is the directory the ignore rules belong to: the directory being
+// processed (the dump's target), never the process's working directory, so a
+// command reads the same rules wherever it is run from. Only the ignore files
+// at and below it apply. Without a target it is WorkingDir.
+func (cr *Option) IgnoreRoot() string {
+	dir := cr.TargetDirname
+	if dir == "" {
+		dir = cr.WorkingDir
+	}
+	if abs, err := filepath.Abs(dir); err == nil {
+		return abs
+	}
+	return dir
 }
 
 // NormalizeFileFilters recomputes the file-selection state derived from the raw

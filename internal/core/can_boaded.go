@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/commandline"
-	"github.com/magicdrive/ark/internal/common"
 )
 
 func CanBoaded(opt *commandline.Option, path string) bool {
@@ -16,10 +15,11 @@ func CanBoaded(opt *commandline.Option, path string) bool {
 		return false
 	}
 
-	if opt.GitIgnoreRule != nil {
-		if opt.GitIgnoreRule.MatchesPath(common.TrimDotSlash(path)) {
-			return false
-		}
+	// The rules are rooted at their own directory (Option.IgnoreRoot), not at
+	// the working directory a relative path is relative to: match the
+	// absolute path.
+	if opt.GitIgnoreRule.MatchesPath(absPath) {
+		return false
 	}
 
 	if opt.PatternRegexp != nil {
@@ -92,7 +92,7 @@ func CanEnterDir(opt *commandline.Option, dir string) bool {
 			return false
 		}
 	}
-	if opt.GitIgnoreRule != nil && opt.GitIgnoreRule.MatchesPath(common.TrimDotSlash(dir)) {
+	if absDir, err := filepath.Abs(dir); err == nil && opt.GitIgnoreRule.MatchesPath(absDir) {
 		return false
 	}
 	if opt.ExcludeDir != "" {

@@ -23,11 +23,11 @@ func TestServerOptParse_IgnoreRuleRootedAtServedRepository(t *testing.T) {
 		t.Fatal(err)
 	}
 	rule := opt.GeneralOption.GitIgnoreRule
-	if rule == nil {
+	if rule == nil || rule.Ark == nil {
 		t.Fatal("no ignore rule built")
 	}
-	if want := libgitignore.ToAbsDir(root); rule.Root != want {
-		t.Errorf("ignore rule rooted at %q, want %q", rule.Root, want)
+	if want := libgitignore.ToAbsDir(root); rule.Ark.Root != want || (rule.Git != nil && rule.Git.Root != want) {
+		t.Errorf("ignore rule rooted at %q, want %q", rule.Ark.Root, want)
 	}
 }
 

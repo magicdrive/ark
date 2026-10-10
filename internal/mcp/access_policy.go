@@ -82,7 +82,7 @@ func (h *ToolsHandler) accessPolicy() accessPolicy {
 
 // readAccessPolicy reads the current policy.
 func (h *ToolsHandler) readAccessPolicy() accessPolicy {
-	rule, err := h.ignoreRuleErr(false)
+	rule, err := h.sourceRule(libgitignore.ArkSource)
 	return h.newPolicy(rule, err)
 }
 
@@ -96,7 +96,7 @@ func (h *ToolsHandler) pathPolicy(rel string) accessPolicy {
 	files, err := h.ignoreReader().For(filepath.ToSlash(rel))
 	var rule *libgitignore.GitIgnore
 	if err == nil {
-		rule, err = files.Compile(false)
+		rule, err = files.CompileSource(libgitignore.ArkSource)
 	}
 	return h.newPolicy(rule, err)
 }

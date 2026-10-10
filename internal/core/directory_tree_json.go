@@ -50,7 +50,7 @@ func generateTreeJSON(path string, allowedFileMap map[string]bool, opt *commandl
 		if IsMetadataDirName(file.Name()) {
 			continue
 		}
-		if !CanBoaded(opt, fullPath) {
+		if !CanBoaded(opt, fullPath) || aliasIgnored(opt, fullPath, file) {
 			continue
 		}
 
@@ -67,7 +67,9 @@ func generateTreeJSON(path string, allowedFileMap map[string]bool, opt *commandl
 				Name: file.Name(),
 				Type: "file",
 			})
-			allowedFileMap[fullPath] = true
+			if readableEntry(fullPath, file) {
+				allowedFileMap[fullPath] = true
+			}
 		}
 	}
 

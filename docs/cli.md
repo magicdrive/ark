@@ -61,18 +61,53 @@ ark -f arklite -E vendor,dist .     # compact format, skip two directories
 Regular expressions use Go's [`regexp`](https://pkg.go.dev/regexp) syntax.
 Size strings accept `K` and `M` suffixes.
 
-A `.arkignore` file uses `.gitignore` syntax. The dump reads ignore files
-under its **working directory** — run `ark .` in the repository — and reads a
-directory's `.arkignore` only when that directory has no `.gitignore`, unless
-`.gitignore` handling is off (`-a off`). The MCP server applies every
-`.arkignore` regardless of `.gitignore`
-([SECURITY.md](../SECURITY.md#file-access-policy-arkignore)).
+A `.arkignore` file uses `.gitignore` syntax. The ignore rules belong to the
+dumped directory: the dump reads every `.arkignore` and `.gitignore` at and
+below it — not above it, and not in the directory it is run from — so
+`ark /path/to/repo` selects the same files from anywhere
+([Ignore rules](#ignore-rules)).
 
 ```gitignore
 .idea/
 .vscode/
 *.code-workspace
 ```
+
+### Ignore rules
+
+The dump and the MCP server share one reading of ignore files:
+
+- **Root.** Rules come from the ignore files at and below the processed
+  directory (the dump's target, the server's `--root`), never from the
+  working directory or a directory above it. Each file's patterns are
+  relative to its own directory; `--additionally-ignorerule` files are
+  relative to the root.
+- **Syntax.** `.gitignore` syntax: `*`, `**`, `?`, a leading `/` anchors, a
+  trailing `/` names a directory, `!` re-includes what an earlier pattern of
+  the same source excluded, matching is case-sensitive. A path is ignored
+  when it or a directory above it matches.
+- **Two sources.** `.arkignore` files (with `--additionally-ignorerule`) and
+  `.gitignore` files are separate rules: a path is ignored when either
+  ignores it, and a `!` in one never re-includes what the other ignores. A
+  directory may hold both. `-a off` (`allowGitignore: false` for an MCP file
+  tool) leaves `.gitignore` out; `.arkignore` always applies.
+- **Symlinks.** A symlink is listed but not followed into a directory; a
+  dangling or looping link is skipped; a link to a file inside the root is
+  ignored when its target is. The dump reads a file link that leads outside
+  the root; the MCP server does not unless started with
+  `--allow-external-symlinks on`.
+- **What differs.** The rules mean the same in both; what they control does
+  not: the dump selects files to write, while the MCP server's access
+  policy is the `.arkignore` source alone — `.gitignore` never changes what
+  an agent may read
+  ([SECURITY.md](../SECURITY.md#file-access-policy-arkignore)).
+- An ignore file the dump cannot read (an `.arkignore`, or a `.gitignore`
+  unless `-a off`) stops it with `ignore rules: …` and a non-zero exit
+  before anything is written: no output file is created or changed, and
+  nothing is printed on standard output. Every ignore file is read and
+  compiled before the dump starts. Other read errors during the dump (an
+  unreadable source file) also exit non-zero, but may leave a partial output
+  file.
 
 ### Output formats
 

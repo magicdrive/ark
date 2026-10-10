@@ -15,9 +15,9 @@ import (
 	"syscall"
 )
 
-// IgnoreFiles is a snapshot of ignore files GenerateIntegratedGitIgnore
-// reads for a root — the .gitignore and .arkignore files it would consult
-// (same walk, same per-directory choice) and the additional rule files.
+// IgnoreFiles is a snapshot of the ignore files of a root — every .gitignore
+// and .arkignore under it (not in .git, .ark or symlinked directories) and the
+// additional rule files.
 // Its Fingerprint and the rules it Compiles come from the same bytes, so a
 // compiled rule is always the rule of the files that fingerprint names, even
 // when the files change while it is used.
@@ -77,7 +77,7 @@ func (r *IgnoreReader) file(path string, strict bool) (*ignoreFile, error) {
 		if strict && !errors.Is(err, fs.ErrNotExist) && !errors.Is(err, syscall.ENOTDIR) {
 			return nil, err
 		}
-		// GenerateIntegratedGitIgnore takes any Stat failure for absence.
+		// Outside For, any Stat failure means absence.
 		r.files[path] = nil
 		return nil, nil
 	}
@@ -128,8 +128,8 @@ func (r *IgnoreReader) extraFiles() ([]*ignoreFile, error) {
 func (r *IgnoreReader) All() (*IgnoreFiles, error) {
 	r.allOnce.Do(func() {
 		f := &IgnoreFiles{root: r.root}
-		// Directories in walk order (the order GenerateIntegratedGitIgnore
-		// appends their rules in); a directory's ignore files are found
+		// Directories in walk order (each source appends its rules in
+		// this order); a directory's ignore files are found
 		// among its entries, which the walk lists anyway, instead of by
 		// probing every directory.
 		var order []string
@@ -263,9 +263,23 @@ func (f *IgnoreFiles) digest() string {
 // mean equal rules.
 func (f *IgnoreFiles) Fingerprint() string { return f.fingerprint }
 
-// Compile builds the rule GenerateIntegratedGitIgnore builds from these
-// files, with the same result and the same failures.
-func (f *IgnoreFiles) Compile(allowGitignore bool) (*GitIgnore, error) {
+// Source is a kind of rule: .arkignore files (with the additional rule
+// files), or .gitignore files. The two are independent: each is compiled and
+// matched on its own, so a negation in one never re-includes what the other
+// excludes.
+type Source int
+
+const (
+	// ArkSource: every .arkignore file, then the additional rule files.
+	ArkSource Source = iota
+	// GitSource: every .gitignore file.
+	GitSource
+)
+
+// CompileSource builds one source's rule from these files: its files'
+// patterns in walk order, each anchored at its own directory (additional
+// rule files at the root). An unreadable file of that source is an error.
+func (f *IgnoreFiles) CompileSource(src Source) (*GitIgnore, error) {
 	gi := NewGitIgnore()
 	gi.Root = f.root
 	add := func(file *ignoreFile, dir string) error {
@@ -277,7 +291,7 @@ func (f *IgnoreFiles) Compile(allowGitignore bool) (*GitIgnore, error) {
 	}
 	for _, d := range f.dirs {
 		file := d.ark
-		if allowGitignore && d.git != nil {
+		if src == GitSource {
 			file = d.git
 		}
 		if file == nil {
@@ -287,12 +301,80 @@ func (f *IgnoreFiles) Compile(allowGitignore bool) (*GitIgnore, error) {
 			return nil, err
 		}
 	}
-	for _, file := range f.extra {
-		if err := add(file, f.root); err != nil {
-			return nil, err
+	if src == ArkSource {
+		for _, file := range f.extra {
+			if err := add(file, f.root); err != nil {
+				return nil, err
+			}
 		}
 	}
 	return gi, nil
+}
+
+// RuleSet is the ignore rule of a file selection: the .arkignore rule and,
+// when .gitignore handling is on, the .gitignore rule. A path is ignored when
+// either rule matches it.
+type RuleSet struct {
+	Ark *GitIgnore
+	Git *GitIgnore // nil: .gitignore handling off
+}
+
+// CompileRuleSet compiles the .arkignore rule and, if allowGitignore, the
+// .gitignore rule.
+func (f *IgnoreFiles) CompileRuleSet(allowGitignore bool) (*RuleSet, error) {
+	ark, err := f.CompileSource(ArkSource)
+	if err != nil {
+		return nil, err
+	}
+	rs := &RuleSet{Ark: ark}
+	if allowGitignore {
+		if rs.Git, err = f.CompileSource(GitSource); err != nil {
+			return nil, err
+		}
+	}
+	return rs, nil
+}
+
+// GenerateRuleSet reads the ignore files under root (every .arkignore and
+// .gitignore below it, never above it, and the additional rule files) and
+// compiles them. root, not the working directory, anchors every rule.
+func GenerateRuleSet(allowGitignore bool, root string, additionallyFileList []string) (*RuleSet, error) {
+	files, err := ReadIgnoreFiles(root, additionallyFileList)
+	if err != nil {
+		return nil, err
+	}
+	return files.CompileRuleSet(allowGitignore)
+}
+
+// Root is the directory the rules belong to ("" for an empty set).
+func (rs *RuleSet) Root() string {
+	switch {
+	case rs == nil:
+		return ""
+	case rs.Ark != nil:
+		return rs.Ark.Root
+	case rs.Git != nil:
+		return rs.Git.Root
+	}
+	return ""
+}
+
+// MatchesPath reports whether either rule matches path (absolute, or relative
+// to the rules' root).
+func (rs *RuleSet) MatchesPath(path string) bool {
+	if rs == nil {
+		return false
+	}
+	return (rs.Ark != nil && rs.Ark.MatchesPath(path)) || (rs.Git != nil && rs.Git.MatchesPath(path))
+}
+
+// MatchesRel is MatchesPath for a clean "/"-separated path relative to the
+// root.
+func (rs *RuleSet) MatchesRel(rel string) bool {
+	if rs == nil {
+		return false
+	}
+	return (rs.Ark != nil && rs.Ark.MatchesRel(rel)) || (rs.Git != nil && rs.Git.MatchesRel(rel))
 }
 
 // scanLines splits a file as AppendIgnoreFileWithDir does.

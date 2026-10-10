@@ -148,6 +148,19 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
   rules that cannot be read fail closed. Each request reads every rule file
   once; a named path reads only the rule files above it; compiled rules are
   reused while the rule files' SHA-256 contents are unchanged.
+- **The dump reads ignore files as the MCP server does.** Rules come from the
+  ignore files at and below the dumped directory, wherever `ark` is run from
+  (v5.0.1 rooted them at the working directory: `ark /abs/repo` from
+  elsewhere applied none of the repository's rules). `.arkignore` and
+  `.gitignore` are separate sources — either excludes, and a `!` in one never
+  re-includes what the other excludes (v5.0.1 read a directory's
+  `.arkignore` only when it had no `.gitignore`, so with the default `-a on`
+  a root `.gitignore` disabled the root `.arkignore`). A symlink to an
+  excluded file in the repository is excluded too; symlinks to directories
+  are listed, not followed; dangling and looping links no longer stop the
+  dump (v5.0.1 exited with `read …: is a directory` / `open …: no such
+  file`). An ignore file the dump cannot read stops it (`ignore rules: …`)
+  instead of being skipped.
 - Path arguments of every MCP tool go through one gate: relative paths resolve
   against the absolute root; absolute paths are accepted only inside it;
   `../` escapes are refused; an existing path whose symlink-resolved form leaves
@@ -176,6 +189,8 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
 | A name declared only in another language | Strong / Candidate to that declaration | Unresolved | Expect no callers, impact or context across languages |
 | Secrets in MCP responses | Masked only by the file tools | Masked in every response by default; `mcp-server --mask-secrets off` turns it off, with a warning | Start the server with `--mask-secrets off` where unmasked text is required |
 | Files listed in `.arkignore` | Read, listed, searched and indexed by the MCP server | Invisible to every MCP tool and resource | Remove patterns for files agents must see |
+| Dump ignore rules | Read under the working directory; a directory's `.arkignore` skipped when it had a `.gitignore` (default `-a on`) | Read at and below the dumped directory; `.arkignore` and `.gitignore` both apply | Expect more files excluded where both exist or when run from elsewhere; a subdirectory target no longer uses its parents' rules — put rules in it, or dump the parent |
+| Dump with an unreadable ignore file / a dangling or directory symlink | Rules silently skipped / exit 1 | Exit 1 with `ignore rules: …` / dump completes | Fix the file's permissions |
 | Source in code-intelligence responses | As written | Detected secrets, and code the assignment rule matches (`token := next()`), show `*****MASKED*****` | — |
 | Error text | Root shown as given (`./`) | Absolute root; ambiguity listing has `file:line symbolId=` | Do not parse error text |
 
@@ -308,11 +323,9 @@ tool-response tokens, not a model's total token use.
   (a JSON `"api_key": "…"` member, `Authorization: Bearer …`, passwords in
   connection URLs), masks some ordinary code (`token := next()`), and never
   masks paths or symbol names. It is not data-loss prevention (`SECURITY.md`).
-- The repository dump (CLI) reads ignore files under its working directory,
-  not under the directory it dumps, and with `.gitignore` handling on reads a
-  directory's `.arkignore` only if it has no `.gitignore`; the MCP server
-  applies every `.arkignore`. The dump also stops at a symlink to a
-  directory (`read …: is a directory`). All predate v6.
+- A source file the dump cannot read stops it with a non-zero exit after part
+  of the output file is written (predates v6). An unreadable *ignore* file
+  stops it before anything is written.
 - With `--allow-external-symlinks on`, walks still do not descend into a
   directory symlink; files below it are readable by naming them. A symlink
   retargeted between the check and the read can be read through (TOCTOU).
@@ -345,7 +358,9 @@ were read as ordinary imports; `var x I = &T{}` proved type T for x.
 walks skip symlinks leading outside the root unless
 `mcp-server --allow-external-symlinks on`;
 detected secrets are masked in MCP responses by default (tools, resources,
-errors); `.arkignore` exclusions are enforced by the MCP server.
+errors); `.arkignore` exclusions are enforced by the MCP server, and the
+dump reads ignore rules from the dumped directory with `.arkignore` and
+`.gitignore` as separate sources.
 
 **Deprecated / Removed** — none.
 

@@ -37,7 +37,11 @@ func TestMatchesRel_EqualsMatchesPath(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, extra := range [][]string{nil, {extraFile}} {
-		gi, err := GenerateIntegratedGitIgnore(false, root, extra)
+		files, err := ReadIgnoreFiles(root, extra)
+		if err != nil {
+			t.Fatal(err)
+		}
+		gi, err := files.CompileSource(ArkSource)
 		if err != nil {
 			t.Fatal(err)
 		}

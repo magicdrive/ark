@@ -29,8 +29,9 @@ type ToolsHandler struct {
 	opt        *commandline.Option
 	cacheStore cache.Store // nil → NopStore
 
-	// ignore holds the repository's ignore rules, rooted at rootDir: [0] with
-	// .gitignore files disabled (.arkignore only), [1] with them enabled.
+	// ignore holds the repository's compiled ignore rules, rooted at rootDir,
+	// by source: [ArkSource] the .arkignore rule, [GitSource] the .gitignore
+	// rule.
 	// They depend only on the repository's ignore files — never on the
 	// process working directory or a request — and are rebuilt when those
 	// files change.
@@ -140,44 +141,42 @@ func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cac
 	}
 }
 
-// ignoreState is a built ignore rule and the fingerprint of the ignore files it
-// was built from.
+// ignoreState is a compiled rule of one source and the fingerprint of the
+// ignore files it was compiled from.
 type ignoreState struct {
 	fingerprint string
 	rule        *libgitignore.GitIgnore
 	err         error // why rule is nil, if it is
 }
 
-func ignoreSlot(allowGitignore bool) int {
+// ignoreRule returns the file tools' ignore rule set rooted at h.rootDir: the
+// .arkignore rule and, if allowGitignore, the .gitignore rule — each source
+// on its own, so either excludes. A source that cannot be compiled (e.g. an
+// unreadable rule file) is left out; the access policy, which reads the
+// .arkignore source itself, fails closed in that case.
+func (h *ToolsHandler) ignoreRule(allowGitignore bool) *libgitignore.RuleSet {
+	ark, _ := h.sourceRule(libgitignore.ArkSource)
+	rs := &libgitignore.RuleSet{Ark: ark}
 	if allowGitignore {
-		return 1
+		rs.Git, _ = h.sourceRule(libgitignore.GitSource)
 	}
-	return 0
+	return rs
 }
 
-// ignoreRule returns the repository's current ignore rule rooted at h.rootDir,
-// rebuilt whenever an ignore file was added, removed or edited. A rule that
-// cannot be built (e.g. an unreadable directory) is nil — no ignoring —
-// exactly as Option.Normalize treats it.
-func (h *ToolsHandler) ignoreRule(allowGitignore bool) *libgitignore.GitIgnore {
-	rule, _ := h.ignoreRuleErr(allowGitignore)
-	return rule
-}
-
-// ignoreRuleErr is ignoreRule with the error that left the rule nil.
+// sourceRule returns the current rule of one source.
 //
 // The ignore files are read (walked, read and hashed) for every request, so
 // an added, removed, moved or edited rule file is seen by the next request;
 // only compiling is skipped while their fingerprint is unchanged. The rule is
 // compiled from the very bytes the fingerprint was taken of, so the cache can
 // never pair a fingerprint with the rule of other contents.
-func (h *ToolsHandler) ignoreRuleErr(allowGitignore bool) (*libgitignore.GitIgnore, error) {
+func (h *ToolsHandler) sourceRule(src libgitignore.Source) (*libgitignore.GitIgnore, error) {
 	files, err := h.ignoreFiles()
 	if err != nil {
 		return nil, err // the repository could not be walked: nothing to reuse
 	}
 	fp := files.Fingerprint()
-	i := ignoreSlot(allowGitignore)
+	i := int(src)
 	s := h.shared()
 	s.ignoreMu.Lock()
 	defer s.ignoreMu.Unlock()
@@ -186,7 +185,7 @@ func (h *ToolsHandler) ignoreRuleErr(allowGitignore bool) (*libgitignore.GitIgno
 		return s.ignore[i].rule, s.ignore[i].err
 	}
 	s.ignoreBuilds++
-	rule, buildErr := files.Compile(allowGitignore)
+	rule, buildErr := files.CompileSource(src)
 	s.ignore[i] = ignoreState{fingerprint: fp, rule: rule, err: buildErr}
 	return rule, buildErr
 }

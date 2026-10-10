@@ -104,6 +104,15 @@ index, and refused when named, unless the server runs with
 directory symlink; name a path below it instead
 ([Symlink policy](../SECURITY.md#symlink-policy)).
 
+**The dump leaves out, or includes, files unexpectedly**
+
+The dump reads the `.arkignore` and `.gitignore` files at and below the
+directory it dumps — not above it, and not where it is run from — and either
+kind excludes (`-a off` leaves `.gitignore` out). A subdirectory dump does not
+see its parents' ignore files; dump the parent or add the rules to the
+subdirectory ([Ignore rules](cli.md#ignore-rules)). `ignore rules: …` means an
+ignore file cannot be read; fix its permissions.
+
 **Answers seem stale**
 
 They should not: every request re-checks the source files' contents and

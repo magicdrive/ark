@@ -31,7 +31,7 @@ func skipMetadata(root, current string, info os.FileInfo) (bool, error) {
 // repository's ignore rule (rooted at the repository root, not the process
 // working directory); nil applies none. exclude is the .arkignore access
 // policy (Option.AccessExclude); nil excludes nothing.
-func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore, exclude func(string) bool) (string, error) {
+func GenerateDirectoryTreeJSON(path string, ignore *libgitignore.RuleSet, exclude func(string) bool) (string, error) {
 	// Create a temporary option with default values
 	opt := &commandline.Option{
 		WorkingDir:                      ".",
@@ -101,7 +101,7 @@ type boundedTreeEntry struct {
 // Without limits it is exactly GenerateDirectoryTreeJSON; with them it walks
 // the same entries in the same order under the same filters, stopping at the
 // limits instead of filtering afterwards.
-func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.GitIgnore, exclude func(string) bool, limits treeLimits) (string, error) {
+func GenerateBoundedDirectoryTreeJSON(path string, ignore *libgitignore.RuleSet, exclude func(string) bool, limits treeLimits) (string, error) {
 	if limits.none() {
 		return GenerateDirectoryTreeJSON(path, ignore, exclude)
 	}

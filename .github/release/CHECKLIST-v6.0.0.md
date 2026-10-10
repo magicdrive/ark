@@ -29,9 +29,12 @@ on macOS x86_64; re-run what changed since.
       changes).
 - [ ] `.arkignore` now hides files from the MCP server (NOTES, Breaking
       changes): confirm for v6.0.0.
-- [ ] Decide whether to align the dump with the MCP `.arkignore` policy
-      (rules under the dumped directory, every `.arkignore` read) and fix its
-      crash on a directory symlink, or keep them for a later release.
+- [x] Dump and MCP read ignore files one way: rules rooted at the processed
+      directory, `.arkignore` / `.gitignore` as separate sources, symlinks
+      never stop the dump (`TestIgnoreSemantics_*`, `TestCLIIgnore_*`).
+- [x] Dump changes approved for v6.0.0: a subdirectory target does not apply
+      its parents' ignore files; an unreadable ignore file stops the dump
+      before any output (`TestCLIIgnoreFailClosed_*`).
 - [ ] Optional: re-run the Go oracle on a repository of your choice
       (`ARK_GO_ORACLE_ROOT=<repo> go test -run TestGoOracleMeasure -v ./internal/languages/golang/`):
       `FP 0` expected.

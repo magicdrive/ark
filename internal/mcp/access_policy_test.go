@@ -185,7 +185,7 @@ func TestAccessPolicyCache_RequestSnapshot(t *testing.T) {
 	if !req.accessPolicy().excludes("a.go") || req.accessPolicy().excludes("b.go") {
 		t.Error("a request's policy changed while it ran")
 	}
-	if rule, _ := req.ignoreRuleErr(true); rule.MatchesRel("b.go") {
+	if req.ignoreRule(true).MatchesRel("b.go") {
 		t.Error("a request's .gitignore-enabled rule is of a newer generation than its policy")
 	}
 	if !excluded(h, "b.go") || excluded(h, "a.go") {

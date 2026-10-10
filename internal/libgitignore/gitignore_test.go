@@ -138,10 +138,11 @@ bar/
 		t.Fatalf("write sub/.gitignore: %v", err)
 	}
 
-	gi, err := libgitignore.GenerateIntegratedGitIgnore(true, tmp, []string{})
+	rules, err := libgitignore.GenerateRuleSet(true, tmp, []string{})
 	if err != nil {
-		t.Fatalf("GenerateIntegratedGitIgnore: %v", err)
+		t.Fatalf("GenerateRuleSet: %v", err)
 	}
+	gi := rules.Git
 
 	tests := []struct {
 		path     string

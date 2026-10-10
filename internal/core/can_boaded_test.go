@@ -112,7 +112,7 @@ func TestCanBoaded_GitIgnore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to compile gitignore: %v", err)
 	}
-	opt.GitIgnoreRule = matcher
+	opt.GitIgnoreRule = &libgitignore.RuleSet{Git: matcher}
 	if core.CanBoaded(opt, "temp.tmp") {
 		t.Errorf("Expected .tmp file to be ignored by gitignore")
 	}
@@ -124,7 +124,7 @@ func TestCanBoaded_GitIgnore_NoMatch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to compile gitignore: %v", err)
 	}
-	opt.GitIgnoreRule = matcher
+	opt.GitIgnoreRule = &libgitignore.RuleSet{Git: matcher}
 	if !core.CanBoaded(opt, "main.go") {
 		t.Errorf("Expected main.go to be allowed")
 	}

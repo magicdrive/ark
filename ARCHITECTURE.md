@@ -391,10 +391,23 @@ compiled from. Matching is indexed by pattern directory
 (`GitIgnore.MatchesRel`), deciding exactly as the reference loop
 (`MatchesPathHow`). Tests: `TestAccessPolicyCache_*`,
 `TestIgnoreReader_ForDecidesAsAll`, `TestIgnoreReader_OneVersionPerReader`,
-`TestIgnoreFiles_CompileEqualsGenerate`, `TestMatchesRel_EqualsMatchesPath`.
+`TestIgnoreFiles_SourcesCompileTheirOwnFiles`, `TestMatchesRel_EqualsMatchesPath`.
 Danger: skipping the per-request read (a timer, mtimes, a watcher) — a rule
 change would not apply to the next request; or compiling from a second read
 — a fingerprint would name another version's rule.
+
+**The dump and the MCP server read ignore files one way.** Both build their
+rules with `libgitignore` from the ignore files at and below the processed
+directory (`Option.IgnoreRoot`: the dump's target, the server's root —
+never the working directory), as two sources compiled separately
+(`IgnoreFiles.CompileSource`, `RuleSet`): `.arkignore` (with additional rule
+files) and `.gitignore`; either ignores, and a negation never crosses
+sources. The access policy uses the `.arkignore` source only. Walk entries
+are matched by absolute path, and a symlink is also matched by its in-root
+target (`core.aliasIgnored`). Tests: `TestIgnoreSemantics_*`,
+`TestCLIIgnore_*`. Danger: matching a path relative to the working directory
+— rules from one directory applied to another; or one merged pattern list —
+a `.gitignore` `!` would re-include what `.arkignore` excludes.
 
 **Symlinks leading outside the root are not followed unless the operator
 allows it.** By default the gate refuses a path that resolves outside the

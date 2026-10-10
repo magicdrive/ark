@@ -166,17 +166,16 @@ func TestMCPArkignore_ExcludedFilesAreUnreachable(t *testing.T) {
 	}
 }
 
-// The repository dump, run in the repository as documented (`ark .`; the
-// dump reads ignore files under its working directory), excludes the same
-// files — with and without .gitignore handling.
+// The repository dump excludes the same files — with and without .gitignore
+// handling, through the same symlinks, run from outside the repository (the
+// rules belong to the dumped directory, not the working directory).
 func TestMCPArkignore_DumpExcludesTheSameFiles(t *testing.T) {
 	bin := buildArk(t)
-	// No directory symlink: the dump fails on one (a separate, known issue).
-	proj := arkignoreFixture(t, true, false)
+	proj := arkignoreFixture(t, true, true)
 	for _, flags := range [][]string{nil, {"-a", "off"}} {
 		out := filepath.Join(t.TempDir(), "dump.txt")
-		cmd := exec.Command(bin, append(append([]string{"-S", "-o", out}, flags...), ".")...)
-		cmd.Dir = proj
+		cmd := exec.Command(bin, append(append([]string{"-S", "-o", out}, flags...), proj)...)
+		cmd.Dir = t.TempDir()
 		if b, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("dump %v: %v\n%s", flags, err, b)
 		}

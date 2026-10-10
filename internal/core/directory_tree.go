@@ -31,7 +31,7 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 			continue
 		}
 
-		if !CanBoaded(opt, fullPath) {
+		if !CanBoaded(opt, fullPath) || aliasIgnored(opt, fullPath, file) {
 			continue
 		}
 
@@ -66,10 +66,67 @@ func GenerateTreeString(path string, indent string, allowedFileListMap map[strin
 			}
 			b.WriteString(file.Name())
 			b.WriteString("\n")
-			allowedFileListMap[fullPath] = true
+			if readableEntry(fullPath, file) {
+				allowedFileListMap[fullPath] = true
+			}
 		}
 
 	}
 
 	return b.String(), allowedFileListMap, nil
+}
+
+// readableEntry reports whether a non-directory entry of a listing has content
+// to dump. A symlink is listed but its content is read only when it leads to a
+// file: a link to a directory is not followed (walks never descend into
+// symlinked directories), and a dangling or looping link has nothing to read.
+func readableEntry(fullPath string, entry os.DirEntry) bool {
+	if entry.Type()&os.ModeSymlink == 0 {
+		return true
+	}
+	fi, err := os.Stat(fullPath)
+	return err == nil && !fi.IsDir()
+}
+
+// aliasIgnored reports whether entry is a symlink leading to a path inside the
+// ignore rules' root that the rules ignore (the path or a directory above
+// it): a link must not expose an ignored file under another name. Where a
+// link leads outside the root, no rule of the root applies to its target.
+func aliasIgnored(opt *commandline.Option, fullPath string, entry os.DirEntry) bool {
+	if entry.Type()&os.ModeSymlink == 0 || opt.GitIgnoreRule == nil {
+		return false
+	}
+	real, err := filepath.EvalSymlinks(fullPath)
+	if err != nil {
+		return false // dangling or looping: nothing is read through it
+	}
+	root := opt.GitIgnoreRule.Root()
+	if root == "" {
+		return false
+	}
+	rel, ok := relUnder(root, real)
+	if !ok {
+		if realRoot, err := filepath.EvalSymlinks(root); err == nil {
+			rel, ok = relUnder(realRoot, real)
+		}
+	}
+	if !ok || rel == "." {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	for i := 0; i < len(rel); i++ {
+		if rel[i] == '/' && opt.GitIgnoreRule.MatchesRel(rel[:i]) {
+			return true
+		}
+	}
+	return opt.GitIgnoreRule.MatchesRel(rel)
+}
+
+// relUnder returns p relative to root when p is root or below it.
+func relUnder(root, p string) (string, bool) {
+	rel, err := filepath.Rel(root, p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return rel, true
 }

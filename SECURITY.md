@@ -118,11 +118,11 @@ The MCP server never returns anything from a file the repository's
   a rule file or directory that could apply to it cannot be read — with
   `the .arkignore rules could not be read, so file access is refused`.
 
-Limits: the policy covers the MCP server. The repository dump reads ignore
-files under its *working directory* (run `ark .` in the repository), and with
-`.gitignore` handling on it reads a directory's `.arkignore` only when that
-directory has no `.gitignore`. Symlinks that lead outside the root are
-covered by the [Symlink policy](#symlink-policy).
+The repository dump reads `.arkignore` the same way — rules from the dumped
+directory down, regardless of the working directory and of `.gitignore`
+files ([Ignore rules](docs/cli.md#ignore-rules)) — but it is not an access
+control: whoever runs it reads the files anyway. Symlinks that lead outside
+the root are covered by the [Symlink policy](#symlink-policy).
 
 ## Files Ark writes
 

@@ -16,10 +16,47 @@ func patternsOf(gi *GitIgnore) []string {
 	return out
 }
 
-// Compile builds exactly what GenerateIntegratedGitIgnore builds — the same
-// patterns in the same order, with and without .gitignore handling — and
-// fails where it fails.
-func TestIgnoreFiles_CompileEqualsGenerate(t *testing.T) {
+// referenceSource builds one source's rule the plain way: every rule file of
+// that kind the repository walk reaches (not in .git, .ark or a symlinked
+// directory; a dangling link is no file), in walk order, each anchored at its
+// directory — then, for .arkignore, the additional rule files at the root.
+func referenceSource(t *testing.T, root, name string, extras []string) (*GitIgnore, error) {
+	t.Helper()
+	gi := NewGitIgnore()
+	gi.Root = ToAbsDir(root)
+	err := filepath.WalkDir(gi.Root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if !d.IsDir() {
+			return nil
+		}
+		if path != gi.Root && (d.Name() == ".git" || d.Name() == ".ark") {
+			return filepath.SkipDir
+		}
+		if _, err := os.Stat(filepath.Join(path, name)); err == nil {
+			_, err := AppendIgnoreFileWithDir(gi, filepath.Join(path, name), path)
+			return err
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	if name == ".arkignore" {
+		for _, e := range extras {
+			if _, err := AppendIgnoreFileWithDir(gi, e, gi.Root); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return gi, nil
+}
+
+// Each source compiles exactly its own files — a directory's .arkignore is
+// read whether or not the directory also has a .gitignore — in walk order,
+// and fails where reading its own files fails.
+func TestIgnoreFiles_SourcesCompileTheirOwnFiles(t *testing.T) {
 	root := t.TempDir()
 	write := func(rel, body string) {
 		p := filepath.Join(root, filepath.FromSlash(rel))
@@ -32,6 +69,7 @@ func TestIgnoreFiles_CompileEqualsGenerate(t *testing.T) {
 	}
 	write(".arkignore", "*.log\n!keep.log\n")
 	write(".gitignore", "build/\n")
+	write("a/.gitignore", "g.go\n")
 	write("a/.arkignore", "x.go\r\n# comment\n\n/y\n")
 	write("a/b/.gitignore", "z\n")
 	write("c/.arkignore", "\\!bang\n")
@@ -57,14 +95,14 @@ func TestIgnoreFiles_CompileEqualsGenerate(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, allow := range []bool{false, true} {
-			want, wantErr := GenerateIntegratedGitIgnore(allow, root, extras)
-			got, gotErr := files.Compile(allow)
+		for src, name := range map[Source]string{ArkSource: ".arkignore", GitSource: ".gitignore"} {
+			want, wantErr := referenceSource(t, root, name, extras)
+			got, gotErr := files.CompileSource(src)
 			if (wantErr == nil) != (gotErr == nil) {
-				t.Fatalf("extras %v allow %v: error %v, Generate %v", extras, allow, gotErr, wantErr)
+				t.Fatalf("extras %v %s: error %v, reference %v", extras, name, gotErr, wantErr)
 			}
 			if wantErr == nil && !reflect.DeepEqual(patternsOf(got), patternsOf(want)) {
-				t.Errorf("extras %v allow %v:\n got %q\nwant %q", extras, allow, patternsOf(got), patternsOf(want))
+				t.Errorf("extras %v %s:\n got %q\nwant %q", extras, name, patternsOf(got), patternsOf(want))
 			}
 		}
 	}
@@ -138,7 +176,7 @@ func TestIgnoreReader_ForDecidesAsAll(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		whole, err := all.Compile(allow)
+		whole, err := all.CompileRuleSet(allow)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -148,7 +186,7 @@ func TestIgnoreReader_ForDecidesAsAll(t *testing.T) {
 			if err != nil {
 				t.Fatalf("For(%q): %v", p, err)
 			}
-			part, err := files.Compile(allow)
+			part, err := files.CompileRuleSet(allow)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -179,7 +217,7 @@ func TestIgnoreReader_OneVersionPerReader(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		gi, err := f.Compile(false)
+		gi, err := f.CompileSource(ArkSource)
 		if err != nil {
 			t.Fatal(err)
 		}
