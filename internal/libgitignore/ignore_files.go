@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/magicdrive/ark/internal/common"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -170,18 +171,10 @@ func (r *IgnoreReader) All() (*IgnoreFiles, error) {
 		found := map[string]*ignoreDir{}
 		skipping := "" // the directory whose entries are not being recorded
 		// The root may itself be a symlink (a server or dump root given
-		// through a link): filepath.WalkDir would not enter it, and no rule
-		// would be read while the directory it leads to is served. Walk the
-		// directory it resolves to and report every path in the root's own
-		// spelling, which the rules are anchored at.
-		walkRoot := r.root
-		if real, err := filepath.EvalSymlinks(r.root); err == nil {
-			walkRoot = real
-		}
-		err := filepath.WalkDir(walkRoot, func(path string, d os.DirEntry, err error) error {
-			if walkRoot != r.root {
-				path = r.root + strings.TrimPrefix(path, walkRoot)
-			}
+		// through a link): walk the directory it leads to, in the root's
+		// own spelling, which the rules are anchored at
+		// (common.WalkDirRoot).
+		err := common.WalkDirRoot(r.root, func(path string, d os.DirEntry, err error) error {
 			if err != nil {
 				return err
 			}

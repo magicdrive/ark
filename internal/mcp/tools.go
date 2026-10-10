@@ -273,6 +273,9 @@ func (h *ToolsHandler) fileToolOption(args map[string]interface{}) (*commandline
 	if h.opt != nil {
 		opt = *h.opt
 	}
+	// The file tools' root is the server root (Option.IgnoreRoot): the walk
+	// that starts there enters it even when it is a symlink.
+	opt.WorkingDir, opt.TargetDirname = h.rootDir, ""
 	if opt.AllowGitignoreFlagValue == "" {
 		opt.AllowGitignoreFlagValue = "on"
 	}

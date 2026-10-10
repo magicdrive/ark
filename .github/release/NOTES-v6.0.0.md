@@ -167,6 +167,13 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
   built over the resolved directory — included excluded files
   (`get_context` and `search_context` returned them). The walk now enters the
   directory the root leads to.
+- **A symlinked root works as the directory.** `list_files`,
+  `search_in_files`, `get_project_stats`, `find_symbol`, `find_references`
+  and `get_files_arklite` returned nothing for a `--root` given through a
+  symlink, and the plaintext, markdown and arklite dumps of such a target
+  were empty (v5.0.1 too). They now walk the directory the root leads to and
+  report paths under the root as given; symlinks below the root keep their
+  policy.
 - Path arguments of every MCP tool go through one gate: relative paths resolve
   against the absolute root; absolute paths are accepted only inside it;
   `../` escapes are refused; an existing path whose symlink-resolved form leaves

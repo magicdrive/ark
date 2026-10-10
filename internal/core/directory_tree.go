@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -129,4 +130,14 @@ func relUnder(root, p string) (string, bool) {
 		return "", false
 	}
 	return rel, true
+}
+
+// walkFrom walks start like filepath.WalkDir, entering it when it is the
+// processed root given through a symlink (common.WalkDirRoot). A directory
+// link named as any other start is not entered.
+func walkFrom(opt *commandline.Option, start string, fn fs.WalkDirFunc) error {
+	if common.SamePath(start, opt.IgnoreRoot()) {
+		return common.WalkDirRoot(start, fn)
+	}
+	return filepath.WalkDir(start, fn)
 }

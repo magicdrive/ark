@@ -39,6 +39,9 @@ on macOS x86_64; re-run what changed since.
       feeds the freshness fingerprint (`TestSourceFingerprintListed_*`,
       `TestListedFingerprint_*`); a symlinked root keeps its `.arkignore`
       rules (`TestListedFingerprint_SymlinkedRootKeepsTheRules`).
+- [x] A symlinked root (MCP `--root`, dump target) answers as its directory:
+      four root spellings compared over 21 tools and every dump format
+      (`TestSymlinkedRoot_*`).
 - [ ] Optional: re-run the Go oracle on a repository of your choice
       (`ARK_GO_ORACLE_ROOT=<repo> go test -run TestGoOracleMeasure -v ./internal/languages/golang/`):
       `FP 0` expected.

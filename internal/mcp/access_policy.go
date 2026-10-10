@@ -3,6 +3,7 @@ package mcp
 import (
 	"errors"
 	"fmt"
+	"github.com/magicdrive/ark/internal/common"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -231,4 +232,13 @@ func (p accessPolicy) excludedPathError(path string) error {
 		return fmt.Errorf("path %q: %w: %v", path, errPolicyUnavailable, p.err)
 	}
 	return fmt.Errorf("path %q does not exist", path)
+}
+
+// walkFrom walks start like filepath.Walk, entering it when it is the server
+// root given through a symlink (common.WalkRoot).
+func (h *ToolsHandler) walkFrom(start string, fn filepath.WalkFunc) error {
+	if common.SamePath(start, h.rootDir) {
+		return common.WalkRoot(start, fn)
+	}
+	return filepath.Walk(start, fn)
 }

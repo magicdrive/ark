@@ -110,7 +110,8 @@ The MCP server never returns anything from a file the repository's
   excluded stay on disk (and are never served); delete `<root>/.ark/index`
   to remove them.
 - **Symlinked root.** A server root (or dump target) given through a
-  symlink reads the rules of the directory it leads to.
+  symlink behaves as the directory it leads to: the same rules, files and
+  answers ([Symlink policy](#symlink-policy)).
 - **Independent of masking.** `--mask-secrets off` never makes an excluded
   file readable.
 - **Failure.** Rules that cannot be read fail closed, even when a compiled
@@ -171,6 +172,18 @@ String-prefix checks (`strings.HasPrefix(path, root)`) are intentionally
 **not** used, because they are vulnerable to prefix collisions.
 
 ## Symlink policy
+
+**The root itself.** A root given through a symlink (`--root ~/repo-link`,
+`ark ~/repo-link`; chains of links too) is the repository it leads to:
+listings, searches, the index and the dump walk that directory, and report
+paths under the root as given (the logical path), which the `.arkignore`
+rules are anchored at. Only the root is followed this way: it does not make
+symlinks below it, or `--allow-external-symlinks`, behave differently. The
+link is re-resolved for every request, so retargeting it while the server
+runs serves the new directory, with its own rules and index. A dangling or
+looping root is an error at startup (`root directory does not exist`,
+`cannot access root`) or for the dump (`a directory not found`), never an
+empty repository.
 
 **Inside the repository.** A symlink whose target lies inside the root
 works, and `.arkignore` applies both to the path it is reached by and to

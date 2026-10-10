@@ -36,7 +36,7 @@ func WriteAllFilesAsArklite(treeStr, root, outputPath string, allowedFileListMap
 	writer.WriteString("\n")
 	writer.WriteString("## File Dump\n")
 
-	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	err = walkFrom(opt, root, func(path string, d os.DirEntry, err error) error {
 
 		if err != nil || d.IsDir() {
 			return err

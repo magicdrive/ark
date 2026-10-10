@@ -3,6 +3,7 @@ package mcp
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/magicdrive/ark/internal/common"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -200,7 +201,7 @@ func ReadAndProcessFile(path string, opt *commandline.Option) (string, error) {
 func ListFilteredFiles(path string, opt *commandline.Option) ([]string, error) {
 	var files []string
 
-	err := filepath.Walk(path, func(currentPath string, info os.FileInfo, err error) error {
+	err := walkFrom(opt, path, func(currentPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
@@ -260,7 +261,7 @@ func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *comman
 	}
 
 	count := 0
-	err = filepath.Walk(path, func(currentPath string, info os.FileInfo, err error) error {
+	err = walkFrom(opt, path, func(currentPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
@@ -439,7 +440,7 @@ func GetProjectStats(path string, opt *commandline.Option) (map[string]interface
 		"extensionStats":   map[string]int{},
 	}
 
-	err := filepath.Walk(path, func(currentPath string, info os.FileInfo, err error) error {
+	err := walkFrom(opt, path, func(currentPath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil // Skip errors
 		}
@@ -516,4 +517,15 @@ func GenerateArkliteForFiles(paths []string, opt *commandline.Option) (string, e
 	}
 
 	return result.String(), nil
+}
+
+// walkFrom walks start like filepath.Walk, entering it when it is the server
+// root given through a symlink (common.WalkRoot). A directory link named as
+// any other start is not entered: below it, paths would not be the paths the
+// .arkignore rules name.
+func walkFrom(opt *commandline.Option, start string, fn filepath.WalkFunc) error {
+	if opt != nil && common.SamePath(start, opt.IgnoreRoot()) {
+		return common.WalkRoot(start, fn)
+	}
+	return filepath.Walk(start, fn)
 }

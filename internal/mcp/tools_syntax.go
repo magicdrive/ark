@@ -330,7 +330,7 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 	var statsScanned, statsSkipped, statsParseErr int
 
 	policy := h.accessPolicy()
-	err = filepath.Walk(fullPath, func(filePath string, info os.FileInfo, err error) error {
+	err = h.walkFrom(fullPath, func(filePath string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
 		}

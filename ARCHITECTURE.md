@@ -411,6 +411,16 @@ walk's. Tests: `TestSourceFingerprintListed_*`, `TestListedFingerprint_*`.
 Danger: deciding freshness from a listing of another walk or request — an
 index would be checked against directories the policy was not read from.
 
+**A symlinked root is the directory it leads to; nothing else is followed.**
+Walks that start at the processed root use `common.WalkRoot` /
+`WalkDirRoot`: they walk the root's target and report paths in the root's
+spelling, so rules anchored at the root match (`IgnoreReader.All`, the MCP
+file tools, symbol and reference search, the dump). A walk that starts at
+any other directory link does not enter it. Tests: `TestSymlinkedRoot_*`.
+Danger: entering a directory link below the root — its entries' paths would
+not be the paths the rules name (a file excluded as `sub/x` would be
+listed as `dirlink/x`).
+
 **The dump and the MCP server read ignore files one way.** Both build their
 rules with `libgitignore` from the ignore files at and below the processed
 directory (`Option.IgnoreRoot`: the dump's target, the server's root —

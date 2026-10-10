@@ -91,7 +91,9 @@ The dump and the MCP server share one reading of ignore files:
   ignores it, and a `!` in one never re-includes what the other ignores. A
   directory may hold both. `-a off` (`allowGitignore: false` for an MCP file
   tool) leaves `.gitignore` out; `.arkignore` always applies.
-- **Symlinks.** A symlink is listed but not followed into a directory; a
+- **Symlinks.** A target (or server root) given through a symlink is the
+  directory it leads to; paths are reported under the target as given.
+  Below it, a symlink is listed but not followed into a directory; a
   dangling or looping link is skipped; a link to a file inside the root is
   ignored when its target is. The dump reads a file link that leads outside
   the root; the MCP server does not unless started with

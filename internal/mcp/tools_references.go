@@ -163,7 +163,7 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 
 	if info.IsDir() {
 		policy := h.accessPolicy()
-		_ = filepath.Walk(fullPath, func(p string, fi os.FileInfo, err error) error {
+		_ = h.walkFrom(fullPath, func(p string, fi os.FileInfo, err error) error {
 			if err != nil {
 				return nil
 			}

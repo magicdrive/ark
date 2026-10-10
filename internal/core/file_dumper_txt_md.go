@@ -41,7 +41,7 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 		writer.WriteString(root + "\n" + treeStr + "\n")
 	}
 
-	err = filepath.WalkDir(root, func(fpath string, d os.DirEntry, err error) error {
+	err = walkFrom(opt, root, func(fpath string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
