@@ -35,6 +35,10 @@ on macOS x86_64; re-run what changed since.
 - [x] Dump changes approved for v6.0.0: a subdirectory target does not apply
       its parents' ignore files; an unreadable ignore file stops the dump
       before any output (`TestCLIIgnoreFailClosed_*`).
+- [x] One repository walk per index request: the rule-file walk's listing
+      feeds the freshness fingerprint (`TestSourceFingerprintListed_*`,
+      `TestListedFingerprint_*`); a symlinked root keeps its `.arkignore`
+      rules (`TestListedFingerprint_SymlinkedRootKeepsTheRules`).
 - [ ] Optional: re-run the Go oracle on a repository of your choice
       (`ARK_GO_ORACLE_ROOT=<repo> go test -run TestGoOracleMeasure -v ./internal/languages/golang/`):
       `FP 0` expected.

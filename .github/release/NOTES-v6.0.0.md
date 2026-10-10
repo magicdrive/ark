@@ -161,6 +161,12 @@ where they were wrong**, as in v5.0.0 — see Breaking changes.
   dump (v5.0.1 exited with `read …: is a directory` / `open …: no such
   file`). An ignore file the dump cannot read stops it (`ignore rules: …`)
   instead of being skipped.
+- **A symlinked root no longer loses its `.arkignore` rules.** When
+  `mcp-server --root` (or a dump target) was itself a symlink, the walk that
+  reads the rule files did not enter it, so no rule applied while the index —
+  built over the resolved directory — included excluded files
+  (`get_context` and `search_context` returned them). The walk now enters the
+  directory the root leads to.
 - Path arguments of every MCP tool go through one gate: relative paths resolve
   against the absolute root; absolute paths are accepted only inside it;
   `../` escapes are refused; an existing path whose symlink-resolved form leaves
@@ -241,13 +247,16 @@ any `.arkignore` enforcement in brackets:
 
 | Corpus | `get_diagnostics` | `list_files` | `search_in_files` | `get_file_content` |
 |---|---|---|---|---|
-| Ark (1 pattern) | 40.3 → 36.3 ms [26.8] | 112.9 → 87.0 ms [103.3] | 138.8 → 109.6 ms [120.3] | 6.4 → 0.4 ms [0.2] |
-| golang.org/x/tools (no `.arkignore`) | 130.6 → 137.4 ms [108.0] | 115.0 → 102.3 ms [90.5] | 92.2 → 69.3 ms [72.8] | 25.3 → 0.4 ms [0.4] |
-| x/tools + 300 nested `.arkignore` (900 patterns) | 1,810 → 217 ms [104] | 4,953 → 277 ms [2,491] | 1,447 → 126 ms [733] | 34.0 → 0.5 ms [0.3] |
+| Ark (1 pattern) | 40.3 → 34.2 ms [26.8] | 112.9 → 87.0 ms [103.3] | 138.8 → 109.6 ms [120.3] | 6.4 → 0.4 ms [0.2] |
+| golang.org/x/tools (no `.arkignore`) | 130.6 → 119.6 ms [108.0] | 115.0 → 102.3 ms [90.5] | 92.2 → 69.3 ms [72.8] | 25.3 → 0.4 ms [0.4] |
+| x/tools + 300 nested `.arkignore` (900 patterns) | 1,810 → 192 ms [104] | 4,953 → 277 ms [2,491] | 1,447 → 126 ms [733] | 34.0 → 0.5 ms [0.3] |
 
-The remaining cost of index tools (≈10 ms on Ark, ≈30 ms on x/tools) is the
-walk that re-reads the rule files on every request; compiling the rules takes
-microseconds and is reused while they are unchanged.
+An index request walks the repository once: the walk that re-reads the rule
+files also lists the sources its freshness fingerprint reads (warm
+`get_diagnostics` 43.4 → 34.2 ms on Ark, 137.1 → 119.6 ms on x/tools against
+two walks). What remains above the build without enforcement is the rule
+files' reading and the policy checks; compiling the rules takes microseconds
+and is reused while they are unchanged.
 
 Tool-level workflow benchmark (12 tasks: exact, partial and ambiguous names,
 callers, callees, impact, error path, another Go repository, TypeScript; no

@@ -83,7 +83,7 @@ func (h *ToolsHandler) forRequest() *ToolsHandler {
 		newIndex:     h.newIndex,
 		buildContext: h.buildContext,
 		base:         h,
-		req:          &requestScope{reader: h.newIgnoreReader()},
+		req:          &requestScope{reader: h.newRequestReader()},
 	}
 }
 
@@ -102,6 +102,79 @@ func (h *ToolsHandler) newIgnoreReader() *libgitignore.IgnoreReader {
 		extra = h.opt.AdditionallyIgnoreRuleFilenameList
 	}
 	return libgitignore.NewIgnoreReader(h.rootDir, extra)
+}
+
+// newRequestReader returns a request's reader: it also records the entries of
+// its repository walk outside the directories no index enters, so the
+// request's index freshness check need not list the directories again
+// (listedSources).
+func (h *ToolsHandler) newRequestReader() *libgitignore.IgnoreReader {
+	r := h.newIgnoreReader()
+	r.CollectEntries(index.SkipDirName)
+	return r
+}
+
+// sourceListingKey carries a request's repository listing (listedSources) in
+// its context.
+type sourceListingKey struct{}
+
+// sourceListing is the request's walk of the server root: the root as the
+// reader spelled it, and the entries in walk order.
+type sourceListing struct {
+	root    string
+	entries []libgitignore.Entry
+}
+
+// requestListing returns the request's repository listing: the entries of the
+// very walk its access policy snapshot was read by, so the freshness check and
+// the policy describe one state of the directories.
+func (h *ToolsHandler) requestListing() (sourceListing, bool) {
+	if h.req == nil {
+		return sourceListing{}, false
+	}
+	entries, ok := h.req.reader.Entries()
+	return sourceListing{root: h.rootDir, entries: entries}, ok
+}
+
+// listedSources returns the listing's entries for a walk of index root
+// canonical (symlink-free, inside the server root), spelled below canonical,
+// or false when the listing cannot stand in for that walk: the walk failed,
+// or canonical lies in a directory whose entries were not recorded.
+func (l sourceListing) listedSources(canonical string) ([]index.WalkEntry, bool) {
+	if len(l.entries) == 0 || !l.entries[0].D.IsDir() {
+		return nil, false
+	}
+	realRoot := l.root
+	if r, err := filepath.EvalSymlinks(l.root); err == nil {
+		realRoot = r
+	}
+	rel, ok := relInside(realRoot, canonical)
+	if !ok {
+		return nil, false
+	}
+	prefix := l.root
+	if rel != "." {
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			if index.SkipDirName(part) {
+				return nil, false // not recorded below such a directory
+			}
+		}
+		prefix = filepath.Join(l.root, rel)
+	}
+	var out []index.WalkEntry
+	for _, e := range l.entries {
+		if e.Path != prefix && !strings.HasPrefix(e.Path, prefix+string(filepath.Separator)) {
+			if len(out) > 0 {
+				break // a directory's entries are contiguous in walk order
+			}
+			continue
+		}
+		out = append(out, index.WalkEntry{Path: canonical + e.Path[len(prefix):], D: e.D})
+	}
+	if len(out) == 0 || !out[0].D.IsDir() {
+		return nil, false
+	}
+	return out, true
 }
 
 // ignoreReader returns the request's reader (each rule file read once for
@@ -274,6 +347,9 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 	s := h.shared()
 	if h.req != nil {
 		ctx = context.WithValue(ctx, policyKey{}, h.accessPolicy())
+		if listing, ok := h.requestListing(); ok {
+			ctx = context.WithValue(ctx, sourceListingKey{}, listing)
+		}
 	}
 	s.indexOnce.Do(func() {
 		providers := defaultProviders()
@@ -298,10 +374,21 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 			// A freshness check runs in the request: it uses the request's
 			// snapshot (taken after the request arrived, as the index cache
 			// requires). A build runs detached and reads the policy itself.
+			//
+			// The request has already walked the repository to read its
+			// .arkignore files (IgnoreReader.All); the freshness check reuses
+			// that listing instead of listing the directories again, and
+			// reads and hashes the same files in the same order
+			// (index.SourceFingerprintListed). Without a usable listing it
+			// walks.
 			s.indexes.fingerprint = func(ctx context.Context, root string) (string, error) {
 				policy, ok := ctx.Value(policyKey{}).(accessPolicy)
 				if !ok {
 					policy = s.accessPolicy()
+				} else if listing, ok := ctx.Value(sourceListingKey{}).(sourceListing); ok {
+					if entries, ok := listing.listedSources(root); ok {
+						return index.SourceFingerprintListed(ctx, root, providers, policy.indexExclude, entries)
+					}
 				}
 				return index.SourceFingerprintExcluding(ctx, root, providers, policy.indexExclude)
 			}

@@ -30,12 +30,7 @@ type Exclude func(path string, d fs.DirEntry) bool
 // is why a change of what exclude leaves out changes the fingerprint.
 func walkSources(ctx context.Context, root string, providers []language.Provider, exclude Exclude,
 	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) error {
-	extMap := make(map[string]language.Provider)
-	for _, p := range providers {
-		for _, ext := range p.Extensions() {
-			extMap[ext] = p
-		}
-	}
+	step := sourceStep(root, providers, exclude, visit)
 	return filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return nil // skip unreadable dirs
@@ -43,6 +38,23 @@ func walkSources(ctx context.Context, root string, providers []language.Provider
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		return step(path, d)
+	})
+}
+
+// sourceStep is walkSources' decision for one walk entry: whether to enter a
+// directory (filepath.SkipDir if not) and, for a file, whether to read and
+// visit it. walkSources and listedSources share it, so a listed walk decides
+// exactly as a walk does.
+func sourceStep(root string, providers []language.Provider, exclude Exclude,
+	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) func(path string, d fs.DirEntry) error {
+	extMap := make(map[string]language.Provider)
+	for _, p := range providers {
+		for _, ext := range p.Extensions() {
+			extMap[ext] = p
+		}
+	}
+	return func(path string, d fs.DirEntry) error {
 		if d.IsDir() {
 			if SkipDirName(d.Name()) || (exclude != nil && path != root && exclude(path, d)) {
 				return filepath.SkipDir
@@ -60,7 +72,42 @@ func walkSources(ctx context.Context, root string, providers []language.Provider
 		relPath, _ := filepath.Rel(root, path)
 		visit(path, relPath, prov, src, err)
 		return nil
-	})
+	}
+}
+
+// WalkEntry is one entry of a filepath.WalkDir walk: its path and directory
+// entry.
+type WalkEntry struct {
+	Path string
+	D    fs.DirEntry
+}
+
+// listedSources is walkSources over entries a walk already listed — the
+// entries of filepath.WalkDir(root), in its order, root first — instead of
+// listing the directories again. It visits the same files in the same order,
+// provided the listing is complete below every directory walkSources enters.
+func listedSources(ctx context.Context, root string, providers []language.Provider, exclude Exclude, entries []WalkEntry,
+	visit func(path, rel string, prov language.Provider, src []byte, readErr error)) error {
+	step := sourceStep(root, providers, exclude, visit)
+	skipping := ""
+	for _, e := range entries {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if skipping != "" {
+			if strings.HasPrefix(e.Path, skipping) {
+				continue
+			}
+			skipping = ""
+		}
+		if err := step(e.Path, e.D); err == filepath.SkipDir {
+			if e.Path == root {
+				return nil // as filepath.WalkDir: skipping the root ends the walk
+			}
+			skipping = e.Path + string(filepath.Separator)
+		}
+	}
+	return nil
 }
 
 // sourceDigest accumulates the fingerprint of an index's inputs: the provider
@@ -94,6 +141,31 @@ func (d *sourceDigest) sum() string { return hex.EncodeToString(d.h.Sum(nil)) }
 // file — content, not metadata, decides freshness — but parses nothing.
 func SourceFingerprint(ctx context.Context, root string, providers []language.Provider) (string, error) {
 	return SourceFingerprintExcluding(ctx, root, providers, nil)
+}
+
+// SourceFingerprintListed is SourceFingerprintExcluding computed from the
+// entries of a walk of root already made (filepath.WalkDir order, root first,
+// complete below every directory an index enters), so the directories are not
+// listed again. With the listing the walk would make now, it returns the same
+// fingerprint.
+func SourceFingerprintListed(ctx context.Context, root string, providers []language.Provider, exclude Exclude, entries []WalkEntry) (string, error) {
+	if err := checkRoot(root); err != nil {
+		return "", err
+	}
+	if len(entries) == 0 || entries[0].Path != root || !entries[0].D.IsDir() {
+		return "", fmt.Errorf("index: listing of %s does not start at it", root)
+	}
+	d := newSourceDigest(providers)
+	err := listedSources(ctx, root, providers, exclude, entries, func(_, rel string, _ language.Provider, src []byte, readErr error) {
+		d.add(rel, src, readErr)
+	})
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
+	if err != nil {
+		return "", err
+	}
+	return d.sum(), nil
 }
 
 // SourceFingerprintExcluding is SourceFingerprint of an index built with

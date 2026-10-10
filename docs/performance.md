@@ -66,18 +66,23 @@ runs on one server (milliseconds):
 
 | Repository | `get_diagnostics` | `list_files` | `search_in_files` | `get_file_content` |
 |---|---:|---:|---:|---:|
-| Ark (one `.arkignore` pattern) | 36.3 | 87.0 | 109.6 | 0.4 |
-| golang.org/x/tools (no `.arkignore`) | 137.4 | 102.3 | 69.3 | 0.4 |
-| x/tools with 300 nested `.arkignore` files (900 patterns) | 217.0 | 276.7 | 125.9 | 0.5 |
+| Ark (one `.arkignore` pattern) | 34.2 | 90.0 | 112.4 | 0.4 |
+| golang.org/x/tools (no `.arkignore`) | 119.6 | 105.3 | 73.5 | 0.5 |
+| x/tools with 300 nested `.arkignore` files (900 patterns) | 192.1 | 309.0 | 135.5 | 0.5 |
 | *same, build without `.arkignore` enforcement* | | | | |
 | Ark | 26.8 | 103.3 | 120.3 | 0.2 |
 | golang.org/x/tools | 108.0 | 90.5 | 72.8 | 0.4 |
 | x/tools, 300 nested `.arkignore` files | 103.8 | 2,490.9 | 733.3 | 0.3 |
 
 - A tool that names one path reads only the rule files above it: no walk.
-- Index tools walk the repository once more than before to read the rule
-  files (about 10 ms on Ark, 30 ms on x/tools). Compiling the rules takes
-  microseconds and is skipped while their SHA-256 contents are unchanged.
+- Index tools walk the repository once per request: the walk that reads the
+  rule files also lists the sources the freshness fingerprint reads. Sharing
+  it cut warm `get_diagnostics` from 43.4 to 34.2 ms on Ark, 137.1 to
+  119.6 ms on x/tools and 215.3 to 192.1 ms on the nested corpus, and the
+  first request after a rule edit by the same amount. Compiling the rules
+  takes microseconds and is skipped while their SHA-256 contents are
+  unchanged. Index rebuilds and the file tools (`list_files`,
+  `search_in_files`) are unchanged by this.
 - Matching is indexed by the directory of each rule, which also speeds up
   the file tools' `.gitignore` filtering on repositories with many rule
   files.

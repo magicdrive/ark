@@ -58,12 +58,12 @@ directories named `vendor` or `node_modules`, or whose name starts with `.`.
   two subdirectories), least recently used first out.
 - An index is immutable and shared by concurrent requests.
 
-The fingerprint walk reads every source file on each request, and a second
-walk re-reads the `.arkignore` rule files (only their compilation is reused
-while they are unchanged); on a 1,875-file repository the two walks are the
-bulk of a warm request's ~140 ms. A tool given a single path reads only the
-rule files above that path and walks nothing
-([Performance](performance.md)).
+Each index request walks the repository once: the walk that re-reads the
+`.arkignore` rule files (only their compilation is reused while they are
+unchanged) also lists the source files, and the fingerprint then reads and
+hashes every listed source file. On a 1,875-file repository this is the bulk
+of a warm request. A tool given a single path reads only the rule files above
+that path and walks nothing ([Performance](performance.md)).
 
 ## Extraction cache
 

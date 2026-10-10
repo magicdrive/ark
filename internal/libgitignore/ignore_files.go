@@ -53,6 +53,40 @@ type IgnoreReader struct {
 	allOnce sync.Once
 	all     *IgnoreFiles
 	allErr  error
+
+	// collectSkip, when set (CollectEntries), makes All record the entries
+	// it walks, except below directories it names; entries holds them.
+	collectSkip func(name string) bool
+	entries     []Entry
+}
+
+// Entry is one entry of the repository walk All makes, in filepath.WalkDir
+// order: its path (below the reader's root, the root itself first) and its
+// directory entry.
+type Entry struct {
+	Path string
+	D    fs.DirEntry
+}
+
+// CollectEntries makes All record the entries of its walk, for a caller that
+// would otherwise walk the same directories again (Entries). Entries below a
+// directory skip names (other than the root) are not recorded; the directory
+// itself is. It must be called before All.
+func (r *IgnoreReader) CollectEntries(skip func(name string) bool) {
+	r.collectSkip = skip
+}
+
+// Entries returns the entries All recorded, and whether they are complete:
+// false when collection was not requested, All has not run, or its walk
+// failed.
+func (r *IgnoreReader) Entries() ([]Entry, bool) {
+	if r.collectSkip == nil {
+		return nil, false
+	}
+	if _, err := r.All(); err != nil {
+		return nil, false
+	}
+	return r.entries, true
 }
 
 // NewIgnoreReader returns a reader for root and the additional rule files.
@@ -134,9 +168,33 @@ func (r *IgnoreReader) All() (*IgnoreFiles, error) {
 		// probing every directory.
 		var order []string
 		found := map[string]*ignoreDir{}
-		err := filepath.WalkDir(r.root, func(path string, d os.DirEntry, err error) error {
+		skipping := "" // the directory whose entries are not being recorded
+		// The root may itself be a symlink (a server or dump root given
+		// through a link): filepath.WalkDir would not enter it, and no rule
+		// would be read while the directory it leads to is served. Walk the
+		// directory it resolves to and report every path in the root's own
+		// spelling, which the rules are anchored at.
+		walkRoot := r.root
+		if real, err := filepath.EvalSymlinks(r.root); err == nil {
+			walkRoot = real
+		}
+		err := filepath.WalkDir(walkRoot, func(path string, d os.DirEntry, err error) error {
+			if walkRoot != r.root {
+				path = r.root + strings.TrimPrefix(path, walkRoot)
+			}
 			if err != nil {
 				return err
+			}
+			if r.collectSkip != nil {
+				if skipping != "" && !strings.HasPrefix(path, skipping) {
+					skipping = ""
+				}
+				if skipping == "" {
+					r.entries = append(r.entries, Entry{Path: path, D: d})
+					if d.IsDir() && path != r.root && r.collectSkip(d.Name()) {
+						skipping = path + string(filepath.Separator)
+					}
+				}
 			}
 			if path != r.root && (d.Name() == ".gitignore" || d.Name() == ".arkignore") {
 				// What os.Stat would find: anything but a dangling symlink.

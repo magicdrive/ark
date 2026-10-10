@@ -109,6 +109,8 @@ The MCP server never returns anything from a file the repository's
   change alters is rebuilt. Cache entries written before a file was
   excluded stay on disk (and are never served); delete `<root>/.ark/index`
   to remove them.
+- **Symlinked root.** A server root (or dump target) given through a
+  symlink reads the rules of the directory it leads to.
 - **Independent of masking.** `--mask-secrets off` never makes an excluded
   file readable.
 - **Failure.** Rules that cannot be read fail closed, even when a compiled

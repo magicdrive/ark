@@ -396,6 +396,21 @@ Danger: skipping the per-request read (a timer, mtimes, a watcher) — a rule
 change would not apply to the next request; or compiling from a second read
 — a fingerprint would name another version's rule.
 
+**A request walks the repository once.** The walk that reads the rule files
+(`IgnoreReader.All`, which also walks a symlinked root's target, in the
+root's spelling) records its entries outside directories no index enters
+(`CollectEntries(index.SkipDirName)`); the request's index freshness check
+replays that listing with the walk's own decisions (`index.sourceStep`,
+`SourceFingerprintListed`) instead of listing the directories again, so the
+access policy and the fingerprint describe one walk. File contents are still
+read and hashed: content, not metadata, decides freshness. Where the listing
+cannot stand in — the walk failed, or the index root lies below a directory
+whose entries were not recorded — the check walks as before; so does the
+post-build verification (`indexCache.run`), whose timestamp must be its own
+walk's. Tests: `TestSourceFingerprintListed_*`, `TestListedFingerprint_*`.
+Danger: deciding freshness from a listing of another walk or request — an
+index would be checked against directories the policy was not read from.
+
 **The dump and the MCP server read ignore files one way.** Both build their
 rules with `libgitignore` from the ignore files at and below the processed
 directory (`Option.IgnoreRoot`: the dump's target, the server's root —

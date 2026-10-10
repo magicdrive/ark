@@ -163,3 +163,24 @@ func TestCLIIgnore_SymlinksDoNotStopTheDump(t *testing.T) {
 		}
 	}
 }
+
+// A dump target given through a symlink never dumps a file the rules of the
+// directory it leads to exclude. (The dump does not descend into a symlinked
+// target and writes no files for it — a known limitation.)
+func TestCLIIgnore_SymlinkedTargetKeepsTheRules(t *testing.T) {
+	bin := buildArk(t)
+	repo := cliIgnoreFixture(t)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(repo, link); err != nil {
+		t.Fatal(err)
+	}
+	allowed := map[string]bool{}
+	for _, f := range dumpedFiles(t, bin, repo, ".") {
+		allowed[f] = true
+	}
+	for _, f := range dumpedFiles(t, bin, t.TempDir(), link) {
+		if !allowed[f] {
+			t.Errorf("through a symlinked target: %s dumped", f)
+		}
+	}
+}
