@@ -9,18 +9,14 @@ import (
 	"testing"
 )
 
-// buildArk compiles the ark binary once for CLI integration tests.
+// buildArk returns the ark binary for CLI integration tests, built once per
+// test process and shared (integration_binary_test.go).
 func buildArk(t *testing.T) string {
 	t.Helper()
 	if runtime.GOOS == "windows" {
 		t.Skip("integration test uses POSIX shell stub")
 	}
-	bin := filepath.Join(t.TempDir(), "ark-itest")
-	out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput()
-	if err != nil {
-		t.Fatalf("build ark: %v\n%s", err, out)
-	}
-	return bin
+	return arkBinary.get(t)
 }
 
 // runArk executes the built binary in dir with HOME overridden to home.
