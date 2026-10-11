@@ -25,6 +25,6 @@
 [3]
 ./internal/golden                                                      # 79
 ./internal/completion                                                  # 59
+./tests/integration                                                    # 40
 ./internal/languages/php                                               # 30
-./tests/integration                                                    # 21
 *

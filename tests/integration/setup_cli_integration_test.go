@@ -116,6 +116,10 @@ func TestCLI_SetupCodex_NotInstalled_Fails(t *testing.T) {
 	cmd := exec.Command(bin, "setup", "codex", "--ark-path", ark, "--root", repo)
 	cmd.Dir = repo
 	cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home, "PATH="}
+	if gorace, ok := os.LookupEnv("GORACE"); ok {
+		// Under -race: where the race detector reports (integration_binary_test.go).
+		cmd.Env = append(cmd.Env, "GORACE="+gorace)
+	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	err := cmd.Run()

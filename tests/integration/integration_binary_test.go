@@ -1,11 +1,14 @@
 package integration
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -16,11 +19,21 @@ import (
 // fixture, HOME, working directory and environment. The binary is the
 // module's main package, two directories up from this one (go test runs a
 // package's tests in its own directory).
-var arkBinary = sharedBinary{pkg: filepath.Join("..", "..")}
+//
+// Under go test -race the binary is built with -race too, so the CLI and MCP
+// server processes the tests start run under the race detector.
+var arkBinary = sharedBinary{pkg: filepath.Join("..", ".."), race: raceEnabled}
 
 func TestMain(m *testing.M) {
 	arkBinary.snapshot()
+	if err := arkBinary.watchRaces(); err != nil {
+		fmt.Fprintf(os.Stderr, "integration tests: %v\n", err)
+		os.Exit(1)
+	}
 	code := m.Run()
+	if arkBinary.unreportedRaces() && code == 0 {
+		code = 1
+	}
 	if err := arkBinary.remove(); err != nil {
 		fmt.Fprintf(os.Stderr, "integration tests: removing the shared ark binary: %v\n", err)
 	}
@@ -29,7 +42,8 @@ func TestMain(m *testing.M) {
 
 // sharedBinary builds a main package at most once per test process.
 type sharedBinary struct {
-	pkg string // the main package, relative to the test's working directory
+	pkg  string // the main package, relative to the test's working directory
+	race bool   // build with -race and fail the tests whose processes race
 
 	// The build runs in the environment and working directory the test
 	// process started with, not in those of the test that happens to need the
@@ -41,6 +55,13 @@ type sharedBinary struct {
 	dir  string // the temporary directory holding the binary
 	path string
 	err  error
+
+	// With race, the race detector of every process started from the binary
+	// writes its reports to raceDir/report.<pid> (GORACE log_path) instead of
+	// stderr: a report survives a process that is killed, and never mixes
+	// with a process's output (the MCP protocol on stdout).
+	raceDir string
+	raceMu  sync.Mutex
 }
 
 func (b *sharedBinary) snapshot() {
@@ -48,13 +69,46 @@ func (b *sharedBinary) snapshot() {
 	b.wd, b.err = os.Getwd()
 }
 
+// watchRaces points the race detector of the processes the tests start (they
+// inherit this process's environment) at raceDir, through GORACE.
+func (b *sharedBinary) watchRaces() error {
+	if !b.race {
+		return nil
+	}
+	dir, err := os.MkdirTemp("", "ark-itest-race-")
+	if err != nil {
+		return err
+	}
+	b.raceDir = dir
+	// GORACE options are separated by spaces, so log_path cannot hold one.
+	if strings.ContainsAny(dir, " \t") {
+		return fmt.Errorf("the race report directory %q contains a space, which GORACE log_path cannot hold; set TMPDIR (TEMP on Windows) to a path without one", dir)
+	}
+	// Later options win. atexit_sleep_ms=0 drops the second each raced
+	// process otherwise sleeps at exit (for other goroutines to finish
+	// reporting), which with a process per CLI call multiplies a run's time;
+	// a race found before exit is still in the report. The caller's GORACE
+	// comes next and can set it back; log_path comes last, as the reports
+	// must land in dir.
+	return os.Setenv("GORACE", strings.Join(strings.Fields("atexit_sleep_ms=0 "+os.Getenv("GORACE")+" log_path="+filepath.Join(dir, "report")), " "))
+}
+
 // get returns the binary's path, building it on first use; a failed build
-// fails every test that needs the binary, with the build's output.
+// fails every test that needs the binary, with the build's output. With race,
+// the test fails, once every process it started is done (the cleanups that
+// stop them run first), if any of them raced.
 func (b *sharedBinary) get(t *testing.T) string {
 	t.Helper()
 	b.once.Do(b.build)
 	if b.err != nil {
 		t.Fatalf("build ark: %v", b.err)
+	}
+	if b.raceDir != "" {
+		t.Cleanup(func() {
+			for _, r := range b.takeRaceReports() {
+				t.Errorf("data race in an ark process this test started (%s):\n%s", r.name, r.text)
+			}
+		})
 	}
 	return b.path
 }
@@ -73,7 +127,11 @@ func (b *sharedBinary) build() {
 	if runtime.GOOS == "windows" {
 		path += ".exe"
 	}
-	cmd := exec.Command("go", "build", "-o", path, b.pkg)
+	args := []string{"build"}
+	if b.race {
+		args = append(args, "-race")
+	}
+	cmd := exec.Command("go", append(args, "-o", path, b.pkg)...)
 	cmd.Env, cmd.Dir = b.env, b.wd
 	if out, err := cmd.CombinedOutput(); err != nil {
 		b.err = fmt.Errorf("%v\n%s", err, out)
@@ -82,11 +140,47 @@ func (b *sharedBinary) build() {
 	b.path = path
 }
 
-// remove deletes the binary once every test, and every process a test
-// started, is done.
-func (b *sharedBinary) remove() error {
-	if b.dir == "" {
-		return nil
+type raceReport struct{ name, text string }
+
+// takeRaceReports returns, and removes, the race reports written so far.
+func (b *sharedBinary) takeRaceReports() []raceReport {
+	b.raceMu.Lock()
+	defer b.raceMu.Unlock()
+	files, _ := filepath.Glob(filepath.Join(b.raceDir, "report.*"))
+	sort.Strings(files)
+	var reports []raceReport
+	for _, f := range files {
+		text, err := os.ReadFile(f)
+		if err != nil {
+			text = []byte(fmt.Sprintf("(unreadable: %v)", err))
+		}
+		reports = append(reports, raceReport{filepath.Base(f), string(text)})
+		_ = os.Remove(f)
 	}
-	return os.RemoveAll(b.dir)
+	return reports
+}
+
+// unreportedRaces reports, on stderr, races no test claimed — a process that
+// outlived the test that started it.
+func (b *sharedBinary) unreportedRaces() bool {
+	if b.raceDir == "" {
+		return false
+	}
+	reports := b.takeRaceReports()
+	for _, r := range reports {
+		fmt.Fprintf(os.Stderr, "integration tests: data race in an ark process (%s):\n%s\n", r.name, r.text)
+	}
+	return len(reports) > 0
+}
+
+// remove deletes the binary and the race reports once every test, and every
+// process a test started, is done.
+func (b *sharedBinary) remove() error {
+	var errs []error
+	for _, dir := range []string{b.dir, b.raceDir} {
+		if dir != "" {
+			errs = append(errs, os.RemoveAll(dir))
+		}
+	}
+	return errors.Join(errs...)
 }
