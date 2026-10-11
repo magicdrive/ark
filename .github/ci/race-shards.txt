@@ -1,0 +1,30 @@
+# Race-detector shards of the CI `race` job (`go test -race`), read by
+# race-shard.py. Under a "[N]" header, one entry per line:
+#
+#   ./pkg                 the package's tests
+#   ./pkg -run <regexp>   the package's tests that <regexp> selects
+#   ./pkg -skip <regexp>  all the others: a package split in two lists both
+#                         halves, with the same regexp, in two shards
+#   *                     every package of `go list ./...` no line names
+#
+# A shard starts its packages in the order written, so the slowest come
+# first (a slow package started late is what bounds a shard); the packages
+# "*" takes follow in `go list` order. A package named twice (other than the
+# two halves of a split), a split whose halves differ, a package that does
+# not exist or an empty shard fails the job. The comments are race run
+# times measured with 4 CPUs (seconds).
+[1]
+./internal/resolver                                                    # 140
+./internal/languages/golang -run ^TestFidelity_RepositoryReferencesMatchGoAST$  # 78
+[2]
+./internal/mcp                                                         # 105
+./internal/languages/typescript                                        # 102
+./internal/languages/golang -skip ^TestFidelity_RepositoryReferencesMatchGoAST$ # 82
+./internal/tsparse                                                     # 32
+./internal/index                                                       # 4
+[3]
+./internal/golden                                                      # 79
+./internal/completion                                                  # 59
+./tests/integration                                                    # 40
+./internal/languages/php                                               # 30
+*

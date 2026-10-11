@@ -11,15 +11,11 @@ import (
 	"github.com/magicdrive/ark/internal/instruction"
 )
 
-// buildArk compiles the real binary once per test.
+// buildArk returns the real binary, built once per test process and shared
+// (integration_binary_test.go).
 func buildArk(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "ark")
-	cmd := exec.Command("go", "build", "-o", bin, filepath.Join("..", ".."))
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("go build: %v\n%s", err, out)
-	}
-	return bin
+	return arkBinary.get(t)
 }
 
 // runArk runs the binary in dir with an isolated HOME and returns stdout,

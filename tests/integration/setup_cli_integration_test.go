@@ -1,26 +1,19 @@
-package main
+package integration
 
 import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
 
-// buildArk compiles the ark binary once for CLI integration tests.
+// buildArk returns the ark binary for CLI integration tests, built once per
+// test process and shared (integration_binary_test.go). It runs on every
+// system; a test that needs a POSIX shell skips itself where there is none.
 func buildArk(t *testing.T) string {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("integration test uses POSIX shell stub")
-	}
-	bin := filepath.Join(t.TempDir(), "ark-itest")
-	out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput()
-	if err != nil {
-		t.Fatalf("build ark: %v\n%s", err, out)
-	}
-	return bin
+	return arkBinary.get(t)
 }
 
 // runArk executes the built binary in dir with HOME overridden to home.
@@ -44,6 +37,10 @@ func runArk(t *testing.T, bin, dir, home string, args ...string) (string, string
 	return stdout.String(), stderr.String(), code
 }
 
+// fakeArkBin is a placeholder for --ark-path: `ark setup` checks that the
+// path is a regular, executable file and writes it into the client's config,
+// but never runs it — so the "#!/bin/sh" content needs no shell, and Windows
+// (no execute bit; an extensionless path is accepted) takes the file as is.
 func fakeArkBin(t *testing.T) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "ark")
@@ -119,6 +116,10 @@ func TestCLI_SetupCodex_NotInstalled_Fails(t *testing.T) {
 	cmd := exec.Command(bin, "setup", "codex", "--ark-path", ark, "--root", repo)
 	cmd.Dir = repo
 	cmd.Env = []string{"HOME=" + home, "USERPROFILE=" + home, "PATH="}
+	if gorace, ok := os.LookupEnv("GORACE"); ok {
+		// Under -race: where the race detector reports (integration_binary_test.go).
+		cmd.Env = append(cmd.Env, "GORACE="+gorace)
+	}
 	var stderr strings.Builder
 	cmd.Stderr = &stderr
 	err := cmd.Run()

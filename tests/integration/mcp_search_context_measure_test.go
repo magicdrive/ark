@@ -1,8 +1,9 @@
-package main
+package integration
 
 import (
 	"encoding/json"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -65,7 +66,8 @@ func TestMeasureSearchContext(t *testing.T) {
 		t.Skip("set ARK_SEARCH_MEASURE=1 to measure")
 	}
 	bin := buildArk(t)
-	repo, err := os.Getwd()
+	// Measured on this repository: the module root, two directories up.
+	repo, err := filepath.Abs(filepath.Join("..", ".."))
 	if err != nil {
 		t.Fatal(err)
 	}

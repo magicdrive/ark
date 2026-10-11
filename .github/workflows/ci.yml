@@ -12,7 +12,15 @@ permissions:
   contents: read
 
 jobs:
-  test:
+  # The verifications run as independent jobs, in parallel; ci-gate (last)
+  # fails unless every one of them succeeded and the race shards together
+  # ran exactly the tests the unit job ran. Each job keeps its own Go build
+  # cache (setup-go keyed by go.sum and the job's file in .github/ci/cache-keys).
+  # Every test job reports through .github/ci/test-report.py: counts, failures
+  # and skips (with reasons) in the log and the step summary; the full test
+  # lists in the job's test-report artifact.
+
+  lint:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -22,9 +30,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
-
-      - name: Install dependencies
-        run: go mod download
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/lint
 
       - name: Check formatting
         run: |
@@ -38,24 +46,8 @@ jobs:
             exit 1
           fi
 
-      - name: Install zsh (shell completion tests)
-        # internal/completion runs the completion scripts under real bash and
-        # zsh; without zsh those subtests are skipped.
-        run: sudo apt-get update && sudo apt-get install -y zsh
-
       - name: Run go vet
         run: go vet ./...
-
-      - name: Run tests
-        run: go test ./...
-
-      - name: Run tests with race detector
-        # The descriptor-anchored file access tests (internal/fsroot,
-        # internal/accesspolicy) need symlinks: make their absence a failure,
-        # not a skip.
-        env:
-          ARK_REQUIRE_SYMLINKS: "1"
-        run: go test -race ./...
 
       # Pinned: staticcheck 2026.2.1 (v0.8.1, the latest release) cannot read
       # Go 1.27.2's export data; this development version can. Return to a
@@ -82,53 +74,131 @@ jobs:
             ./internal/accesspolicy/... \
             ./internal/safewalk/...
 
-      # -fuzz is a regexp that must match exactly one fuzz test per run:
-      # anchor every pattern.
-      - name: Run fuzz smoke (path containment)
-        run: go test -run '^$' -fuzz='^FuzzResolveToolPath$' -fuzztime=10s ./internal/mcp/
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Run fuzz smoke (path containment, physical root)
-        run: go test -run '^$' -fuzz='^FuzzResolveToolPath_PhysicalRoot$' -fuzztime=10s ./internal/mcp/
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/unit
 
-      - name: Run fuzz smoke (symbol search matching)
-        run: go test -run '^$' -fuzz='^FuzzMatchSymbols$' -fuzztime=10s ./internal/search/
+      - name: Install zsh (shell completion tests)
+        # internal/completion runs the completion scripts under real bash and
+        # zsh; without zsh those subtests are skipped.
+        run: sudo apt-get update && sudo apt-get install -y zsh
 
-      - name: Run fuzz smoke (declaration identity)
-        run: go test -run '^$' -fuzz='^FuzzDeclarationIdentity$' -fuzztime=10s ./internal/index/
+      - name: Run tests
+        run: |
+          set +e
+          go test -json ./... > "$RUNNER_TEMP/unit.json"
+          rc=$?
+          set -e
+          python3 .github/ci/test-report.py "$RUNNER_TEMP/unit.json" unit-linux "$RUNNER_TEMP/reports"
+          exit $rc
 
-      - name: Run fuzz smoke (parent identity)
-        run: go test -run '^$' -fuzz='^FuzzParentIdentity$' -fuzztime=10s ./internal/index/
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-report-unit
+          path: ${{ runner.temp }}/reports
+          if-no-files-found: error
 
-      - name: Run fuzz smoke (SymbolID collision detection)
-        run: go test -run '^$' -fuzz='^FuzzIdentityCollision$' -fuzztime=10s ./internal/index/
+  # `go test -race ./...`, split into the shards of .github/ci/race-shards.txt:
+  # each shard starts its packages slowest first, a package may be split in
+  # two by one regexp (-run in one shard, -skip in another), and "*" takes
+  # every package no line names. Same flags and environment as one run over
+  # ./... (race-shard.py run); ci-gate checks every test ran exactly once.
+  race:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Run fuzz smoke (cache decode)
-        run: go test -fuzz=FuzzCacheDecoding -fuzztime=10s ./internal/cache/
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/race-${{ matrix.shard }}
 
-      - name: Run fuzz smoke (extraction)
-        run: go test -fuzz=FuzzExtract -fuzztime=10s ./internal/languages/golang/
+      - name: List the shard's packages
+        run: |
+          python3 .github/ci/race-shard.py list "${{ matrix.shard }}" > "$RUNNER_TEMP/packages"
+          cat "$RUNNER_TEMP/packages"
+          [ -s "$RUNNER_TEMP/packages" ]
 
-      - name: Run fuzz smoke (PHP extraction)
-        run: go test -fuzz=FuzzExtractPHP -fuzztime=10s ./internal/languages/php/
+      - name: Install zsh (shell completion tests)
+        # As in the unit job, for the shard that runs internal/completion.
+        run: |
+          if cut -d' ' -f1 "$RUNNER_TEMP/packages" | grep -qx 'github.com/magicdrive/ark/internal/completion'; then
+            sudo apt-get update && sudo apt-get install -y zsh
+          fi
 
-      - name: Run fuzz smoke (TypeScript/TSX extraction)
-        run: go test -run '^$' -fuzz=FuzzExtractTypeScript -fuzztime=10s ./internal/languages/typescript/
+      - name: Run tests with race detector
+        # The descriptor-anchored file access tests (internal/fsroot,
+        # internal/accesspolicy) need symlinks: make their absence a failure,
+        # not a skip.
+        env:
+          ARK_REQUIRE_SYMLINKS: "1"
+        run: |
+          set +e
+          python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/race.json"
+          rc=$?
+          set -e
+          python3 .github/ci/test-report.py "$RUNNER_TEMP/race.json" "race-${{ matrix.shard }}-linux" "$RUNNER_TEMP/reports"
+          exit $rc
 
-      - name: Run fuzz smoke (TypeScript module specifiers)
-        run: go test -run '^$' -fuzz=FuzzModuleSpec -fuzztime=10s ./internal/languages/typescript/
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-report-race-${{ matrix.shard }}
+          path: ${{ runner.temp }}/reports
+          if-no-files-found: error
 
-      - name: Run fuzz smoke (TypeScript type arguments)
-        run: go test -run '^$' -fuzz='^FuzzTypeArgParser$' -fuzztime=10s ./internal/languages/typescript/
+  # Every fuzz smoke target of .github/ci/fuzz-smoke.txt, by group: each
+  # alone, for 10 seconds, with -run '^$' (the unit and race jobs run the
+  # packages' tests).
+  fuzz-smoke:
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [1, 2, 3]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
-      - name: Run fuzz smoke (Terraform extraction)
-        run: go test -run '^$' -fuzz=FuzzExtractTerraform -fuzztime=10s ./internal/languages/terraform/
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/fuzz-${{ matrix.group }}
+
+      - name: Run fuzz smoke
+        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}"
 
   # The descriptor-anchored file access foundation (internal/fsroot,
   # internal/accesspolicy) and the case-insensitive name tests (C1: the MCP
   # path gate, MCP walks, the dump) on the systems whose file systems fold
   # names: Windows (os.Root and object identities instead of openat; NTFS)
   # and macOS (APFS, case-insensitive by default, plus a case-sensitive
-  # volume for the C1-6 tests). Linux runs the same tests in the test job,
+  # volume for the C1-6 tests). Linux runs the same tests in the unit and
+  # race jobs,
   # where the case-folding ones skip (ext4 is case-sensitive). Symlinks and
   # case folding are required here: a skip for either fails the job; skips
   # for attacks the system itself refuses are listed.
@@ -155,20 +225,30 @@ jobs:
           echo "ARK_CASE_SENSITIVE_DIR=$RUNNER_TEMP/csvol" >> "$GITHUB_ENV"
 
       - name: Run file access security tests (race detector)
+        # Every command runs; any failure fails the step. The report lists
+        # every skip with its reason and every KNOWN-GAP line.
         shell: bash
         env:
           ARK_REQUIRE_SYMLINKS: "1"
           ARK_REQUIRE_CASE_FOLDING: "1"
         run: |
-          set -o pipefail
-          go test -race -count=1 -v ./internal/fsroot ./internal/accesspolicy ./internal/safewalk | tee fsroot-test.log
-          go test -count=1 -v -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core . | tee -a fsroot-test.log
-          go test -count=1 -v -race -run 'TestParallel' ./internal/index ./internal/golden | tee -a fsroot-test.log
+          rc=0
+          out="$RUNNER_TEMP/filesystem-security.json"
+          go test -race -count=1 -json ./internal/fsroot ./internal/accesspolicy ./internal/safewalk >> "$out" || rc=1
+          go test -count=1 -json -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core ./tests/integration >> "$out" || rc=1
+          go test -count=1 -json -race -run 'TestParallel' ./internal/index ./internal/golden >> "$out" || rc=1
+          py=python3; "$py" -c '' 2>/dev/null || py=python
+          system=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+          "$py" .github/ci/test-report.py "$out" "filesystem-security-$system" "$RUNNER_TEMP/reports"
+          exit $rc
 
-      - name: List skipped tests
+      - name: Upload the test report
         if: always()
-        shell: bash
-        run: grep -E -- '--- SKIP|SKIP:|KNOWN-GAP' fsroot-test.log || echo "no skipped tests or known gaps"
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-report-filesystem-security-${{ matrix.os }}
+          path: ${{ runner.temp }}/reports
+          if-no-files-found: error
 
   # The TypeScript compiler differential: Ark's TypeScript readings compared
   # with the pinned compiler (.github/ts-oracle). Node.js and TypeScript are
@@ -185,6 +265,9 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/typescript-compiler-differential
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -193,3 +276,43 @@ jobs:
 
       - name: Run TypeScript compiler differential
         run: .github/ts-oracle/run.sh
+
+  # The gate: green only if every verification job above succeeded (a
+  # failure, cancellation or skip of any job, or of any matrix leg, fails
+  # it) and the race shards together ran exactly the packages and tests the
+  # unit job ran (.github/ci/check-coverage.py). It also lists, per system,
+  # the filesystem-security tests that skipped.
+  ci-gate:
+    if: always()
+    needs: [lint, unit, race, fuzz-smoke, filesystem-security, typescript-compiler-differential]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Every verification job succeeded
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, sys
+          needs = json.loads(os.environ["NEEDS"])
+          want = {"lint", "unit", "race", "fuzz-smoke", "filesystem-security", "typescript-compiler-differential"}
+          results = {job: v["result"] for job, v in needs.items()}
+          for job in sorted(want | set(results)):
+              print(f"{job}: {results.get(job, 'missing')}")
+          if set(results) != want or any(r != "success" for r in results.values()):
+              sys.exit("a verification job did not succeed")
+          EOF
+
+      - name: Checkout code
+        if: always()
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Download the test reports
+        if: always()
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: test-report-*
+          path: reports
+
+      - name: Race shards ran exactly the unit tests; skips per system
+        if: always()
+        run: python3 .github/ci/check-coverage.py reports windows macos

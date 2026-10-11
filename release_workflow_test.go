@@ -2,7 +2,10 @@ package main
 
 import (
 	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -69,21 +72,430 @@ func TestReleaseWorkflow_PublishesOnlyAfterEveryGate(t *testing.T) {
 	}
 }
 
+// The CI workflow is the release gate (release.yml's ci job runs it, and
+// release needs ci): every verification runs in some job, as before the
+// jobs were split, and nothing lets a failure, a skip or a cancellation of
+// any of them pass. The checks look at what the jobs run and how they depend
+// on each other, not at job names or step order.
 func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 	top, jobs := workflowJobs(t, ".github/workflows/ci.yml")
-	if !strings.Contains(top, "  workflow_call:") {
-		t.Error("ci.yml must be callable by the release workflow (workflow_call)")
-	}
-	for job, wants := range map[string][]string{
-		"test":                             {"go vet ./...", "go test ./...", "go test -race ./...", "staticcheck", "-fuzz='^FuzzTypeArgParser$'"},
-		"typescript-compiler-differential": {".github/ts-oracle/run.sh", "node-version: '22.17.0'"},
-	} {
-		for _, want := range wants {
-			if !strings.Contains(jobs[job], want) {
-				t.Errorf("ci.yml: job %s lacks %q", job, want)
-			}
+	for _, trigger := range []string{"  push:\n    branches:\n      - main", "  pull_request:", "  workflow_call:"} {
+		if !strings.Contains(top, trigger) {
+			t.Errorf("ci.yml: trigger %q missing (push to main, pull requests and the release must run the same gates)", strings.TrimSpace(strings.SplitN(trigger, "\n", 2)[0]))
 		}
 	}
+	all, _ := os.ReadFile(".github/workflows/ci.yml")
+	if strings.Contains(string(all), "continue-on-error") {
+		t.Error("ci.yml: continue-on-error would let a failed verification pass")
+	}
+
+	// withJob returns the jobs whose text contains every want.
+	withJob := func(wants ...string) []string {
+		var out []string
+		for name, job := range jobs {
+			ok := true
+			for _, w := range wants {
+				ok = ok && strings.Contains(job, w)
+			}
+			if ok {
+				out = append(out, name)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	require := func(what string, wants ...string) string {
+		t.Helper()
+		found := withJob(wants...)
+		if len(found) == 0 {
+			t.Errorf("ci.yml: no job runs %s (%q)", what, wants)
+			return ""
+		}
+		return found[0]
+	}
+
+	require("gofmt", "gofmt -l")
+	require("go vet", "go vet ./...")
+	require("the unit tests", "go test -json ./... >")
+	require("staticcheck (pinned for Go 1.27.2)",
+		"go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45",
+		"./internal/cache/...", "./internal/context/...", "./internal/index/...", "./internal/resolver/...",
+		"./internal/language/...", "./internal/languages/...", "./internal/mcp/...", "./internal/symbol/...",
+		"./internal/reference/...", "./internal/repomap/...", "./internal/impact/...", "./internal/search/...",
+		"./internal/fsroot/...", "./internal/accesspolicy/...", "./internal/safewalk/...")
+	race := require("the race tests, by shard", `race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/race.json"`, "rc=$?", "exit $rc", `ARK_REQUIRE_SYMLINKS: "1"`)
+	if race != "" {
+		got, want := matrixValues(t, jobs[race], "shard"), raceShards(t)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("ci.yml: race matrix shards %v, race-shards.txt declares %v", got, want)
+		}
+		if strings.Join(want, ",") != "1,2,3" {
+			t.Errorf("race-shards.txt: shards %v, want 1, 2 and 3", want)
+		}
+		if strings.Contains(jobs[race], "-short") {
+			t.Error("ci.yml: the race tests must not run with -short")
+		}
+	}
+	// What race-shard.py runs: go test -race -json, nothing else added (a
+	// split adds only its -run or -skip).
+	script, err := os.ReadFile(".github/ci/race-shard.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{`["go", "test", "-race", "-json"] + whole`, `["go", "test", "-race", "-json", flag, rx, p]`} {
+		if !strings.Contains(string(script), cmd) {
+			t.Errorf("race-shard.py: no %s: whole packages and split halves run as go test -race -json", cmd)
+		}
+	}
+	if !strings.Contains(string(script), "return 1 if failed else 0") {
+		t.Error("race-shard.py: a shard must fail when any of its go test commands does")
+	}
+	for _, flag := range []string{`"-short"`, `"-count`, `"-timeout`, `"-failfast"`, `"-p"`} {
+		if strings.Contains(string(script), flag) {
+			t.Errorf("race-shard.py: the race run must not add %s", flag)
+		}
+	}
+	fuzz := require("the fuzz smoke, by group", `.github/ci/fuzz-smoke.sh "${{ matrix.group }}"`)
+	if fuzz != "" {
+		if got, want := matrixValues(t, jobs[fuzz], "group"), fuzzGroups(t); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("ci.yml: fuzz matrix groups %v, fuzz-smoke.txt declares %v", got, want)
+		}
+	}
+	require("the file access security tests",
+		"os: [windows-latest, macos-latest]", `ARK_REQUIRE_SYMLINKS: "1"`, `ARK_REQUIRE_CASE_FOLDING: "1"`,
+		"go test -race -count=1 -json ./internal/fsroot ./internal/accesspolicy ./internal/safewalk",
+		"go test -count=1 -json -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core ./tests/integration",
+		"go test -count=1 -json -race -run 'TestParallel' ./internal/index ./internal/golden",
+		"exit $rc")
+	require("the TypeScript compiler differential", ".github/ts-oracle/run.sh", "node-version: '22.17.0'")
+
+	// The gate: needs every other job, runs whatever they did, and fails
+	// unless each succeeded and the race shards ran exactly the unit tests.
+	gate := require("the gate", "check-coverage.py reports windows macos")
+	if gate != "" {
+		job := jobs[gate]
+		if !regexp.MustCompile(`(?m)^    if: always\(\)$`).MatchString(job) {
+			t.Errorf("ci.yml: %s must run whatever the other jobs did (if: always())", gate)
+		}
+		m := regexp.MustCompile(`(?m)^    needs: \[([^\]]*)\]`).FindStringSubmatch(job)
+		var needs []string
+		if m != nil {
+			for _, n := range strings.Split(m[1], ",") {
+				needs = append(needs, strings.TrimSpace(n))
+			}
+		}
+		sort.Strings(needs)
+		var others []string
+		for name := range jobs {
+			if name != gate {
+				others = append(others, name)
+			}
+		}
+		sort.Strings(others)
+		if strings.Join(needs, ",") != strings.Join(others, ",") {
+			t.Errorf("ci.yml: %s needs %v; every other job is %v", gate, needs, others)
+		}
+		if !strings.Contains(job, `r != "success"`) || !strings.Contains(job, "toJSON(needs)") {
+			t.Errorf("ci.yml: %s must fail unless every job it needs succeeded", gate)
+		}
+	}
+	// No verification job may be skipped by a condition.
+	for name, job := range jobs {
+		if name != gate && regexp.MustCompile(`(?m)^    if:`).MatchString(job) {
+			t.Errorf("ci.yml: job %s has a condition: a skipped job would not fail the release", name)
+		}
+	}
+}
+
+// matrixValues returns the values of a matrix key of a job ("shard: [1, 2]").
+func matrixValues(t *testing.T, job, key string) []string {
+	t.Helper()
+	m := regexp.MustCompile(`(?m)^\s+` + key + `:\s*\[([^\]]*)\]`).FindStringSubmatch(job)
+	if m == nil {
+		t.Errorf("ci.yml: no matrix %s", key)
+		return nil
+	}
+	var out []string
+	for _, v := range strings.Split(m[1], ",") {
+		out = append(out, strings.TrimSpace(v))
+	}
+	sort.Strings(out)
+	return out
+}
+
+// raceShards returns the shards race-shards.txt declares.
+func raceShards(t *testing.T) []string {
+	t.Helper()
+	b, err := os.ReadFile(".github/ci/race-shards.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, m := range regexp.MustCompile(`(?m)^\[(\d+)\]\s*$`).FindAllStringSubmatch(string(b), -1) {
+		out = append(out, m[1])
+	}
+	sort.Strings(out)
+	return out
+}
+
+type fuzzEntry struct{ group, pkg, target string }
+
+// fuzzList returns the entries of fuzz-smoke.txt.
+func fuzzList(t *testing.T) []fuzzEntry {
+	t.Helper()
+	b, err := os.ReadFile(".github/ci/fuzz-smoke.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []fuzzEntry
+	for _, line := range strings.Split(string(b), "\n") {
+		f := strings.Fields(line)
+		if len(f) == 0 || strings.HasPrefix(f[0], "#") {
+			continue
+		}
+		if len(f) != 3 {
+			t.Fatalf("fuzz-smoke.txt: %q is not <group> <package> <target>", line)
+		}
+		out = append(out, fuzzEntry{f[0], f[1], f[2]})
+	}
+	return out
+}
+
+func fuzzGroups(t *testing.T) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, e := range fuzzList(t) {
+		if e.group != "-" && !seen[e.group] {
+			seen[e.group] = true
+			out = append(out, e.group)
+		}
+	}
+	sort.Strings(out)
+	return out
+}
+
+// raceEntry is one line of `race-shard.py all`: a shard runs a package, or
+// the half of a split package that -run or -skip <regexp> selects.
+type raceEntry struct{ shard, pkg, flag, regexp string }
+
+func raceEntries(t *testing.T) []raceEntry {
+	t.Helper()
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found: the CI gate checks the shards' coverage at run time")
+	}
+	out, err := exec.Command(py, ".github/ci/race-shard.py", "all").CombinedOutput()
+	if err != nil {
+		t.Fatalf("race-shard.py all: %v\n%s", err, out)
+	}
+	var entries []raceEntry
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Fields(line)
+		switch {
+		case len(f) == 2:
+			entries = append(entries, raceEntry{f[0], f[1], "", ""})
+		case len(f) == 4 && (f[2] == "-run" || f[2] == "-skip") && f[3] != "":
+			entries = append(entries, raceEntry{f[0], f[1], f[2], f[3]})
+		default:
+			t.Fatalf("race-shard.py all: %q", line)
+		}
+	}
+	return entries
+}
+
+// Every package of `go list ./...` runs in exactly one race shard, except a
+// package split in two: its -run and -skip halves, by the same regexp, in two
+// different shards. No shard is empty.
+func TestCIWorkflow_RaceShardsCoverEveryPackage(t *testing.T) {
+	entries := raceEntries(t)
+	list, err := exec.Command("go", "list", "./...").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPkg := map[string][]raceEntry{}
+	perShard := map[string]int{}
+	for _, e := range entries {
+		byPkg[e.pkg] = append(byPkg[e.pkg], e)
+		perShard[e.shard]++
+	}
+	pkgs := strings.Fields(string(list))
+	for _, p := range pkgs {
+		uses := byPkg[p]
+		switch {
+		case len(uses) == 1 && uses[0].flag == "":
+		case len(uses) == 2:
+			a, b := uses[0], uses[1]
+			if a.flag == b.flag || a.flag == "" || b.flag == "" {
+				t.Errorf("%s: split halves %q and %q are not one -run and one -skip", p, a.flag, b.flag)
+			}
+			if a.regexp != b.regexp {
+				t.Errorf("%s: split regexps differ: %q, %q", p, a.regexp, b.regexp)
+			}
+			if a.shard == b.shard {
+				t.Errorf("%s: both halves in shard %s", p, a.shard)
+			}
+		default:
+			t.Errorf("%s runs %d times in the race shards: %v", p, len(uses), uses)
+		}
+		delete(byPkg, p)
+	}
+	for p := range byPkg {
+		t.Errorf("race shards name %s, which go list ./... does not list", p)
+	}
+	for _, s := range raceShards(t) {
+		if perShard[s] == 0 {
+			t.Errorf("race shard %s runs nothing", s)
+		}
+	}
+}
+
+// A split's regexp selects some, not all, of the package's top-level tests
+// (and fuzz tests, run as tests), and no subtest by name: the -run half and
+// the -skip half each run something, and every test — with its subtests —
+// in exactly one of them. Tests added later run in the -skip half.
+func TestCIWorkflow_RaceSplitsAreComplementary(t *testing.T) {
+	splits := 0
+	for _, e := range raceEntries(t) {
+		if e.flag != "-run" {
+			continue
+		}
+		splits++
+		if strings.Contains(e.regexp, "/") {
+			t.Errorf("%s: split regexp %q names subtests", e.pkg, e.regexp)
+		}
+		re, err := regexp.Compile(e.regexp)
+		if err != nil {
+			t.Errorf("%s: %v", e.pkg, err)
+			continue
+		}
+		out, err := exec.Command("go", "test", "-list", ".", e.pkg).Output()
+		if err != nil {
+			t.Fatalf("go test -list %s: %v", e.pkg, err)
+		}
+		var run, skip []string
+		for _, name := range strings.Fields(string(out)) {
+			if !regexp.MustCompile(`^(Test|Fuzz|Example)`).MatchString(name) {
+				continue // "ok <pkg> <time>"
+			}
+			if re.MatchString(name) {
+				run = append(run, name)
+			} else {
+				skip = append(skip, name)
+			}
+		}
+		if len(run) == 0 || len(skip) == 0 {
+			t.Errorf("%s: %q selects %d of %d tests: each half must run something", e.pkg, e.regexp, len(run), len(run)+len(skip))
+		}
+		t.Logf("%s: -run %q: %v; -skip: %d tests", e.pkg, e.regexp, run, len(skip))
+	}
+	if splits == 0 {
+		t.Log("no split package")
+	}
+}
+
+// The binary-level case-folding tests the gate requires to pass on every
+// filesystem-security system (check-coverage.py REQUIRED_SECURITY_TESTS) are
+// at least these two, exist in tests/integration, and are selected by the
+// job's -run over that package: a rename, a narrower -run or a shorter list
+// fails here instead of turning into a silent skip.
+func TestCIWorkflow_RequiredSecurityTestsAreSelected(t *testing.T) {
+	gate, err := os.ReadFile(".github/ci/check-coverage.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^REQUIRED_SECURITY_TESTS = \(([^)]*)\)`).FindSubmatch(gate)
+	if m == nil {
+		t.Fatal("check-coverage.py: no REQUIRED_SECURITY_TESTS")
+	}
+	var required []string
+	for _, q := range regexp.MustCompile(`"([^"]+)"`).FindAllSubmatch(m[1], -1) {
+		required = append(required, string(q[1]))
+	}
+	for _, want := range []string{"TestMCPCase_ExcludedFilesUnreachable", "TestCLICase_DumpExcludes"} {
+		if !strings.Contains(strings.Join(required, ","), want) {
+			t.Errorf("check-coverage.py: REQUIRED_SECURITY_TESTS %v lacks %s", required, want)
+		}
+	}
+	if !strings.Contains(string(gate), `REQUIRED_SECURITY_PACKAGE = "/tests/integration"`) {
+		t.Error("check-coverage.py: the required tests must be looked up in tests/integration")
+	}
+
+	_, jobs := workflowJobs(t, ".github/workflows/ci.yml")
+	run := regexp.MustCompile(`(?m)^\s*go test [^\n]*-run '([^']+)' [^\n]*\./tests/integration[ \n]`).FindStringSubmatch(jobs["filesystem-security"])
+	if run == nil {
+		t.Fatal("ci.yml: filesystem-security runs no -run over ./tests/integration")
+	}
+	selects := regexp.MustCompile(run[1])
+	listed, err := exec.Command("go", "test", "-list", ".", "./tests/integration").Output()
+	if err != nil {
+		t.Fatalf("go test -list ./tests/integration: %v", err)
+	}
+	for _, name := range required {
+		if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `$`).Match(listed) {
+			t.Errorf("tests/integration has no %s", name)
+		}
+		if !selects.MatchString(name) {
+			t.Errorf("ci.yml: filesystem-security -run %q does not select %s", run[1], name)
+		}
+	}
+}
+
+// The fuzz smoke runs 13 targets, each once and for 10 seconds without the
+// unit tests, and every Fuzz function of the repository is either in it or
+// listed as deliberately left out.
+func TestCIWorkflow_FuzzSmokeIsComplete(t *testing.T) {
+	script, err := os.ReadFile(".github/ci/fuzz-smoke.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(script), `go test -run '^$' -fuzz="^${target}\$" -fuzztime=10s "$pkg"`) {
+		t.Error("fuzz-smoke.sh: each target must run alone (anchored), for 10s, with -run '^$'")
+	}
+	smoke, listed := 0, map[string]bool{}
+	for _, e := range fuzzList(t) {
+		key := e.pkg + " " + e.target
+		if listed[key] {
+			t.Errorf("fuzz-smoke.txt: %s listed twice", key)
+		}
+		listed[key] = true
+		if e.group != "-" {
+			smoke++
+		}
+		files, _ := filepath.Glob(filepath.Join(filepath.FromSlash(strings.TrimPrefix(e.pkg, "./")), "*_test.go"))
+		found := false
+		for _, f := range files {
+			b, _ := os.ReadFile(f)
+			found = found || strings.Contains(string(b), "func "+e.target+"(f *testing.F)")
+		}
+		if !found {
+			t.Errorf("fuzz-smoke.txt: no %s in %s", e.target, e.pkg)
+		}
+	}
+	if smoke != 13 {
+		t.Errorf("fuzz smoke: %d targets, want 13", smoke)
+	}
+	fuzzFunc := regexp.MustCompile(`(?m)^func (Fuzz\w+)\(f \*testing\.F\)`)
+	filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != "." && (strings.HasPrefix(d.Name(), ".") || d.Name() == "testdata") {
+				return filepath.SkipDir // not packages of go list ./...
+			}
+			return nil
+		}
+		if !strings.HasSuffix(path, "_test.go") {
+			return nil
+		}
+		b, _ := os.ReadFile(path)
+		for _, m := range fuzzFunc.FindAllStringSubmatch(string(b), -1) {
+			if key := "./" + filepath.ToSlash(filepath.Dir(path)) + " " + m[1]; !listed[key] {
+				t.Errorf("%s (%s) is neither in the fuzz smoke nor listed as left out (fuzz-smoke.txt)", m[1], path)
+			}
+		}
+		return nil
+	})
 }
 
 // Every GoReleaser invocation uses the same major version as the
