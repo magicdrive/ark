@@ -1,0 +1,21 @@
+# Fuzz smoke of the CI `fuzz-smoke` job: "<group> <package> <target>", one
+# target per line. fuzz-smoke.sh runs each, alone, as
+#   go test -run '^$' -fuzz='^<target>$' -fuzztime=10s <package>
+# (no unit test runs again here: the unit and race jobs run them).
+# A line whose group is "-" is a fuzz test deliberately not in the smoke;
+# its seed corpus still runs with the unit and race tests. Every Fuzz
+# function of the repository is listed (TestCIWorkflow_FuzzSmokeIsComplete).
+1 ./internal/mcp FuzzResolveToolPath
+1 ./internal/mcp FuzzResolveToolPath_PhysicalRoot
+1 ./internal/search FuzzMatchSymbols
+1 ./internal/cache FuzzCacheDecoding
+2 ./internal/index FuzzDeclarationIdentity
+2 ./internal/index FuzzParentIdentity
+2 ./internal/index FuzzIdentityCollision
+2 ./internal/languages/golang FuzzExtract
+2 ./internal/languages/php FuzzExtractPHP
+3 ./internal/languages/typescript FuzzExtractTypeScript
+3 ./internal/languages/typescript FuzzModuleSpec
+3 ./internal/languages/typescript FuzzTypeArgParser
+3 ./internal/languages/terraform FuzzExtractTerraform
+- ./internal/mcp FuzzRouteNotificationInvariant

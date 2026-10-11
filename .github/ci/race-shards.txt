@@ -1,0 +1,15 @@
+# Race-detector shards of the CI `race` job (`go test -race`): packages
+# under a "[N]" header, one per line, as `./` paths. The shard holding "*"
+# runs every package of `go list ./...` that no other shard names, so a
+# package can never be left out; a package named twice, or one that does
+# not exist, fails the job (race-shard.py). Balanced by the race run times
+# of the packages (the slowest single package bounds a shard).
+[1]
+./internal/languages/golang
+./internal/tsparse
+./internal/index
+[2]
+./internal/resolver
+./internal/languages/typescript
+[3]
+*
