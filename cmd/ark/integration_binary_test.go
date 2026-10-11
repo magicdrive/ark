@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -78,17 +77,33 @@ func (b *sharedBinary) watchRaces() error {
 		return err
 	}
 	b.raceDir = dir
-	// GORACE options are separated by spaces, so log_path cannot hold one.
-	if strings.ContainsAny(dir, " \t") {
-		return fmt.Errorf("the race report directory %q contains a space, which GORACE log_path cannot hold; set TMPDIR (TEMP on Windows) to a path without one", dir)
+	gorace, err := goraceFor(os.Getenv("GORACE"), filepath.Join(dir, "report"))
+	if err != nil {
+		return err
 	}
-	// Later options win. atexit_sleep_ms=0 drops the second each raced
-	// process otherwise sleeps at exit (for other goroutines to finish
-	// reporting), which with a process per CLI call multiplies a run's time;
-	// a race found before exit is still in the report. The caller's GORACE
-	// comes next and can set it back; log_path comes last, as the reports
-	// must land in dir.
-	return os.Setenv("GORACE", strings.Join(strings.Fields("atexit_sleep_ms=0 "+os.Getenv("GORACE")+" log_path="+filepath.Join(dir, "report")), " "))
+	return os.Setenv("GORACE", gorace)
+}
+
+// goraceFor returns the GORACE of the processes the tests start. Later
+// options win: atexit_sleep_ms=0 drops the second each raced process
+// otherwise sleeps at exit (for other goroutines to finish reporting), which
+// with a process per CLI call multiplies a run's time — a race found before
+// exit is still in the report; the caller's GORACE comes next and can set it
+// back; log_path comes last, as the reports must land at reportPath.
+//
+// The race detector's option parser (sanitizer_common) ends a value at a
+// space, a comma or a colon — the "C:" of a Windows path among them — unless
+// the value is quoted. Nothing is escaped inside the quotes, so the path
+// cannot hold a double quote (no Windows path can).
+func goraceFor(caller, reportPath string) (string, error) {
+	if strings.Contains(reportPath, `"`) {
+		return "", fmt.Errorf("the race report path %q contains a double quote, which GORACE log_path cannot hold", reportPath)
+	}
+	opts := []string{"atexit_sleep_ms=0"}
+	if caller = strings.TrimSpace(caller); caller != "" {
+		opts = append(opts, caller)
+	}
+	return strings.Join(append(opts, `log_path="`+reportPath+`"`), " "), nil
 }
 
 // get returns the binary's path, building it on first use; a failed build
@@ -144,15 +159,20 @@ type raceReport struct{ name, text string }
 func (b *sharedBinary) takeRaceReports() []raceReport {
 	b.raceMu.Lock()
 	defer b.raceMu.Unlock()
-	files, _ := filepath.Glob(filepath.Join(b.raceDir, "report.*"))
-	sort.Strings(files)
+	// os.ReadDir, not filepath.Glob: the directory's own path is not a
+	// pattern (a backslash or a bracket in it would make one).
+	entries, _ := os.ReadDir(b.raceDir)
 	var reports []raceReport
-	for _, f := range files {
+	for _, e := range entries { // sorted by name
+		if !strings.HasPrefix(e.Name(), "report.") {
+			continue
+		}
+		f := filepath.Join(b.raceDir, e.Name())
 		text, err := os.ReadFile(f)
 		if err != nil {
 			text = []byte(fmt.Sprintf("(unreadable: %v)", err))
 		}
-		reports = append(reports, raceReport{filepath.Base(f), string(text)})
+		reports = append(reports, raceReport{e.Name(), string(text)})
 		_ = os.Remove(f)
 	}
 	return reports
