@@ -102,7 +102,8 @@ on macOS x86_64; re-run what changed since.
       masking (`git status`): README, README_ja, `docs/`, SECURITY,
       ARCHITECTURE pointers, release notes, `internal/mcp/sanitize.go`,
       help text, `.goreleaser.yml`, tests (`docs_test.go`,
-      `mcp_secret_masking_integration_test.go`, `mcp_arkignore_integration_test.go`,
+      `mcp_secret_masking_integration_test.go`, `mcp_arkignore_integration_test.go`
+      (both under `tests/integration/` since v6.0.1),
       `internal/mcp/sanitize_test.go`, `internal/commandline/help_test.go`)
       — all tracked at `da4c43a` (e.g. `129e63b`).
 - [ ] After tagging, check the README's Quick start on a clean machine

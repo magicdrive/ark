@@ -235,7 +235,7 @@ jobs:
           rc=0
           out="$RUNNER_TEMP/filesystem-security.json"
           go test -race -count=1 -json ./internal/fsroot ./internal/accesspolicy ./internal/safewalk >> "$out" || rc=1
-          go test -count=1 -json -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core . >> "$out" || rc=1
+          go test -count=1 -json -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core ./tests/integration >> "$out" || rc=1
           go test -count=1 -json -race -run 'TestParallel' ./internal/index ./internal/golden >> "$out" || rc=1
           py=python3; "$py" -c '' 2>/dev/null || py=python
           system=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')

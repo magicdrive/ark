@@ -23,8 +23,8 @@
 ./internal/tsparse                                                     # 32
 ./internal/index                                                       # 4
 [3]
-.                                                                      # 106
 ./internal/golden                                                      # 79
 ./internal/completion                                                  # 59
 ./internal/languages/php                                               # 30
+./tests/integration                                                    # 21
 *

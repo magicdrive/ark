@@ -1,4 +1,4 @@
-package main
+package integration
 
 import (
 	"fmt"
@@ -13,8 +13,10 @@ import (
 // The integration tests run the real ark binary. It is built once per test
 // process, when a test first needs it, and shared: only the executable is
 // shared — no test writes to it — while each test runs it with its own
-// fixture, HOME, working directory and environment.
-var arkBinary = sharedBinary{pkg: "."}
+// fixture, HOME, working directory and environment. The binary is the
+// module's main package, two directories up from this one (go test runs a
+// package's tests in its own directory).
+var arkBinary = sharedBinary{pkg: filepath.Join("..", "..")}
 
 func TestMain(m *testing.M) {
 	arkBinary.snapshot()

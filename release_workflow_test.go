@@ -164,7 +164,7 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 	require("the file access security tests",
 		"os: [windows-latest, macos-latest]", `ARK_REQUIRE_SYMLINKS: "1"`, `ARK_REQUIRE_CASE_FOLDING: "1"`,
 		"go test -race -count=1 -json ./internal/fsroot ./internal/accesspolicy ./internal/safewalk",
-		"go test -count=1 -json -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core .",
+		"go test -count=1 -json -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core ./tests/integration",
 		"go test -count=1 -json -race -run 'TestParallel' ./internal/index ./internal/golden",
 		"exit $rc")
 	require("the TypeScript compiler differential", ".github/ts-oracle/run.sh", "node-version: '22.17.0'")
