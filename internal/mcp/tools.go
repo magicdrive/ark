@@ -16,6 +16,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/libgitignore"
+	"github.com/magicdrive/ark/internal/safewalk"
 )
 
 // ToolsHandler handles all MCP tools
@@ -43,6 +44,11 @@ type ToolsHandler struct {
 	// index_cache.go); created on first use.
 	indexOnce sync.Once
 	indexes   *indexCache
+
+	// memo keeps find_symbol's and find_references' parse results by the
+	// content parsed (parse_memo.go); created on first use.
+	memoOnce sync.Once
+	memo     *parseMemo
 
 	// newIndex replaces index construction in tests (e.g. to force SymbolID
 	// collisions through index.NewWithIDs); nil means index.NewWithCache.
@@ -323,8 +329,22 @@ func (h *ToolsHandler) fileToolOption(args map[string]interface{}) (*commandline
 		return nil, fmt.Errorf("file access: %v", err)
 	}
 	opt.FS = w
-	opt.AccessExclude = h.accessPolicy().excludesWalked
+	opt.AccessExclude = h.walkExclude(w)
 	return &opt, nil
+}
+
+// walkExclude is the walk policy as a filter of what w reports
+// (excludesWalked): an entry w reported as a plain file or directory is
+// not a symlink, so it is decided by name without being looked up by path
+// again; any other path is examined.
+func (h *ToolsHandler) walkExclude(w *safewalk.Walker) func(string) bool {
+	policy := h.accessPolicy()
+	return func(path string) bool {
+		if w.ReportedPlain(path) {
+			return policy.excludesEntry(path, false)
+		}
+		return policy.excludesWalked(path)
+	}
 }
 
 // fileToolOptionError is the tool result for an option set that cannot be
@@ -789,7 +809,7 @@ func (h *ToolsHandler) getDirectoryTree(args map[string]interface{}) (*CallToolR
 	if err != nil {
 		return &CallToolResult{Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: file access: %v", err)}}, IsError: true}, nil
 	}
-	tree, err := directoryTreeJSON(fullPath, h.ignoreRule(true), h.accessPolicy().excludesWalked, w, limits)
+	tree, err := directoryTreeJSON(fullPath, h.ignoreRule(true), h.walkExclude(w), w, limits)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},

@@ -364,7 +364,20 @@ func (h *ToolsHandler) readIndexed(base string, fileID source.FileID) ([]byte, e
 		return data, nil
 	}
 	hookRead(rel)
-	data, err = snap.ReadFile(rel)
+	// A file this request's walk reported (the freshness check of the very
+	// index the file comes from walks the sources under this request's
+	// snapshot) is read through that walk's resolution, identity by
+	// identity; any other, resolved, decided and read in one operation.
+	a.mu.Lock()
+	w := a.walker
+	a.mu.Unlock()
+	reported := false
+	if w != nil {
+		data, reported, err = w.ReadReported(rel)
+	}
+	if !reported {
+		data, err = snap.ReadFile(rel)
+	}
 	if err != nil {
 		return nil, err
 	}

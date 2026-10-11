@@ -85,6 +85,9 @@ type Walker struct {
 	// directory handle it was listed from.
 	cur     *fsroot.Entry
 	curPath string
+	// curID is the identity cur's examination (Describe) found, when it
+	// is a regular file: the object a read of cur must reach.
+	curID fsroot.Identity
 }
 
 // New returns a walker of snap's tree. root is the root as callers spell it
@@ -282,12 +285,16 @@ func (w *Walker) walk(start string, fn func(v visit, err error) error) error {
 			w.rememberDir(e)
 		}
 		p := report(e.Rel())
+		var id fsroot.Identity
+		if ok {
+			id = r.Identity()
+		}
 		w.mu.Lock()
-		w.cur, w.curPath = &e, p
+		w.cur, w.curPath, w.curID = &e, p, id
 		w.mu.Unlock()
 		err = fn(visit{path: p, info: info, e: e}, nil)
 		w.mu.Lock()
-		w.cur, w.curPath = nil, ""
+		w.cur, w.curPath, w.curID = nil, "", fsroot.Identity{}
 		w.mu.Unlock()
 		return mapSkip(err)
 	})
@@ -452,7 +459,7 @@ func (w *Walker) ReadFile(path string) ([]byte, error) {
 	}
 	w.mu.Lock()
 	r, ok := w.seen[rel]
-	cur := w.cur
+	cur, curID := w.cur, w.curID
 	if cur != nil && filepath.Clean(path) != w.curPath {
 		cur = nil
 	}
@@ -462,8 +469,13 @@ func (w *Walker) ReadFile(path string) ([]byte, error) {
 	if cur != nil && cur.Type().IsRegular() {
 		// The entry being reported: read through the handle it was
 		// listed from — the object at its name decided and opened in one
-		// operation (no walk from the root again).
-		data, err = w.snap.ReadEntry(*cur)
+		// operation (no walk from the root again); the object the walk
+		// described (curID), or nothing.
+		if !curID.IsZero() {
+			data, err = w.snap.ReadEntryAs(*cur, curID)
+		} else {
+			data, err = w.snap.ReadEntry(*cur)
+		}
 		if err == nil && w.extra != nil && matchesWithParents(w.extra, cur.Rel()) {
 			data, err = nil, accesspolicy.ErrExcluded
 		}
@@ -476,6 +488,44 @@ func (w *Walker) ReadFile(path string) ([]byte, error) {
 		return nil, readError(path, err)
 	}
 	return data, nil
+}
+
+// ReportedPlain reports whether a walk or a listing of this walker
+// reported path (in the caller's spelling) as a regular file or a directory
+// — not a symlink: its type as the walk examined it (Describe), with no
+// lookup by path.
+func (w *Walker) ReportedPlain(path string) bool {
+	rel, err := w.rel(path)
+	if err != nil {
+		return false
+	}
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if _, ok := w.seen[rel]; ok {
+		return true
+	}
+	_, ok := w.dirs[rel]
+	return ok
+}
+
+// ReadReported reads rel (root-relative, "/"-separated) if a walk or a
+// listing of this walker reported it as a regular file: through the
+// resolution made then (identity by identity), as ReadFile reads it; ok is
+// false, and nothing is read, for a file not reported. Errors are the
+// snapshot's, unworded.
+func (w *Walker) ReadReported(rel string) (data []byte, ok bool, err error) {
+	w.mu.Lock()
+	r, ok := w.seen[rel]
+	w.mu.Unlock()
+	if !ok {
+		return nil, false, nil
+	}
+	at("read", rel)
+	data, err = w.snap.ReadResolved(r)
+	if err == nil && w.extra != nil && matchesWithParents(w.extra, rel) {
+		data, err = nil, accesspolicy.ErrExcluded
+	}
+	return data, true, err
 }
 
 // Stat is os.Stat(path) through the tree: the object path leads to, if the

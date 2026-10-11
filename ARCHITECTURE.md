@@ -426,14 +426,20 @@ and a policy snapshot (the request's, an index build's own, the dump's) —
 in the shapes they used (`Walk`, `WalkDir`, `ReadDir`, `ReadFile`, `Stat`):
 entries listed through directory handles are decided before the caller
 sees them, and a reported file is read through the walk's resolution
-(`fsroot.Entry.Resolved`, `Snapshot.ReadResolved`). The index reads its
-sources the same way (`index.WithFS`); a request's freshness check walks
-under the request's snapshot, so an index is served only when its
-fingerprint is what the request may read. Tests: `TestC3_*`,
-`TestWalkMatchesFilepathWalk`. Danger: deciding a walk entry and then
-reading its path again (`os.ReadFile(path)` in a walk callback) — the window
-this closes; or serving an index on its build-time check alone after the
-rules changed.
+(`fsroot.Entry.Resolved`, `Snapshot.ReadResolved`); the entry being
+reported is read through the handle it was listed from, opened only if it
+is still the object its examination found (`fsroot.Entry.ReadAs`: the
+identity `Describe` found, compared again on the opened file). The index
+reads its sources the same way (`index.WithFS`); a request's freshness check
+walks under the request's snapshot, so an index is served only when its
+fingerprint is what the request may read, and the text the request then
+reads back from the index's files (snippets, generated-package markers) is
+read through that walk's resolutions (`safewalk.Walker.ReadReported`).
+Tests: `TestC3_*`, `TestWalkMatchesFilepathWalk`, `TestEntryReadAs`,
+`TestWarmIndexReads_*`. Danger: deciding a walk entry and then reading its
+path again (`os.ReadFile(path)` in a walk callback) — the window this
+closes; reading through a resolution without comparing identities; or
+serving an index on its build-time check alone after the rules changed.
 
 **The rules are read for every request, once, and never trusted from a
 cache.** Each request (`ToolsHandler.forRequest`) has one
@@ -520,6 +526,28 @@ through a link in the repository, may lead outside.
 - The shared build runs detached from any requester's context: one caller
   giving up must not kill the build others wait for. Failed, panicked or
   stale builds are never published; query options are never part of the key.
+- **A build extracts in parallel and ingests in walk order.** The walk
+  reads every source and adds it to the fingerprint in order; extraction
+  (cache lookup, parse, cache store) runs on a small worker pool, bounded
+  also by the source bytes in flight (a parse's memory grows with its file);
+  results are
+  ingested strictly in walk order and a provider's panic is raised again on
+  the building goroutine (`index/extract.go`). The server's build is the
+  sequential build's index, byte for byte. Tests:
+  `TestParallelBuildMatchesSequential`, `TestParallelExtraction_PanicAndOrder`.
+  Danger: ingesting in completion order, or reading sources off the walk.
+- **The parse memo saves parsing, never reading or deciding.**
+  `find_symbol` and `find_references` walk, decide and read every file
+  through the request's walker on every request; the server's memo
+  (`mcp/parse_memo.go`) keeps what parsing those bytes yields, keyed by the
+  SHA-256 of the bytes and what else the result depends on (language,
+  provider cache version, the file's name where the result embeds it).
+  Owned by the server's handler, shared by its requests under a mutex,
+  bounded (LRU over the bytes parsed); content is the key, so an entry is
+  never stale and is never invalidated; a lookup needs the bytes, so it
+  reveals nothing a request did not read. Tests: `TestParseMemo_*`.
+  Danger: keying by path or metadata, or looking up before the read is
+  decided.
 - Extraction cache: a cache miss is preferable to a cache that lies. Change
   the provider's `CacheVersion` whenever extraction semantics change, and
   `cache.CurrentSchemaVersion` when the cached shape changes; read errors are

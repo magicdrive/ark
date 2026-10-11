@@ -149,17 +149,11 @@ func (t *Tree) chainFile(dir handle, d *ChainDir, name string, read func(string)
 		d.File.NotRegular = true
 		return nil
 	}
-	f, oi, err := dir.openFile(name, info.id)
+	b, oi, err := dir.readFile(name, info.id)
 	if err != nil {
 		if errors.Is(err, ErrChanged) || errors.Is(err, ErrNotRegular) || errors.Is(err, fs.ErrNotExist) {
 			return &fs.PathError{Op: "read", Path: name, Err: ErrChanged}
 		}
-		d.File.Err = err
-		return nil
-	}
-	defer f.Close()
-	b, err := readAllSized(f, oi.size)
-	if err != nil {
 		d.File.Err = err
 		return nil
 	}

@@ -96,6 +96,19 @@ func (d *winDir) openFile(name string, want Identity) (*os.File, objInfo, error)
 	return f, infoOf(after), nil
 }
 
+func (d *winDir) readFile(name string, want Identity) ([]byte, objInfo, error) {
+	f, info, err := d.openFile(name, want)
+	if err != nil {
+		return nil, objInfo{}, err
+	}
+	defer f.Close()
+	b, err := readAllSized(f, info.size)
+	if err != nil {
+		return nil, objInfo{}, err
+	}
+	return b, info, nil
+}
+
 func (d *winDir) readlink(name string) (string, error) { return d.r.Readlink(name) }
 
 func (d *winDir) readDir(bool) ([]dirent, error) {

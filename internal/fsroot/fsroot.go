@@ -115,6 +115,9 @@ type handle interface {
 	// opened; a symlink or other type fails. If want is not zero, the file
 	// opened must be want.
 	openFile(name string, want Identity) (*os.File, objInfo, error)
+	// readFile opens name as openFile does (the same checks) and returns
+	// its whole content.
+	readFile(name string, want Identity) ([]byte, objInfo, error)
 	readlink(name string) (string, error)
 	// readDir lists the directory, sorted by name. Types are hints: every
 	// open re-checks the object it finds. owned: no other goroutine reads
@@ -689,6 +692,40 @@ func (t *Tree) rootRelative(target string, rootID Identity, ancestors bool) ([]s
 		below = append(below, filepath.Base(p))
 		p = parent
 	}
+}
+
+// ReadResolved reads the regular file r resolved, reached as Open reaches
+// it (every directory and the file verified identity by identity), whole.
+func (t *Tree) ReadResolved(r Resolved) ([]byte, error) {
+	if r.tree != t {
+		return nil, ErrInvalidPath
+	}
+	if !r.info.mode.IsRegular() {
+		return nil, &fs.PathError{Op: "open", Path: r.logical, Err: ErrNotRegular}
+	}
+	if r.external != "" {
+		f, err := t.Open(r)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		return ReadAll(f, r.info.size)
+	}
+	root, release, err := t.acquire()
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	dir, held, err := t.walkDirs(root, r.real[:len(r.real)-1], r.dirIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer closeAll(held)
+	b, _, err := dir.readFile(r.real[len(r.real)-1], r.info.id)
+	if err != nil {
+		return nil, &fs.PathError{Op: "open", Path: r.logical, Err: err}
+	}
+	return b, nil
 }
 
 // Open opens the regular file r names: the object Resolve checked, reached

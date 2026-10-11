@@ -5,7 +5,6 @@ import (
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/language"
-	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -45,67 +44,17 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 	b.ids = ids
 	digest := newSourceDigest(providers)
 
+	// The walk reads the sources in order (and adds them to the fingerprint
+	// as it reads them); their extraction — a pure function of the file's
+	// name and bytes — runs on workers; the results are ingested in walk
+	// order, so the index is the one a sequential build makes (extract.go).
+	ex := newExtractor(ctx, store, extractWorkers())
 	err := walkSources(ctx, root, providers, exclude, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
-		if readErr != nil {
-			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))
-			b.stats.Skipped++
-			return
-		}
-
-		fileID := source.FileID(relPath)
-		cacheKey := cache.NewCacheKey(relPath, src, ArkVersion, prov.CacheVersion())
-
-		// Try cache hit first.
-		if cached, hit, _ := store.Get(cacheKey); hit {
-			// A hit must yield the index a miss would: diagnostics included.
-			b.addDiagnostics(cached.Diagnostics)
-			b.ingestExtraction(fileID, cached.Language, language.Extraction{
-				Symbols:      cached.Symbols,
-				References:   cached.References,
-				Imports:      cached.Imports,
-				Diagnostics:  cached.Diagnostics,
-				Bindings:     cached.Bindings,
-				Exports:      cached.Exports,
-				ModuleScoped: cached.ModuleScoped,
-				IdentityOnly: cached.IdentityOnly,
-
-				Package:       cached.Package,
-				PackageScoped: cached.PackageScoped,
-			})
-			return
-		}
-
-		// Cache miss — extract and store.
-		extraction, err := prov.Extract(ctx, fileID, src)
-		if err != nil {
-			b.addDiagnostic(fileFailure(relPath, language.DiagExtractionError, "extraction error", err))
-			b.stats.Skipped++
-			return
-		}
-		b.addDiagnostics(extraction.Diagnostics)
-
-		lang := string(prov.Language())
-		b.ingestExtraction(fileID, lang, extraction)
-
-		// Persist to cache (best-effort; errors are ignored).
-		_ = store.Put(&cache.CachedExtraction{
-			Key:          cacheKey,
-			Language:     lang,
-			Symbols:      extraction.Symbols,
-			References:   extraction.References,
-			Imports:      extraction.Imports,
-			Diagnostics:  extraction.Diagnostics,
-			Bindings:     extraction.Bindings,
-			Exports:      extraction.Exports,
-			ModuleScoped: extraction.ModuleScoped,
-			IdentityOnly: extraction.IdentityOnly,
-
-			Package:       extraction.Package,
-			PackageScoped: extraction.PackageScoped,
-		})
+		ex.add(relPath, prov, src, readErr)
+		ex.drain(b, false)
 	})
-
+	ex.drain(b, true)
 	if err != nil && err != context.Canceled && err != context.DeadlineExceeded {
 		// Walk errors other than context cancellation are soft.
 	}

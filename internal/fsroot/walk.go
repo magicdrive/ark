@@ -192,12 +192,35 @@ func (e Entry) ReadChecked(check func(Identity) error) ([]byte, error) {
 				return err
 			}
 		}
-		f, oi, err := h.openFile(e.name, info.id)
-		if err != nil {
-			return err
+		out, _, err = h.readFile(e.name, info.id)
+		return err
+	})
+	if err != nil {
+		return nil, &fs.PathError{Op: "read", Path: e.rel, Err: err}
+	}
+	return out, nil
+}
+
+// ReadAs is ReadChecked for an entry already examined through the handle it
+// was listed from (Describe): want is the identity that examination found
+// — a regular file, not a symlink. check decides on want before anything
+// is opened; then the object at the entry's name is opened (no symlink
+// followed) and read only if it is still a regular file of identity want,
+// else ErrChanged. What ReadChecked's own lstat would find again is not
+// looked up a second time; what is opened and read is verified the same.
+func (e Entry) ReadAs(want Identity, check func(Identity) error) ([]byte, error) {
+	if e.IsSymlink() || want.IsZero() {
+		return e.ReadChecked(check)
+	}
+	if check != nil {
+		if err := check(want); err != nil {
+			return nil, &fs.PathError{Op: "read", Path: e.rel, Err: err}
 		}
-		defer f.Close()
-		out, err = readAllSized(f, oi.size)
+	}
+	var out []byte
+	err := e.dir.use(func(h handle) error {
+		var err error
+		out, _, err = h.readFile(e.name, want)
 		return err
 	})
 	if err != nil {
@@ -215,12 +238,9 @@ func (e Entry) ReadAll() ([]byte, Identity, error) {
 	var b []byte
 	var id Identity
 	err := e.dir.use(func(h handle) error {
-		f, info, err := h.openFile(e.name, Identity{})
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		b, err = readAllSized(f, info.size)
+		var info objInfo
+		var err error
+		b, info, err = h.readFile(e.name, Identity{})
 		id = info.id
 		return err
 	})

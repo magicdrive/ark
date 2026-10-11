@@ -404,15 +404,14 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 			return nil
 		}
 
-		parseResult, err := syntax.Parse(lang, source)
-		if err != nil {
+		parsed := h.fileSymbols(lang, source)
+		if !parsed.ok {
 			statsParseErr++
 			return nil
 		}
-		defer parseResult.Release()
 
 		statsScanned++
-		symbols := syntax.ExtractSymbols(parseResult)
+		symbols := parsed.symbols
 
 		relPath, _ := filepath.Rel(h.rootDir, filePath)
 

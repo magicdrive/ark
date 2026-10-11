@@ -1,7 +1,6 @@
 package mcp
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -138,12 +137,12 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 		}
 		relPath, _ := filepath.Rel(h.rootDir, filePath)
 		fileID := source.FileID(relPath)
-		ext2, err := provider.Extract(context.Background(), fileID, src)
-		if err != nil {
+		refs, ok := h.fileReferences(provider, fileID, src)
+		if !ok {
 			return
 		}
 		lang := string(provider.Language())
-		for _, ref := range ext2.References {
+		for _, ref := range refs {
 			if len(results) >= maxResults {
 				break
 			}

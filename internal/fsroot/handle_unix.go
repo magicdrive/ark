@@ -94,27 +94,79 @@ func (d *unixDir) openDir(name string, want Identity) (handle, error) {
 }
 
 func (d *unixDir) openFile(name string, want Identity) (*os.File, objInfo, error) {
+	fd, info, err := d.openFD(name, want)
+	if err != nil {
+		return nil, objInfo{}, err
+	}
+	return os.NewFile(uintptr(fd), name), info, nil
+}
+
+// openFD is openFile's descriptor: opened, checked to be a regular file
+// (and want), not yet wrapped.
+func (d *unixDir) openFD(name string, want Identity) (int, objInfo, error) {
 	// O_NONBLOCK: a FIFO swapped in must not block the server; the type is
 	// checked below and a regular file reads the same either way.
 	fd, err := unix.Openat(d.fd, name, unix.O_RDONLY|unix.O_NOFOLLOW|unix.O_CLOEXEC|unix.O_NONBLOCK, 0)
 	if err != nil {
-		return nil, objInfo{}, &fs.PathError{Op: "openat", Path: name, Err: err}
+		return -1, objInfo{}, &fs.PathError{Op: "openat", Path: name, Err: err}
 	}
 	var st unix.Stat_t
 	if err := unix.Fstat(fd, &st); err != nil {
 		unix.Close(fd)
-		return nil, objInfo{}, &fs.PathError{Op: "fstat", Path: name, Err: err}
+		return -1, objInfo{}, &fs.PathError{Op: "fstat", Path: name, Err: err}
 	}
 	if st.Mode&unix.S_IFMT != unix.S_IFREG {
 		unix.Close(fd)
-		return nil, objInfo{}, &fs.PathError{Op: "openat", Path: name, Err: ErrNotRegular}
+		return -1, objInfo{}, &fs.PathError{Op: "openat", Path: name, Err: ErrNotRegular}
 	}
 	info := objInfo{size: st.Size, id: statIdentity(&st)}
 	if !want.IsZero() && !info.id.Same(want) {
 		unix.Close(fd)
-		return nil, objInfo{}, &fs.PathError{Op: "openat", Path: name, Err: ErrChanged}
+		return -1, objInfo{}, &fs.PathError{Op: "openat", Path: name, Err: ErrChanged}
 	}
-	return os.NewFile(uintptr(fd), name), info, nil
+	return fd, info, nil
+}
+
+// readFile opens name as openFile does and reads it whole on the
+// descriptor itself: an os.File would ask the descriptor's flags and, since
+// it is non-blocking, register it with the runtime poller (two system calls
+// a file, for nothing a regular file can use).
+func (d *unixDir) readFile(name string, want Identity) ([]byte, objInfo, error) {
+	fd, info, err := d.openFD(name, want)
+	if err != nil {
+		return nil, objInfo{}, err
+	}
+	defer unix.Close(fd)
+	b, err := readAllFD(fd, info.size)
+	if err != nil {
+		return nil, objInfo{}, &fs.PathError{Op: "read", Path: name, Err: err}
+	}
+	return b, info, nil
+}
+
+// readAllFD is readAllSized on a descriptor: size (from fstat) is a hint,
+// the content is what is read until end of file.
+func readAllFD(fd int, size int64) ([]byte, error) {
+	if size <= 0 || size > 1<<30 {
+		size = 512
+	}
+	buf := make([]byte, 0, size+1)
+	for {
+		n, err := unix.Read(fd, buf[len(buf):cap(buf)])
+		if err == unix.EINTR {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if n == 0 {
+			return buf, nil
+		}
+		buf = buf[:len(buf)+n]
+		if len(buf) == cap(buf) {
+			buf = append(buf, 0)[:len(buf)]
+		}
+	}
 }
 
 func (d *unixDir) readlink(name string) (string, error) {

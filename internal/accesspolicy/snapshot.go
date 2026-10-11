@@ -485,6 +485,16 @@ func (s *Snapshot) ReadEntry(e fsroot.Entry) ([]byte, error) {
 	return e.ReadChecked(func(fsroot.Identity) error { return s.CheckEntry(e) })
 }
 
+// ReadEntryAs is ReadEntry for an entry its walk has just examined (want:
+// the identity the examination found, fsroot.Entry.ReadAs): decided
+// (CheckEntry) and read only if the object at its name is still that one.
+func (s *Snapshot) ReadEntryAs(e fsroot.Entry, want fsroot.Identity) ([]byte, error) {
+	if e.IsSymlink() {
+		return nil, fsroot.ErrSymlink
+	}
+	return e.ReadAs(want, func(fsroot.Identity) error { return s.CheckEntry(e) })
+}
+
 // verifyDir checks that d is the directory the snapshot walked (or, below
 // .git or .ark, that the skipped directory above it is).
 func (s *Snapshot) verifyDir(d fsroot.DirRef) error {
@@ -548,12 +558,7 @@ func (s *Snapshot) ReadResolved(r fsroot.Resolved) ([]byte, error) {
 	if !r.IsRegular() {
 		return nil, &fs.PathError{Op: "read", Path: r.Logical(), Err: fsroot.ErrNotRegular}
 	}
-	f, err := s.tree.Open(r)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	return fsroot.ReadAll(f, r.Size())
+	return s.tree.ReadResolved(r)
 }
 
 // ReadFile reads rel through the snapshot's tree if the policy admits it.
