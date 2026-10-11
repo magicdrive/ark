@@ -14,6 +14,7 @@
     race shards: a failed, skipped or cancelled run is not coverage;
   - per system, every skipped filesystem-security test, and the state of the
     binary-level case tests (TestMCPCase_, TestCLICase_);
+  - no report has a MUST_RUN_PACKAGES package passed from go test's cache;
   - on every filesystem-security system, each of REQUIRED_SECURITY_TESTS ran
     and passed: a skip, a failure or a test that did not run fails the gate.
 
@@ -32,6 +33,12 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 # every system of the filesystem-security job — the ark binary on a
 # case-insensitive file system.
 REQUIRED_SECURITY_PACKAGE = "/tests/integration"
+
+# Packages whose tests build ark from source in another process: go test's
+# result cache sees those sources only through the directories the tests
+# record (recordInputs in their integration_binary_test.go), so a result
+# reused from the cache ("(cached)") is not a run of the current sources.
+MUST_RUN_PACKAGES = ("/tests/integration", "/cmd/ark")
 REQUIRED_SECURITY_TESTS = ("TestMCPCase_ExcludedFilesUnreachable", "TestCLICase_DumpExcludes")
 
 
@@ -70,7 +77,11 @@ def main():
         return hits[0]
 
     def packages(tests_tsv):
-        return {r[0] for r in load(tests_tsv[: -len(".tests.tsv")] + ".packages.tsv")}
+        rows = load(tests_tsv[: -len(".tests.tsv")] + ".packages.tsv")
+        for r in rows:
+            if r[0].endswith(MUST_RUN_PACKAGES) and len(r) > 3 and r[3] == "cached":
+                errors.append(f"{os.path.basename(tests_tsv)[: -len('.tests.tsv')]}: {r[0]} passed from go test's cache, not a run of the current sources")
+        return {r[0] for r in rows}
 
     def module_relative(pkg, module):
         if pkg == module:
@@ -126,6 +137,7 @@ def main():
         if not path:
             continue
         rows = load(path)
+        packages(path)
         tally = collections.Counter(r[2] for r in rows)
         print(f"\nfilesystem-security {system}: {tally['pass']} pass, {tally['fail']} fail, {tally['skip']} skip")
         for r in rows:

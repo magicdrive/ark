@@ -440,6 +440,36 @@ func TestCIWorkflow_RequiredSecurityTestsAreSelected(t *testing.T) {
 	}
 }
 
+// The tests that build ark from source in another process (tests/integration,
+// cmd/ark) must run whenever those sources change: their shared build records
+// the build's input directories for go test's result cache before it builds
+// (recordInputs), and the gate fails a report in which either package passed
+// from the cache (check-coverage.py MUST_RUN_PACKAGES).
+func TestCIWorkflow_SourceBuildingTestsAlwaysRun(t *testing.T) {
+	gate, err := os.ReadFile(".github/ci/check-coverage.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^MUST_RUN_PACKAGES = \(([^)]*)\)`).FindSubmatch(gate)
+	if m == nil {
+		t.Fatal("check-coverage.py: no MUST_RUN_PACKAGES")
+	}
+	for _, pkg := range []string{"tests/integration", "cmd/ark"} {
+		if !strings.Contains(string(m[1]), `"/`+pkg+`"`) {
+			t.Errorf("check-coverage.py: MUST_RUN_PACKAGES %s lacks /%s", m[1], pkg)
+		}
+		src, err := os.ReadFile(filepath.Join(pkg, "integration_binary_test.go"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		record := strings.Index(string(src), "b.recordInputs(flags)")
+		build := strings.Index(string(src), `exec.Command("go", append(append([]string{"build"}, flags...)`)
+		if record < 0 || build < 0 || record > build {
+			t.Errorf("%s/integration_binary_test.go: the shared build must record its inputs (b.recordInputs(flags)) before go build", pkg)
+		}
+	}
+}
+
 // The fuzz smoke runs 13 targets, each once and for 10 seconds without the
 // unit tests, and every Fuzz function of the repository is either in it or
 // listed as deliberately left out.

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"testing"
@@ -140,17 +141,66 @@ func (b *sharedBinary) build() {
 	if runtime.GOOS == "windows" {
 		path += ".exe"
 	}
-	args := []string{"build"}
+	var flags []string
 	if b.race {
-		args = append(args, "-race")
+		flags = append(flags, "-race")
 	}
-	cmd := exec.Command("go", append(args, "-o", path, b.pkg)...)
+	if _, err := b.recordInputs(flags); err != nil {
+		b.err = err
+		return
+	}
+	cmd := exec.Command("go", append(append([]string{"build"}, flags...), "-o", path, b.pkg)...)
 	cmd.Env, cmd.Dir = b.env, b.wd
 	if out, err := cmd.CombinedOutput(); err != nil {
 		b.err = fmt.Errorf("%v\n%s", err, out)
 		return
 	}
 	b.path = path
+}
+
+// recordInputs opens, in this process, every directory the build of pkg
+// reads from: the directories of the main module's packages it compiles
+// (go.mod and go.sum sit in the module root, the main package's) and those
+// of their embedded files. go test caches a test's result against the files
+// and directories the test itself opened — a directory by the name, size and
+// time of each entry, so a file changed, added or removed there counts — and
+// knows nothing of what go build, another process, reads: without this, a
+// result cached before a change to ark's sources would be reused after it.
+// It runs inside the first test that needs the binary, as go test records
+// only what a test opens while m.Run runs; it returns the directories.
+func (b *sharedBinary) recordInputs(flags []string) ([]string, error) {
+	format := `{{if and .Module .Module.Main}}{{.Dir}}{{range .EmbedFiles}}{{"\t"}}{{.}}{{end}}{{"\n"}}{{end}}`
+	cmd := exec.Command("go", append(append([]string{"list", "-deps"}, flags...), "-f", format, b.pkg)...)
+	cmd.Env, cmd.Dir = b.env, b.wd
+	var stderr strings.Builder
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("go list -deps %s (the build's inputs, for go test's cache): %v\n%s", b.pkg, err, stderr.String())
+	}
+	dirs := map[string]bool{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		fields := strings.Split(line, "\t")
+		if fields[0] == "" {
+			continue
+		}
+		dirs[fields[0]] = true
+		for _, embed := range fields[1:] {
+			dirs[filepath.Dir(filepath.Join(fields[0], filepath.FromSlash(embed)))] = true
+		}
+	}
+	if len(dirs) == 0 {
+		return nil, fmt.Errorf("go list -deps %s: no package of the main module", b.pkg)
+	}
+	var recorded []string
+	for dir := range dirs {
+		if _, err := os.ReadDir(dir); err != nil {
+			return nil, fmt.Errorf("recording the build input %s: %v", dir, err)
+		}
+		recorded = append(recorded, dir)
+	}
+	sort.Strings(recorded)
+	return recorded, nil
 }
 
 type raceReport struct{ name, text string }
