@@ -57,8 +57,11 @@ jobs:
           ARK_REQUIRE_SYMLINKS: "1"
         run: go test -race ./...
 
+      # Pinned: staticcheck 2026.2.1 (v0.8.1, the latest release) cannot read
+      # Go 1.27.2's export data; this development version can. Return to a
+      # release once one supports Go 1.27.2.
       - name: Install staticcheck
-        run: go install honnef.co/go/tools/cmd/staticcheck@latest
+        run: go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45
 
       - name: Run staticcheck (intelligence core)
         run: |
@@ -159,7 +162,8 @@ jobs:
         run: |
           set -o pipefail
           go test -race -count=1 -v ./internal/fsroot ./internal/accesspolicy ./internal/safewalk | tee fsroot-test.log
-          go test -count=1 -v -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core . | tee -a fsroot-test.log
+          go test -count=1 -v -race -run 'TestCase_|TestB[0-9]|TestC3_|TestRequestAccess_|TestWarmIndexReads_|TestParseMemo_|TestDumpSymlinkToIgnored|TestMCPCase_|TestCLICase_' ./internal/mcp ./internal/core . | tee -a fsroot-test.log
+          go test -count=1 -v -race -run 'TestParallel' ./internal/index ./internal/golden | tee -a fsroot-test.log
 
       - name: List skipped tests
         if: always()

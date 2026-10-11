@@ -3,11 +3,13 @@ package index_test
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/index"
@@ -88,5 +90,43 @@ func TestParallelExtraction_LargeFiles(t *testing.T) {
 	}
 	if len(ds) != 6 {
 		t.Fatalf("%d diagnostics, want 6", len(ds))
+	}
+}
+
+// A panic on the walking goroutine itself (here the exclude function, not a
+// provider) while extractions are in flight leaves no worker behind: the
+// build stops its workers before the panic leaves it.
+func TestParallelExtraction_WalkPanicStopsWorkers(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < 40; i++ {
+		os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%02d.fake", i)), []byte("x"), 0o644)
+	}
+	before := runtime.NumGoroutine()
+	n := 0
+	exclude := func(path string, d fs.DirEntry) bool {
+		if !d.IsDir() {
+			if n++; n == 30 {
+				panic("exclude panic")
+			}
+		}
+		return false
+	}
+	func() {
+		defer func() {
+			if r := recover(); r == nil || !strings.Contains(fmt.Sprint(r), "exclude panic") {
+				t.Errorf("recovered %v, want the walk's panic", r)
+			}
+		}()
+		index.NewWithCacheExcluding(context.Background(), dir, []language.Provider{panicProvider{}}, cache.NopStore{}, exclude)
+		t.Error("the build returned instead of panicking")
+	}()
+	// The workers have ended when the panic leaves the build; the
+	// goroutine that reports their end may still be returning.
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
+	if after := runtime.NumGoroutine(); after > before {
+		t.Errorf("goroutines: %d before the build, %d after the walk's panic", before, after)
 	}
 }

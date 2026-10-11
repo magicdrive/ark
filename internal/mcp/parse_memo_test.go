@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,6 +14,13 @@ var memoCalls = []benchCall{
 	{"find_symbol", map[string]interface{}{"pattern": "Fn", "kind": "function"}},
 	{"find_references", map[string]interface{}{"path": ".", "name": "Helper"}},
 	{"find_references", map[string]interface{}{"path": "a/a.go", "name": "Helper"}},
+}
+
+// jsonPath is rel as the tools' JSON output spells a path: in the operating
+// system's form, JSON-encoded (a Windows separator is escaped).
+func jsonPath(rel string) string {
+	b, _ := json.Marshal(filepath.FromSlash(rel))
+	return string(b)
 }
 
 func memoRepo(t *testing.T) string {
@@ -47,7 +55,7 @@ func TestParseMemo_SameOutput(t *testing.T) {
 	}
 	out := callOut(t, h, "find_references", map[string]interface{}{"path": ".", "name": "Helper"})
 	for _, f := range []string{"a/a.go", "b/b.go", "b/c.go"} {
-		if !strings.Contains(out, `"file": "`+filepath.FromSlash(f)+`"`) {
+		if !strings.Contains(out, `"file": `+jsonPath(f)) {
 			t.Errorf("find_references does not report %s:\n%s", f, out)
 		}
 	}
@@ -61,10 +69,10 @@ func TestParseMemo_EditedFile(t *testing.T) {
 	callOut(t, h, "find_symbol", map[string]interface{}{"pattern": "."})
 	callOut(t, h, "find_references", map[string]interface{}{"path": ".", "name": "Helper"})
 	put(t, filepath.Join(root, "a/a.go"), "package a\n\nfunc Renamed() int { return 1 }\n\nfunc AFn() int { return Renamed() }\n")
-	if sym := callOut(t, h, "find_symbol", map[string]interface{}{"pattern": "^Renamed$"}); !strings.Contains(sym, filepath.FromSlash("a/a.go")) {
+	if sym := callOut(t, h, "find_symbol", map[string]interface{}{"pattern": "^Renamed$"}); !strings.Contains(sym, jsonPath("a/a.go")) {
 		t.Errorf("find_symbol does not find the edited file's new symbol:\n%s", sym)
 	}
-	if sym := callOut(t, h, "find_symbol", map[string]interface{}{"pattern": "^Helper$"}); strings.Contains(sym, filepath.FromSlash("a/a.go")) {
+	if sym := callOut(t, h, "find_symbol", map[string]interface{}{"pattern": "^Helper$"}); strings.Contains(sym, jsonPath("a/a.go")) {
 		t.Errorf("find_symbol returns a symbol the edited file no longer has:\n%s", sym)
 	}
 	refs := callOut(t, h, "find_references", map[string]interface{}{"path": "a", "name": "Helper"})

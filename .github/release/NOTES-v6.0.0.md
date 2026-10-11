@@ -1,8 +1,8 @@
 # Ark v6.0.0 — release notes (draft)
 
 > Draft for the maintainer. Every number below was measured during the v6.0.0
-> release audit (macOS x86_64, Go 1.27.1); nothing here is a general
-> performance or token guarantee. Token counts are Ark's own estimate
+> release work (macOS x86_64, Go 1.27.1; the release is built with Go
+> 1.27.2); nothing here is a general performance or token guarantee. Token counts are Ark's own estimate
 > (`len(text)/4`), not any model's tokenizer, and they count tool responses
 > only — not an agent's total token use.
 
@@ -280,59 +280,61 @@ No CLI flag, MCP tool, required parameter or output field was removed.
 5. **Callers of target tools** that relied on a bare name for a same-file
    namesake must pass `symbolId`.
 
-## Performance (measured, v5.0.1 vs v6.0.0, same machine and corpus)
+## Performance
 
-| Corpus | Files | Cold first call | Warm get_context | Cache-restore first call | Max RSS |
-|---|---|---|---|---|---|
-| small fixture | 4 | 97 → 102 ms | 0.4 → 0.4 ms | 21 → 21 ms | 48 → 49 MB |
-| Ark repository | 585 | 4.09 → 4.12 s | 30.7 → 28.7 ms | 570 → 570 ms | 248 → 249 MB |
-| fzf | 89 | 1.58 → 1.56 s | 6.7 → 6.4 ms | 149 → 147 ms | 228 → 234 MB |
-| golang.org/x/tools v0.36.0 | 1216 | 14.7–16.1 → 15.2–15.9 s | 79 → 74 ms | 2.15 → 2.25 s | 832–947 → 781–1029 MB |
+Measured on the final build against the build before its performance work
+(Phase 3-D), on one machine (macOS x86_64, Intel Xeon W-2140B, APFS; Go
+1.27.1), alternating the two builds; medians of five runs unless stated.
+Corpora: synthetic Go repositories (medium: 1,025 source files; large:
+about 5,000) and Ark's own repository. These are Ark's own timings — they
+say nothing about a model's inference time or token use.
 
-Timings and RSS overlap between versions across repeated runs (RSS varies with
-GC timing). This table compares versions on the audit's corpus copies (x/tools:
-1,216 indexed files); `docs/performance.md` measures v6.0.0 alone on the full
-release archives (x/tools: 1,875 files), with a reproducible procedure. Go package scoping (measured against the v6 audit build, same
-corpora): resolver time 1.31 s → 0.19 s on x/tools (268 → 54 ms on Ark: the
-repository-wide name stages no longer run for Go), index build 14.9 → 13.6 s,
-heap retained by the index unchanged (70.5 → 68.4 MB on x/tools); warm tool
-latency within run-to-run variation. In-process on x/tools: allocations +1.6% (3.64M → 3.70M), heap
-304 → 305 MB. `search_context` warm latency: 0.5 ms / 32 ms / 8 ms / 96 ms on the
-four corpora.
+| What | Before | After |
+|---|---|---|
+| Replayed code-investigation session (Ark's repository; 6 tasks, 22 tool calls, a new server per session) | 25.0 s | 14.3 s (−43%) |
+| Warm `find_symbol` (medium) | 3.13 s | 42 ms |
+| Warm `find_references` (medium) | 1.66 s | 43 ms |
+| First index build, extraction cache off (medium) | 2.13 s | 0.67 s |
+| First index build, extraction cache off (large) | 12.0 s | 4.7 s |
+| Warm index-based tools (`search_code`, `get_callers`, `get_context`, …) | | 4–16% faster, by repository shape |
+| `get_repository_map` | | 47–60% faster |
 
-Access policy (`.arkignore` and symlinks) — warm latency per tool, median of
-9, `.arkignore` integration's first version → this release; the build before
-any `.arkignore` enforcement in brackets:
+Where it comes from: files are read with fewer system calls, a file a walk
+has just examined is read against the identity the walk found, a request
+reads index snippets through its own freshness walk, `find_symbol` and
+`find_references` keep their parse results by content, and the index build
+extracts sources on four workers. Tool output is unchanged (below).
 
-| Corpus | `get_diagnostics` | `list_files` | `search_in_files` | `get_file_content` |
-|---|---|---|---|---|
-| Ark (1 pattern) | 40.3 → 34.2 ms [26.8] | 112.9 → 87.0 ms [103.3] | 138.8 → 109.6 ms [120.3] | 6.4 → 0.4 ms [0.2] |
-| golang.org/x/tools (no `.arkignore`) | 130.6 → 119.6 ms [108.0] | 115.0 → 102.3 ms [90.5] | 92.2 → 69.3 ms [72.8] | 25.3 → 0.4 ms [0.4] |
-| x/tools + 300 nested `.arkignore` (900 patterns) | 1,810 → 192 ms [104] | 4,953 → 277 ms [2,491] | 1,447 → 126 ms [733] | 34.0 → 0.5 ms [0.3] |
+Trade-offs and limits:
 
-An index request walks the repository once: the walk that re-reads the rule
-files also lists the sources its freshness fingerprint reads (warm
-`get_diagnostics` 43.4 → 34.2 ms on Ark, 137.1 → 119.6 ms on x/tools against
-two walks). What remains above the build without enforcement is the rule
-files' reading and the policy checks; compiling the rules takes microseconds
-and is reused while they are unchanged.
+- **Peak memory during the first index build is higher.** Extraction runs in
+  parallel (four workers, at most 256 KB of source in flight), and each
+  worker holds a parser's memory while it parses. Process peak RSS during a
+  first build, extraction cache off: Ark's repository 236 MB → about
+  380 MB; a deep synthetic repository 150 MB → about 180 MB; a repository
+  of large files (18 files of about 250 KB) 333 MB → about 420 MB. The heap
+  the server keeps after the build is unchanged.
+- **The first `find_symbol` / `find_references` call still parses every
+  file** (seconds on a repository of several hundred files); the speed-up
+  above is for later calls, whose files have not changed.
+- **Warm index requests still read and hash every source file**: an index
+  is reused only after a walk under the request's own access policy finds
+  every source's content unchanged — the freshness check is not relaxed for
+  speed.
+- The parse memo is bounded by the bytes of source it holds results for
+  (64 MB); the results themselves take several times that.
 
-Tool-level workflow benchmark (12 tasks: exact, partial and ambiguous names,
-callers, callees, impact, error path, another Go repository, TypeScript; no
-model involved — fixed procedures, same success criteria):
+Validation of the performance work: the MCP output of the final build and of
+the build before it compared over 6 corpora, 21 tools and 9,688 calls (cold
+and warm servers, error paths included) — no difference.
 
-| Workflow | Tasks solved | Tool calls | Tool-response tokens | Warm wall-clock |
-|---|---|---|---|---|
-| A: grep + read files (no Ark) | 9/12 | 50 | 213,264 | 1.0 s |
-| B: find_symbol / get_context / graph tools (v5.0.1) | 10/12 | 16 | 21,699 | 35.4 s |
-| B: same (v6.0.0) | 10/12 | 16 | 21,699 | 35.3 s |
-| C: search_context first (v6.0.0) | 12/12 | 16 | 51,190 | 0.4 s |
+Go resolution (measured before the filesystem hardening; the resolver is
+unchanged since): Go package scoping cut resolver time from 1.31 s to 0.19 s
+on golang.org/x/tools (268 → 54 ms on Ark), with the heap retained by the
+index unchanged.
 
-C solves the two tasks B misses (a name in another naming style; a
-case-insensitive partial name) and avoids `find_symbol`'s per-call file scan,
-but returns more tokens: 31k of its 51k come from one task whose target
-function is very large (`get_context` always includes the target). These are
-tool-response tokens, not a model's total token use.
+`docs/performance.md` describes how to measure; its figures predate the
+filesystem hardening and the performance work above.
 
 ## Documentation
 
@@ -445,7 +447,9 @@ dump reads ignore rules from the dumped directory with `.arkignore` and
 
 **Deprecated / Removed** — none.
 
-**Performance** — no measurable change (see above).
+**Performance** — faster warm tools, `find_symbol` / `find_references`
+on unchanged files and first index builds; higher peak memory during a
+first index build (see Performance).
 
 **Internal** — `language.Dialect` / `language.NameSpace`,
 `resolver.FileIndex.NameSpace` (set by the index; no cache change);
@@ -466,3 +470,10 @@ cases, 0 disagreements), GoReleaser snapshot build + `verify-dist.sh` (8
 archives), MCP JSON-RPC integration tests on the real binary, setup upgrade from
 v5.0.1 for all six clients, cache cold / warm / corrupted / read-only /
 v5.0.1-written, 240 concurrent HTTP requests.
+
+Final build: filesystem security and regression tests on macOS; CI on the
+performance commit (run #180) green — the Linux test job (`go test`, race,
+staticcheck, fuzz smoke) and the `filesystem-security` jobs on macOS and
+Windows; the MCP differential above (9,688 calls); an independent security
+review of Phases 3-A…3-D before tagging; `govulncheck` with the release's
+Go (1.27.2): no known vulnerability.

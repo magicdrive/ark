@@ -49,6 +49,7 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 	// name and bytes — runs on workers; the results are ingested in walk
 	// order, so the index is the one a sequential build makes (extract.go).
 	ex := newExtractor(ctx, store, extractWorkers())
+	defer ex.stop() // also when the walk panics: no worker is left behind
 	err := walkSources(ctx, root, providers, exclude, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
 		digest.add(relPath, src, readErr)
 		ex.add(relPath, prov, src, readErr)
