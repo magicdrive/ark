@@ -110,9 +110,11 @@ jobs:
           path: ${{ runner.temp }}/reports
           if-no-files-found: error
 
-  # `go test -race ./...`, split by package into the shards of
-  # .github/ci/race-shards.txt (the last one takes every package no other
-  # shard names); same flags and environment as one run over ./...
+  # `go test -race ./...`, split into the shards of .github/ci/race-shards.txt:
+  # each shard starts its packages slowest first, a package may be split in
+  # two by one regexp (-run in one shard, -skip in another), and "*" takes
+  # every package no line names. Same flags and environment as one run over
+  # ./... (race-shard.py run); ci-gate checks every test ran exactly once.
   race:
     strategy:
       fail-fast: false
@@ -133,14 +135,14 @@ jobs:
 
       - name: List the shard's packages
         run: |
-          python3 .github/ci/race-shard.py "${{ matrix.shard }}" > "$RUNNER_TEMP/packages"
+          python3 .github/ci/race-shard.py list "${{ matrix.shard }}" > "$RUNNER_TEMP/packages"
           cat "$RUNNER_TEMP/packages"
           [ -s "$RUNNER_TEMP/packages" ]
 
       - name: Install zsh (shell completion tests)
         # As in the unit job, for the shard that runs internal/completion.
         run: |
-          if grep -qx 'github.com/magicdrive/ark/internal/completion' "$RUNNER_TEMP/packages"; then
+          if cut -d' ' -f1 "$RUNNER_TEMP/packages" | grep -qx 'github.com/magicdrive/ark/internal/completion'; then
             sudo apt-get update && sudo apt-get install -y zsh
           fi
 
@@ -152,7 +154,7 @@ jobs:
           ARK_REQUIRE_SYMLINKS: "1"
         run: |
           set +e
-          go test -race -json $(cat "$RUNNER_TEMP/packages") > "$RUNNER_TEMP/race.json"
+          python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/race.json"
           rc=$?
           set -e
           python3 .github/ci/test-report.py "$RUNNER_TEMP/race.json" "race-${{ matrix.shard }}-linux" "$RUNNER_TEMP/reports"

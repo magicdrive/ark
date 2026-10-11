@@ -123,13 +123,36 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 		"./internal/language/...", "./internal/languages/...", "./internal/mcp/...", "./internal/symbol/...",
 		"./internal/reference/...", "./internal/repomap/...", "./internal/impact/...", "./internal/search/...",
 		"./internal/fsroot/...", "./internal/accesspolicy/...", "./internal/safewalk/...")
-	race := require("the race tests, by shard", `go test -race -json $(cat "$RUNNER_TEMP/packages")`, `race-shard.py "${{ matrix.shard }}"`, `ARK_REQUIRE_SYMLINKS: "1"`)
+	race := require("the race tests, by shard", `race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/race.json"`, "rc=$?", "exit $rc", `ARK_REQUIRE_SYMLINKS: "1"`)
 	if race != "" {
-		if got, want := matrixValues(t, jobs[race], "shard"), raceShards(t); strings.Join(got, ",") != strings.Join(want, ",") {
+		got, want := matrixValues(t, jobs[race], "shard"), raceShards(t)
+		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("ci.yml: race matrix shards %v, race-shards.txt declares %v", got, want)
+		}
+		if strings.Join(want, ",") != "1,2,3" {
+			t.Errorf("race-shards.txt: shards %v, want 1, 2 and 3", want)
 		}
 		if strings.Contains(jobs[race], "-short") {
 			t.Error("ci.yml: the race tests must not run with -short")
+		}
+	}
+	// What race-shard.py runs: go test -race -json, nothing else added (a
+	// split adds only its -run or -skip).
+	script, err := os.ReadFile(".github/ci/race-shard.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{`["go", "test", "-race", "-json"] + whole`, `["go", "test", "-race", "-json", flag, rx, p]`} {
+		if !strings.Contains(string(script), cmd) {
+			t.Errorf("race-shard.py: no %s: whole packages and split halves run as go test -race -json", cmd)
+		}
+	}
+	if !strings.Contains(string(script), "return 1 if failed else 0") {
+		t.Error("race-shard.py: a shard must fail when any of its go test commands does")
+	}
+	for _, flag := range []string{`"-short"`, `"-count`, `"-timeout`, `"-failfast"`, `"-p"`} {
+		if strings.Contains(string(script), flag) {
+			t.Errorf("race-shard.py: the race run must not add %s", flag)
 		}
 	}
 	fuzz := require("the fuzz smoke, by group", `.github/ci/fuzz-smoke.sh "${{ matrix.group }}"`)
@@ -251,57 +274,122 @@ func fuzzGroups(t *testing.T) []string {
 	return out
 }
 
-// Every package of `go list ./...` runs in exactly one race shard.
-func TestCIWorkflow_RaceShardsCoverEveryPackage(t *testing.T) {
+// raceEntry is one line of `race-shard.py all`: a shard runs a package, or
+// the half of a split package that -run or -skip <regexp> selects.
+type raceEntry struct{ shard, pkg, flag, regexp string }
+
+func raceEntries(t *testing.T) []raceEntry {
+	t.Helper()
 	py, err := exec.LookPath("python3")
 	if err != nil {
 		t.Skip("python3 not found: the CI gate checks the shards' coverage at run time")
 	}
 	out, err := exec.Command(py, ".github/ci/race-shard.py", "all").CombinedOutput()
 	if err != nil {
-		t.Fatalf("race-shard.py: %v\n%s", err, out)
+		t.Fatalf("race-shard.py all: %v\n%s", err, out)
 	}
+	var entries []raceEntry
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		f := strings.Fields(line)
+		switch {
+		case len(f) == 2:
+			entries = append(entries, raceEntry{f[0], f[1], "", ""})
+		case len(f) == 4 && (f[2] == "-run" || f[2] == "-skip") && f[3] != "":
+			entries = append(entries, raceEntry{f[0], f[1], f[2], f[3]})
+		default:
+			t.Fatalf("race-shard.py all: %q", line)
+		}
+	}
+	return entries
+}
+
+// Every package of `go list ./...` runs in exactly one race shard, except a
+// package split in two: its -run and -skip halves, by the same regexp, in two
+// different shards. No shard is empty.
+func TestCIWorkflow_RaceShardsCoverEveryPackage(t *testing.T) {
+	entries := raceEntries(t)
 	list, err := exec.Command("go", "list", "./...").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
-	shardOf := map[string]string{}
-	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
-		f := strings.Fields(line)
-		if len(f) != 2 {
-			t.Fatalf("race-shard.py all: %q", line)
-		}
-		if prev, dup := shardOf[f[1]]; dup {
-			t.Errorf("%s in race shards %s and %s", f[1], prev, f[0])
-		}
-		shardOf[f[1]] = f[0]
-	}
-	declared := map[string]bool{}
-	for _, s := range raceShards(t) {
-		declared[s] = true
+	byPkg := map[string][]raceEntry{}
+	perShard := map[string]int{}
+	for _, e := range entries {
+		byPkg[e.pkg] = append(byPkg[e.pkg], e)
+		perShard[e.shard]++
 	}
 	pkgs := strings.Fields(string(list))
 	for _, p := range pkgs {
-		s, ok := shardOf[p]
-		if !ok {
-			t.Errorf("%s runs in no race shard", p)
-		} else if !declared[s] {
-			t.Errorf("%s runs in undeclared shard %s", p, s)
+		uses := byPkg[p]
+		switch {
+		case len(uses) == 1 && uses[0].flag == "":
+		case len(uses) == 2:
+			a, b := uses[0], uses[1]
+			if a.flag == b.flag || a.flag == "" || b.flag == "" {
+				t.Errorf("%s: split halves %q and %q are not one -run and one -skip", p, a.flag, b.flag)
+			}
+			if a.regexp != b.regexp {
+				t.Errorf("%s: split regexps differ: %q, %q", p, a.regexp, b.regexp)
+			}
+			if a.shard == b.shard {
+				t.Errorf("%s: both halves in shard %s", p, a.shard)
+			}
+		default:
+			t.Errorf("%s runs %d times in the race shards: %v", p, len(uses), uses)
+		}
+		delete(byPkg, p)
+	}
+	for p := range byPkg {
+		t.Errorf("race shards name %s, which go list ./... does not list", p)
+	}
+	for _, s := range raceShards(t) {
+		if perShard[s] == 0 {
+			t.Errorf("race shard %s runs nothing", s)
 		}
 	}
-	if len(shardOf) != len(pkgs) {
-		t.Errorf("race shards hold %d packages; go list ./... has %d", len(shardOf), len(pkgs))
-	}
-	for s := range declared {
-		n := 0
-		for _, owner := range shardOf {
-			if owner == s {
-				n++
+}
+
+// A split's regexp selects some, not all, of the package's top-level tests
+// (and fuzz tests, run as tests), and no subtest by name: the -run half and
+// the -skip half each run something, and every test — with its subtests —
+// in exactly one of them. Tests added later run in the -skip half.
+func TestCIWorkflow_RaceSplitsAreComplementary(t *testing.T) {
+	splits := 0
+	for _, e := range raceEntries(t) {
+		if e.flag != "-run" {
+			continue
+		}
+		splits++
+		if strings.Contains(e.regexp, "/") {
+			t.Errorf("%s: split regexp %q names subtests", e.pkg, e.regexp)
+		}
+		re, err := regexp.Compile(e.regexp)
+		if err != nil {
+			t.Errorf("%s: %v", e.pkg, err)
+			continue
+		}
+		out, err := exec.Command("go", "test", "-list", ".", e.pkg).Output()
+		if err != nil {
+			t.Fatalf("go test -list %s: %v", e.pkg, err)
+		}
+		var run, skip []string
+		for _, name := range strings.Fields(string(out)) {
+			if !regexp.MustCompile(`^(Test|Fuzz|Example)`).MatchString(name) {
+				continue // "ok <pkg> <time>"
+			}
+			if re.MatchString(name) {
+				run = append(run, name)
+			} else {
+				skip = append(skip, name)
 			}
 		}
-		if n == 0 {
-			t.Errorf("race shard %s runs no package", s)
+		if len(run) == 0 || len(skip) == 0 {
+			t.Errorf("%s: %q selects %d of %d tests: each half must run something", e.pkg, e.regexp, len(run), len(run)+len(skip))
 		}
+		t.Logf("%s: -run %q: %v; -skip: %d tests", e.pkg, e.regexp, run, len(skip))
+	}
+	if splits == 0 {
+		t.Log("no split package")
 	}
 }
 
