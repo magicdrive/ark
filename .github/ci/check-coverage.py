@@ -13,7 +13,9 @@
   - no test failed, and no test the unit job ran (passed) was skipped in the
     race shards: a failed, skipped or cancelled run is not coverage;
   - per system, every skipped filesystem-security test, and the state of the
-    binary-level case tests (TestMCPCase_, TestCLICase_).
+    binary-level case tests (TestMCPCase_, TestCLICase_);
+  - on every filesystem-security system, each of REQUIRED_SECURITY_TESTS ran
+    and passed: a skip, a failure or a test that did not run fails the gate.
 
 Usage: check-coverage.py <reports-dir> <system>...
 """
@@ -25,6 +27,12 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+
+# The binary-level case-folding tests (tests/integration) that must pass on
+# every system of the filesystem-security job — the ark binary on a
+# case-insensitive file system.
+REQUIRED_SECURITY_PACKAGE = "/tests/integration"
+REQUIRED_SECURITY_TESTS = ("TestMCPCase_ExcludedFilesUnreachable", "TestCLICase_DumpExcludes")
 
 
 def shard_file():
@@ -128,6 +136,10 @@ def main():
             print("  binary-level case tests (TestMCPCase_, TestCLICase_): none ran")
         for r in case:
             print(f"  {r[2].upper():4} {r[1]}")
+        for name in REQUIRED_SECURITY_TESTS:
+            got = [r[2] for r in rows if r[1] == name and r[0].endswith(REQUIRED_SECURITY_PACKAGE)]
+            if got != ["pass"]:
+                errors.append(f"filesystem-security {system}: required {name} {', '.join(got) or 'did not run'} (want pass)")
 
     if errors:
         print("\ncoverage check failed:")

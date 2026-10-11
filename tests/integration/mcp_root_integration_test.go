@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -333,6 +334,12 @@ func TestMCPRoot_SetupEntriesLaunchTheProject(t *testing.T) {
 	}
 	for _, cl := range clients {
 		t.Run(cl.id, func(t *testing.T) {
+			if cl.id == "codex" && runtime.GOOS == "windows" {
+				// ark setup codex runs the `codex` CLI found on PATH; the
+				// stand-in here is a POSIX shell script (fakeCodexScript),
+				// which Windows cannot run. The JSON clients need no shell.
+				t.Skip("the fake codex CLI is a POSIX shell script")
+			}
 			_, projA, projB, _ := rootWorkspace(t)
 			home := t.TempDir()
 			fakeBin := t.TempDir()

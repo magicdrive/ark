@@ -393,6 +393,53 @@ func TestCIWorkflow_RaceSplitsAreComplementary(t *testing.T) {
 	}
 }
 
+// The binary-level case-folding tests the gate requires to pass on every
+// filesystem-security system (check-coverage.py REQUIRED_SECURITY_TESTS) are
+// at least these two, exist in tests/integration, and are selected by the
+// job's -run over that package: a rename, a narrower -run or a shorter list
+// fails here instead of turning into a silent skip.
+func TestCIWorkflow_RequiredSecurityTestsAreSelected(t *testing.T) {
+	gate, err := os.ReadFile(".github/ci/check-coverage.py")
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := regexp.MustCompile(`(?m)^REQUIRED_SECURITY_TESTS = \(([^)]*)\)`).FindSubmatch(gate)
+	if m == nil {
+		t.Fatal("check-coverage.py: no REQUIRED_SECURITY_TESTS")
+	}
+	var required []string
+	for _, q := range regexp.MustCompile(`"([^"]+)"`).FindAllSubmatch(m[1], -1) {
+		required = append(required, string(q[1]))
+	}
+	for _, want := range []string{"TestMCPCase_ExcludedFilesUnreachable", "TestCLICase_DumpExcludes"} {
+		if !strings.Contains(strings.Join(required, ","), want) {
+			t.Errorf("check-coverage.py: REQUIRED_SECURITY_TESTS %v lacks %s", required, want)
+		}
+	}
+	if !strings.Contains(string(gate), `REQUIRED_SECURITY_PACKAGE = "/tests/integration"`) {
+		t.Error("check-coverage.py: the required tests must be looked up in tests/integration")
+	}
+
+	_, jobs := workflowJobs(t, ".github/workflows/ci.yml")
+	run := regexp.MustCompile(`(?m)^\s*go test [^\n]*-run '([^']+)' [^\n]*\./tests/integration[ \n]`).FindStringSubmatch(jobs["filesystem-security"])
+	if run == nil {
+		t.Fatal("ci.yml: filesystem-security runs no -run over ./tests/integration")
+	}
+	selects := regexp.MustCompile(run[1])
+	listed, err := exec.Command("go", "test", "-list", ".", "./tests/integration").Output()
+	if err != nil {
+		t.Fatalf("go test -list ./tests/integration: %v", err)
+	}
+	for _, name := range required {
+		if !regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(name) + `$`).Match(listed) {
+			t.Errorf("tests/integration has no %s", name)
+		}
+		if !selects.MatchString(name) {
+			t.Errorf("ci.yml: filesystem-security -run %q does not select %s", run[1], name)
+		}
+	}
+}
+
 // The fuzz smoke runs 13 targets, each once and for 10 seconds without the
 // unit tests, and every Fuzz function of the repository is either in it or
 // listed as deliberately left out.

@@ -56,6 +56,9 @@ func caseFixture(t *testing.T) string {
 		"abs-upper.go": strings.ToUpper(proj) + string(filepath.Separator) + "SECRET.GO",
 	} {
 		if err := os.Symlink(target, filepath.Join(proj, link)); err != nil {
+			if os.Getenv("ARK_REQUIRE_SYMLINKS") != "" {
+				t.Fatalf("ARK_REQUIRE_SYMLINKS: cannot create symlink %s: %v", link, err)
+			}
 			t.Skipf("SKIP: symlinks unavailable: %v", err)
 		}
 	}

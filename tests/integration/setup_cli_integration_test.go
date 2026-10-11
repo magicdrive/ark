@@ -4,18 +4,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
 
 // buildArk returns the ark binary for CLI integration tests, built once per
-// test process and shared (integration_binary_test.go).
+// test process and shared (integration_binary_test.go). It runs on every
+// system; a test that needs a POSIX shell skips itself where there is none.
 func buildArk(t *testing.T) string {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("integration test uses POSIX shell stub")
-	}
 	return arkBinary.get(t)
 }
 
@@ -40,6 +37,10 @@ func runArk(t *testing.T, bin, dir, home string, args ...string) (string, string
 	return stdout.String(), stderr.String(), code
 }
 
+// fakeArkBin is a placeholder for --ark-path: `ark setup` checks that the
+// path is a regular, executable file and writes it into the client's config,
+// but never runs it — so the "#!/bin/sh" content needs no shell, and Windows
+// (no execute bit; an extensionless path is accepted) takes the file as is.
 func fakeArkBin(t *testing.T) string {
 	t.Helper()
 	p := filepath.Join(t.TempDir(), "ark")
