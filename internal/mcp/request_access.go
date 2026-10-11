@@ -355,7 +355,9 @@ func (h *ToolsHandler) readIndexed(base string, fileID source.FileID) ([]byte, e
 	if err != nil {
 		return nil, err
 	}
-	rel := path.Join(treeRel(base), string(fileID))
+	// The tree's form: an index names a file in the operating system's
+	// form (d\x.go on Windows); the tree and its walks, "/"-separated.
+	rel := path.Join(treeRel(base), filepath.ToSlash(string(fileID)))
 	a := &h.req.access
 	a.mu.Lock()
 	data, ok := a.indexed[rel]
