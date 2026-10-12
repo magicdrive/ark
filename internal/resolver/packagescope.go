@@ -35,10 +35,25 @@ import (
 //     one that two or more distinct import paths of the repository resolve
 //     under, or — when it is the repository's only candidate — one whose
 //     last element is the repository root directory's name (a module
-//     github.com/u/repo checked out as repo/). A single coincidence (an
-//     external path that happens to end in a repository directory's name)
-//     establishes no prefix. Of several directories the longest wins (the
-//     import path names it fully).
+//     github.com/u/repo checked out as repo/). The prefix itself names the
+//     root directory; importing it counts as one of the two paths when its
+//     last element is the name of a package of the root directory (Go names
+//     a package after its import path), so a module checked out under
+//     another name (repo@v1.2.3/, a renamed clone) still has a prefix. A
+//     single coincidence (an external path that happens to end in a
+//     repository directory's name) establishes no prefix. A prefix without
+//     a host (no dot in its first element: encoding, log) may be the
+//     standard library's, whose paths can coincide with a repository's
+//     directories in twos (encoding/json, encoding/xml) or name the root
+//     package (log): only the root directory's own name establishes it.
+//     Of several directories the longest wins (the import path names it
+//     fully).
+//   - An import path that names no repository directory is outside the
+//     repository (OutsideRepository) only when nothing in the repository
+//     could be it: when it ends in a repository directory or its last
+//     element names a package of the root directory, an unestablished
+//     prefix is missing evidence, not proof — the name stays Unresolved
+//     without that claim.
 //   - A directory may hold several packages (a library beside a generator
 //     behind a build tag): an import refers to the one whose name the
 //     reference uses (the implicit name of an import is its package's name);
@@ -62,6 +77,9 @@ type packageScope struct {
 	packages map[string]map[string]bool
 	// dirOf: import path → repository directory ("" when external).
 	dirOf map[string]string
+	// maybeRepo: import paths dirOf maps to no directory that could still
+	// name one (not proven external).
+	maybeRepo map[string]bool
 }
 
 func (r *Resolver) pkgScope() *packageScope {
@@ -90,18 +108,34 @@ func (r *Resolver) pkgScope() *packageScope {
 			}
 		}
 		sort.Strings(importPaths)
-		ps.dirOf = mapImportPaths(importPaths, ps.packages, r.rootName)
+		ps.dirOf, ps.maybeRepo = mapImportPaths(importPaths, ps.packages, r.rootName)
 	})
 	return ps
 }
 
+// hostedPath reports whether an import path's first element has a dot — a
+// module path with a host (example.com/m); a path without one is reserved
+// for the standard library, or a local module named without a host.
+func hostedPath(p string) bool {
+	first, _, _ := strings.Cut(p, "/")
+	return strings.Contains(first, ".")
+}
+
 // mapImportPaths maps import paths to repository directories (see the
-// package-scoping rules above).
-func mapImportPaths(importPaths []string, packages map[string]map[string]bool, rootName string) map[string]string {
+// package-scoping rules above). maybeRepo holds the paths it maps to none
+// that could still name a repository package.
+func mapImportPaths(importPaths []string, packages map[string]map[string]bool, rootName string) (dirOf map[string]string, maybeRepo map[string]bool) {
 	type match struct{ prefix, dir string }
 	matches := map[string][]match{}
 	support := map[string]map[string]bool{} // prefix → import paths under it
 	for _, p := range importPaths {
+		if packages["."][path.Base(p)] {
+			// p may be the prefix itself, naming the root package.
+			if support[p] == nil {
+				support[p] = map[string]bool{}
+			}
+			support[p][p] = true
+		}
 		for dir := range packages {
 			if dir == "." || !strings.HasSuffix(p, "/"+dir) {
 				continue
@@ -115,12 +149,21 @@ func mapImportPaths(importPaths []string, packages map[string]map[string]bool, r
 		}
 	}
 	accepted := func(prefix string) bool {
+		named := rootName != "" && path.Base(prefix) == rootName
+		if !hostedPath(prefix) {
+			// A path without a host (no dot in its first element) is the
+			// standard library's as much as a module's: encoding/json and
+			// encoding/xml share "encoding" by coincidence. Only the root
+			// directory's own name establishes it.
+			return named
+		}
 		if len(support[prefix]) >= 2 {
 			return true
 		}
-		return len(support) == 1 && rootName != "" && path.Base(prefix) == rootName
+		return len(support) == 1 && named
 	}
 	out := map[string]string{}
+	maybe := map[string]bool{}
 	for _, p := range importPaths {
 		best := ""
 		for _, m := range matches[p] {
@@ -132,8 +175,11 @@ func mapImportPaths(importPaths []string, packages map[string]map[string]bool, r
 			best = "." // the import path is the repository prefix itself
 		}
 		out[p] = best
+		if best == "" && (len(matches[p]) > 0 || packages["."][path.Base(p)]) {
+			maybe[p] = true
+		}
 	}
-	return out
+	return out, maybe
 }
 
 // resolvePackageScoped resolves a reference of a package-scoped file.
@@ -142,7 +188,18 @@ func (r *Resolver) resolvePackageScoped(res Resolution, ref reference.Reference,
 		return r.resolvePackageName(res, ref, fi)
 	}
 	if ref.ReceiverType != "" {
+		if pkg, name, ok := strings.Cut(ref.ReceiverType, "."); ok {
+			return r.resolveViaImportedReceiverType(res, ref, fi, pkg, name)
+		}
 		return r.resolveViaReceiverType(res, ref, fi)
+	}
+	if ref.ConfidenceCap == ConfidenceCandidate.String() {
+		// The provider caps a receiver it found a local declaration shadows
+		// (a variable named like an import or a type: var atomic T;
+		// atomic.Add(...)): it is a value, so neither the import nor the type
+		// is evidence — and an import outside the repository proves nothing
+		// about it (no OutsideRepository).
+		return capUntypedReceiver(r.resolveByName(res, ref, fi), ref)
 	}
 	if imp, ok := r.importNamed(ref.ReceiverExpr, fi); ok {
 		return r.resolveImportedName(res, ref, fi, imp)
@@ -154,6 +211,41 @@ func (r *Resolver) resolvePackageScoped(res Resolution, ref reference.Reference,
 	}
 	// A variable or expression receiver without type evidence (R4).
 	return capUntypedReceiver(r.resolveByName(res, ref, fi), ref)
+}
+
+// resolveViaImportedReceiverType resolves a member of a receiver declared as
+// pkg.Name — a type of the package the file imports as pkg (R2 through the
+// import binding): Exact among that type's members. A type of a package
+// outside the repository has its members outside too (OutsideRepository);
+// an import that may name a repository package unproven, a package without
+// that exported type, or a type without that member, is Unresolved.
+func (r *Resolver) resolveViaImportedReceiverType(res Resolution, ref reference.Reference, fi FileIndex, pkg, name string) Resolution {
+	detail := fmt.Sprintf("receiver %q declared as %q", ref.ReceiverExpr, ref.ReceiverType)
+	imp, ok := r.importNamed(pkg, fi)
+	if !ok {
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceReceiverType, Detail: detail + "; no import named " + pkg}}
+		return res
+	}
+	if imp.dir == "" {
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceReceiverType, Detail: detail + "; " + imp.path + " is not a repository package"}}
+		res.OutsideRepository = !r.pkgScope().maybeRepo[imp.path]
+		return res
+	}
+	var types []symbol.Symbol
+	for _, s := range r.importableDecls(imp.dir, imp.pkg, name, fi) {
+		if ownsMembers(s.Kind) {
+			types = append(types, s)
+		}
+	}
+	if len(types) == 0 {
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceReceiverType, Detail: fmt.Sprintf("%s; package %s (%s) declares no type %q", detail, imp.path, imp.dir, name)}}
+		return res
+	}
+	conf := ConfidenceExact
+	if len(types) > 1 {
+		conf = ConfidenceCandidate
+	}
+	return r.memberResolution(res, ref, types, conf, EvidenceReceiverType, detail)
 }
 
 // resolvePackageName resolves a receiverless name by package scoping.
@@ -216,17 +308,17 @@ func (r *Resolver) packageMembers(name string, fi FileIndex) []symbol.Symbol {
 	return out
 }
 
-// packageTypes returns the type-like declarations named name in the file's
-// own package.
+// packageTypes returns the type declarations named name in the file's own
+// package that can own members (ownsMembers).
 func (r *Resolver) packageTypes(name string, fi FileIndex) []symbol.Symbol {
 	var out []symbol.Symbol
 	for _, s := range withoutMembers(r.sameFileMatch(reference.Reference{Name: name}, fi)) {
-		if isTypeLike(s.Kind) {
+		if ownsMembers(s.Kind) {
 			out = append(out, s)
 		}
 	}
 	for _, s := range r.packageMembers(name, fi) {
-		if isTypeLike(s.Kind) {
+		if ownsMembers(s.Kind) {
 			out = append(out, s)
 		}
 	}
@@ -292,6 +384,10 @@ type importRef struct{ path, dir, pkg string }
 // resolveImportedName resolves pkg.Name through the file's import of pkg.
 func (r *Resolver) resolveImportedName(res Resolution, ref reference.Reference, fi FileIndex, imp importRef) Resolution {
 	if imp.dir == "" {
+		if r.pkgScope().maybeRepo[imp.path] {
+			res.Evidence = []ResolutionEvidence{{Kind: EvidenceExplicitImport, Detail: fmt.Sprintf("%q imports %s, which may name a repository package: no import-path prefix establishes which", ref.ReceiverExpr, imp.path)}}
+			return res
+		}
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceExplicitImport, Detail: fmt.Sprintf("%q imports %s, which is not a repository package", ref.ReceiverExpr, imp.path)}}
 		res.OutsideRepository = true
 		return res

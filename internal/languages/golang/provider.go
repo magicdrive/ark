@@ -11,6 +11,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/internal/treediag"
+	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 	"github.com/magicdrive/ark/internal/tsparse"
@@ -24,7 +25,7 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "go-7" }
+func (p *Provider) CacheVersion() string        { return "go-8" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
@@ -174,7 +175,9 @@ func goTypeDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 	var drafts []language.SymbolDraft
 	for i := 0; i < node.ChildCount(); i++ {
 		child := node.Child(i)
-		if child.Type(lang) == "type_spec" {
+		// A type alias (type A = B) declares a type name like a type
+		// definition: a KindType symbol, which owns no methods of its own.
+		if t := child.Type(lang); t == "type_spec" || t == "type_alias" {
 			if d := goTypeSpec(child, lang, src, file); d != nil {
 				drafts = append(drafts, *d)
 			}
@@ -214,55 +217,51 @@ func goTypeSpec(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 }
 
 func goConstDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
+	return goValueDecl(node, lang, src, file, symbol.KindConstant)
+}
+
+func goVarDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
+	return goValueDecl(node, lang, src, file, symbol.KindVariable)
+}
+
+// goValueDecl returns a symbol for every name a var or const declaration
+// declares — of a single spec, of a parenthesized group (var specs inside a
+// var_spec_list), and every name of a spec declaring several (var a, b int);
+// each symbol spans its spec. The blank identifier declares nothing.
+func goValueDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID, kind symbol.SymbolKind) []language.SymbolDraft {
 	var drafts []language.SymbolDraft
-	for i := 0; i < node.ChildCount(); i++ {
-		child := node.Child(i)
-		if child.Type(lang) == "const_spec" {
-			for j := 0; j < child.ChildCount(); j++ {
-				gc := child.Child(j)
-				if gc.Type(lang) == "identifier" {
-					name := gc.Text(src)
-					drafts = append(drafts, language.SymbolDraft{
-						Name:      name,
-						Qualified: name,
-						Kind:      symbol.KindConstant,
-						Location:  nodeLocation(child, file),
-						StartByte: child.StartByte(),
-						EndByte:   child.EndByte(),
-						Exported:  isExported(name),
-					})
-					break
-				}
+	for _, spec := range goValueSpecs(node, lang) {
+		for _, id := range namedChildren(spec, lang, "identifier") {
+			name := id.Text(src)
+			if name == "_" {
+				continue
 			}
+			drafts = append(drafts, language.SymbolDraft{
+				Name:      name,
+				Qualified: name,
+				Kind:      kind,
+				Location:  nodeLocation(spec, file),
+				StartByte: spec.StartByte(),
+				EndByte:   spec.EndByte(),
+				Exported:  isExported(name),
+			})
 		}
 	}
 	return drafts
 }
 
-func goVarDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID) []language.SymbolDraft {
-	var drafts []language.SymbolDraft
-	for i := 0; i < node.ChildCount(); i++ {
-		child := node.Child(i)
-		if child.Type(lang) == "var_spec" {
-			for j := 0; j < child.ChildCount(); j++ {
-				gc := child.Child(j)
-				if gc.Type(lang) == "identifier" {
-					name := gc.Text(src)
-					drafts = append(drafts, language.SymbolDraft{
-						Name:      name,
-						Qualified: name,
-						Kind:      symbol.KindVariable,
-						Location:  nodeLocation(child, file),
-						StartByte: child.StartByte(),
-						EndByte:   child.EndByte(),
-						Exported:  isExported(name),
-					})
-					break
-				}
-			}
+// goValueSpecs returns the var_spec / const_spec nodes of a declaration.
+func goValueSpecs(decl *ts.Node, lang *ts.Language) []*ts.Node {
+	var specs []*ts.Node
+	for j := 0; j < decl.ChildCount(); j++ {
+		switch ch := decl.Child(j); ch.Type(lang) {
+		case "var_spec", "const_spec":
+			specs = append(specs, ch)
+		case "var_spec_list":
+			specs = append(specs, namedChildren(ch, lang, "var_spec")...)
 		}
 	}
-	return drafts
+	return specs
 }
 
 // childText returns the text of the first child node with the given type.
@@ -301,7 +300,15 @@ func isExported(name string) bool {
 
 // extractGoReferences walks the AST and collects syntactic references and imports.
 func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
-	c := &goRefCollector{lang: lang, src: src, file: file, fields: collectGoStructFields(root, lang, src), values: goFileValues(root, lang, src)}
+	c := &goRefCollector{lang: lang, src: src, file: file, fields: collectGoStructFields(root, lang, src),
+		values: goFileValues(root, lang, src), types: goFileTypes(root, lang, src), tparams: goTypeParamScopes(root, lang, src)}
+	// Imports first: whether a selector's operand is an import name decides
+	// what the selector is (refs_values.go), wherever the import is written.
+	for i := 0; i < root.ChildCount(); i++ {
+		if ch := root.Child(i); ch.Type(lang) == "import_declaration" {
+			c.collectImports(ch)
+		}
+	}
 	c.walk(root, "", nil)
 	return c.refs, c.imports
 }
@@ -316,6 +323,26 @@ type goRefCollector struct {
 	locals  map[string]int       // goDeclCounts of the enclosing function; nil outside
 	scopes  map[string][]goScope // local declarations of the enclosing function by scope
 	values  map[string]bool      // package-level var / const names of this file
+	types   map[string]bool      // package-level type names of this file
+	tparams map[string][]goScope // type parameters of the file's declarations by scope
+	handled map[uint64]bool      // spans of call / construction names already recorded
+	inError int                  // depth of enclosing ERROR nodes
+	ltypes  map[string][]goScope // local type declarations of the enclosing function by scope
+}
+
+// goFileTypes collects the file's package-level type names.
+func goFileTypes(root *ts.Node, lang *ts.Language, src []byte) map[string]bool {
+	out := map[string]bool{}
+	for i := 0; i < root.ChildCount(); i++ {
+		if d := root.Child(i); d.Type(lang) == "type_declaration" {
+			for _, spec := range goNamed(d) {
+				if ids := namedChildren(spec, lang, "type_identifier"); len(ids) > 0 {
+					out[ids[0].Text(src)] = true
+				}
+			}
+		}
+	}
+	return out
 }
 
 // goNamed returns the named children of n.
@@ -355,22 +382,75 @@ func goFileValues(root *ts.Node, lang *ts.Language, src []byte) map[string]bool 
 	return out
 }
 
-// walkFunction walks a function or method declaration as container.
+// walkFunction walks a function or method declaration as container; its
+// own name declares, it is no use.
 func (c *goRefCollector) walkFunction(node *ts.Node, container string) {
 	counts := make(map[string]int)
 	goDeclCounts(node, c.lang, c.src, counts)
 	env := goFunctionTypeEnv(node, c.lang, c.src, counts)
 	c.locals = counts
 	c.scopes = goLocalScopes(node, c.lang, c.src)
+	c.ltypes = goLocalTypeScopes(node, c.lang, c.src)
+	named := false
 	for i := 0; i < node.ChildCount(); i++ {
-		c.walk(node.Child(i), container, env)
+		ch := node.Child(i)
+		if t := ch.Type(c.lang); !named && (t == "identifier" || t == "field_identifier") {
+			named = true
+			continue
+		}
+		c.walk(ch, container, env)
 	}
-	c.locals, c.scopes = nil, nil
+	c.locals, c.scopes, c.ltypes = nil, nil, nil
+}
+
+// walkDeclaring walks n but its direct children of type declared (the
+// names it declares).
+func (c *goRefCollector) walkDeclaring(n *ts.Node, declared string, container string, env goTypeEnv) {
+	for i := 0; i < n.ChildCount(); i++ {
+		if ch := n.Child(i); ch.Type(c.lang) != declared {
+			c.walk(ch, container, env)
+		}
+	}
+}
+
+// walkLeftRight walks a statement whose first child is its left side:
+// declared names (:=, skipped), or written targets (=, op=).
+func (c *goRefCollector) walkLeftRight(n *ts.Node, container string, env goTypeEnv) {
+	if n.ChildCount() == 0 {
+		return
+	}
+	left := n.Child(0)
+	declares := false
+	for i := 1; i < n.ChildCount(); i++ {
+		if n.Child(i).Type(c.lang) == ":=" {
+			declares = true
+		}
+	}
+	if !declares {
+		if left.Type(c.lang) == "expression_list" {
+			for _, t := range goNamed(left) {
+				c.writeTarget(t, container, env)
+			}
+		} else {
+			c.writeTarget(left, container, env)
+		}
+	}
+	for i := 1; i < n.ChildCount(); i++ {
+		c.walk(n.Child(i), container, env)
+	}
 }
 
 // walk collects references. env carries the proven receiver types of the
 // enclosing function (see receiver_types.go); nil outside functions.
 func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
+	if node.IsError() {
+		// Inside an ERROR the parser recovered by guessing: its structure is
+		// no evidence of what a name is (a declaration's name may sit where
+		// a use would). Calls keep being collected as before; type uses,
+		// values and writes are not (refs_values.go).
+		c.inError++
+		defer func() { c.inError-- }()
+	}
 	t := node.Type(c.lang)
 	switch t {
 	case "function_declaration":
@@ -395,8 +475,64 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 		c.walkFunction(node, qualified)
 		return
 	case "import_declaration":
-		c.collectImports(node)
-		return // don't recurse into imports
+		return // collected before the walk
+	case "type_spec", "type_alias":
+		// The first type_identifier is the declared name; the rest are uses
+		// by the declaration (a field's type, an embedded type, ...).
+		name := ""
+		for i := 0; i < node.ChildCount(); i++ {
+			ch := node.Child(i)
+			if name == "" && ch.Type(c.lang) == "type_identifier" {
+				name = ch.Text(c.src)
+				continue
+			}
+			inner := container
+			if inner == "" {
+				inner = name
+			}
+			c.walk(ch, inner, env)
+		}
+		return
+	case "var_spec", "const_spec":
+		// A package-level spec declaring one name contains its uses.
+		inner := container
+		if inner == "" && c.locals == nil {
+			if ids := namedChildren(node, c.lang, "identifier"); len(ids) == 1 {
+				inner = ids[0].Text(c.src)
+			}
+		}
+		c.walkDeclaring(node, "identifier", inner, env)
+		return
+	case "parameter_declaration", "variadic_parameter_declaration", "type_parameter_declaration":
+		c.walkDeclaring(node, "identifier", container, env)
+		return
+	case "short_var_declaration", "range_clause", "receive_statement", "assignment_statement":
+		c.walkLeftRight(node, container, env)
+		return
+	case "inc_statement", "dec_statement":
+		for _, t := range goNamed(node) {
+			c.writeTarget(t, container, env)
+		}
+		return
+	case "type_switch_statement":
+		// switch v := x.(type): v is declared.
+		for i := 0; i < node.ChildCount(); i++ {
+			ch := node.Child(i)
+			if ch.Type(c.lang) == "expression_list" && i+1 < node.ChildCount() && node.Child(i+1).Type(c.lang) == ":=" {
+				continue
+			}
+			c.walk(ch, container, env)
+		}
+		return
+	case "type_identifier", "qualified_type":
+		c.typeUse(node, container)
+		return
+	case "identifier":
+		c.valueUse(node, container, reference.KindValueReference)
+		return
+	case "selector_expression":
+		c.selectorUse(node, container, env, false)
+		return
 	case "func_literal":
 		if c.locals == nil {
 			// A function literal outside any function (a package-level
@@ -404,7 +540,8 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 			c.locals = make(map[string]int)
 			goDeclCounts(node, c.lang, c.src, c.locals)
 			c.scopes = goLocalScopes(node, c.lang, c.src)
-			defer func() { c.locals, c.scopes = nil, nil }()
+			c.ltypes = goLocalTypeScopes(node, c.lang, c.src)
+			defer func() { c.locals, c.scopes, c.ltypes = nil, nil, nil }()
 		}
 	case "call_expression":
 		c.collectCall(node, container, env)
@@ -413,7 +550,15 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 		c.collectGenericConversion(node, container, env)
 	case "composite_literal":
 		c.collectComposite(node, container)
-		// fall through to recurse
+		for i := 0; i < node.ChildCount(); i++ {
+			ch := node.Child(i)
+			if ch.Type(c.lang) == "literal_value" {
+				c.literalValue(ch, container, env, node.ChildCount() > 0 && keysAreValues(node.Child(0), c.lang))
+			} else {
+				c.walk(ch, container, env)
+			}
+		}
+		return
 	}
 	for i := 0; i < node.ChildCount(); i++ {
 		c.walk(node.Child(i), container, env)
@@ -593,7 +738,8 @@ func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices [
 		}
 		kinds = goGenericKinds
 	}
-	recvType := env.receiverType(recv, funcNode.StartByte(), c.fields)
+	recvType := c.receiverType(recv, funcNode.StartByte(), env)
+	c.markHandled(funcNode)
 	c.refs = append(c.refs, language.ReferenceDraft{
 		Name:          name,
 		Kind:          "call",
@@ -607,6 +753,31 @@ func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices [
 	})
 }
 
+// receiverType returns the proven type of receiver expression recv used at
+// at (receiver_types.go), unless a type name it relies on — the variable's
+// type, and for a field step the struct whose field it reads — is a type
+// parameter or a local type there, not the package's type of that name. (A
+// variable named like its type does not shadow it: state := &state{} is of
+// the package's type state.)
+func (c *goRefCollector) receiverType(recv string, at uint32, env goTypeEnv) string {
+	t := env.receiverType(recv, at, c.fields)
+	if t == "" {
+		return ""
+	}
+	shadowed := func(name string) bool {
+		return name != "" && !strings.Contains(name, ".") && (goShadowed(c.tparams, name, at) || goShadowed(c.ltypes, name, at))
+	}
+	if shadowed(t) {
+		return ""
+	}
+	if root, _, step := strings.Cut(recv, "."); step {
+		if v, ok := env[root]; ok && shadowed(v.typ) {
+			return ""
+		}
+	}
+	return t
+}
+
 // localCap caps a reference that a local declaration in scope at its
 // position shadows (scopes.go): a called name, or the root of a receiver
 // without a proven type. The call is then of a local function value, or the
@@ -615,13 +786,16 @@ func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices [
 // as a Candidate.
 func (c *goRefCollector) localCap(name, recv, recvType string, at uint32) string {
 	if recv == "" {
-		if goShadowed(c.scopes, name, at) {
+		if c.shadowedAt(name, at) {
 			return "candidate"
 		}
 		return ""
 	}
 	root, _, _ := strings.Cut(recv, ".")
-	if recvType == "" && goShadowed(c.scopes, root, at) {
+	if recvType == "" && (c.shadowedAt(root, at) || c.values[root]) {
+		// A local, or a package variable of this file named like an import's
+		// guessed name (var v2 = …; v2.Do() beside "math/rand/v2"): a value,
+		// never the import.
 		return "candidate"
 	}
 	return ""
@@ -735,6 +909,7 @@ func (c *goRefCollector) collectComposite(node *ts.Node, container string) {
 	if name == "" {
 		return
 	}
+	c.markHandled(typeNode)
 	c.refs = append(c.refs, language.ReferenceDraft{
 		Name:          name,
 		Kind:          "construction",

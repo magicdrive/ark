@@ -345,6 +345,14 @@ const Name = "n"
 		if r.Container != "use" && r.Container != "more" {
 			continue
 		}
+		if r.Kind != "call" && r.Kind != "construction" {
+			// Type uses and value references are other tests' subject
+			// (refs_values_test.go); an element is never a call here.
+			if r.Name == "handlers" && r.Kind != "value_reference" {
+				t.Errorf("handlers is a variable of the file, read as %s", r.Kind)
+			}
+			continue
+		}
 		kinds := ""
 		if r.TargetKinds != "" {
 			kinds = "function/method/type only"
@@ -394,7 +402,9 @@ func TestExtract_GenericCallDerivedAsIndexExpression(t *testing.T) {
 		}
 		var got []string
 		for _, r := range ex.References {
-			got = append(got, fmt.Sprintf("%s %s.%s %s", r.Kind, r.ReceiverExpr, r.Name, r.TargetKinds))
+			if r.Kind == "call" {
+				got = append(got, fmt.Sprintf("%s %s.%s %s", r.Kind, r.ReceiverExpr, r.Name, r.TargetKinds))
+			}
 		}
 		if !slices.Equal(got, []string{c.want}) {
 			t.Errorf("got %v, want %v", got, c.want)

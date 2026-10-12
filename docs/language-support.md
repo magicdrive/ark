@@ -53,42 +53,70 @@ All languages share these rules:
 ## Go
 
 **Extracted:** functions, methods (with receiver type), structs, interfaces,
-named types, package-level constants and variables; calls, constructions
-(`T{}`, `pkg.T{}`), type uses, imports (including aliases and dot imports).
-Type aliases (`type A = B`) and function-local declarations are not symbols.
+named types, type aliases (`type A = B`), package-level constants and
+variables (every name of a spec and of a grouped `var ( ... )`); calls,
+constructions (`T{}`, `pkg.T{}`), type uses (parameter, result, field,
+variable and conversion types, type arguments, embedded fields, `pkg.T`),
+value references (constants, package variables, functions passed as values,
+`pkg.Var`, method expressions `T.M`), writes (`x = v`, `x += v`, `x++`,
+`pkg.Var = v`; a field write `v.f = x` is recorded for `find_references`,
+fields are no symbols), imports (including aliases and dot imports).
+Function-local declarations are not symbols, and their uses are not recorded.
 
 **Resolution:** Go package scoping
 ([details](resolution-model.md#go-package-scope)). Package-qualified
 functions, types and constants resolve `exact` through the import path;
 same-package names resolve `exact` (same file) or `strong`. A local
-declaration that shadows a name is respected.
+declaration or a type parameter that shadows a name is respected.
 
 A method call resolves when the receiver's type is written down locally:
 
 - the method receiver (`func (s *T) M()`);
-- an explicitly typed parameter (`func f(r *Repo)`);
+- an explicitly typed parameter (`func f(r *Repo)`, `func f(t *pkg.T)`,
+  `func f(l List[int])`);
 - a single declaration in the function body with a written type
-  (`x := &T{}`, `x := T{}`, `var x T`);
+  (`x := &T{}`, `x := T{}`, `var x T`, `var x pkg.T`);
 - one field step on such a variable, when the struct is declared in the same
   file with an explicitly typed field (`s.repo.Save()`).
 
-Only unqualified type names count.
+Methods of named non-struct types (`type ids map[string]int`) resolve like
+any other. A type name a type parameter or a local type shadows is no
+receiver type.
 
 **Stays `candidate` or unresolved (never a wrong edge):**
 
-- method calls through a field of a struct declared in another file, or of a
-  package-qualified type (`h.svc.Place()` where `svc *orders.Service`);
-- method calls on a function's return value (`NewService().Place()`) or on
-  `var s pkg.T`;
+- method calls through a field of a struct declared in another file;
+- method calls on a function's return value (`NewService().Place()`) or on a
+  variable whose type is not written down (`s := pkg.New()`);
 - interface dispatch and promoted (embedded) methods;
-- methods of named non-struct types (`type ids map[string]int`);
+- method values (`f := s.Run`) and field reads;
 - declarations duplicated across build-tagged files (build tags are not
   evaluated);
-- a function passed as a value (`ids: symbol.NewDeclarationID`) is not a call.
+- a name whose kind the syntax leaves open (`others[i](1)` with `others`
+  declared in another file of the package) keeps the parser's reading: its
+  target is right, its edge kind may be `uses_type` for a variable.
 
-Go module paths are inferred from import paths, not read from `go.mod`. With
-only one internal import path, imports map into the repository only if the
-repository directory's name equals the module path's last element.
+**Measured against `go/types`** (every identifier the type checker resolves,
+joined with Ark's references; golang.org/x/tools v0.36.0, golang.org/x/exp,
+cobra v1.9.1, go-cmp v0.6.0 and Ark itself; procedure
+`docs/scripts/go-oracle.sh`, opt-in, not in CI): of 85,565 references Ark
+resolved to one declaration the type checker could verify, none disagreed
+with it, and none was claimed outside the repository wrongly; 92.5% of the
+uses of repository declarations the type checker records resolve to the
+right one (calls 76–85%, type uses and values above 98%). What the oracle
+cannot judge — a package whose dependencies are not in the module cache, a
+file the host's build constraints exclude — is counted apart.
+
+Go module paths are inferred from import paths, not read from `go.mod`. An
+import path maps into the repository under a prefix two import paths share;
+the module path itself (importing the root package) counts as one of them,
+and with only one internal import path the repository directory's name must
+equal the module path's last element. A module path without a host
+(`module myapp`) maps only when the repository directory is named like it:
+such paths may be the standard library's (`encoding/json` beside a
+repository directory `json/`). An import that may name a repository
+package but is not mapped stays unresolved — it is not claimed to be outside
+the repository.
 
 ## TypeScript and TSX
 

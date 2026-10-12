@@ -157,9 +157,19 @@ Go files resolve by Go's scoping rules, not by spelling:
   package.
 - `pkg.Name` is looked up in the package the import path names: exported,
   non-test declarations only. An import of a package outside the repository
-  is `outsideRepository`.
-- A name a local declaration shadows at the call is never resolved to a
-  package-level declaration.
+  is `outsideRepository` — but only when nothing in the repository could be
+  it: an import path ending in a repository directory, or naming the root
+  package, that no module prefix establishes stays unresolved without that
+  claim.
+- A name a local declaration or a type parameter shadows at its use is never
+  resolved to a package-level declaration; a variable named like an import
+  (`var atomic T; atomic.Add()`) is a variable, not the import.
+- Besides calls and constructions, Go files record type uses (`func f(r
+  *Repo)`, `var x pkg.T`, `[]T{}`, a type argument, an embedded field), value
+  references (a constant, a package variable, a function passed as a value,
+  `pkg.Var`, a method expression `T.M`) and writes (`x = v`, `x++`,
+  `pkg.Var = v`, a field write `v.f = x`). Type uses form `uses_type` edges
+  and value references `references` edges; writes form none.
 - No repository-wide name rule applies: a builtin, a local function value or
   an external declaration is never "the only declaration with that name"
   elsewhere.
@@ -178,13 +188,16 @@ func Run() {
 ```
 
 Import paths are mapped to repository directories by suffix, under a module
-prefix that at least two import paths share (or the only candidate prefix
-that ends in the repository directory's name).
+prefix that at least two import paths share (the module path itself counts
+when the root directory's package is named after its last element), or the
+only candidate prefix that ends in the repository directory's name. A prefix
+without a host (`encoding` of `encoding/json`, `log`) may be the standard
+library's: only the repository directory's own name establishes it.
 
 Go method calls whose receiver type is not written down locally — through a
-struct field, a function's return value, an interface or a package-qualified
-type (`var s pkg.T; s.M()`) — stay `candidate`. See
-[Language support](language-support.md#go).
+struct field of a struct declared in another file or a function's return
+value — stay `candidate`; an interface method or a promoted (embedded)
+method has no edge. See [Language support](language-support.md#go).
 
 ## Ambiguity, identity and `symbolId`
 

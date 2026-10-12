@@ -12,8 +12,14 @@ import (
 // by := , var, const or a local type is in scope from the end of its
 // declaration to the end of the innermost enclosing block, case clause, or
 // statement whose header declares it (if / for / switch / select init); a
-// range variable throughout its for statement. Labels are another
-// namespace and shadow nothing.
+// range variable throughout its for statement; a local type from its name
+// on (its own declaration may refer to it: type node struct{ next *node }).
+// Labels are another namespace and shadow nothing.
+//
+// Type parameters are scoped declarations too, also outside functions
+// (goTypeParamScopes): a function's and a method's (declared by its
+// receiver, func (l *List[T]) ...) in the whole declaration, a generic
+// type's in its type specification.
 
 // goScope is the byte range a local declaration is in scope.
 type goScope struct{ from, to uint32 }
@@ -61,9 +67,10 @@ func goLocalScopes(fn *ts.Node, lang *ts.Language, src []byte) map[string][]goSc
 				add(id, n.EndByte(), enclosing.EndByte())
 			}
 		case "type_spec", "type_alias":
-			// The declared type's name is the first type_identifier.
+			// The declared type's name is the first type_identifier; its
+			// scope starts at the name.
 			if ids := namedChildren(n, lang, "type_identifier"); len(ids) > 0 {
-				add(ids[0], n.EndByte(), enclosing.EndByte())
+				add(ids[0], ids[0].StartByte(), enclosing.EndByte())
 			}
 		case "type_switch_statement":
 			// switch v := x.(type): v in every clause.
@@ -86,6 +93,103 @@ func goLocalScopes(fn *ts.Node, lang *ts.Language, src []byte) map[string][]goSc
 	walk(fn, fn)
 	return out
 }
+
+// goLocalTypeScopes returns the local type declarations of fn by name, each
+// in scope from its name to the end of the enclosing block: the subset of
+// goLocalScopes that can shadow a type name.
+func goLocalTypeScopes(fn *ts.Node, lang *ts.Language, src []byte) map[string][]goScope {
+	out := map[string][]goScope{}
+	var walk func(n *ts.Node, enclosing *ts.Node)
+	walk = func(n *ts.Node, enclosing *ts.Node) {
+		switch n.Type(lang) {
+		case "type_spec", "type_alias":
+			if ids := namedChildren(n, lang, "type_identifier"); len(ids) > 0 {
+				if name := ids[0].Text(src); name != "_" {
+					out[name] = append(out[name], goScope{ids[0].StartByte(), enclosing.EndByte()})
+				}
+			}
+		}
+		if goOpensScope(n.Type(lang)) {
+			enclosing = n
+		}
+		for i := 0; i < n.ChildCount(); i++ {
+			walk(n.Child(i), enclosing)
+		}
+	}
+	walk(fn, fn)
+	return out
+}
+
+// goTypeParamScopes returns the type parameters of the file's declarations
+// by name, each in scope over its declaration: a function's or a type's
+// type_parameter_list, a method's receiver type arguments.
+func goTypeParamScopes(root *ts.Node, lang *ts.Language, src []byte) map[string][]goScope {
+	out := map[string][]goScope{}
+	add := func(id *ts.Node, scope *ts.Node) {
+		if name := id.Text(src); name != "_" {
+			out[name] = append(out[name], goScope{scope.StartByte(), scope.EndByte()})
+		}
+	}
+	var walk func(n *ts.Node, depth int)
+	walk = func(n *ts.Node, depth int) {
+		if depth > maxGoDepth {
+			return
+		}
+		switch n.Type(lang) {
+		case "function_declaration", "type_spec", "type_alias":
+			for _, tpl := range namedChildren(n, lang, "type_parameter_list") {
+				for _, decl := range namedChildren(tpl, lang, "type_parameter_declaration") {
+					for _, id := range namedChildren(decl, lang, "identifier") {
+						add(id, n)
+					}
+				}
+			}
+		case "method_declaration":
+			if recv := namedChildren(n, lang, "parameter_list"); len(recv) > 0 {
+				for _, id := range goReceiverTypeParams(recv[0], lang) {
+					add(id, n)
+				}
+			}
+		}
+		for i := 0; i < n.ChildCount(); i++ {
+			walk(n.Child(i), depth+1)
+		}
+	}
+	walk(root, 0)
+	return out
+}
+
+// goReceiverTypeParams returns the type parameters a method receiver
+// declares: the type arguments of its generic type, (l *List[K, V]).
+func goReceiverTypeParams(recv *ts.Node, lang *ts.Language) []*ts.Node {
+	var out []*ts.Node
+	var find func(n *ts.Node)
+	find = func(n *ts.Node) {
+		switch n.Type(lang) {
+		case "generic_type":
+			for _, ta := range namedChildren(n, lang, "type_arguments") {
+				for _, el := range goNamed(ta) {
+					if el.Type(lang) == "type_elem" && len(goNamed(el)) == 1 {
+						el = goNamed(el)[0]
+					}
+					if t := el.Type(lang); t == "type_identifier" || t == "identifier" {
+						out = append(out, el)
+					}
+				}
+			}
+			return
+		case "parameter_declaration", "pointer_type", "parameter_list":
+			for _, c := range goNamed(n) {
+				find(c)
+			}
+		}
+	}
+	find(recv)
+	return out
+}
+
+// maxGoDepth bounds recursion over the syntax tree.
+const maxGoDepth = 2000
 
 // goOpensScope reports whether a node bounds the scope of declarations made
 // directly inside it.

@@ -136,8 +136,12 @@ func TestPackageScope_ImportPrefixEvidence(t *testing.T) {
 	if got := target(psResolve(t, files, "repo", "cmd/main.go", "Run", "lib")); got != "lib/lib.go#Run exact" {
 		t.Errorf("single import under the root's name: %s", got)
 	}
-	if res := psResolve(t, files, "elsewhere", "cmd/main.go", "Run", "lib"); res.HasUniqueTarget() || !res.OutsideRepository {
-		t.Errorf("single import, root named otherwise: %s", target(res))
+	// Root named otherwise: no prefix is established, so the import names no
+	// directory — but it ends in the repository's lib/, so it is not proven
+	// external either (a renamed checkout): Unresolved, without the
+	// OutsideRepository claim.
+	if res := psResolve(t, files, "elsewhere", "cmd/main.go", "Run", "lib"); res.HasUniqueTarget() || res.OutsideRepository {
+		t.Errorf("single import, root named otherwise: %s (outside %v)", target(res), res.OutsideRepository)
 	}
 	// A coincidence: an external package whose last element names a
 	// repository directory, next to one internal import.
@@ -149,6 +153,74 @@ func TestPackageScope_ImportPrefixEvidence(t *testing.T) {
 	files = psIndex(coincidence, true)
 	if res := psResolve(t, files, "repo", "cmd/main.go", "Wrap", "errors"); res.HasUniqueTarget() {
 		t.Errorf("an external import was mapped into the repository: %s", target(res))
+	}
+}
+
+// A module's root package is imported by its module path, the prefix
+// itself: with the root package named after the path's last element, that
+// import is one of the two paths establishing the prefix, whatever the
+// checkout directory is called. An import path nothing in the repository
+// could be stays OutsideRepository; one that could (it ends in a repository
+// directory, or names the root package) but no prefix establishes is
+// Unresolved without that claim.
+func TestPackageScope_RootPackageImport(t *testing.T) {
+	module := []psFile{
+		{path: "cobra.go", pkg: "cobra", decls: []string{"Command"}},
+		{path: "doc/doc.go", pkg: "doc", decls: []string{"Gen"}, imports: []language.ImportDraft{{Path: "github.com/spf13/cobra"}}},
+		{path: "cmd/main.go", pkg: "main", imports: []language.ImportDraft{{Path: "github.com/spf13/cobra"}, {Path: "github.com/spf13/cobra/doc"}, {Path: "fmt"}}},
+	}
+	files := psIndex(module, true)
+	for _, root := range []string{"cobra", "cobra@v1.9.1", "fork"} {
+		if got := target(psResolve(t, files, root, "cmd/main.go", "Command", "cobra")); got != "cobra.go#Command exact" {
+			t.Errorf("root %q: root package import: %s", root, got)
+		}
+		if got := target(psResolve(t, files, root, "cmd/main.go", "Gen", "doc")); got != "doc/doc.go#Gen exact" {
+			t.Errorf("root %q: subpackage import: %s", root, got)
+		}
+		if res := psResolve(t, files, root, "cmd/main.go", "Println", "fmt"); !res.OutsideRepository {
+			t.Errorf("root %q: fmt is not OutsideRepository", root)
+		}
+	}
+	// Only the root import: no second path establishes the prefix.
+	alone := []psFile{
+		{path: "cobra.go", pkg: "cobra", decls: []string{"Command"}},
+		{path: "doc/doc.go", pkg: "doc", imports: []language.ImportDraft{{Path: "github.com/spf13/cobra"}}},
+	}
+	files = psIndex(alone, true)
+	res := psResolve(t, files, "cobra@v1.9.1", "doc/doc.go", "Command", "cobra")
+	if res.HasUniqueTarget() || res.OutsideRepository {
+		t.Errorf("unestablished root import: %s (outside %v)", target(res), res.OutsideRepository)
+	}
+}
+
+// Paths without a host (no dot in their first element) are the standard
+// library's as much as a module's: two of them sharing a prefix by
+// coincidence (encoding/json, encoding/xml beside repository directories
+// json/ and xml/), or one naming the root package's name (log, with a root
+// package log), map nothing into the repository.
+func TestPackageScope_StandardLibraryPathsMapNothing(t *testing.T) {
+	repo := []psFile{
+		{path: "log.go", pkg: "log", decls: []string{"Println"}},
+		{path: "syslog/syslog.go", pkg: "syslog", decls: []string{"New"}},
+		{path: "json/json.go", pkg: "json", decls: []string{"Marshal"}},
+		{path: "xml/xml.go", pkg: "xml", decls: []string{"Marshal"}},
+		{path: "cmd/app/main.go", pkg: "main", imports: []language.ImportDraft{
+			{Path: "log"}, {Path: "log/syslog"}, {Path: "encoding/json"}, {Path: "encoding/xml"}}},
+	}
+	files := psIndex(repo, true)
+	for _, c := range []struct{ name, recv string }{{"Println", "log"}, {"New", "syslog"}, {"Marshal", "json"}, {"Marshal", "xml"}} {
+		if res := psResolve(t, files, "mylog", "cmd/app/main.go", c.name, c.recv); res.HasUniqueTarget() {
+			t.Errorf("%s.%s resolved into the repository: %s", c.recv, c.name, target(res))
+		}
+	}
+	// A module named without a host, checked out under its own name.
+	local := []psFile{
+		{path: "util/util.go", pkg: "util", decls: []string{"Do"}},
+		{path: "main.go", pkg: "main", imports: []language.ImportDraft{{Path: "myapp/util"}}},
+	}
+	files = psIndex(local, true)
+	if got := target(psResolve(t, files, "myapp", "main.go", "Do", "util")); got != "util/util.go#Do exact" {
+		t.Errorf("hostless module under its own name: %s", got)
 	}
 }
 

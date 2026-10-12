@@ -1,5 +1,5 @@
 ## stats
-files=6 symbols=11 references=10 relations=5 skipped=0
+files=6 symbols=11 references=17 relations=11 skipped=0
 lang go=6
 ## symbols
 symbol Broken kind=function lang=go qualified="Broken" receiver="" exported=true @broken.go:3:1-5:15
@@ -14,22 +14,35 @@ symbol User kind=struct lang=go qualified="User" receiver="" exported=true @user
 symbol Save kind=method lang=go qualified="User.Save" receiver="User" exported=true @user.go:10:1-12:2
 symbol DefaultRole kind=constant lang=go qualified="DefaultRole" receiver="" exported=true @user.go:14:7-14:29
 ## references
+ref Draft kind=type_use container="Draft.Save" receiver="" call=false @draft.go:8:10-8:15
 ref fmt kind=import container="" receiver="" call=false @repository.go:3:8-3:13
+ref Repository kind=type_use container="Repository.Find" receiver="" call=false @repository.go:9:10-9:20
+ref User kind=type_use container="Repository.Find" receiver="" call=false @repository.go:9:38-9:42
 ref Println kind=call container="Repository.Find" receiver="fmt" call=true @repository.go:10:2-10:13
 ref User kind=construction container="Repository.Find" receiver="" call=false @repository.go:11:10-11:14
+ref Repository kind=type_use container="UserService" receiver="" call=false @service.go:5:8-5:18
+ref UserService kind=type_use container="UserService.Create" receiver="" call=false @service.go:9:10-9:21
 ref User kind=construction container="UserService.Create" receiver="" call=false @service.go:10:7-10:11
 ref Find kind=call container="UserService.Create" receiver="s.repo" receiver_type="Repository" call=true @service.go:11:11-11:22
 ref Save kind=call container="UserService.Create" receiver="found" call=true @service.go:12:9-12:19
 ref testing kind=import container="" receiver="" call=false @service_test.go:3:8-3:17
+ref T kind=type_use container="TestCreate" receiver="testing" call=false @service_test.go:5:20-5:29
 ref UserService kind=construction container="TestCreate" receiver="" call=false @service_test.go:6:8-6:19
 ref Create kind=call container="TestCreate" receiver="s" receiver_type="UserService" call=true @service_test.go:7:12-7:20
-ref Fatal kind=call container="TestCreate" receiver="t" call=true @service_test.go:8:3-8:10
+ref Fatal kind=call container="TestCreate" receiver="t" receiver_type="testing.T" call=true @service_test.go:8:3-8:10
+ref User kind=type_use container="User.Save" receiver="" call=false @user.go:10:10-10:14
 ## edges
+edge Draft.Save -uses_type-> Draft confidence=exact evidence=[same_file:symbol "Draft" defined in same file draft.go]
 edge Repository.Find -calls-> User confidence=strong evidence=[same_package:symbol "User" found in same package as repository.go]
+edge Repository.Find -uses_type-> Repository confidence=exact evidence=[same_file:symbol "Repository" defined in same file repository.go]
+edge Repository.Find -uses_type-> User confidence=strong evidence=[same_package:symbol "User" found in same package as repository.go]
 edge TestCreate -calls-> UserService confidence=strong evidence=[same_package:symbol "UserService" found in same package as service_test.go]
 edge TestCreate -calls-> UserService.Create confidence=strong evidence=[receiver_type:receiver "s" declared as "UserService"]
+edge User.Save -uses_type-> User confidence=exact evidence=[same_file:symbol "User" defined in same file user.go]
+edge UserService -uses_type-> Repository confidence=strong evidence=[same_package:symbol "Repository" found in same package as service.go]
 edge UserService.Create -calls-> Repository.Find confidence=strong evidence=[receiver_type:receiver "s.repo" declared as "Repository"]
 edge UserService.Create -calls-> User confidence=strong evidence=[same_package:symbol "User" found in same package as service.go]
+edge UserService.Create -uses_type-> UserService confidence=exact evidence=[same_file:symbol "UserService" defined in same file service.go]
 ## diagnostics
 diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.go:3:14-3:15
 diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.go:5:12-5:12
