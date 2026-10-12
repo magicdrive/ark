@@ -3,7 +3,6 @@ package mcp
 import (
 	"log"
 	"path"
-	"strings"
 	"sync"
 
 	"github.com/magicdrive/ark/internal/commandline"
@@ -61,8 +60,8 @@ func (h *ToolsHandler) fileMaskSyntax(rel string) secrets.Syntax {
 	if !ok || !r.IsRegular() {
 		return secrets.SyntaxUnknown
 	}
-	if real := r.Real(); real != "" && strings.HasSuffix(path.Base(real), ".tf") {
-		return secrets.SyntaxTerraform
+	if real := r.Real(); real != "" {
+		return secrets.SyntaxForFile(path.Base(real))
 	}
 	return secrets.SyntaxUnknown
 }

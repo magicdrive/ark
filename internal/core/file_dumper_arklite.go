@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/magicdrive/ark/internal/commandline"
-	"github.com/magicdrive/ark/internal/secrets"
 	"github.com/magicdrive/ark/internal/textbank"
 )
 
@@ -64,10 +63,7 @@ func WriteAllFilesAsArklite(treeStr, root, outputPath string, allowedFileListMap
 		pattern := getCommentDelimiters(lang)
 		data = stripComments(data, pattern)
 
-		if opt.MaskSecretsFlag.Bool() {
-			content := secrets.MaskAll(string(data))
-			data = []byte(content)
-		}
+		data = []byte(maskContent(opt, path, d, string(data)))
 		lines := bytes.Split(data, []byte("\n"))
 
 		var compact bytes.Buffer

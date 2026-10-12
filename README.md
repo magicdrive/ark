@@ -282,7 +282,11 @@ estimates (`len(text)/4`), not model token counts.
   (cloud and service tokens, private keys, `password = …` assignments) are
   masked in MCP responses by default (`--mask-secrets off` disables it, with
   a warning); masking is not exhaustive, and paths and symbol names are never
-  masked.
+  masked. The rules are a recommended default a repository can adjust in
+  `.ark-secrets-rules.toml` — the MCP server applies the disabling of a rule
+  only with its operator's `--secret-rule-overrides on` — and
+  `ark secrets-scan` shows what they mask, and why, without the values
+  ([Secret masking rules](docs/secret-rules.md)).
 - Files excluded by `.arkignore` are invisible to the MCP server: no tool
   reads, lists, searches or indexes them, whatever the masking setting.
 - The server caches extraction results in `<root>/.ark/index`; add `.ark/` to
@@ -308,8 +312,11 @@ Details and known limitations: [SECURITY.md](SECURITY.md).
 - **Repository dump** — `ark <dir>` writes a directory's tree and file
   contents to one text, Markdown, XML or compact *arklite* file, with
   `.gitignore` handling and secret masking.
+- **`ark secrets-scan`** — report what secret masking masks in a repository,
+  file, line and rule, without the values; list the rules; suggest
+  `.arkignore` entries.
 - **`ark symbol` / `ark syntax`** — print one file's declarations or syntax
-  tree.
+  tree (not masked).
 - **`ark skill`** — generate task guidance for agents that use skills.
 
 See the [CLI reference](docs/cli.md).

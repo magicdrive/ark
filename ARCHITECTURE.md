@@ -386,6 +386,38 @@ resolve to and what the cache holds; or a string replace over the
 serialized response — it can break JSON and IDs; or trusting a file's name
 or content for its syntax — a `.tf` link to a `.env` file would unmask it.
 
+**One masking policy, one pipeline, for masking and finding.** The rules
+are compiled once into an immutable `secrets.Policy` — the built-in rules
+(`secrets/rules.go`, each with a stable ID pinned by
+`TestBuiltinRules_StableIDs` and `TestBuiltinRules_Documented`) less those a
+repository disables, plus those it adds — and applied by one pipeline
+(`secrets/engine.go`): PEM blocks, then per line the pattern rules in order
+and the assignment rules, each step finding spans of the text the earlier
+steps left. `Policy.Mask` replaces them; `Policy.Find` reports them, mapped
+back to the original text — so `ark secrets-scan` finds exactly what masking
+masks, never by a second detector. Without configuration the policy is
+`secrets.Recommended()`, byte for byte v6.1.0's masking
+(`TestRecommended_MatchesV61`, `FuzzRecommended_MatchesV61` against the frozen
+oracle `secrets/internal/v61`). The configuration (`.ark-secrets-rules.toml`
+or `ark-secrets-rules.toml` at the root) is read by `internal/secretpolicy`
+from the pinned root without following a symlink, for the dump once per run,
+for the MCP server per request and compiled only when its bytes change
+(`mcp/secret_policy.go`; a request masks everything with the policy it took:
+`TestSecretPolicy_RequestsNeverMixConfigurations`). The MCP server applies
+the entries that disable built-in rules only with the operator's
+`--secret-rule-overrides on` — repository text must not weaken the masking
+its operator runs — and fails closed on a configuration it cannot read or
+compile: results with repository text are replaced by the error, and an
+error message is withheld rather than masked by fewer rules
+(`TestSecretPolicy_*`, `TestSecretPolicy_ErrorMessages`). A file's syntax for masking comes from
+`secrets.SyntaxForFile` on the regular file read, in the dump
+(`core/masking.go`) as in the server (`fileMaskSyntax`). Masking never
+decides access and never reaches analysis. Danger: a second detector for
+the scan (it drifts from what masking masks); falling back to the
+recommended rules on a broken configuration (rules a user added vanish
+silently); reading the configuration through a symlink or by path (a swapped
+link would choose the rules).
+
 **`.arkignore` decides what the MCP server may read, where files are
 reached.** One policy (`mcp/access_policy.go`) — every `.arkignore` under the
 root, read with the dump's matcher (`libgitignore`) — is applied at the path

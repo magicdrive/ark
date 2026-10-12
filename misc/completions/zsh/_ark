@@ -6,7 +6,7 @@
 
 local context state state_descr line
 typeset -A opt_args
-local -a general_opts mcp_opts syntax_opts symbol_opts skill_opts setup_opts mcp_init_opts
+local -a general_opts mcp_opts syntax_opts secrets_scan_opts symbol_opts skill_opts setup_opts mcp_init_opts
 local -a subcommands client_arg
 local skill_sub
 
@@ -44,6 +44,7 @@ mcp_opts=(
   '--exclude-dir[-E]:dirname:_files -/'
   '--skip-non-utf8[-s]' '--delete-comment[-D]'
   '--allow-external-symlinks[Read through symlinks leading outside the repository]:on/off:(on off)'
+  '--secret-rule-overrides[Apply rule overrides of the repository configuration]:on/off:(on off)'
   '--no-cache[Disable persistent index cache]'
   '--help[-h]' '--version[-v]'
 )
@@ -56,7 +57,25 @@ subcommands=(
   'symbol:Extract symbols from file'
   'skill:Generate Cline/ChatGPT Skill'
   'instruction:Print agent instructions for using Ark MCP'
+  'secrets-scan:Report what secret masking masks, without values'
 )
+
+secrets_scan_opts=(
+
+  '--format[-f]:format:(text json)'
+
+  '--list-rules[List the masking rules]'
+
+  '--suggest-ignore[Suggest .arkignore entries and rules to review]'
+
+  '--include-ignored[Also scan the files the ignore rules exclude]'
+
+  '--allow-gitignore[-a]:on/off:(on off)'
+
+  '--help[-h]'
+
+)
+
 
 syntax_opts=(
   '--lang:Language:(go typescript tsx javascript python php terraform)'
@@ -125,6 +144,7 @@ case $state in
         _arguments -C "${setup_opts[@]}" "${client_arg[@]}"
         ;;
       instruction) _arguments -C '-h[Show help]' '--help[Show help]' '1:target:((claude\:"Instructions for Claude Code" codex\:"Instructions for Codex" cursor\:"Instructions for Cursor" cline\:"Instructions for Cline" copilot-vscode\:"Instructions for GitHub Copilot in VS Code" copilot-cli\:"Instructions for GitHub Copilot CLI"))' ;;
+      secrets-scan) _arguments -C "${secrets_scan_opts[@]}" '1:directory:_files -/' ;;
       syntax)     _arguments -C "${syntax_opts[@]}" '1:file:_files' ;;
       symbol)     _arguments -C "${symbol_opts[@]}" '1:file:_files' ;;
       skill)

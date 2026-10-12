@@ -11,7 +11,6 @@ import (
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/model"
-	"github.com/magicdrive/ark/internal/secrets"
 	"github.com/magicdrive/ark/internal/textbank"
 )
 
@@ -85,9 +84,7 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 
 		var content = string(decodedBytes)
 
-		if opt.MaskSecretsFlag.Bool() {
-			content = secrets.MaskAll(content)
-		}
+		content = maskContent(opt, fpath, d, content)
 
 		if opt.OutputFormat == "markdown" {
 			writer.WriteString("\n---\n\n")

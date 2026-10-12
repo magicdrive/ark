@@ -12,7 +12,6 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/commandline"
-	"github.com/magicdrive/ark/internal/secrets"
 	"github.com/magicdrive/ark/internal/textbank"
 )
 
@@ -111,9 +110,7 @@ func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[
 				return fmt.Errorf("failed to read %s: %w", fpath, err)
 			}
 			content := string(decodedBytes)
-			if opt.MaskSecretsFlag.Bool() {
-				content = secrets.MaskAll(content)
-			}
+			content = maskContent(opt, fpath, entry, content)
 			lang := detectLanguageTag(fpath)
 			fmt.Fprintf(writer, `<file name="%s" language="%s">`, xmlEscape(name), xmlEscape(lang))
 			writer.WriteString("\n<![CDATA[\n")

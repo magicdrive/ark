@@ -42,7 +42,7 @@ ark -f arklite -E vendor,dist .     # compact format, skip two directories
 | `--output-filename <file>` | `-o` | Output file name | `ark-output.txt`, `.md`, `.xml` or `.arklite.txt` by format |
 | `--output-format <fmt>` | `-f` | `txt`, `md`, `xml` or `arklite` | `txt` |
 | `--scan-buffer <size>` | `-b` | Line scan buffer (`10M`, `500K`, …) | `10M` |
-| `--mask-secrets <on\|off>` | `-m` | Mask detected secrets | `on` |
+| `--mask-secrets <on\|off>` | `-m` | Mask detected secrets, by the repository's [secret masking rules](secret-rules.md) | `on` |
 | `--allow-gitignore <on\|off>` | `-a` | Apply `.gitignore` rules | `on` |
 | `--additionally-ignorerule <file>` | `-A` | Extra ignore-rule file | – |
 | `--with-line-number <on\|off>` | `-n` | Prefix lines with numbers (`txt` format only) | `off` |
@@ -261,6 +261,7 @@ configuration `setup` wrote.
 | `--no-cache` | – | Do not use the extraction cache in `<root>/.ark/index` | cache on |
 | `--mask-secrets <on\|off>` | `-m` | Mask detected secrets in every MCP response; `off` disables masking and logs a warning ([SECURITY.md](../SECURITY.md#secret-masking)) | `on` |
 | `--allow-external-symlinks <on\|off>` | – | Read files through symlinks in the repository that lead outside it; `.arkignore` still applies, and paths outside the root stay refused ([Symlink policy](../SECURITY.md#symlink-policy)) | `off` |
+| `--secret-rule-overrides <on\|off>` | – | Apply the entries of the repository's [secret rules configuration](secret-rules.md) that disable built-in masking rules; without it they are left out and logged once | `off` |
 | `--scan-buffer`, `--allow-gitignore`, `--additionally-ignorerule`, `--ignore-dotfile`, `--pattern-regex`, `--include-ext`, `--exclude-dir-regex`, `--exclude-file-regex`, `--exclude-ext`, `--exclude-dir`, `--skip-non-utf8`, `--delete-comment` | | As in [repository dump](#repository-dump). They are the defaults of the file tools (`list_files`, `search_in_files`, `get_file_content`, …); a tool argument of the same name overrides them per request | |
 
 The filter options do not narrow the code-intelligence index: graph tools
@@ -331,9 +332,83 @@ Claude Code slash command under `.claude/commands/`. Generated skills grant
 19 of Ark's 21 MCP tools (all but `find_references` and
 `get_language_support`).
 
+## `secrets-scan`
+
+`ark secrets-scan [dirname]` reports what Ark's secret masking masks in a
+repository — file, line, column, length and rule — without showing a value.
+It uses the masking itself: the repository's [secret rules](secret-rules.md),
+the same matching, each file in the syntax the dump and the MCP server read
+it in. A finding-free scan is no proof that the repository holds no secret.
+
+```bash
+ark secrets-scan                       # the current directory
+ark secrets-scan repo --format json
+ark secrets-scan --list-rules          # ID, source, kind, state, reason
+ark secrets-scan --suggest-ignore      # suggestions; changes nothing
+ark secrets-scan --include-ignored     # also the files the ignore rules exclude
+```
+
+| Option | Alias | Description | Default |
+|---|---|---|---|
+| `--format <text\|json>` | `-f` | Output format | `text` |
+| `--list-rules` | – | List the rules instead of scanning | – |
+| `--suggest-ignore` | – | Add suggestions: files to add to `.arkignore`, files masking handles, rules that mostly mask source code. Nothing is written | – |
+| `--include-ignored` | – | Also scan the files `.arkignore` and `.gitignore` exclude (marked `excluded`). The scan still stays in the directory and follows no symlink to reach them | – |
+| `--allow-gitignore <on\|off>` | `-a` | Apply `.gitignore` rules | `on` |
+
+It reads the files the dump reads: `.arkignore` and `.gitignore` applied,
+`.git` and `.ark` skipped, binary, non-UTF-8 and files over 16 MiB counted as
+skipped. A symlink leading outside the directory is not followed: it is
+listed as not scanned (the dump follows it; the MCP server only with
+`--allow-external-symlinks on`). A mask inserted at an empty value (`""`) is
+no finding.
+
+```text
+Secret scan of /work/app
+Rules: Ark's recommended rules adjusted by .ark-secrets-rules.toml
+
+.env:1:10  generic-assignment-password  (builtin assignment, 21 bytes)
+app/main.go:4:11  generic-assignment-token  (builtin assignment, 6 bytes)
+notes.txt:1:8  acme-token  (config pattern, 17 bytes)
+external.txt: not scanned: a symlink leading outside the directory or nowhere (…)
+
+Rules found:
+  generic-assignment-password      Value of an assignment whose key ends in "password"
+  …
+
+3 findings in 3 files (8 files scanned, 0 skipped as binary, non-UTF-8 or too large).
+Values are not shown. No finding is no proof of no secret: the scan finds what Ark's masking masks.
+```
+
+The JSON output (`"version": 1`; fields are only added within a version)
+holds `root`, `config` (the configuration file or `null`), `includeIgnored`,
+`summary` (`findings`, `files`, `scannedFiles`, `skippedFiles`, `byRule`),
+`findings` (`path`, `line`, `column`, `length`, `ruleId`, `source`, `kind`,
+`excluded`), `errors` (`path`, `message`), `unfollowedSymlinks` and, with
+`--suggest-ignore`, `suggestions` (`exclude`, `maskOnly`, `reviewRules`).
+Findings are ordered by path, line, column and rule.
+
+Suggestions are heuristics, not a security assessment: a file is suggested
+for `.arkignore` when its name is a credentials file's (`.env`, `*.pem`,
+`*.key`, `*.tfvars`, `id_rsa`, `credentials.json`, …), or when it is no
+source code and at least half of its non-blank lines (and at least three)
+have findings; a rule is suggested for review when it finds at least ten
+spans in source code, where an assignment rule mostly masks code
+(`token := next()`). `.arkignore` keeps files out of Ark's output only: git,
+editors and other tools still read them.
+
+| Exit status | Meaning |
+|---|---|
+| `0` | No findings (or `--list-rules`, `--help`) |
+| `1` | Findings |
+| `2` | A configuration or argument error: nothing was scanned |
+| `3` | A file or directory could not be scanned: the result is incomplete |
+
 ## `syntax` and `symbol`
 
-Inspect one file without starting a server.
+Inspect one file without starting a server. Their output is not masked:
+`ark syntax --format json` prints the source text of every leaf node of the
+file as written.
 
 ```bash
 ark symbol internal/mcp/tools.go

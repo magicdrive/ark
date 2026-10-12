@@ -94,6 +94,8 @@ func cliCommands(t *testing.T) []command {
 	sknfs := mustFS(t, skn.FlagSet, err)
 	_, ins, err := commandline.InstructionOptParse(nil)
 	insfs := mustFS(t, ins.FlagSet, err)
+	_, ssc, err := commandline.SecretsScanOptParse(nil)
+	sscfs := mustFS(t, ssc.FlagSet, err)
 
 	return []command{
 		{"general", nil, gfs},
@@ -108,6 +110,7 @@ func cliCommands(t *testing.T) []command {
 		{"skill update", []string{"skill", "update"}, skufs},
 		{"skill inspect", []string{"skill", "inspect"}, sknfs},
 		{"instruction", []string{"instruction"}, insfs},
+		{"secrets-scan", []string{"secrets-scan"}, sscfs},
 	}
 }
 

@@ -206,7 +206,7 @@ func processFileContentIn(data []byte, readErr error, path string, opt *commandl
 
 	// Mask secrets if requested
 	if opt.MaskSecretsFlag.Bool() {
-		content = secrets.MaskAllIn(content, syntax)
+		content = opt.MaskPolicy().Mask(content, secrets.Mode{Syntax: syntax})
 	}
 
 	// Add line numbers if requested

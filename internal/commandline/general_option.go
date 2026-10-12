@@ -13,6 +13,7 @@ import (
 	"github.com/magicdrive/ark/internal/common"
 	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/model"
+	"github.com/magicdrive/ark/internal/secrets"
 )
 
 type Option struct {
@@ -37,6 +38,16 @@ type Option struct {
 	// decides every entry before it is reported and reads the object it
 	// decided. The MCP server and the dump set it; nil means by path.
 	FS FileAccess
+	// SecretPolicy is the masking policy of the repository being dumped,
+	// loaded from its secret rules configuration once per run
+	// (internal/secretpolicy); nil means the recommended policy.
+	SecretPolicy *secrets.Policy
+	// SecretRuleOverrides (mcp-server --secret-rule-overrides on) lets the
+	// MCP server apply the entries of the repository's secret rules
+	// configuration that disable built-in masking rules: text in the
+	// repository must not weaken the masking its operator runs. Only the
+	// operator sets it; the CLI applies the configuration whole.
+	SecretRuleOverrides bool
 	// AllowExternalSymlinks (mcp-server --allow-external-symlinks on) lets
 	// the MCP server read files through symlinks in the repository that lead
 	// outside it. Only the operator sets it; the CLI leaves it false.
@@ -319,6 +330,15 @@ type FileAccess interface {
 	ReadDir(path string) ([]fs.DirEntry, error)
 	ReadFile(path string) ([]byte, error)
 	Stat(path string) (fs.FileInfo, error)
+}
+
+// MaskPolicy returns the masking policy: SecretPolicy, or the recommended
+// one when none was loaded.
+func (cr *Option) MaskPolicy() *secrets.Policy {
+	if cr != nil && cr.SecretPolicy != nil {
+		return cr.SecretPolicy
+	}
+	return secrets.Recommended()
 }
 
 // ReadFile reads path through FS, or by path without it.
