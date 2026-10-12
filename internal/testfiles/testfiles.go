@@ -30,6 +30,11 @@ import (
 //	PHP         FooTest.php (PHPUnit), or any file under a tests/ or test/
 //	            directory (PHPUnit's layout, which also holds the suite's
 //	            base classes and helpers)
+//	Rust        any file under a tests/ directory (Cargo's integration
+//	            tests and their shared modules, or a module named tests),
+//	            or a module file named tests.rs (the `#[cfg(test)] mod
+//	            tests;` convention). Unit tests written inline
+//	            (`#[cfg(test)] mod tests { ... }`) are in production files.
 func IsTestFile(path string) bool {
 	slashed := filepath.ToSlash(path)
 	base := slashed[strings.LastIndex(slashed, "/")+1:]
@@ -52,6 +57,16 @@ func IsTestFile(path string) bool {
 		for _, d := range dirs[:len(dirs)-1] {
 			switch d {
 			case "tests", "Tests", "test":
+				return true
+			}
+		}
+	case ".rs":
+		if base == "tests.rs" {
+			return true
+		}
+		dirs := strings.Split(slashed, "/")
+		for _, d := range dirs[:len(dirs)-1] {
+			if d == "tests" {
 				return true
 			}
 		}

@@ -87,7 +87,7 @@ A call whose callee name is computed at run time should be observed as a
 as an unresolved reference of its container instead of the call silently
 not existing ("Unknown is not empty"). Probe (per language): one such call —
 Go `m["k"]()`, TypeScript/TSX/JavaScript `o[k]()`, Python `getattr(o, n)()`,
-PHP `$o->$m()`.
+PHP `$o->$m()`, Rust `m[k]()`.
 
 Target: exactly one Dynamic reference, with no name fabricated from the
 expression. Only a Dynamic reference is safe here: a guessed name would be

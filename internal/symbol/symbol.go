@@ -45,6 +45,12 @@ const (
 	KindDataSource    SymbolKind = "data_source"
 	KindOutput        SymbolKind = "output"
 	KindConfiguration SymbolKind = "configuration"
+
+	// Declarations of Rust. A macro is a macro_rules! macro; an impl is an
+	// impl block, which declares no name of its own (its items are named
+	// through the implemented type, or as the trait implementation's).
+	KindMacro SymbolKind = "macro"
+	KindImpl  SymbolKind = "impl"
 )
 
 // Symbol is the canonical domain representation of a code symbol.

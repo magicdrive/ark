@@ -153,6 +153,7 @@ func (x *extractor) extract(j *extractJob) {
 
 		Package:       ext.Package,
 		PackageScoped: ext.PackageScoped,
+		Aliases:       ext.Aliases,
 	})
 }
 
@@ -219,6 +220,7 @@ func (x *extractor) ingest(b *builder, j *extractJob) {
 
 			Package:       cached.Package,
 			PackageScoped: cached.PackageScoped,
+			Aliases:       cached.Aliases,
 		})
 		return
 	}

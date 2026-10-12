@@ -43,6 +43,34 @@ Go 1.27.1 (`go build` of the commit), repositories on a local SSD, no other
 load. Each repository is the GitHub release archive of the tag shown; Ark is
 the source tree of commit `c1c76d3`.
 
+### Rust
+
+Rust support is newer than the table above and was measured separately: the
+`feature/rust-language-support` working tree (based on `656da7b`), the same
+machine and script, five runs per package. Each package is its crates.io
+release as Cargo downloads it (a copy, since the script writes the cache into
+it).
+
+| Package (version) | Files indexed | Cold | Warm | Restore | Peak RSS |
+|---|---:|---:|---:|---:|---:|
+| [quick-error](https://crates.io/crates/quick-error) 1.2.3 | 2 | 430 [421–488] | 1 [1–1] | 5 [4–6] | 96 MB |
+| [regex](https://crates.io/crates/regex) 1.3.4 | 62 | 165 [156–167] | 5 [5–6] | 42 [41–44] | 117 MB |
+| [tokio](https://crates.io/crates/tokio) 0.2.13 | 372 | 311 [310–368] | 21 [21–26] | 181 [177–183] | 147 MB |
+| [syn](https://crates.io/crates/syn) 1.0.16 | 79 | 1,322 [1,303–1,373] | 8 [7–8] | 169 [162–170] | 262 MB |
+| [serde](https://crates.io/crates/serde) 1.0.104 | 19 | 1,919 [1,718–2,073] | 4 [4–5] | 62 [55–113] | 263 MB |
+
+Most of the cold time is parsing. A file the parser's production route
+rejects (Rust 2015 `try!(...)`, which the grammar reads as the `try`
+keyword) is parsed again by fallback routes; the last of them, the forest
+route, could take tens of seconds on files dense with attributes and doc
+comments, and then fail. A probe now decides first whether it can succeed
+([Architecture](../ARCHITECTURE.md), "One parse path"): before it, the same
+measurement gave quick-error 38,968 ms cold (157 MB) and serde 19,987 ms
+(864 MB). Over 4,810 files of 256 crates.io packages, parsing takes 38.5 s
+in all; the slowest file is a 2.6 MB generated table (3.2 s), and 7 files
+still run the forest route (those without a comment the probe can blank),
+none among the ten slowest.
+
 ### Reading the results
 
 - **File count is a poor predictor.** Cost depends on the amount of source
@@ -104,6 +132,23 @@ python3 docs/scripts/ark-mcp-timing.py "$(command -v ark)" /path/to/repository 5
 The script writes the extraction cache into `<repository>/.ark/index` for the
 restore runs and deletes it afterwards. Timings vary with CPU, disk and file
 system cache; compare versions on the same machine.
+
+The parser changes behind the Rust figures are checked by opt-in tests, not
+run in CI:
+
+```bash
+# Every file: Parse gives the route and tree it gave before the probe and the
+# parser pool (one "language:extension:directory" per corpus).
+ARK_TSPARSE_CORPUS="rust:.rs:$HOME/.cargo/registry/src/<index>;go:.go:/path/to/go" \
+  go test ./internal/tsparse -run TestProbe_Corpus -v -timeout 3h
+# Rust packages: counts, time, heap high-water mark, determinism, crate boundaries.
+ARK_RUST_CORPUS=/path/to/crate1:/path/to/crate2 \
+  go test ./internal/languages/rust -run TestCorpus_External -v
+```
+
+`TestProbe_ScalesLinearly` and `TestExtractScalesLinearly` run in CI: four
+times the input must not cost more than ten times the time (a quadratic or
+cubic cost does).
 
 ## Token figures
 

@@ -16,7 +16,7 @@ func CallersToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_callers",
-			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete among the references Ark observes: files it does not extract — e.g. Terraform .tf.json — and code lost to an unrecoverable syntax error are in no count); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations). For Terraform the callers are dependents: edge kind referenced_by (uses its value) or depended_on_by (depends_on), never a call. indexDiagnostics appears when the index has diagnostics (see get_diagnostics): references in code they cover are in no count",
+			Description: "Find symbols that call a given symbol, using the repository index. unattributed counts references that may call it but are not resolved edges (0 means the caller list is complete among the references Ark observes: files it does not extract — e.g. Terraform .tf.json — and code lost to an unrecoverable syntax error are in no count); candidates lists possible callers from ambiguous references (one per symbol and reference kind with its reference count; a deterministic sample of at most 10; candidatesTotal counts the symbols, candidateRelationsTotal the relations). Each edge reports what the reference is: called_by (a call or construction), referenced_by, depended_on_by (Terraform dependents), implemented_by, extended_by, trait_used_by, type_used_by or imported_by. indexDiagnostics appears when the index has diagnostics (see get_diagnostics): references in code they cover are in no count",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -317,10 +317,12 @@ func (h *ToolsHandler) callGraph(args map[string]interface{}, callers bool) (*Ca
 }
 
 // edgeDisplayKind is the kind an edge entry reports. A reverse edge is the
-// generic index.EdgeCalledBy; one built from a dependency reference
-// (configuration languages) reports what it is — referenced_by /
-// depended_on_by — so a dependency is never shown as a call. Every other edge
-// reports its graph kind unchanged.
+// generic index.EdgeCalledBy; it reports what the reference it was built from
+// is — called_by only for a call or a construction (a call-like edge,
+// edgeKindFor), and otherwise referenced_by, depended_on_by, implemented_by,
+// extended_by, trait_used_by, type_used_by or imported_by — so an
+// implementation, a type use or an import is never shown as a call. Every
+// other edge reports its graph kind unchanged.
 func edgeDisplayKind(e index.GraphEdge) string {
 	if e.Kind == index.EdgeCalledBy {
 		switch e.RefKind {
@@ -328,6 +330,16 @@ func edgeDisplayKind(e index.GraphEdge) string {
 			return "referenced_by"
 		case reference.KindExplicitDependency:
 			return "depended_on_by"
+		case reference.KindImplements:
+			return "implemented_by"
+		case reference.KindInheritance:
+			return "extended_by"
+		case reference.KindUsesTrait:
+			return "trait_used_by"
+		case reference.KindTypeUse:
+			return "type_used_by"
+		case reference.KindImport:
+			return "imported_by"
 		}
 	}
 	return string(e.Kind)

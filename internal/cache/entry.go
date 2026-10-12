@@ -29,4 +29,8 @@ type CachedExtraction struct {
 	Package       string    `json:"package,omitempty"`
 	PackageScoped bool      `json:"packageScoped,omitempty"`
 	CachedAt      time.Time `json:"cachedAt"`
+
+	// Aliases (language.Extraction.Aliases) are optional the same way: only
+	// the provider that emits them (rust) reads entries with them.
+	Aliases []language.AliasDraft `json:"aliases,omitempty"`
 }

@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -67,6 +67,7 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"go":         language.SupportLevelContextQualityCertified,
 		"php":        language.SupportLevelGraph,
 		"terraform":  language.SupportLevelGraph,
+		"rust":       language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)
@@ -100,6 +101,22 @@ func TestRegistry_TerraformExtensions(t *testing.T) {
 	for _, name := range []string{"build.pkr.hcl", "job.nomad.hcl", "terragrunt.hcl", "main.tftest.hcl", "main.tf.json", "vars.tfvars.json"} {
 		if d, ok := reg.DetectByFilename(name); ok && d.Language == "terraform" {
 			t.Errorf("%s: must not be indexed as terraform", name)
+		}
+	}
+}
+
+// TestRegistry_RustExtensions pins the files Rust is indexed for: .rs only
+// (Cargo.toml is not a Rust source).
+func TestRegistry_RustExtensions(t *testing.T) {
+	reg := languages.Registry()
+	for _, name := range []string{"lib.rs", "src/main.rs", "MOD.RS"} {
+		if d, ok := reg.DetectByFilename(name); !ok || d.Language != "rust" {
+			t.Errorf("%s: not detected as rust", name)
+		}
+	}
+	for _, name := range []string{"Cargo.toml", "Cargo.lock", "x.rs.bak", "x.rlib"} {
+		if d, ok := reg.DetectByFilename(name); ok && d.Language == "rust" {
+			t.Errorf("%s: must not be indexed as rust", name)
 		}
 	}
 }

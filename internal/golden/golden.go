@@ -63,6 +63,12 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	// Module-binding evidence is printed only when a provider emits it, so
 	// snapshots of providers that do not model bindings stay byte-identical.
 	writeModuleBindings(&b, ext)
+	if len(ext.Aliases) > 0 {
+		b.WriteString("## aliases\n")
+		for _, a := range ext.Aliases {
+			fmt.Fprintf(&b, "alias %s -> %s %s\n", a.Qualified, a.Target, loc(a.Location))
+		}
+	}
 
 	b.WriteString("## diagnostics\n")
 	for _, d := range sortedDiagnostics(ext.Diagnostics) {

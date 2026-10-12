@@ -155,7 +155,7 @@ func SyntaxToolDefinitions() []Tool {
 					},
 					"lang": map[string]interface{}{
 						"type":        "string",
-						"description": "Language override (go, typescript, tsx, javascript, python, php, terraform). Auto-detected if not specified.",
+						"description": "Language override (go, typescript, tsx, javascript, python, php, terraform, rust). Auto-detected if not specified.",
 					},
 				},
 				"required": []string{"path"},

@@ -419,7 +419,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |---|---|---|
-| `--lang <language>` | `go`, `typescript`, `tsx`, `javascript`, `python`, `php`, `terraform` | detected from the extension |
+| `--lang <language>` | `go`, `typescript`, `tsx`, `javascript`, `python`, `php`, `terraform`, `rust` | detected from the extension |
 | `--format <text\|json>` | Output format | `text` |
 
 ## Shell completions

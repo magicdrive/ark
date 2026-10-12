@@ -8,7 +8,7 @@
 
 Ark はリポジトリを構文解析して宣言と参照を抽出し、各参照がどの宣言を指すかを解決したうえで、その結果のグラフを [Model Context Protocol](https://modelcontextprotocol.io)（MCP）でコーディングエージェントに提供します。エージェントは「この関数を呼んでいるのはどこか」「この変更は何に影響するか」「編集の前に読むべきコードはどれか」を問い合わせ、どこまで確かな答えなのかを添えた回答を受け取れます。
 
-Ark は単一の静的バイナリです。Go、TypeScript、TSX、PHP、Terraform、JavaScript、Python を、リポジトリのコードを一切実行せずに解析します。
+Ark は単一の静的バイナリです。Go、TypeScript、TSX、PHP、Terraform、Rust、JavaScript、Python を、リポジトリのコードを一切実行せずに解析します。
 
 > 詳細なドキュメント（`docs/` 以下）は英語で提供しています。
 
@@ -208,6 +208,7 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 | TypeScript、TSX | context-quality certified | 相対 import、barrel、型の付いたレシーバー。`tsconfig` のパス設定と型推論には非対応 |
 | PHP | graph | 名前空間、`use`、継承とトレイト。フレームワークやオートロードの意味論には非対応 |
 | Terraform | graph | モジュール単位のアドレス、ローカルモジュールの出力。`.tf.json` は読まない |
+| Rust | graph | crate 内のパス（`crate`/`self`/`super`、`use`、inherent と trait impl の区別）。値に対するメソッド呼び出し、ワークスペースの他 crate、マクロ展開は解決しない |
 | JavaScript | references | トップレベルの関数・クラス・`const`/`let`。クラスのメソッドは抽出しない |
 | Python | references | トップレベルの関数とクラス。メソッドは抽出しない |
 
@@ -240,7 +241,8 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 ## 制限事項
 
 - 型推論、戻り値の型の伝搬、制御フロー解析は行いません。
-- モジュール解決はコンパイラと同等ではありません。`tsconfig` のパス設定、Composer / PSR-4 のオートロード、`package.json` は解釈しません。
+- モジュール解決はコンパイラと同等ではありません。`tsconfig` のパス設定、Composer / PSR-4 のオートロード、`package.json`、`Cargo.toml` は解釈しません。
+- マクロは展開しません（Rust の `macro_rules!`、手続きマクロ、derive）。
 - フレームワークの意味論（DI コンテナ、ルーティング、デコレーター）は扱いません。
 - 明示的な import があっても、言語をまたぐ参照は解決しません（JavaScript から TypeScript のファイルを import する場合など）。
 - JavaScript と Python のクラスのメソッドは抽出しません。
