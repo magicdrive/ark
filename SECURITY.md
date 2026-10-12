@@ -57,6 +57,25 @@ The same rules mask the repository dump (`ark <dir>`).
   levels, ...) are returned as they are, so a client can pass them back. A
   secret embedded in a file or directory name or an identifier is therefore
   not masked. JSON keys, numbers and structure are never changed.
+- **Recommended rules, adjustable.** The rules below are Ark's recommended
+  default, each with a stable ID. A repository adjusts them with
+  `.ark-secrets-rules.toml` (or `ark-secrets-rules.toml`) at its root: it
+  disables built-in rules and adds its own ([Secret masking
+  rules](docs/secret-rules.md)). The dump, `ark secrets-scan` and the MCP
+  server read it the same way — a regular file at the root, never through a
+  symlink — and apply it the same way, with one exception: **the MCP server
+  applies the entries that disable built-in rules only when its operator
+  starts it with `--secret-rule-overrides on`.** The file is text in the
+  repository, which an agent may write; without the operator's flag the
+  server leaves those entries out, applies the rest, and logs once which
+  entries it left out. Adding rules is never restricted. A configuration
+  that cannot be read or compiled is an error, never the recommended rules in
+  its place: the dump and the scan fail, and the MCP server replaces every
+  result with repository text in it by the error (fail closed) until it is
+  fixed; results built only from identifiers still go out, and a failing
+  request's error message is withheld rather than masked by fewer rules. No
+  error, log or scan output holds a configured pattern's text or a masked
+  value.
 - **Rules.** Whole PEM private-key blocks; known token formats (AWS access
   key IDs, GitHub, GitLab, Slack, Stripe, SendGrid and Google keys and
   tokens, JWTs, Azure account keys); and the value of an assignment whose
@@ -108,8 +127,23 @@ The same rules mask the repository dump (`ark <dir>`).
   applied only when a response is produced. The cache in `<root>/.ark/index`
   therefore holds unmasked extraction data (symbols and references).
 
+- **Scanning.** `ark secrets-scan` reports where the rules mask and by
+  which rule, with the masking's own matching (`Policy.Find`, the pipeline
+  `Policy.Mask` masks by), never the values. A scan without findings is no
+  proof that a repository holds no secret. `--include-ignored` also scans
+  the files the ignore rules exclude, inside the directory, without
+  following a symlink to reach them.
+- **Not masked: `ark syntax` and `ark symbol`.** They inspect one file the
+  user names, outside the masking; `ark syntax --format json` prints the
+  source text of the file's leaf nodes as written.
+- **Masking never decides access.** A secret rules configuration changes what
+  is masked in output, nothing else: not which files can be read
+  (`.arkignore`, root and symlink checks), not the index, symbols, the
+  repository map or search results.
+
 Masking is a safety net, not data-loss prevention. To keep a file away from
-an agent entirely, exclude it with `.arkignore`.
+an agent entirely, exclude it with `.arkignore` — which keeps it out of Ark's
+output only: git, editors and agents with other tools still read it.
 
 ## File access policy (`.arkignore`)
 

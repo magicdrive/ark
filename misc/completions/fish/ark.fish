@@ -12,7 +12,7 @@ function __fish_ark_no_subcommand
     # options are only valid before/without a subcommand.
     set cmd (commandline -opc)
     test (count $cmd) -lt 2; and return 0
-    not contains -- $cmd[2] mcp-server mcp-init setup syntax symbol skill instruction
+    not contains -- $cmd[2] mcp-server mcp-init setup syntax symbol skill instruction secrets-scan
 end
 
 function __fish_ark_setup_client_position
@@ -44,6 +44,9 @@ complete -c ark -n '__fish_ark_is_first_arg'    \
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'mcp-init'                           \
         -d 'Register MCP server entry in settings.json'
+complete -c ark -n '__fish_ark_is_first_arg'    \
+        -a 'secrets-scan'                       \
+        -d 'Report what secret masking masks, without values'
 
 # ----- general flags (no argument) ------------------------------------------
 complete -c ark -n '__fish_ark_no_subcommand' -s h -l help          -d 'Show help'
@@ -72,6 +75,7 @@ complete -c ark -n '__fish_ark_no_subcommand' -l exclude-dir      -s E -d 'Exclu
 # ----- mcp-server flags ------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l no-cache -d 'Disable persistent index cache'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l allow-external-symlinks -d 'Read through symlinks leading outside the repository' -x -a 'on off'
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l secret-rule-overrides -d 'Apply rule overrides of the repository configuration' -x -a 'on off'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -s s -l skip-non-utf8  -d 'Skip non-UTF8 files'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -s D -l delete-comment -d 'Delete code comments'
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -s h -l help            -d 'Show help'
@@ -221,3 +225,11 @@ complete -c ark -n '__fish_seen_subcommand_from mcp-init' \
 complete -c ark -n '__fish_seen_subcommand_from mcp-init' \
         -s h -l help -d 'Show help'
 
+
+# ----- secrets-scan options ---------------------------------------------------
+complete -c ark -n '__fish_seen_subcommand_from secrets-scan' -l format -s f -d 'Output format' -x -a 'text json'
+complete -c ark -n '__fish_seen_subcommand_from secrets-scan' -l list-rules -d 'List the masking rules'
+complete -c ark -n '__fish_seen_subcommand_from secrets-scan' -l suggest-ignore -d 'Suggest .arkignore entries and rules to review'
+complete -c ark -n '__fish_seen_subcommand_from secrets-scan' -l include-ignored -d 'Also scan the files the ignore rules exclude'
+complete -c ark -n '__fish_seen_subcommand_from secrets-scan' -l allow-gitignore -s a -d 'Enable .gitignore' -x -a 'on off'
+complete -c ark -n '__fish_seen_subcommand_from secrets-scan' -s h -l help -d 'Show help'

@@ -13,6 +13,7 @@ Sub commands:
   symbol <file>                                    Extract symbols (functions, types, etc.) from file.
   skill                                            Generate Ark MCP skill for Claude Code / OpenAI.
   instruction <target>                             Print agent instructions for using Ark MCP (target: claude, codex, cursor, cline, copilot-vscode, copilot-cli).
+  secrets-scan [dirname]                           Report what Ark's secret masking masks, and why, without showing it.
 
 
 general (repository dump mode) options:
@@ -77,6 +78,7 @@ mcp-server options:
   -s, --skip-non-utf8                              Specify flag to ignore files that do not have utf8 charset. (optional.)
   -D, --delete-comment                             Specify flag strip comments based on language detection. (optional.)
   --allow-external-symlinks <'on'|'off'>           Read files through symlinks in the repository that lead outside it. (optional. default: 'off')
+  --secret-rule-overrides <'on'|'off'>             Apply the entries of the repository's secret rules configuration that disable built-in masking rules. (optional. default: 'off')
   --no-cache                                       Disable the persistent extraction cache in <root>/.ark/index. (optional.)
 
 instruction options:
@@ -89,6 +91,16 @@ instruction options:
                                                      copilot-vscode  -> .github/copilot-instructions.md
                                                      copilot-cli     -> .github/copilot-instructions.md
   -h, --help                                       Show help message.
+
+secrets-scan options:
+  [dirname]                                        Directory to scan. (optional. default: '.')
+  -f, --format <'text'|'json'>                     Specify output format. (optional. default: 'text')
+  --list-rules                                     List the masking rules: ID, source, kind, state, description. (optional.)
+  --suggest-ignore                                 Suggest .arkignore entries and rules to review; changes nothing. (optional.)
+  --include-ignored                                Also scan the files .arkignore and .gitignore exclude, within the directory. (optional.)
+  -a, --allow-gitignore <'on'|'off'>               Specify enable .gitignore filter rule. (optional. default: 'on')
+  -h, --help                                       Show help message.
+                                                   Exit status: 0 no findings, 1 findings, 2 configuration or argument error, 3 a file not scanned.
 
 syntax options:
   -h, --help                                       Show help message.

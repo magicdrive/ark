@@ -11,13 +11,16 @@ import (
 type ResourcesHandler struct {
 	rootDir string
 	opt     *commandline.Option
+	// policies is the masking policy cache, the server's tools' (NewMCPServer).
+	policies *policyCache
 }
 
 // NewResourcesHandler creates a new resources handler
 func NewResourcesHandler(rootDir string, opt *commandline.Option) *ResourcesHandler {
 	return &ResourcesHandler{
-		rootDir: rootDir,
-		opt:     opt,
+		rootDir:  rootDir,
+		opt:      opt,
+		policies: newPolicyCache(),
 	}
 }
 
@@ -40,36 +43,46 @@ func (h *ResourcesHandler) ListResources() []Resource {
 }
 
 // ReadResource reads a specific resource by URI, with the secrets in its
-// text masked (sanitize.go).
+// text masked (sanitize.go) by the repository's policy (secret_policy.go):
+// one request, whose file access and policy end with it
+// (request_access.go).
 func (h *ResourcesHandler) ReadResource(uri string) (*ReadResourceResult, error) {
+	th := NewToolsHandler(h.rootDir, h.opt)
+	th.policies = h.policies
+	th, end := th.beginRequest()
+	defer end()
 	var result *ReadResourceResult
 	var err error
 	switch {
 	case strings.HasPrefix(uri, "file://"):
-		result, err = h.readFileResource(uri)
+		result, err = h.readFileResource(th, uri)
 	case strings.HasPrefix(uri, "directory://"):
-		result, err = h.readDirectoryResource(uri)
+		result, err = h.readDirectoryResource(th, uri)
 	default:
 		return nil, fmt.Errorf("unsupported resource URI scheme: %s", uri)
 	}
 	if !masksByDefault(h.opt) {
 		return result, err
 	}
-	return sanitizeResourceResult(result), err
+	p, perr := th.maskPolicy()
+	if perr != nil {
+		if result == nil {
+			return nil, err
+		}
+		return nil, fmt.Errorf("secret masking configuration error: %v; nothing was returned: fix the configuration or remove it", perr)
+	}
+	return sanitizeResourceResultWith(result, p), err
 }
 
-func (h *ResourcesHandler) readFileResource(uri string) (*ReadResourceResult, error) {
+func (h *ResourcesHandler) readFileResource(toolsHandler *ToolsHandler, uri string) (*ReadResourceResult, error) {
 	// Extract path from file:// URI
 	path := strings.TrimPrefix(uri, "file://")
 	if path == "" {
 		return nil, fmt.Errorf("file path is required")
 	}
 
-	// Use tools handler to get file content: one request, whose file
-	// access ends with it (request_access.go). The path is the URI's text
-	// after "file://", as is: nothing is percent-decoded.
-	toolsHandler, end := NewToolsHandler(h.rootDir, h.opt).beginRequest()
-	defer end()
+	// The tools handler of the resource's request reads the file. The path
+	// is the URI's text after "file://", as is: nothing is percent-decoded.
 	args := map[string]interface{}{
 		"path": path,
 	}
@@ -94,16 +107,14 @@ func (h *ResourcesHandler) readFileResource(uri string) (*ReadResourceResult, er
 	}, nil
 }
 
-func (h *ResourcesHandler) readDirectoryResource(uri string) (*ReadResourceResult, error) {
+func (h *ResourcesHandler) readDirectoryResource(toolsHandler *ToolsHandler, uri string) (*ReadResourceResult, error) {
 	// Extract path from directory:// URI
 	path := strings.TrimPrefix(uri, "directory://")
 	if path == "" {
 		path = "."
 	}
 
-	// Use tools handler to get directory tree
-	toolsHandler, end := NewToolsHandler(h.rootDir, h.opt).beginRequest()
-	defer end()
+	// The tools handler of the resource's request lists the directory.
 	args := map[string]interface{}{
 		"path": path,
 	}

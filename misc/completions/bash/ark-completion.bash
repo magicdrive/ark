@@ -7,7 +7,7 @@
 # internal/commandline, the setup client registry or the language registry.
 
 # ---- CLI contract tables (kept in sync with internal/commandline by tests) ----
-_ark_subcommands="mcp-server mcp-init setup syntax symbol skill instruction"
+_ark_subcommands="mcp-server mcp-init setup syntax symbol skill instruction secrets-scan"
 _ark_skill_subcommands="init add-explorer update inspect"
 _ark_setup_clients="claude cursor codex cline copilot-vscode copilot-cli"
 _ark_instruction_targets="claude codex cursor cline copilot-vscode copilot-cli"   # a separate registry from the setup clients (same names today, by coincidence)
@@ -21,7 +21,7 @@ _ark_gen_opts="--output-filename -o --scan-buffer -b --output-format -f --mask-s
 _ark_mcp_flags="--skip-non-utf8 -s --delete-comment -D --no-cache --help -h --version -v"
 _ark_mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
-    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E --allow-external-symlinks"
+    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E --allow-external-symlinks --secret-rule-overrides"
 _ark_setup_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 _ark_mcp_init_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 _ark_syntax_opts="--lang --format -h --help"
@@ -30,6 +30,7 @@ _ark_skill_init_opts="--name --output --archive -h --help"
 _ark_skill_update_opts="--force --dry-run -h --help"
 _ark_skill_inspect_opts="-h --help"
 _ark_instruction_opts="-h --help"
+_ark_secrets_scan_opts="--format -f --list-rules --suggest-ignore --include-ignored --allow-gitignore -a --help -h"
 
 # ---- helpers (no hard dependency on the bash-completion package) --------------
 if ! declare -F _filedir >/dev/null 2>&1; then
@@ -74,7 +75,7 @@ _ark() {
   # Mode comes from argv[1] only, exactly like the CLI dispatcher.
   local cmd=${COMP_WORDS[1]} sub=""
   case $cmd in
-    mcp-server|mcp-init|setup|syntax|symbol|skill|instruction) ;;
+    mcp-server|mcp-init|setup|syntax|symbol|skill|instruction|secrets-scan) ;;
     *) cmd=general ;;
   esac
   if [[ $cmd == skill ]] && (( cword > 2 )); then
@@ -101,7 +102,7 @@ _ark() {
       case $prev in
         --type|-t) _ark_offer "stdio http"; return 0 ;;
         --http-port|-p) _ark_offer "8008 8522 8080 9000"; return 0 ;;
-        --mask-secrets|-m|--allow-gitignore|-a|--ignore-dotfile|-d|--allow-external-symlinks) _ark_offer "on off"; return 0 ;;
+        --mask-secrets|-m|--allow-gitignore|-a|--ignore-dotfile|-d|--allow-external-symlinks|--secret-rule-overrides) _ark_offer "on off"; return 0 ;;
         --scan-buffer|-b) _ark_offer "1M 5M 10M 100K"; return 0 ;;
         --include-ext|-i|--exclude-ext|-e) _ark_offer "${_ark_exts}"; return 0 ;;
         --root|-r) _filedir -d; return 0 ;;
@@ -114,6 +115,11 @@ _ark() {
         --root|-r) _filedir -d; return 0 ;;
         --ark-path|-p) _filedir; return 0 ;;
         --name|-n) return 0 ;;
+      esac ;;
+    secrets-scan)
+      case $prev in
+        --format|-f) _ark_offer "text json"; return 0 ;;
+        --allow-gitignore|-a) _ark_offer "on off"; return 0 ;;
       esac ;;
     syntax|symbol)
       case $prev in
@@ -143,6 +149,8 @@ _ark() {
       else
         _ark_offer "${_ark_setup_opts}"
       fi ;;
+    secrets-scan)
+      if [[ $cur == -* ]]; then _ark_offer "${_ark_secrets_scan_opts}"; else _filedir -d; fi ;;
     syntax|symbol)
       if [[ $cur == -* ]]; then _ark_offer "${_ark_syntax_opts}"; else _filedir; fi ;;
     instruction)

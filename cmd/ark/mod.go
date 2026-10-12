@@ -1,7 +1,9 @@
 package ark
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 	"github.com/magicdrive/ark/internal/core"
 	"github.com/magicdrive/ark/internal/instruction"
 	"github.com/magicdrive/ark/internal/mcp"
+	"github.com/magicdrive/ark/internal/secretscan"
 	"github.com/magicdrive/ark/internal/setup"
 	"github.com/magicdrive/ark/internal/skill"
 	"github.com/magicdrive/ark/internal/syntax"
@@ -40,6 +43,8 @@ func Execute(version string) {
 		case "instruction":
 			runInstructionCommand()
 			return
+		case "secrets-scan":
+			os.Exit(runSecretsScanCommand(os.Args[2:], os.Stdout, os.Stderr))
 		}
 	}
 	runDefaultCommand(version)
@@ -490,4 +495,65 @@ func runSkillInspect() {
 		fmt.Println("\n=== Analysis ===")
 		fmt.Printf("Project: %s\nLanguage: %s\n", analysis.ProjectName, analysis.PrimaryLang)
 	}
+}
+
+// Exit statuses of ark secrets-scan.
+const (
+	scanClean      = 0 // no findings
+	scanFindings   = 1 // findings
+	scanUsageError = 2 // a configuration or argument error
+	scanIncomplete = 3 // a file or directory could not be scanned
+)
+
+// runSecretsScanCommand runs ark secrets-scan and returns its exit status.
+func runSecretsScanCommand(args []string, stdout, stderr io.Writer) int {
+	_, opt, err := commandline.SecretsScanOptParse(args)
+	if err != nil {
+		fmt.Fprintf(stderr, "ark secrets-scan: %v\n", err)
+		return scanUsageError
+	}
+	if opt.HelpFlag {
+		opt.FlagSet.Usage()
+		return scanClean
+	}
+	if !DirExists(opt.TargetDirname) {
+		fmt.Fprintf(stderr, "ark secrets-scan: a directory not found: %s\n", opt.TargetDirname)
+		return scanUsageError
+	}
+	asJSON := opt.FormatValue == "json"
+	if opt.ListRulesFlag {
+		loaded, err := secretscan.LoadConfig(opt.TargetDirname)
+		if err != nil {
+			fmt.Fprintf(stderr, "ark secrets-scan: %v\n", err)
+			return scanUsageError
+		}
+		if err := secretscan.WriteRules(stdout, loaded, asJSON); err != nil {
+			fmt.Fprintf(stderr, "ark secrets-scan: %v\n", err)
+			return scanIncomplete
+		}
+		return scanClean
+	}
+	report, err := secretscan.Scan(opt.TargetDirname, secretscan.Options{IncludeIgnored: opt.IncludeIgnoredFlag, AllowGitignore: opt.AllowGitignore})
+	if err != nil {
+		fmt.Fprintf(stderr, "ark secrets-scan: %v\n", err)
+		if errors.Is(err, secretscan.ErrConfig) {
+			return scanUsageError
+		}
+		return scanIncomplete
+	}
+	if asJSON {
+		if err := report.WriteJSON(stdout, opt.SuggestIgnoreFlag); err != nil {
+			fmt.Fprintf(stderr, "ark secrets-scan: %v\n", err)
+			return scanIncomplete
+		}
+	} else {
+		report.WriteText(stdout, opt.SuggestIgnoreFlag)
+	}
+	switch {
+	case len(report.Errors) > 0:
+		return scanIncomplete
+	case len(report.Findings) > 0:
+		return scanFindings
+	}
+	return scanClean
 }

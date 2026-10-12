@@ -455,7 +455,7 @@ func fishCond(cond string, tokens []string) bool {
 		case c == "__fish_ark_is_first_arg":
 			ok = len(tokens) == 1
 		case c == "__fish_ark_no_subcommand":
-			ok = len(tokens) < 2 || !contains([]string{"mcp-server", "mcp-init", "setup", "syntax", "symbol", "skill", "instruction"}, tokens[1])
+			ok = len(tokens) < 2 || !contains([]string{"mcp-server", "mcp-init", "setup", "syntax", "symbol", "skill", "instruction", "secrets-scan"}, tokens[1])
 		case c == "__fish_ark_setup_client_position":
 			ok = len(tokens) == 2 && tokens[1] == "setup"
 		case c == "__fish_ark_instruction_target_position":

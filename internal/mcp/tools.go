@@ -17,6 +17,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/safewalk"
+	"github.com/magicdrive/ark/internal/secrets"
 )
 
 // ToolsHandler handles all MCP tools
@@ -44,6 +45,12 @@ type ToolsHandler struct {
 	// index_cache.go); created on first use.
 	indexOnce sync.Once
 	indexes   *indexCache
+
+	// policies is the repository's compiled masking policy, reused across
+	// requests while its configuration is unchanged (secret_policy.go);
+	// created on first use when no constructor set it (policyCache).
+	policiesOnce sync.Once
+	policies     *policyCache
 
 	// memo keeps find_symbol's and find_references' parse results by the
 	// content parsed (parse_memo.go); created on first use.
@@ -75,6 +82,12 @@ type requestScope struct {
 	policy     accessPolicy
 
 	access requestAccess // the pinned root and policy snapshot (request_access.go)
+
+	// maskOnce takes the request's masking policy once (maskPolicy): every
+	// result of the request is masked by the same one.
+	maskOnce sync.Once
+	mask     *secrets.Policy
+	maskErr  error
 }
 
 // forRequest returns the handler for one request: the same server state,
@@ -214,6 +227,7 @@ func NewToolsHandlerWithCache(rootDir string, opt *commandline.Option, store cac
 		rootDir:    rootDir,
 		opt:        opt,
 		cacheStore: store,
+		policies:   newPolicyCache(),
 	}
 }
 
@@ -729,7 +743,16 @@ func (h *ToolsHandler) CallTool(name string, arguments map[string]interface{}) (
 	if !h.masking(name, arguments) {
 		return result, err
 	}
-	return sanitizeToolResult(name, result), err
+	p, perr := h.maskPolicy()
+	if perr != nil {
+		// The configuration cannot be applied: nothing with repository text
+		// in it goes out (fail closed).
+		if result == nil || identifiersOnly(name, result) {
+			return result, err
+		}
+		return policyError(perr), nil
+	}
+	return sanitizeToolResultWith(name, result, p), err
 }
 
 func (h *ToolsHandler) callTool(name string, arguments map[string]interface{}) (*CallToolResult, error) {
@@ -840,6 +863,14 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 
 	// Create option based on parameters
 	opt := *h.opt // Copy base options
+	// The first masking pass uses the request's policy; if it cannot be
+	// had, the recommended one, and the result is refused at the output
+	// boundary (CallTool).
+	if opt.MaskSecretsFlag.Bool() {
+		if p, err := h.maskPolicy(); err == nil {
+			opt.SecretPolicy = p
+		}
+	}
 	if maskSecrets, ok := args["maskSecrets"].(bool); ok {
 		if maskSecrets {
 			opt.MaskSecretsFlagValue = "on"
@@ -1070,6 +1101,14 @@ func (h *ToolsHandler) getFilesArklite(args map[string]interface{}) (*CallToolRe
 
 	// Create option based on parameters
 	opt := *h.opt // Copy base options
+	// The first masking pass uses the request's policy; if it cannot be
+	// had, the recommended one, and the result is refused at the output
+	// boundary (CallTool).
+	if opt.MaskSecretsFlag.Bool() {
+		if p, err := h.maskPolicy(); err == nil {
+			opt.SecretPolicy = p
+		}
+	}
 	opt.OutputFormatValue = "arklite"
 
 	if maskSecrets, ok := args["maskSecrets"].(bool); ok {

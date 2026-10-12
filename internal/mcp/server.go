@@ -9,6 +9,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/secrets"
 )
 
 // RunMCPServe starts the MCP server with the given root directory and options
@@ -85,21 +86,33 @@ func NewMCPServer(rootDir string, serverOpt *commandline.ServeOption) *MCPServer
 			store = cache.NopStore{}
 		}
 	}
-	return &MCPServer{
+	s := &MCPServer{
 		rootDir:   rootDir,
 		serverOpt: serverOpt,
 		tools:     NewToolsHandlerWithCache(rootDir, serverOpt.GeneralOption, store),
 		resources: NewResourcesHandler(rootDir, serverOpt.GeneralOption),
 	}
+	// One masking policy cache for the server: tools and resources compile
+	// the configuration once and log its problems once.
+	s.resources.policies = s.tools.policies
+	return s
 }
 
-// errorData is the error text a tool or resource failure returns: masked
-// unless the server runs with --mask-secrets off.
+// errorData is the error text a tool or resource failure returns: masked by
+// the server's current masking policy (policyCache.current), withheld when
+// the repository's configuration does not compile, and as is when the
+// server runs with --mask-secrets off.
 func (s *MCPServer) errorData(err error) string {
 	if !masksByDefault(s.serverOpt.GeneralOption) {
 		return err.Error()
 	}
-	return sanitizeText(err.Error(), false)
+	p, perr := s.tools.policyCache().current()
+	if perr != nil {
+		// The rules a message may need are those of a configuration that
+		// does not compile: the message is withheld, not masked by fewer.
+		return fmt.Sprintf("The request failed; its message is withheld: secret masking configuration error: %v", perr)
+	}
+	return sanitizeTextIn(err.Error(), false, secrets.SyntaxUnknown, p)
 }
 
 // processRequest routes the request to the appropriate handler

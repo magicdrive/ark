@@ -98,6 +98,9 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 	// --allow-external-symlinks
 	allowExternalSymlinksOpt := fs.String("allow-external-symlinks", "off", "Allow reading files through symlinks in the repository that lead outside it.")
 
+	// --secret-rule-overrides
+	secretRuleOverridesOpt := fs.String("secret-rule-overrides", "off", "Apply the repository's secret rules configuration entries that disable built-in masking rules.")
+
 	// --no-cache
 	noCacheFlagOpt := fs.Bool("no-cache", false, "Disable persistent index cache.")
 
@@ -158,6 +161,14 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 		HttpPort:           strconv.Itoa(*httpPortOpt),
 		NoCache:            *noCacheFlagOpt,
 		GeneralOption:      generalOpt,
+	}
+
+	switch *secretRuleOverridesOpt {
+	case "on":
+		generalOpt.SecretRuleOverrides = true
+	case "off":
+	default:
+		return optLength, nil, fmt.Errorf("--secret-rule-overrides %q: must be 'on' or 'off'", *secretRuleOverridesOpt)
 	}
 
 	switch *allowExternalSymlinksOpt {

@@ -34,7 +34,10 @@ func withSpinner(opt *commandline.Option) error {
 	}()
 
 	s.Start()
-	createDumpFile(opt)
+	if err := createDumpFile(opt); err != nil {
+		s.Stop(fmt.Sprintf("%s  Archiving failed: %s", textbank.EmojiInterrupted, opt.OutputFilename))
+		return err
+	}
 
 	s.SetMessage(fmt.Sprintf("%s  Finalizing record...", textbank.EmojiAlmost))
 	if opt.ComplessFlag && opt.OutputFormat.CanCompless() {

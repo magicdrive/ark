@@ -77,6 +77,16 @@ reference on its line, and every line of a heredoc or YAML block value
 pattern-based and does not
 find every secret. See [SECURITY.md](../SECURITY.md#secret-masking).
 
+The rules are Ark's recommended default, adjustable per repository with
+`.ark-secrets-rules.toml` at its root ([Secret masking
+rules](secret-rules.md)): added rules apply to every tool and resource; the
+entries that disable built-in rules apply only when the server is started
+with `--secret-rule-overrides on`, and otherwise are left out and logged
+once. The file is read for every request and compiled when it changes, so
+an edit applies to the next call. If it cannot be compiled, every result
+with repository text in it is replaced by an error naming the file and the
+problem (identifier-only results still go out) until it is fixed.
+
 **Files excluded by `.arkignore`.** No tool or resource returns anything from
 a file the repository's `.arkignore` files exclude: a path naming one (or a
 symlink leading to one) is reported as not existing, and listings, searches,

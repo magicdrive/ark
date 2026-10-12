@@ -35,6 +35,8 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
 | `path "…" is outside the server root "…"; use a path inside the repository` | Tool paths are relative to the root or absolute inside it. The message shows the root in use. |
 | `path "…" resolves through a symlink to "…", outside the server root "…"` | Ark does not follow a symlink out of the repository by default. Serve a root that contains the target, or start the server with `--allow-external-symlinks on` if the repository's symlinks are trusted ([Symlink policy](../SECURITY.md#symlink-policy)). |
 | `--allow-external-symlinks "…": must be 'on' or 'off'` | The server option takes `on` or `off`. |
+| `Secret masking configuration error: … Nothing was returned: fix the configuration or remove it.` | The repository's `.ark-secrets-rules.toml` (or `ark-secrets-rules.toml`) cannot be read or compiled: the message names the file, the line or rule, and the problem. Until it is fixed, every result with repository text in it is refused (identifier-only results still work). `ark secrets-scan --list-rules` reports the same error ([Secret masking rules](secret-rules.md)). |
+| `--secret-rule-overrides "…": must be 'on' or 'off'` | The server option takes `on` or `off`. |
 | `indexing …: sources kept changing during 3 builds; retry when they settle` | Files changed during three index builds in a row (a build or code generator is writing). Retry when it is done. |
 | `index: … SymbolID collision(s) between distinct declarations …` | Two declarations produced the same 64-bit ID. Index tools are unavailable until one of them changes; file tools keep working. Please report it. |
 | `ark: cache disabled (could not create store: …)` | `<root>/.ark/index` cannot be created. The server works without the cache; fix the directory's permissions to restore it. |
@@ -89,6 +91,14 @@ a `.tf` file read with `get_file_content` or `get_symbol` `var.x` or
 `TYPE.NAME.attr` — but a whole expression around it, or text after it on
 the line, is masked. An unquoted value is masked to the end of its line,
 comments included ([SECURITY.md](../SECURITY.md#secret-masking)).
+
+To see which rule masks what, run `ark secrets-scan` (add `--suggest-ignore`
+for the rules that mostly mask source code). A rule that masks no secret in
+your repository can be disabled in `.ark-secrets-rules.toml`
+([Secret masking rules](secret-rules.md)); the MCP server applies that only
+when started with `--secret-rule-overrides on` — without it, it logs
+`… disables built-in masking rules (…); not applied …` once and keeps
+masking.
 
 **`path "…" does not exist` for a file that exists**
 

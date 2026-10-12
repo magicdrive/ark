@@ -9,6 +9,7 @@
 1 ./internal/mcp FuzzResolveToolPath_PhysicalRoot
 1 ./internal/search FuzzMatchSymbols
 1 ./internal/cache FuzzCacheDecoding
+1 ./internal/secrets FuzzRecommended_MatchesV61
 2 ./internal/index FuzzDeclarationIdentity
 2 ./internal/index FuzzParentIdentity
 2 ./internal/index FuzzIdentityCollision
@@ -18,4 +19,5 @@
 3 ./internal/languages/typescript FuzzModuleSpec
 3 ./internal/languages/typescript FuzzTypeArgParser
 3 ./internal/languages/terraform FuzzExtractTerraform
+3 ./internal/secretpolicy FuzzBuild
 - ./internal/mcp FuzzRouteNotificationInvariant
