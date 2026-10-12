@@ -11,6 +11,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/core"
+	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/secrets"
 )
@@ -181,6 +182,12 @@ func ReadAndProcessFile(path string, opt *commandline.Option) (string, error) {
 // processFileContent applies the processing options to a file's content
 // read (data) or the error reading it (readErr).
 func processFileContent(data []byte, readErr error, path string, opt *commandline.Option) (string, error) {
+	return processFileContentIn(data, readErr, path, opt, secrets.SyntaxUnknown)
+}
+
+// processFileContentIn is processFileContent for a file in syntax (masking:
+// secrets.MaskAllIn).
+func processFileContentIn(data []byte, readErr error, path string, opt *commandline.Option, syntax secrets.Syntax) (string, error) {
 	if readErr != nil {
 		return "", readErr
 	}
@@ -199,7 +206,7 @@ func processFileContent(data []byte, readErr error, path string, opt *commandlin
 
 	// Mask secrets if requested
 	if opt.MaskSecretsFlag.Bool() {
-		content = secrets.MaskAll(content)
+		content = secrets.MaskAllIn(content, syntax)
 	}
 
 	// Add line numbers if requested
@@ -353,8 +360,15 @@ func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *comman
 	return strings.Join(results, "\n"), nil
 }
 
-// DetectLanguage detects the language of a file based on its extension and name
+// DetectLanguage returns the language of a file for get_file_info and
+// get_project_stats: the name of the language Ark analyzes it as
+// (SupportedLanguage) when there is one — the name get_language_support and
+// the repository map use — otherwise a highlighting tag from the file name
+// (knownLanguageTags), or "" when there is none.
 func DetectLanguage(path string) string {
+	if lang := SupportedLanguage(path); lang != "" {
+		return lang
+	}
 	base := strings.ToLower(filepath.Base(path))
 
 	switch {
@@ -377,7 +391,19 @@ func DetectLanguage(path string) string {
 	return ""
 }
 
-// knownLanguageTags maps file extensions to GitHub-compatible language identifiers
+// SupportedLanguage returns the language Ark's language providers analyze a
+// file as, from its extension (languages.Registry), or "" for a file of no
+// supported language. Terraform's JSON syntax (.tf.json, .tfvars.json) is not
+// one: its extension is .json.
+func SupportedLanguage(path string) string {
+	if d, ok := languages.Registry().DetectByFilename(path); ok {
+		return string(d.Language)
+	}
+	return ""
+}
+
+// knownLanguageTags are highlighting tags for files of no supported language
+// (DetectLanguage).
 var knownLanguageTags = map[string]string{
 	".abap":        "abap",
 	".ada":         "ada",
@@ -455,7 +481,11 @@ func GetProjectStats(path string, opt *commandline.Option) (map[string]interface
 		"totalDirectories": 0,
 		"totalSize":        int64(0),
 		"languageStats":    map[string]int{},
-		"extensionStats":   map[string]int{},
+		// supportedLanguageStats counts the files of the languages Ark
+		// analyzes (get_language_support), by that language; languageStats
+		// counts every file with a language or highlighting tag.
+		"supportedLanguageStats": map[string]int{},
+		"extensionStats":         map[string]int{},
 	}
 
 	err := walkFrom(opt, path, func(currentPath string, info os.FileInfo, err error) error {
@@ -494,6 +524,9 @@ func GetProjectStats(path string, opt *commandline.Option) (map[string]interface
 		if language != "" {
 			langStats := stats["languageStats"].(map[string]int)
 			langStats[language]++
+		}
+		if supported := SupportedLanguage(currentPath); supported != "" {
+			stats["supportedLanguageStats"].(map[string]int)[supported]++
 		}
 
 		// Extension stats

@@ -84,7 +84,11 @@ assignments also matches ordinary code whose variable names end in
 `access_key` or `private_key` (`token := next()`, `bypass = true`). Only the
 operator can turn masking off — start the server with `--mask-secrets off`
 (it logs a warning); the `maskSecrets` argument of a tool call has no
-effect.
+effect. A plain reference is shown as written — `${{ secrets.NAME }}`, and in
+a `.tf` file read with `get_file_content` or `get_symbol` `var.x` or
+`TYPE.NAME.attr` — but a whole expression around it, or text after it on
+the line, is masked. An unquoted value is masked to the end of its line,
+comments included ([SECURITY.md](../SECURITY.md#secret-masking)).
 
 **`path "…" does not exist` for a file that exists**
 

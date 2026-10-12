@@ -61,6 +61,7 @@ type SymbolEntry struct {
 	InboundEdges  int
 	OutboundEdges int
 	score         int
+	group         string // policy.group: the listing spreads over groups
 }
 
 // PackageEntry represents one logical package/directory.
@@ -162,12 +163,13 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 		}
 		entry.IsEntry = isEntryPoint(pkg, idx, files)
 
-		// Collect symbols for this package.
+		// Collect symbols for this package, each by its language's policy.
 		var symEntries []SymbolEntry
 		for _, fid := range files {
 			isTestFile := isTestFileID(string(fid))
 			for _, sym := range idx.SymbolsByFile(fid) {
-				if opts.DetailLevel != DetailVerbose && !sym.Exported {
+				pol := policyFor(sym.Language)
+				if !pol.candidate(sym, opts.DetailLevel) {
 					continue
 				}
 				// Skip test helper symbols from test files in non-test packages.
@@ -182,7 +184,8 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 					InboundEdges:  inbound[sym.ID],
 					OutboundEdges: outbound[sym.ID],
 				}
-				se.score = scoreSymbol(se, entry)
+				se.score = pol.score(se, sym, entry)
+				se.group = pol.group(sym)
 				symEntries = append(symEntries, se)
 			}
 		}
@@ -199,10 +202,28 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 			entry.surface += symbolWeight(se.Kind)
 			entry.inbound += se.InboundEdges
 		}
-		if len(symEntries) > opts.MaxSymbols {
-			symEntries = symEntries[:opts.MaxSymbols]
+		entry.Symbols = pickSymbols(symEntries, opts.MaxSymbols)
+
+		// Dependency edges a language fixes from declarations (policy.dependency:
+		// a Terraform module call of a local directory). A declaration the
+		// package makes twice — an override file's module call beside the
+		// original, which the merge may replace — is ambiguous and states none.
+		declared := map[string]int{}
+		for _, fid := range files {
+			for _, sym := range idx.SymbolsByFile(fid) {
+				declared[sym.Qualified]++
+			}
 		}
-		entry.Symbols = symEntries
+		for _, fid := range files {
+			for _, sym := range idx.SymbolsByFile(fid) {
+				if declared[sym.Qualified] != 1 {
+					continue
+				}
+				if toPkg, ok := policyFor(sym.Language).dependency(sym); ok && toPkg != pkg {
+					depSet[[2]string{pkg, toPkg}] = true
+				}
+			}
+		}
 
 		// Collect import-based dependency edges.
 		for _, fid := range files {

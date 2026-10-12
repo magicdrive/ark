@@ -60,12 +60,47 @@ The same rules mask the repository dump (`ark <dir>`).
 - **Rules.** Whole PEM private-key blocks; known token formats (AWS access
   key IDs, GitHub, GitLab, Slack, Stripe, SendGrid and Google keys and
   tokens, JWTs, Azure account keys); and the value of an assignment whose
-  key names a secret (`password = "…"`, `API_TOKEN=…`, `api_key: …`).
-- **Not detected** (examples): a JSON member such as `"api_key": "…"`, an
+  key names a secret (`password = "…"`, `API_TOKEN=…`, `api_key: …`), the
+  key bare, quoted or an index (`"api_key": "…"`, `'password' => '…'`,
+  `$cfg['token'] = …`). Secret patterns apply to a line as written, before
+  any value in it is masked.
+- **No part of a value is left out.** An unquoted value runs to the end of
+  its line — `password: correct horse battery` is masked whole, a comment
+  after it too — and ends earlier only before a `,` or `;` that ends the
+  line or starts another secret-like assignment (`password=a;token=b`). A
+  quoted value ends at its closing quote only when a blank, a comment, a
+  closing bracket or such a separator follows; a value the quote does not
+  end (`"a"b`, `"a" "b"`, `'a''b'`, `"a" + "b"`, an unclosed quote) is
+  masked to the end of the line. A value with nothing in it is left as is.
+- **Not detected** (examples): an
   `Authorization: Bearer …` header value, a password inside a connection
   URL, a value whose variable name does not end in a secret keyword
   (`secretHash := "…"`), non-ASCII keys, and any secret format the rules do
   not know.
+- **References are kept, values are not.** A value that only names another
+  value is not a secret and is returned as written: a GitHub Actions context
+  reference (`${{ secrets.DEPLOY_TOKEN }}`, `${{ steps.x.outputs.y }}` — a
+  context, dot-separated identifiers, nothing else), and, in the
+  `get_file_content` or `get_symbol` result of a Terraform `.tf` file, a
+  Terraform reference (`var.db_password`, `random_password.x.result`,
+  `data.T.N.attr`, `module.M.out`). Whether a file is a `.tf` file is decided
+  by the file actually read, after symlinks, never by the name asked for.
+  Anything else is masked whole: an expression with a literal, an operator, a
+  function or an index (`${{ secrets.A || 'fallback' }}`), a value next to a
+  reference, a bare word (`token: abcdefg`, `password = hunter2`). A GitHub
+  Actions value runs to the end of its line or to a comment (` #`), so
+  nothing after a kept reference is kept with it; a Terraform reference is
+  kept only when a comment, a `,` or a closing bracket follows it, otherwise
+  the value is masked to the end of the line. Every secret pattern still
+  applies to a kept reference's line.
+- **Values over several lines are masked on every line.** The body of a
+  heredoc (`<<EOT`, `<<-EOT`, `<<~EOT`, `<<<'EOT'`) or of a YAML block scalar
+  (`|`, `>-`, …) given to a secret-like key is masked line by line, up to the
+  heredoc's terminator or the first line indented no deeper than the key. A
+  line break is `\n` or `\r\n`: a value never runs past one, nor ends
+  before one. A `␤` in a file is a character of its line, and a value runs
+  through it; `get_files_arklite` masks each file before it writes its line
+  breaks as `␤`, and masks its result again treating those as line breaks.
 - **False positives.** The assignment rule also masks ordinary code such as
   `token := next()`; masked responses show less of such code.
 - **Analysis is unaffected.** Parsing, the index, resolution, the graph,

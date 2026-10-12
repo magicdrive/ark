@@ -183,6 +183,27 @@ argument is an edge from the call to the child's `variable`.
 | **Unresolved or outside** | remote module outputs, `provider = x` without a `provider "x"` block in the module, addresses declared only in `.tf.json`, modules reached only through a symlinked directory, a module whose `source` an override replaces, computed sources |
 | **Not implemented** | value flow from a module argument into the child, `.tf.json` / `.tfvars.json`, other `.hcl` files (Packer, Nomad, Terragrunt, Terraform tests), `moved` / `import` / `removed` blocks, implicit default providers, which module a `.tfvars` file feeds, remote state, Terraform Cloud workspaces |
 
+**What the graph covers.** Within a module, every static address resolves
+to its declaration (above). Across a module call whose `source` is a local
+directory, the call's outputs and input arguments resolve to the child's
+`output` and `variable` declarations. Nothing crosses a state: a
+`terraform_remote_state` data source is an ordinary data source (its
+`outputs.X` is an attribute, not an edge to the other configuration), an ID
+or ARN written in a data source's arguments is a string literal, and a
+`backend` block is not read — so which stack builds the VPC another stack
+reads is not in the graph, and Ark does not guess it from equal strings.
+
+**Overview and counts.** The repository map lists, per module, what it builds
+— resources (one of each type before a second of any), module calls, data
+sources — before its outputs and variables, and shows module calls of a local
+directory as dependencies between modules. `search_code` with `groupBy`
+counts resources by type (`resourceType`, with data sources as `data.TYPE`),
+module (`directory`) or kind ([MCP tools](mcp-tools.md#search_code)).
+
+**Comments are not configuration.** A commented-out block (`#`, `//` or
+`/* … */`) declares nothing, is in no count and no edge; find one with
+`search_in_files` (e.g. `^\s*(#|//)\s*resource "`).
+
 Ark never runs `terraform`, downloads modules or providers, or reads
 `.terraform/`.
 

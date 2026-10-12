@@ -15,7 +15,7 @@ func RepomapToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_repository_map",
-			Description: "Start here in an unfamiliar repository: a ranked overview of its packages and their key types and functions",
+			Description: "Start here in an unfamiliar repository: a ranked overview of its packages and their key types and functions, and the dependencies between packages. For Terraform, each module (directory) lists what it builds — resources (one of each type first), module calls, data sources — before its outputs and variables, and module calls of a local directory are dependencies; count resources by type or module with search_code groupBy",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{

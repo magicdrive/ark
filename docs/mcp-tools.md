@@ -65,8 +65,17 @@ altered, so they can be passed back in later calls; text results of
 identifiers and are not masked. `ark mcp-server --mask-secrets off` turns
 masking off for the server and logs a warning; a request cannot change it
 (the `maskSecrets` argument of `get_file_content` and `get_files_arklite` is
-accepted and has no effect). Masking is pattern-based and does not find
-every secret. See [SECURITY.md](../SECURITY.md#secret-masking).
+accepted and has no effect). A value that only names another value is kept
+as written: a GitHub Actions context reference (`${{ secrets.NAME }}`), and in
+the `get_file_content` or `get_symbol` result of a `.tf` file a Terraform
+reference (`var.db_password`, `random_password.x.result`); an expression with
+anything else in it is masked whole, as is anything written after a kept
+reference on its line, and every line of a heredoc or YAML block value
+(`<<EOT`, `|`). A value is masked whole however it is written: all its words
+(`password: correct horse battery`), under a quoted key (`"api_key": "…"`,
+`'password' => '…'`), past a quote that does not end it. Masking is
+pattern-based and does not
+find every secret. See [SECURITY.md](../SECURITY.md#secret-masking).
 
 **Files excluded by `.arkignore`.** No tool or resource returns anything from
 a file the repository's `.arkignore` files exclude: a path naming one (or a
@@ -127,8 +136,39 @@ Dependencies:
 
 Packages and their symbols are ordered by a deterministic score that favors
 entry points, exported declarations and declarations other code depends on.
-`format: "json"` adds each symbol's edge counts and lists the packages left
-out by `maxPackages`.
+The text names every package of the map — one that lists nothing too — so
+both ends of every dependency line are in it. `format: "json"`
+adds each symbol's edge counts and lists the packages left out by
+`maxPackages`.
+
+A Terraform module (a directory) lists what it builds rather than its
+interface: managed and ephemeral resources, module calls and data sources
+first — one resource of each type before a second of any — then outputs,
+providers and input variables; locals (and `terraform` blocks) only at
+`detail: "verbose"`. A module call whose `source` is a local directory in the
+repository is a dependency on that module; a registry, Git or other remote
+source, a directory outside the repository, a `source` that is no literal and
+a call an override file may replace are none.
+
+```text
+infra (terraform, 12 files, 654 symbols)
+
+modules/app
+  aws_lb_target_group.web
+  aws_lb.web
+  aws_ecs_service.web
+  …
+envs/prod
+  module.network
+  module.app
+  …
+Dependencies:
+  envs/prod → modules/app
+  envs/prod → modules/network
+```
+
+To count resources by type or module, use [`search_code`](#search_code) with
+`groupBy`.
 
 ### `search_context`
 
@@ -192,7 +232,8 @@ Results are in path order; when more than `maxResults` match, `truncated` is
 
 Finds symbols by structural predicates, combined with AND: kind, name
 substring, exported status, a call to a name, use of a type, file pattern,
-language.
+language. It lists at most `maxResults` matches; the first line always states
+the total. With `groupBy` it counts the matches instead.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -203,9 +244,10 @@ language.
 | `exported` | boolean |  |  | Filter by exported/public status |
 | `filePattern` | string |  |  | File path substring filter (case-insensitive) |
 | `format` | string (`text`, `json`) |  | `text` |  |
-| `kind` | string |  |  | Symbol kind filter (function/method/struct/interface/class/type/constant/variable/...) |
-| `language` | string |  |  | Language filter (go/typescript/tsx/javascript/python/php) |
-| `maxResults` | integer |  | `50` | Maximum number of results |
+| `groupBy` | string |  |  | Count the matches instead of listing them, by one or two comma-separated keys: `kind`, `language`, `directory`, `file`, `resourceType` |
+| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check) |
+| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform |
+| `maxResults` | integer |  | `50` | Maximum number of matches listed (the total is always reported); with `groupBy`, of group lines (at most 1000) |
 | `namePattern` | string |  |  | Name substring filter (case-insensitive) |
 | `usesType` | string |  |  | Only symbols that reference a type whose name contains this string |
 
@@ -220,9 +262,37 @@ orders/orders.go:10  function  Place [exported]
 `callsName` and `usesType` match references by name substring; they do not
 require a resolved edge. Test files are excluded unless `excludeTest: false`.
 
+`groupBy` counts every match of the query from the index (nothing is
+re-parsed), largest group first, and lists at most `maxResults` group lines
+(subgroups included), stating how many it leaves out. `resourceType` is a
+Terraform resource's type as declared, with data sources as `data.TYPE` and
+ephemeral resources as `ephemeral.TYPE`; other symbols count as `(none)`.
+`directory` is the file's directory — for Terraform, the module. A
+`namePattern` such as `aws_rds` selects types by name, which is no
+classification by cloud service.
+
+```text
+577 symbols matching kind=resource, counted by resourceType (50 of 60 groups shown; raise maxResults or narrow the query)
+
+    18  aws_rds_cluster
+    17  aws_acm_certificate
+    …
+```
+
+`kind: "resource", namePattern: "aws_ecs", groupBy: "directory"` answers where
+the ECS resources are; `groupBy: "resourceType,directory"` nests the modules
+under each type. In JSON: `{"totalCount", "groupBy", "groups": [{"name",
+"count", "groups"}], "totalGroups", "omittedGroups"}`.
+
 ### `get_symbols`
 
-Lists the declarations of one file, parsed with Tree-sitter.
+Lists the declarations of one file, parsed with Tree-sitter. For a large
+file, list its declarations here and read the ones you need with
+[`get_symbol`](#get_symbol) rather than the whole file. Code in comments
+declares nothing: a commented-out declaration — a commented-out Terraform
+resource, say — is no symbol (an empty file lists `"symbols": null`); find
+it with [`search_in_files`](#search_in_files), e.g. the regex
+`^\s*(#|//)\s*resource "` (a `/* … */` block shows as plain lines).
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -455,7 +525,10 @@ Items come only from graph edges; candidates appear only in the
 
 ### `get_file_content`
 
-Reads one file.
+Reads one file, whole. For a large file, list its declarations with
+[`get_symbols`](#get_symbols) and read the ones you need with
+[`get_symbol`](#get_symbol) first; read the whole file only when you need
+it.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -538,6 +611,10 @@ Bound large repositories with `maxDepth` and `excludeDirs`.
 ### `get_file_info`
 
 Returns a file's size, language, extension and modification time.
+`language` is the language Ark analyzes the file as
+([`get_language_support`](#get_language_support): `terraform` for `.tf` and
+`.tfvars`, `javascript` for `.jsx`), otherwise a highlighting tag from the
+file name (`yaml`, `json` — Terraform's `.tf.json` included —, …), or empty.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -545,7 +622,10 @@ Returns a file's size, language, extension and modification time.
 
 ### `get_project_stats`
 
-Counts files by extension and language.
+Counts files by extension (`extensionStats`), by language or highlighting
+tag as [`get_file_info`](#get_file_info) reports it (`languageStats`), and by
+the languages Ark analyzes (`supportedLanguageStats`: the files of
+[`get_language_support`](#get_language_support)'s languages).
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
