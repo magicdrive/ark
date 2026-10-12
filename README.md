@@ -14,7 +14,7 @@ code it needs to read before editing — and get an answer that states how
 certain it is.
 
 Ark is a single static binary. It analyzes Go, TypeScript, TSX, PHP,
-Terraform, JavaScript and Python without running any code from the
+Terraform, Rust, JavaScript and Python without running any code from the
 repository.
 
 ## Why Ark
@@ -245,6 +245,7 @@ highest stage Ark's tests cover:
 | TypeScript, TSX | context-quality certified | Relative imports, barrels, typed receivers; no `tsconfig` paths or type inference |
 | PHP | graph | Namespaces, `use`, inheritance and traits; no framework or autoload semantics |
 | Terraform | graph | Module-scoped addresses, local module outputs; `.tf.json` not read |
+| Rust | graph | Paths within a crate (`crate`/`self`/`super`, `use`, inherent vs trait impls); no method calls on values, other crates of the workspace or macro expansion |
 | JavaScript | references | Top-level functions, classes, `const`/`let`; class methods not extracted |
 | Python | references | Top-level functions and classes; methods not extracted |
 
@@ -298,7 +299,8 @@ Details and known limitations: [SECURITY.md](SECURITY.md).
 
 - No type inference, return-type propagation or control-flow analysis.
 - Module resolution is not compiler-equivalent: `tsconfig` paths, Composer /
-  PSR-4 autoloading and `package.json` are not interpreted.
+  PSR-4 autoloading, `package.json` and `Cargo.toml` are not interpreted.
+- Macros are not expanded (Rust `macro_rules!`, procedural macros, derives).
 - No framework semantics (dependency-injection containers, routing,
   decorators).
 - No cross-language references, even through an explicit import (a

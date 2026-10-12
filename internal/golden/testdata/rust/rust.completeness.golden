@@ -1,0 +1,32 @@
+symbol {scripts/gen.rs}::main unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  no_candidate helper kind=call receiver="" reason=unattributed @scripts/gen.rs:2:5-2:11
+symbol {scripts/gen.rs}::helper unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+symbol src/bin/cli.rs/crate::main unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  no_candidate connect kind=call receiver="" reason=unattributed @src/bin/cli.rs:7:13-7:20
+symbol crate::connect unattributed_in=3 unattributed_out=0 unresolved=0 outside=0
+symbol crate::transport unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller crate::describe kind=call confidence=candidate refs=1
+symbol crate::transport unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller crate::describe kind=call confidence=candidate refs=1
+symbol crate::describe unattributed_in=1 unattributed_out=2 unresolved=1 outside=0
+  no_candidate String kind=type_use receiver="" reason=unresolved @src/lib.rs:30:32-30:38
+  no_candidate describe kind=call receiver="c" reason=unattributed @src/lib.rs:32:7-32:15
+  candidate_callee crate::transport kind=call confidence=candidate refs=1
+  candidate_callee crate::transport kind=call confidence=candidate refs=1
+symbol crate::net::client::Config unattributed_in=1 unattributed_out=0 unresolved=1 outside=0
+  no_candidate String kind=type_use receiver="" reason=unresolved @src/net/client.rs:4:15-4:21
+symbol crate::net::client::Config::default_for unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate to_string kind=call receiver="addr" reason=unresolved @src/net/client.rs:9:29-9:38
+symbol crate::net::client::Client unattributed_in=2 unattributed_out=0 unresolved=0 outside=0
+symbol crate::net::client::Client::send unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate len kind=call receiver="data" reason=unresolved @src/net/client.rs:23:14-23:17
+symbol crate::net::client::Client::describe unattributed_in=1 unattributed_out=0 unresolved=2 outside=0
+  no_candidate String kind=type_use receiver="" reason=unresolved @src/net/client.rs:26:40-26:46
+  no_candidate format! kind=call receiver="" reason=unresolved @src/net/client.rs:27:9-27:15
+symbol crate::net::client::flush_all unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  no_candidate flush kind=call receiver="item" reason=unattributed @src/net/client.rs:33:14-33:19
+symbol crate::net::Transport unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+symbol crate::net::Transport::flush unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+symbol tests/it.rs/crate::connects unattributed_in=0 unattributed_out=1 unresolved=1 outside=0
+  no_candidate assert_eq! kind=call receiver="" reason=unresolved @tests/it.rs:5:5-5:14
+  no_candidate connect kind=call receiver="golden" reason=unattributed @tests/it.rs:6:13-6:28

@@ -20,7 +20,7 @@ import (
 func userDocs(t *testing.T) []string {
 	t.Helper()
 	docs := []string{"README.md", "README_ja.md", "ARCHITECTURE.md", "SECURITY.md",
-		".github/release/NOTES-v6.0.0.md", ".github/release/CHECKLIST-v6.0.0.md"}
+		".github/release/NOTES-v6.0.0.md", ".github/release/CHECKLIST-v6.0.0.md", ".github/release/NOTES-v6.3.0.md"}
 	more, err := filepath.Glob("docs/*.md")
 	if err != nil || len(more) == 0 {
 		t.Fatalf("no docs/*.md (%v)", err)

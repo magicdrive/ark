@@ -27,6 +27,15 @@ type targetLookup struct {
 // targetCandidatesFromIndex gathers candidate target symbols for a user-supplied
 // name using repository-index semantics (see lookupTargetCandidates).
 func targetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []symbol.Symbol {
+	if c := lookupTargetCandidatesFromIndex(idx, name); len(c) > 0 {
+		return c
+	}
+	// A name of no declaration that an alias gives (a Rust re-export,
+	// `pub use storage::Repository as Repo;` → crate::Repo): what it names.
+	return idx.SymbolsThroughAliases(name)
+}
+
+func lookupTargetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []symbol.Symbol {
 	return lookupTargetCandidates(name, idx.FindSymbolsByQualified,
 		func(n string) []symbol.Symbol {
 			var out []symbol.Symbol

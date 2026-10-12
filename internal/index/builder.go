@@ -214,6 +214,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 		Package:       ex.Package,
 		PackageScoped: ex.PackageScoped,
 		NameSpace:     space,
+		Aliases:       ex.Aliases,
 	}
 }
 
@@ -555,7 +556,27 @@ func (b *builder) freeze() *RepositoryIndex {
 		files:                 files,
 		diagnostics:           b.diagnostics,
 		stats:                 b.stats,
+		aliases:               b.aliases(),
 	}
+}
+
+// aliases collects the files' aliases (language.AliasDraft) by language and
+// identity, targets sorted.
+func (b *builder) aliases() map[aliasKey][]string {
+	out := map[aliasKey][]string{}
+	for _, fi := range b.resolverFiles {
+		for _, a := range fi.Aliases {
+			if a.Qualified != "" && a.Target != "" {
+				k := aliasKey{fi.Language, a.Qualified}
+				out[k] = append(out[k], a.Target)
+			}
+		}
+	}
+	for k, t := range out {
+		sort.Strings(t)
+		out[k] = t
+	}
+	return out
 }
 
 // edgeKey uniquely identifies a directed relationship including its semantic kind.
@@ -564,6 +585,21 @@ type edgeKey struct {
 	From symbol.SymbolID
 	To   symbol.SymbolID
 	Kind EdgeKind
+}
+
+// refKindRank orders the reference kinds of one merged edge: the edge reports
+// the first (a symbol that both calls and names another is its caller).
+func refKindRank(k reference.ReferenceKind) int {
+	for i, r := range []reference.ReferenceKind{
+		reference.KindCall, reference.KindConstruction, reference.KindImplements,
+		reference.KindInheritance, reference.KindUsesTrait, reference.KindTypeUse,
+		reference.KindValueReference, reference.KindExplicitDependency, reference.KindImport,
+	} {
+		if k == r {
+			return i
+		}
+	}
+	return 100
 }
 
 func dedupeEdges(edges []GraphEdge) []GraphEdge {
@@ -581,6 +617,11 @@ func dedupeEdges(edges []GraphEdge) []GraphEdge {
 			// Merge: keep the highest confidence.
 			if e.Confidence > m.edge.Confidence {
 				m.edge.Confidence = e.Confidence
+			}
+			// Keep the reference kind that says the most (a call before a
+			// type use), whatever order the references came in.
+			if refKindRank(e.RefKind) < refKindRank(m.edge.RefKind) {
+				m.edge.RefKind = e.RefKind
 			}
 			// Merge unique evidence entries.
 			for _, ev := range e.Evidence {

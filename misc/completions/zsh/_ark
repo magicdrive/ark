@@ -78,14 +78,14 @@ secrets_scan_opts=(
 
 
 syntax_opts=(
-  '--lang:Language:(go typescript tsx javascript python php terraform)'
+  '--lang:Language:(go typescript tsx javascript python php terraform rust)'
   '--format:Output format:(text json)'
   '-h[Show help]'
   '--help[Show help]'
 )
 
 symbol_opts=(
-  '--lang:Language:(go typescript tsx javascript python php terraform)'
+  '--lang:Language:(go typescript tsx javascript python php terraform rust)'
   '--format:Output format:(text json)'
   '-h[Show help]'
   '--help[Show help]'

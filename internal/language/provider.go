@@ -180,6 +180,19 @@ type ReferenceDraft struct {
 	NamedArgument bool `json:",omitempty"`
 }
 
+// AliasDraft states that the qualified identity Qualified names, by the
+// language's own rules, whatever the identity Target names: a declaration
+// that re-exports another (Rust `pub use a::b::C;` in module m: m::C names
+// a::b::C). Target is fixed as NameQualified is — by the language's lexical
+// rules, never by similarity. A reference whose NameQualified (or a prefix of
+// it, path segment by path segment) is an alias resolves to what the target
+// names (resolver R0); an alias declares nothing itself.
+type AliasDraft struct {
+	Qualified string
+	Target    string
+	Location  source.Location
+}
+
 // ImportDraft is a raw import extracted from a source file.
 type ImportDraft struct {
 	Path     string // import path, e.g. "fmt" or "github.com/foo/bar"
@@ -274,6 +287,11 @@ type Extraction struct {
 	References  []ReferenceDraft
 	Imports     []ImportDraft
 	Diagnostics []Diagnostic
+
+	// Aliases are qualified identities the file declares to name other
+	// identities (see AliasDraft). Providers without such declarations
+	// leave them nil.
+	Aliases []AliasDraft
 
 	// Bindings and Exports are the file's module bindings (see BindingDraft /
 	// ExportDraft). Providers that do not model module bindings leave them nil.

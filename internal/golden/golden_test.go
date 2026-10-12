@@ -16,6 +16,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/source"
@@ -35,6 +36,7 @@ func allProviders() []language.Provider {
 		javascript.NewProvider(),
 		python.NewProvider(),
 		terraform.NewProvider(),
+		rust.NewProvider(),
 	}
 }
 
@@ -48,12 +50,13 @@ var baselineLanguages = []string{
 	"python",
 	"ts_semantics",
 	"terraform",
+	"rust",
 }
 
 // completenessLanguages also freeze what the graph does not show
 // (golden.CompletenessSnapshot): for them the unresolved / outside /
 // candidate partition is part of the behavior under review.
-var completenessLanguages = []string{"terraform"}
+var completenessLanguages = []string{"terraform", "rust"}
 
 func testdataDir() string {
 	_, file, _, _ := runtime.Caller(0)

@@ -88,6 +88,10 @@ type RepositoryIndex struct {
 	// fingerprint identifies the inputs the index was built from.
 	fingerprint string
 
+	// aliases are the identities the files declare to name others
+	// (language.AliasDraft), by language and identity.
+	aliases map[aliasKey][]string
+
 	// --- meta ---
 	files       []source.FileID // sorted
 	diagnostics []language.Diagnostic
@@ -197,6 +201,48 @@ func (idx *RepositoryIndex) SymbolsByKind(kind symbol.SymbolKind) []symbol.Symbo
 	syms := idx.symbolsByKind[kind]
 	out := make([]symbol.Symbol, len(syms))
 	copy(out, syms)
+	sortSymbols(out)
+	return out
+}
+
+// aliasKey is an alias's language and identity.
+type aliasKey struct{ language, qualified string }
+
+// SymbolsThroughAliases returns the declarations a qualified identity names
+// through aliases (language.AliasDraft) — the identity itself an alias, or a
+// leading part of its path — by the rules of resolver R0
+// (resolver.ExpandAliases): what a reference with that identity would
+// resolve to. It returns nothing for an identity no alias is involved in
+// (see FindSymbolsByQualified).
+func (idx *RepositoryIndex) SymbolsThroughAliases(qualified string) []symbol.Symbol {
+	languages := map[string]bool{}
+	for k := range idx.aliases {
+		languages[k.language] = true
+	}
+	var out []symbol.Symbol
+	seen := map[symbol.SymbolID]bool{}
+	for lang := range languages {
+		decls, via := resolver.ExpandAliases(qualified,
+			func(q string) []symbol.Symbol {
+				var d []symbol.Symbol
+				for _, s := range idx.symbolsByQualified[q] {
+					if s.Language == lang {
+						d = append(d, s)
+					}
+				}
+				return d
+			},
+			func(q string) []string { return idx.aliases[aliasKey{lang, q}] })
+		if len(via) == 0 {
+			continue
+		}
+		for _, s := range decls {
+			if !seen[s.ID] {
+				seen[s.ID] = true
+				out = append(out, s)
+			}
+		}
+	}
 	sortSymbols(out)
 	return out
 }

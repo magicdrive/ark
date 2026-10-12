@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/magicdrive/ark/internal/reference"
@@ -52,7 +53,14 @@ type langQualified struct {
 func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 	r.qualOnce.Do(func() {
 		r.qualified = make(map[langQualified][]symbol.Symbol)
+		r.aliases = make(map[langQualified][]string)
 		for _, fi := range r.files {
+			for _, a := range fi.Aliases {
+				if a.Qualified != "" && a.Target != "" {
+					k := langQualified{fi.Language, a.Qualified}
+					r.aliases[k] = append(r.aliases[k], a.Target)
+				}
+			}
 			for _, s := range fi.Symbols {
 				if s.Qualified == "" || (!fi.IdentityOnly && !isTypeLike(s.Kind)) {
 					continue
@@ -64,8 +72,90 @@ func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 		for _, syms := range r.qualified {
 			sortSymbols(syms)
 		}
+		for k, targets := range r.aliases {
+			sort.Strings(targets)
+			r.aliases[k] = targets
+		}
 	})
 	return r.qualified[langQualified{language, qualified}]
+}
+
+// MaxAliasDepth bounds a chain of aliases (language.AliasDraft): what a
+// longer chain names is not followed.
+const MaxAliasDepth = 8
+
+// ExpandAliases returns the declarations an identity names: its own
+// (decls), those its aliases name, and those the identity with a leading
+// part of its path replaced by that part's alias names (a re-exported
+// module: `pub use a::b as m;` then m::x) — all of them, so an identity two
+// readings give (#[cfg] alternatives: an item in one configuration, an alias
+// in the other) names both, as does a path two of whose leading parts are
+// aliases. via lists the aliases followed. Each identity is expanded once,
+// by its shortest chain, so a cycle ends and shared aliases cost nothing
+// more; a chain longer than MaxAliasDepth is not followed. Both R0 and the index's
+// lookup of a re-exported name (index.SymbolsThroughAliases) use it.
+func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases func(string) []string) (out []symbol.Symbol, via []string) {
+	// Breadth first: an identity is first reached by its shortest chain, so
+	// marking it seen never cuts a shorter path the depth bound would allow.
+	type step struct {
+		q     string
+		depth int
+	}
+	seen := map[string]bool{qualified: true}
+	queue := []step{{qualified, 0}}
+	visit := func(q string, depth int) {
+		if depth <= MaxAliasDepth && !seen[q] {
+			seen[q] = true
+			queue = append(queue, step{q, depth})
+		}
+	}
+	for len(queue) > 0 {
+		st := queue[0]
+		queue = queue[1:]
+		out = append(out, decls(st.q)...)
+		for _, target := range aliases(st.q) {
+			via = append(via, st.q)
+			visit(target, st.depth+1)
+		}
+		// Every leading part of the path that is an alias gives a reading:
+		// all of them are followed.
+		parts := strings.Split(st.q, "::")
+		for i := len(parts) - 1; i >= 1; i-- {
+			prefix := strings.Join(parts[:i], "::")
+			rest := strings.Join(parts[i:], "::")
+			for _, target := range aliases(prefix) {
+				via = append(via, prefix)
+				visit(target+"::"+rest, st.depth+1)
+			}
+		}
+	}
+	return out, via
+}
+
+// identityDecls returns the declarations an identity names in language
+// (ExpandAliases over the language's declarations and aliases).
+func (r *Resolver) identityDecls(language, qualified string) (decls []symbol.Symbol, via []string) {
+	d, via := ExpandAliases(qualified,
+		func(q string) []symbol.Symbol { return r.typeDecls(language, q) },
+		func(q string) []string { return r.aliases[langQualified{language, q}] })
+	return uniqueSymbols(d), via
+}
+
+// uniqueSymbols drops repeated symbols, keeping the order.
+func uniqueSymbols(syms []symbol.Symbol) []symbol.Symbol {
+	if len(syms) < 2 {
+		return syms[:len(syms):len(syms)]
+	}
+	seen := make(map[symbol.SymbolID]bool, len(syms))
+	out := syms[:0:0]
+	for _, s := range syms {
+		if !seen[s.ID] {
+			seen[s.ID] = true
+			out = append(out, s)
+		}
+	}
+	sortSymbols(out)
+	return out
 }
 
 // resolveQualifiedIdentity implements R0. It never falls back to name
@@ -107,8 +197,11 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		return own
 	}
 
-	types := r.typeDecls(ref.Language, ref.NameQualified)
+	types, via := r.identityDecls(ref.Language, ref.NameQualified)
 	detail := fmt.Sprintf("%q", ref.NameQualified)
+	if len(via) > 0 {
+		detail += fmt.Sprintf(" (through the re-export of %s)", strings.Join(via, ", "))
+	}
 	if len(types) == 0 {
 		return noQualifiedDeclaration(res, ref, detail)
 	}

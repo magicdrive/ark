@@ -10,6 +10,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/source"
@@ -105,6 +106,18 @@ func fixtures() []providerFixture {
 			// Terraform has no call whose callee is computed at run time
 			// (function names are static built-ins); the honest count is 0.
 			dynamic: conformance.Case{Name: "dynamic", File: "dyn.tf", Source: []byte("locals { v = local.m[var.k] }\n")},
+		},
+		{
+			name:     "rust",
+			provider: rust.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "src/lib.rs", Source: []byte("pub mod a;\npub fn greet() {}\npub const C: i32 = 1;\npub static V: i32 = 2;\n")},
+				{Name: "types_impls", File: "src/model.rs", Source: []byte("use std::fmt;\npub struct User { pub id: u64 }\npub enum Role { Admin, Member(u32) }\npub trait Named { fn name(&self) -> String; }\nimpl User { pub fn new(id: u64) -> Self { Self { id } } }\nimpl Named for User { fn name(&self) -> String { String::new() } }\nimpl fmt::Display for User { fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, \"{}\", self.id) } }\n")},
+				{Name: "calls", File: "src/run.rs", Source: []byte("use crate::model::User;\nmacro_rules! twice { ($e:expr) => { $e; $e } }\nfn run() { let u = User::new(1); u.name(); twice!(crate::greet()); super::greet(); }\n")},
+				{Name: "modules", File: "crates/util/src/a/mod.rs", Source: []byte("mod b { pub(super) fn f() {} }\nuse self::b::f as g;\nuse super::*;\n#[cfg(test)]\nmod tests { use super::*; #[test] fn t() { g(); } }\n")},
+			},
+			broken:  conformance.Case{Name: "broken", File: "src/broken.rs", Source: []byte("pub fn broken( {\n}\npub fn good() {}\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "src/dyn.rs", Source: []byte("pub fn run(m: &[fn()], k: usize) { m[k](); }\n")},
 		},
 	}
 }

@@ -1,6 +1,6 @@
 # Language support
 
-Ark analyzes seven languages. They are not supported equally: each language
+Ark analyzes eight languages. They are not supported equally: each language
 has a **support level**, the highest stage its tests certify, and every
 language has constructs Ark deliberately leaves unresolved.
 
@@ -27,12 +27,13 @@ Levels build on each other:
 | TSX | `.tsx` | `context_quality_certified` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | PHP | `.php` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Terraform | `.tf`, `.tfvars` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Rust | `.rs` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
 | Python | `.py`, `.pyw` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
-answer for JavaScript and Python, and `get_context` still works for PHP and
-Terraform, but those results are not covered by the tests the level names.
+answer for JavaScript and Python, and `get_context` still works for PHP,
+Terraform and Rust, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -206,6 +207,77 @@ module (`directory`) or kind ([MCP tools](mcp-tools.md#search_code)).
 
 Ark never runs `terraform`, downloads modules or providers, or reads
 `.terraform/`.
+
+## Rust
+
+**Extracted:** functions, `struct`, `union`, `enum` (with variants), `trait`
+(with its methods, associated types and constants), `impl` blocks (kind
+`impl`) and their methods, associated functions, types and constants, named
+struct and union fields, `type` aliases, `const`, `static`, `mod` (inline
+and file modules), `macro_rules!` macros (kind `macro`), `extern` block
+functions, and items declared inside function bodies. Each declaration's
+signature keeps its attributes, so a `#[cfg(...)]` alternative shows which
+configuration it belongs to. References: calls, struct and tuple-struct
+construction, type uses (generics, bounds, `where` clauses, patterns),
+value references to constants, statics and enum variants, `use`
+declarations, macro invocations, and `impl Trait for Type` as an
+implementation of the trait.
+
+**Identity.** A declaration's qualified name is its Rust path, prefixed by
+its crate: `crate::storage::Repository::new`. The crate and module come from
+the file's place in Cargo's default layout — `src/lib.rs` and `src/main.rs`
+are the package's crate root, `src/a.rs` and `src/a/mod.rs` module `a`,
+`src/bin/x.rs`, `tests/x.rs`, `examples/x.rs`, `benches/x.rs` and `build.rs`
+crates of their own. The repository root's package is `crate`; another
+package's is its directory (`crates/util/crate::text::upper`); a binary's
+its root file (`src/bin/tool.rs/crate::main`). A trait implementation's
+items are `<Type as Trait>::name`, distinct from the inherent `Type::name`;
+fields are `Type.field`; an item in a function body is `f::{block}::name`; an
+exported macro is `crate::name!`. Cargo.toml is not read: a file Cargo
+places elsewhere (`[lib] path`, `#[path]`, a nested `src` directory, a module
+of `tests/` shared by several tests) is named by its file path instead and
+reached by no path.
+
+**Resolution:** only paths Rust's own scoping fixes resolve — `exact` when
+one declaration has the path, `candidate` when several (`#[cfg]`
+alternatives, two impls of one generic type):
+
+| | |
+|---|---|
+| **Supported** | `crate::`, `self::`, `super::` (repeated), `Self` in impls and trait default methods; items and `use` bindings of the enclosing block or module (Rust modules do not inherit their parent's names); `use` aliases, nested `use` lists, `self` in lists; re-exports and imports of other files of the crate (`pub use storage::Repository;` in `lib.rs` makes `crate::Repository` reach the struct, `use a::b as m;` makes `m::x` reach `a::b::x`); a glob of a module or of an enum of the same file when it is the scope's only glob (`use self::Kind::*;`) — from outside the module only its `pub` / `pub(crate)` names; paths through inline modules; `Type::assoc` of an inherent item; enum variants; `macro_rules!` by textual scope within the file, `#[macro_export]` macros by path; trait implementations (`implements` edges) |
+| **Candidate** | `#[cfg]` alternatives of one item (and of an item and an import or alias of its name); a `use` path starting with a plain name outside the crate root (Rust 2015 reads it from the crate root, 2018 from the scope or another crate; the edition is in Cargo.toml) — and what a path through such an import reaches; a module and a function of one name (`mod parse; pub use parse::parse;` makes `crate::parse` both); a name both `src/lib.rs` and `src/main.rs` declare (they share the crate key `crate`) |
+| **Unresolved by design** | method calls on values (`v.m()`, `self.m()`: type inference and trait resolution); names a local binding, closure parameter, pattern or generic parameter shadows — or a macro statement of the file may bind (`let $n = …` with a name the invocation supplies); a name a glob of another file, an item-level macro, a non-standard macro statement in the block, or a derive or attribute macro other than the compiler's (`#[derive(EnumIter)]`, `#[my_attr]`) may bring; a `#[cfg]` item in a scope with a glob; a private or `pub(super)` name a glob brings from outside its module; a name two `use` declarations bind; a `#[path]` module's items; trait items reached through a type (`Type::default()` without an inherent `default`); `<T as Trait>::f` and other qualified paths; computed callees (`handlers[k]()`, reported as dynamic) |
+| **Not implemented** | paths into another crate of the repository (`my_lib::f` from a binary or test, path dependencies: the crate name is in Cargo.toml), glob re-exports through another file (`pub use self::types::*;`), Cargo workspaces and `[lib]` / `[[bin]]` paths, editions, features, procedural macros, derives, `macro_rules!` expansion, `include!`, build-script output |
+
+**Cargo.** Ark recognizes Cargo's *default directory layout* — which file is
+a crate root, which crate a file belongs to, a package's directory — and
+nothing of Cargo's *configuration*: it does not read `Cargo.toml`, so it
+does not know a workspace's members, a package's or crate's name, path
+dependencies, `[lib]` / `[[bin]]` paths, the edition or features. Two crates
+of a workspace are separate identity spaces (`crates/util/crate::helper` is
+not `crate::helper`), and a reference from one to the other
+(`util::helper()`) is unresolved, not wrong.
+
+**Measured against the compiler.** On 71 crates.io packages without
+dependencies, build scripts or procedural macros (rustc 1.58 save-analysis;
+docs/scripts/rust-oracle.sh), every reference Ark resolved to one
+declaration that the compiler also recorded resolved as the compiler did;
+references the compiler did not record (code another configuration
+compiles, bounds, `Self::X`) are not counted. This holds for that corpus
+and configuration, not as a proof.
+
+A file the parser rejects (for example Rust 2015 `try!(...)`, read as the
+`try` keyword) is reported by `get_diagnostics`; its rejected region is not
+analyzed. Parsing it costs a few hundred milliseconds more than a file the
+parser reads ([Performance](performance.md#rust)).
+
+Unit tests in `#[cfg(test)] mod tests { ... }` are ordinary items of their
+file; files under a `tests/` directory and `tests.rs` modules are test files.
+
+Ark never runs `cargo`, `rustc` or build scripts, and never reads
+`Cargo.toml` or `Cargo.lock`. A `target/` directory is skipped only as
+`.gitignore` excludes it (as `cargo new` writes it): code generated into
+`target/` would otherwise be indexed like any source.
 
 ## JavaScript
 

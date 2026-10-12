@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; `Extraction.Aliases`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -89,6 +89,45 @@ the child is not an edge (`TestInputBinding_*`). Authority:
 `TestGraph_NoEdgeCrossesAModuleBoundaryWithoutBinding`.
 Danger: resolving a Terraform address by name "when the module has no match" —
 `aws_vpc.main` of another module is a different resource.
+
+**Paths, not names** (Rust). A Rust item is named by its path within its
+crate, and which crate a file belongs to, and where in it, follows from
+Cargo's default target layout — so the provider derives a crate key and a
+module path from the file's own repository-relative path, reads no other
+file (Cargo.toml included) and runs nothing. It reuses the Terraform
+extensions unchanged: every file is `IdentityOnly`, every declaration's
+`Qualified` is its path (`crate::storage::Repository`; another package's
+crate `crates/util/crate::…`, a binary's `src/bin/x.rs/crate::…`), and a
+reference carries `NameQualified` only when the language's lexical rules fix
+the path — `crate` / `self` / `super` / `Self`, items and `use` bindings of
+the enclosing block or module (never of an enclosing module), aliases, one
+glob of a module or an enum of the same file (only what the module makes
+visible at the glob: `pub` names from outside it). A module's `use` bindings are
+stated as aliases (`Extraction.Aliases`: identity m::C names a::b::C), a
+generic extension: R0 resolves an identity with no declaration of its own
+through its aliases, or through an alias of a leading part of its path, so a
+re-export of another file reaches the declaration; two aliases of one
+identity leave both targets (Candidate), a chain longer than
+`maxAliasDepth` or a cycle names nothing, and a declaration is never
+replaced by an alias. An inherent method is `TYPE::name`, a
+trait implementation's `<TYPE as TRAIT>::name`: two declarations, as in
+Rust, and `Type::name` names the inherent one by Rust's own inherent-first
+rule. A method call on a value (`v.m()`) never has an identity: its target
+needs type inference and trait resolution. What the provider cannot see is
+not guessed: a name an item-level macro, a derive or attribute macro of
+another crate, a macro statement binding a name its invocation supplies, a
+glob of another file or a `#[path]` module may bring is unresolved; `#[cfg]` alternatives share one
+identity and resolve to Candidates; a `use` whose reading depends on the
+edition (in Cargo.toml) is capped at Candidate — and is no alias; token trees
+are not parsed.
+Authority: `languages/rust/provider.go` (header), `languages/rust/layout.go`.
+Tests: `TestIdentity_*`, `TestShadowing`, `TestMacros*`, `TestGlob*`,
+`TestGraph_Soundness`, `TestGraph_CfgAlternativesAreCandidates`,
+`TestAlias_*` (resolver), and the opt-in compiler comparison
+`TestOracle_*` (docs/scripts/rust-oracle.sh).
+Danger: binding a method call or an unresolved path by its last name — a
+trait implementation's method and an inherent one of the same name are
+different functions, and so are two crates' `crate::helper`.
 
 ## 2. Confidence
 
@@ -297,12 +336,33 @@ to the reference, field names included, while switching routes everywhere
 changes more correct trees than it fixes. A tree without an error is a
 complete derivation by the grammar, so the fallback recovers a derivation
 and never invents one; when every route fails, the production tree and its
-diagnostics stand. Trees it does not return it releases. Authority:
+diagnostics stand. Trees it does not return it releases. The forest route's
+cost is not predictable (a run of comments after an ambiguous prefix makes
+it cubic, tens of seconds per file), so for Go and Rust it runs only after a
+probe — the forest route on a copy with the production tree's comments
+(outside any ERROR) blanked, offsets kept — accepts. The claim the skip rests
+on: a comment is an extra, admitted between any two tokens like whitespace,
+and Go and Rust define their tokens independently of the parse, so every
+derivation has the same tokens and the copy derives exactly when the source
+does — provided a comment's line breaks are blanked too (the comment is one
+extra; a kept line break would be Go's statement terminator, which a review
+found). Languages whose parse decides the tokens (JavaScript regular
+expressions, JSX text, PHP `?>`, Python indentation) are not probed. The
+probe only decides whether to run the forest route; its tree is never
+returned, so a wrong probe could only keep the production tree. The
+production route's parsers come from gotreesitter's ParserPool (building a
+parser costs more than parsing a small file); a panic drops the pool.
+Authority:
 `tsparse/tsparse.go`. Tests: `TestParse_*` (the contract), `TestRoute_*`
-(gotreesitter v0.55.1 route behavior — the upgrade gate),
+(gotreesitter v0.55.1 route behavior — the upgrade gate), `TestProbe_*`
+(the probe agrees with the forest route, never skips a derivable source,
+runs only for Go and Rust; linear cost), `TestBlankComments*`,
+`TestParse_PooledParsersShareNoState`,
 `TestParserRecovery_PHPDestructuring`.
 Danger: switching the process-wide route "because it fixed a file", or
-dropping diagnostics instead of recovering the parse.
+dropping diagnostics instead of recovering the parse; returning the probe's
+tree (it has no comments) or blanking what an ERROR holds (that can make
+underivable source derivable).
 
 **An error-free tree is not the language's reading of ambiguous syntax.**
 Where the grammar is ambiguous the parser may pick a derivation the language
@@ -700,7 +760,11 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
   PHP language support.
 - Compiler-equivalent module resolution: providers rank only a
   config-independent lexical subset (`language.ModuleCandidate`); `tsconfig`,
-  Composer/PSR-4 and `package.json` are not interpreted.
+  Composer/PSR-4, `package.json` and `Cargo.toml` are not interpreted, and
+  `cargo metadata` is never run.
+- Expanding macros (Rust `macro_rules!`, procedural macros, derives): what
+  an expansion declares or calls is not observed; a scope a macro may add
+  names to is not trusted to be complete.
 - Guessing dynamic dispatch (`$obj->$m()`, `new $c()`, `a[k]()`): Unresolved
   or Candidate by design. A provider may prove the one class a variable holds
   (`$c = Foo::class; new $c()`) from the same local rules as receiver types.
@@ -719,7 +783,9 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
 **Not implemented yet** (may be added if the invariants above still hold):
 general type inference and return-type propagation; control/data-flow analysis;
 explicit cross-language references (JavaScript importing a TypeScript file —
-JavaScript emits no module bindings — or any other language pair);
+JavaScript emits no module bindings — or any other language pair); Rust
+paths into another crate of the repository (the crate name is in
+Cargo.toml) and glob re-exports through another file;
 `ReferenceKind × SymbolKind` compatibility in name-based stages; trait
 adaptations (`insteadof`/`as`) beyond stopping; reverse typed-relation context
 (`extended_by`, ...); relation-aware ranking weights; deeper context traversal.

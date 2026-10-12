@@ -51,7 +51,12 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
   `node_modules` or starting with `.`.
 - The declaration may not be extracted: JavaScript and Python class methods,
   Go type aliases and function-local declarations are not symbols
-  ([Language support](language-support.md)).
+  ([Language support](language-support.md)); nor is anything a macro
+  expands to (Rust `macro_rules!`, derives, procedural macros).
+- A Rust name is its path in its crate: `crate::storage::Repository::new`,
+  `<crate::storage::Repository as crate::storage::Store>::save` for a trait
+  implementation's method, and with the package directory for another crate
+  (`crates/util/crate::text::upper`).
 - The `path` argument may index a subdirectory that does not contain it.
 - Use `search_context` with part of the name to see what Ark knows.
 
@@ -67,6 +72,13 @@ An empty edge list is not proof of absence. Check, in the same response:
 - `unattributed` and `candidates`: references Ark saw but could not resolve
   to one declaration — for example, a Go method call through a struct field,
   or a TypeScript method call on a receiver without a type annotation;
+- for Rust: method calls on values (`v.m()`, `self.m()`) are never resolved;
+  a call of a `#[cfg]`-duplicated function is a candidate of each
+  alternative; a call into another crate of the workspace (`my_lib::f`) is
+  unresolved; a name imported by a `use` without `crate::`, `self::` or
+  `super::` outside the crate root is a candidate (Rust 2015 and 2018 read it
+  differently, and the edition is in `Cargo.toml`, which Ark does not read) —
+  writing `use crate::...` makes it exact;
 - `indexDiagnostics`: some files were not fully analyzed;
 - the language's support level: JavaScript and Python graph results are not
   certified.

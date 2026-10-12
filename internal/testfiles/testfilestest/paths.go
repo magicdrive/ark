@@ -16,6 +16,9 @@ var Paths = []string{
 	"tests/Feature/LoginTest.php", "tests/TestCase.php", "src/FooTest.php",
 	"src/Test.php", "src/foo_test.php", "Contest.php", "app/Contest.php",
 	"src/Tests/Unit/Helper.php", "test_helper.php",
+	// Rust
+	"tests/integration.rs", "crates/a/tests/common/mod.rs", "src/tests.rs", "src/a/tests/mod.rs",
+	"src/lib.rs", "src/latest.rs", "src/test.rs", "src/bin/tests_runner.rs",
 	// Test fixture data
 	"internal/x/testdata/a.go", "testdata/b.php", "mytestdata/c.go", "pkg/testdatafile.go",
 }

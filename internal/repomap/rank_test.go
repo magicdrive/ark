@@ -98,7 +98,11 @@ func TestPackageScore_SizeIsSublinearAndCentralityCounts(t *testing.T) {
 	if packageScore(big) >= packageScore(small) {
 		t.Errorf("test package %d >= production package %d", packageScore(big), packageScore(small))
 	}
-	for q, want := range map[string]string{`App\Http\Controller.index`: "Controller.index", "UserService.Create": "UserService.Create", "pkg/mod.fn": "mod.fn", "": "name"} {
+	for q, want := range map[string]string{`App\Http\Controller.index`: "Controller.index", "UserService.Create": "UserService.Create", "pkg/mod.fn": "mod.fn", "": "name",
+		// Rust composite identities stay whole; a crate key prefix goes.
+		"crates/u/crate::text::upper":              "crate::text::upper",
+		"<crates/u/crate::T as crates/u/crate::R>": "<crates/u/crate::T as crates/u/crate::R>",
+		"impl crates/u/crate::T":                   "impl crates/u/crate::T", "{scripts/gen.rs}::main": "{scripts/gen.rs}::main"} {
 		if got := (SymbolEntry{Name: "name", Qualified: q}).label(); got != want {
 			t.Errorf("label(%q) = %q, want %q", q, got, want)
 		}

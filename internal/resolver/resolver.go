@@ -32,6 +32,9 @@ type FileIndex struct {
 	// Package / PackageScoped: package scoping (see language.Extraction).
 	Package       string
 	PackageScoped bool
+	// Aliases are the identities the file declares to name others (see
+	// language.AliasDraft).
+	Aliases []language.AliasDraft
 	// NameSpace is the file's name space (language.NameSpace); "" means its
 	// Language. Name-based stages see only declarations of files of the
 	// referencing file's name space.
@@ -73,6 +76,9 @@ type Resolver struct {
 	// identities pay nothing for it.
 	qualOnce  sync.Once
 	qualified map[langQualified][]symbol.Symbol
+	// aliases maps (language, qualified) to the identities the aliases of
+	// that identity name (language.AliasDraft); built with qualified.
+	aliases map[langQualified][]string
 
 	// Lookup indexes for the name-based stages (see lookup.go). They return
 	// exactly the symbols the corresponding full scans would, in a fixed order,

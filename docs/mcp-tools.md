@@ -255,8 +255,8 @@ the total. With `groupBy` it counts the matches instead.
 | `filePattern` | string |  |  | File path substring filter (case-insensitive) |
 | `format` | string (`text`, `json`) |  | `text` |  |
 | `groupBy` | string |  |  | Count the matches instead of listing them, by one or two comma-separated keys: `kind`, `language`, `directory`, `file`, `resourceType` |
-| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check) |
-| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform |
+| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro) |
+| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust |
 | `maxResults` | integer |  | `50` | Maximum number of matches listed (the total is always reported); with `groupBy`, of group lines (at most 1000) |
 | `namePattern` | string |  |  | Name substring filter (case-insensitive) |
 | `usesType` | string |  |  | Only symbols that reference a type whose name contains this string |
@@ -307,7 +307,7 @@ it with [`search_in_files`](#search_in_files), e.g. the regex
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `path` | string | yes |  | File path to analyze |
-| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform). Auto-detected if not specified. |
+| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust). Auto-detected if not specified. |
 
 Example:
 
@@ -365,8 +365,12 @@ Example:
 In a reverse edge, `to` is the caller. `unattributed: 0` means no observed
 reference may be a missing caller; otherwise `candidates` samples the possible
 callers (at most 10; `candidatesTotal` and `candidateRelationsTotal` count
-all). For Terraform, callers are dependents (`referenced_by`,
-`depended_on_by`). `maxDepth` above 1 follows callers transitively.
+all). Each reverse edge reports what the reference is: `called_by` for a
+call or a construction, and otherwise `referenced_by` (a value; Terraform
+dependents), `depended_on_by` (Terraform `depends_on`), `implemented_by`,
+`extended_by`, `trait_used_by`, `type_used_by` or `imported_by` — an
+implementation, a type use or an import is never shown as a call.
+`maxDepth` above 1 follows callers transitively.
 
 ### `get_callees`
 
@@ -680,7 +684,8 @@ Example:
 
 ```json
 [{"language":"go","level":"context_quality_certified","extensions":[".go"]}, …,
- {"language":"terraform","level":"graph","extensions":[".tf",".tfvars"]}]
+ {"language":"terraform","level":"graph","extensions":[".tf",".tfvars"]},
+ {"language":"rust","level":"graph","extensions":[".rs"]}]
 ```
 
 See [Language support](language-support.md).

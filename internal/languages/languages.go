@@ -22,6 +22,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
+	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 )
@@ -55,6 +56,12 @@ func specList() []spec {
 		// graph (references / depends_on edges). Graph, not
 		// ContextQualityCertified: no context-quality benchmark covers it.
 		{terraform.NewProvider(), grammars.HclLanguage, language.SupportLevelGraph},
+		// Rust (.rs): items, impl/trait members, use/module paths resolved by
+		// identity within a crate, macro_rules! textual scope, typed graph.
+		// Graph, not ContextQualityCertified: no context-quality benchmark
+		// covers it, and method calls on values (type inference) and
+		// cross-crate paths are not resolved; see docs/language-support.md.
+		{rust.NewProvider(), grammars.RustLanguage, language.SupportLevelGraph},
 	}
 }
 

@@ -546,7 +546,10 @@ func (se SymbolEntry) label() string {
 	if q == "" {
 		return se.Name
 	}
-	if i := strings.LastIndexAny(q, `\/`); i >= 0 {
+	// A separator inside a composite identity (a Rust trait implementation
+	// "<a/crate::T as a/crate::R>", an impl "impl a/crate::T", a file-scoped
+	// "{a/b.rs}::f") is not a path prefix: such a label stays whole.
+	if i := strings.LastIndexAny(q, `\/`); i >= 0 && !strings.ContainsAny(q[:i], "<{ ") {
 		q = q[i+1:]
 	}
 	return q

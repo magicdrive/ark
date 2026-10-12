@@ -1,0 +1,96 @@
+## stats
+files=7 symbols=34 references=36 relations=18 skipped=0
+lang rust=7
+## symbols
+symbol main kind=function lang=rust qualified="{scripts/gen.rs}::main" receiver="" exported=false @scripts/gen.rs:1:1-3:2
+symbol helper kind=function lang=rust qualified="{scripts/gen.rs}::helper" receiver="" exported=false @scripts/gen.rs:5:1-5:15
+symbol usage kind=function lang=rust qualified="src/bin/cli.rs/crate::usage" receiver="" exported=false @src/bin/cli.rs:3:1-3:14
+symbol main kind=function lang=rust qualified="src/bin/cli.rs/crate::main" receiver="" exported=false @src/bin/cli.rs:5:1-8:2
+symbol broken kind=function lang=rust qualified="crate::broken::broken" receiver="" exported=true @src/broken.rs:1:1-2:2
+symbol good kind=function lang=rust qualified="crate::broken::good" receiver="" exported=true @src/broken.rs:4:1-4:17
+symbol net kind=module lang=rust qualified="crate::net" receiver="" exported=true @src/lib.rs:1:1-1:13
+symbol broken kind=module lang=rust qualified="crate::broken" receiver="" exported=false @src/lib.rs:2:1-2:12
+symbol check kind=macro lang=rust qualified="crate::check!" receiver="" exported=false @src/lib.rs:7:1-11:2
+symbol RETRIES kind=constant lang=rust qualified="crate::RETRIES" receiver="" exported=true @src/lib.rs:13:1-13:28
+symbol connect kind=function lang=rust qualified="crate::connect" receiver="" exported=true @src/lib.rs:15:1-19:2
+symbol shadowed kind=function lang=rust qualified="crate::shadowed" receiver="" exported=true @src/lib.rs:21:1-23:2
+symbol transport kind=function lang=rust qualified="crate::transport" receiver="" exported=true @src/lib.rs:26:1-26:45
+symbol transport kind=function lang=rust qualified="crate::transport" receiver="" exported=true @src/lib.rs:28:1-28:45
+symbol describe kind=function lang=rust qualified="crate::describe" receiver="" exported=true @src/lib.rs:30:1-33:2
+symbol Config kind=struct lang=rust qualified="crate::net::client::Config" receiver="" exported=true @src/net/client.rs:3:1-5:2
+symbol addr kind=field lang=rust qualified="crate::net::client::Config.addr" receiver="Config" exported=true @src/net/client.rs:4:5-4:21
+symbol impl Config kind=impl lang=rust qualified="impl crate::net::client::Config" receiver="" exported=false @src/net/client.rs:7:1-11:2
+symbol default_for kind=method lang=rust qualified="crate::net::client::Config::default_for" receiver="Config" exported=true @src/net/client.rs:8:5-10:6
+symbol Client kind=struct lang=rust qualified="crate::net::client::Client" receiver="" exported=true @src/net/client.rs:13:1-15:2
+symbol config kind=field lang=rust qualified="crate::net::client::Client.config" receiver="Client" exported=false @src/net/client.rs:14:5-14:19
+symbol impl Client kind=impl lang=rust qualified="impl crate::net::client::Client" receiver="" exported=false @src/net/client.rs:17:1-29:2
+symbol new kind=method lang=rust qualified="crate::net::client::Client::new" receiver="Client" exported=true @src/net/client.rs:18:5-20:6
+symbol send kind=method lang=rust qualified="crate::net::client::Client::send" receiver="Client" exported=true @src/net/client.rs:22:5-24:6
+symbol describe kind=method lang=rust qualified="crate::net::client::Client::describe" receiver="Client" exported=true @src/net/client.rs:26:5-28:6
+symbol flush_all kind=function lang=rust qualified="crate::net::client::flush_all" receiver="" exported=true @src/net/client.rs:31:1-35:2
+symbol client kind=module lang=rust qualified="crate::net::client" receiver="" exported=true @src/net/mod.rs:1:1-1:16
+symbol Transport kind=trait lang=rust qualified="crate::net::Transport" receiver="" exported=true @src/net/mod.rs:5:1-8:2
+symbol send kind=method lang=rust qualified="crate::net::Transport::send" receiver="Transport" exported=false @src/net/mod.rs:6:5-6:42
+symbol flush kind=method lang=rust qualified="crate::net::Transport::flush" receiver="Transport" exported=false @src/net/mod.rs:7:5-7:23
+symbol impl Transport for Client kind=impl lang=rust qualified="<crate::net::client::Client as crate::net::Transport>" receiver="" exported=false @src/net/mod.rs:10:1-14:2
+symbol send kind=method lang=rust qualified="<crate::net::client::Client as crate::net::Transport>::send" receiver="Client" exported=false @src/net/mod.rs:11:5-13:6
+symbol fixture kind=function lang=rust qualified="tests/it.rs/crate::fixture" receiver="" exported=false @tests/it.rs:1:1-1:26
+symbol connects kind=function lang=rust qualified="tests/it.rs/crate::connects" receiver="" exported=false @tests/it.rs:4:1-7:2
+## references
+ref helper kind=call container="{scripts/gen.rs}::main" receiver="" call=true @scripts/gen.rs:2:5-2:11
+ref connect kind=import container="" receiver="golden" call=false @src/bin/cli.rs:1:5-1:20
+ref usage kind=call container="src/bin/cli.rs/crate::main" receiver="" name_qualified="src/bin/cli.rs/crate::usage" identity_in_repository=true call=true @src/bin/cli.rs:6:5-6:10
+ref connect kind=call container="src/bin/cli.rs/crate::main" receiver="" call=true @src/bin/cli.rs:7:13-7:20
+ref Client kind=import container="" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/lib.rs:4:19-4:25
+ref Config kind=import container="" receiver="" name_qualified="crate::net::client::Config" identity_in_repository=true call=false @src/lib.rs:4:27-4:33
+ref Client kind=type_use container="crate::connect" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/lib.rs:15:31-15:37
+ref default_for kind=call container="crate::connect" receiver="" name_qualified="crate::net::client::Config::default_for" identity_in_repository=true call=true @src/lib.rs:16:15-16:31
+ref check! kind=call container="crate::connect" receiver="" name_qualified="crate::check!" identity_in_repository=true call=true @src/lib.rs:17:5-17:10
+ref new kind=call container="crate::connect" receiver="" name_qualified="crate::net::client::Client::new" identity_in_repository=true call=true @src/lib.rs:18:5-18:16
+ref Client kind=type_use container="crate::describe" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/lib.rs:30:21-30:27
+ref String kind=type_use container="crate::describe" receiver="" call=false @src/lib.rs:30:32-30:38
+ref transport kind=call container="crate::describe" receiver="" name_qualified="crate::transport" identity_in_repository=true call=true @src/lib.rs:31:13-31:22
+ref describe kind=call container="crate::describe" receiver="c" call=true @src/lib.rs:32:7-32:15
+ref Transport kind=import container="" receiver="" name_qualified="crate::net::Transport" identity_in_repository=true call=false @src/net/client.rs:1:5-1:21
+ref String kind=type_use container="crate::net::client::Config" receiver="" call=false @src/net/client.rs:4:15-4:21
+ref Config kind=type_use container="impl crate::net::client::Config" receiver="" name_qualified="crate::net::client::Config" identity_in_repository=true call=false @src/net/client.rs:7:6-7:12
+ref Self kind=type_use container="crate::net::client::Config::default_for" receiver="" name_qualified="crate::net::client::Config" identity_in_repository=true call=false @src/net/client.rs:8:39-8:43
+ref Config kind=construction container="crate::net::client::Config::default_for" receiver="" name_qualified="crate::net::client::Config" identity_in_repository=true call=false @src/net/client.rs:9:9-9:15
+ref to_string kind=call container="crate::net::client::Config::default_for" receiver="addr" call=true @src/net/client.rs:9:29-9:38
+ref Config kind=type_use container="crate::net::client::Client" receiver="" name_qualified="crate::net::client::Config" identity_in_repository=true call=false @src/net/client.rs:14:13-14:19
+ref Client kind=type_use container="impl crate::net::client::Client" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/net/client.rs:17:6-17:12
+ref Config kind=type_use container="crate::net::client::Client::new" receiver="" name_qualified="crate::net::client::Config" identity_in_repository=true call=false @src/net/client.rs:18:24-18:30
+ref Self kind=type_use container="crate::net::client::Client::new" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/net/client.rs:18:35-18:39
+ref Self kind=construction container="crate::net::client::Client::new" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/net/client.rs:19:9-19:13
+ref len kind=call container="crate::net::client::Client::send" receiver="data" call=true @src/net/client.rs:23:14-23:17
+ref String kind=type_use container="crate::net::client::Client::describe" receiver="" call=false @src/net/client.rs:26:40-26:46
+ref format! kind=call container="crate::net::client::Client::describe" receiver="" call=true @src/net/client.rs:27:9-27:15
+ref Transport kind=type_use container="crate::net::client::flush_all" receiver="" name_qualified="crate::net::Transport" identity_in_repository=true call=false @src/net/client.rs:31:21-31:30
+ref flush kind=call container="crate::net::client::flush_all" receiver="item" call=true @src/net/client.rs:33:14-33:19
+ref Client kind=import container="" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/net/mod.rs:3:9-3:29
+ref Transport kind=implementation container="<crate::net::client::Client as crate::net::Transport>" receiver="" name_qualified="crate::net::Transport" identity_in_repository=true call=false @src/net/mod.rs:10:6-10:15
+ref Client kind=type_use container="<crate::net::client::Client as crate::net::Transport>" receiver="" name_qualified="crate::net::client::Client" identity_in_repository=true call=false @src/net/mod.rs:10:20-10:26
+ref send kind=call container="<crate::net::client::Client as crate::net::Transport>::send" receiver="" name_qualified="crate::net::client::Client::send" identity_in_repository=true call=true @src/net/mod.rs:12:9-12:21
+ref assert_eq! kind=call container="tests/it.rs/crate::connects" receiver="" call=true @tests/it.rs:5:5-5:14
+ref connect kind=call container="tests/it.rs/crate::connects" receiver="golden" call=true @tests/it.rs:6:13-6:28
+## edges
+edge <crate::net::client::Client as crate::net::Transport> -implements-> crate::net::Transport confidence=exact evidence=[qualified_identity:"crate::net::Transport" is declared at src/net/mod.rs]
+edge <crate::net::client::Client as crate::net::Transport> -uses_type-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
+edge <crate::net::client::Client as crate::net::Transport>::send -calls-> crate::net::client::Client::send confidence=exact evidence=[qualified_identity:"crate::net::client::Client::send" is declared at src/net/client.rs]
+edge crate::connect -calls-> crate::check! confidence=exact evidence=[qualified_identity:"crate::check!" is declared at src/lib.rs]
+edge crate::connect -calls-> crate::net::client::Client::new confidence=exact evidence=[qualified_identity:"crate::net::client::Client::new" is declared at src/net/client.rs]
+edge crate::connect -calls-> crate::net::client::Config::default_for confidence=exact evidence=[qualified_identity:"crate::net::client::Config::default_for" is declared at src/net/client.rs]
+edge crate::connect -uses_type-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
+edge crate::describe -uses_type-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
+edge crate::net::client::Client -uses_type-> crate::net::client::Config confidence=exact evidence=[qualified_identity:"crate::net::client::Config" is declared at src/net/client.rs]
+edge crate::net::client::Client::new -calls-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
+edge crate::net::client::Client::new -uses_type-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
+edge crate::net::client::Client::new -uses_type-> crate::net::client::Config confidence=exact evidence=[qualified_identity:"crate::net::client::Config" is declared at src/net/client.rs]
+edge crate::net::client::Config::default_for -calls-> crate::net::client::Config confidence=exact evidence=[qualified_identity:"crate::net::client::Config" is declared at src/net/client.rs]
+edge crate::net::client::Config::default_for -uses_type-> crate::net::client::Config confidence=exact evidence=[qualified_identity:"crate::net::client::Config" is declared at src/net/client.rs]
+edge crate::net::client::flush_all -uses_type-> crate::net::Transport confidence=exact evidence=[qualified_identity:"crate::net::Transport" is declared at src/net/mod.rs]
+edge impl crate::net::client::Client -uses_type-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
+edge impl crate::net::client::Config -uses_type-> crate::net::client::Config confidence=exact evidence=[qualified_identity:"crate::net::client::Config" is declared at src/net/client.rs]
+edge src/bin/cli.rs/crate::main -calls-> src/bin/cli.rs/crate::usage confidence=exact evidence=[qualified_identity:"src/bin/cli.rs/crate::usage" is declared at src/bin/cli.rs]
+## diagnostics
+diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @src/broken.rs:1:15-1:15
