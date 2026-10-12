@@ -2,9 +2,12 @@ package mcp
 
 import (
 	"log"
+	"path"
+	"strings"
 	"sync"
 
 	"github.com/magicdrive/ark/internal/commandline"
+	"github.com/magicdrive/ark/internal/secrets"
 )
 
 // Secret masking settings (see sanitize.go for what masking does).
@@ -44,4 +47,22 @@ func warnIfServerMaskingOff(opt *commandline.Option) {
 // masking reports whether a tool call's result is masked: the server setting.
 func (h *ToolsHandler) masking(string, map[string]interface{}) bool {
 	return masksByDefault(h.opt)
+}
+
+// fileMaskSyntax returns the syntax masking may assume for the file a tool
+// read at rel: decided from the object the request's gate resolved and the
+// read used — its symlink-free path below the root — never from the path the
+// client asked for or the content. A Terraform configuration file (".tf") is
+// SyntaxTerraform; anything else, a file reached outside the root or read
+// without a resolution, a link named ".tf" to another file, is
+// SyntaxUnknown, which masks as before.
+func (h *ToolsHandler) fileMaskSyntax(rel string) secrets.Syntax {
+	r, ok := h.gateResolution(rel)
+	if !ok || !r.IsRegular() {
+		return secrets.SyntaxUnknown
+	}
+	if real := r.Real(); real != "" && strings.HasSuffix(path.Base(real), ".tf") {
+		return secrets.SyntaxTerraform
+	}
+	return secrets.SyntaxUnknown
 }

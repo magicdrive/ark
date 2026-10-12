@@ -1,5 +1,7 @@
 package mcp
 
+import "github.com/magicdrive/ark/internal/secrets"
+
 // MCP JSON-RPC 2.0 message types
 
 // MCPRequest is a JSON-RPC request: a message whose id member is present and a
@@ -104,6 +106,11 @@ type CallToolParams struct {
 type CallToolResult struct {
 	Content []Content `json:"content"`
 	IsError bool      `json:"isError,omitempty"`
+
+	// maskSyntax is the syntax of the one file the result was built from,
+	// known from the file the request read (fileMaskSyntax); masking uses it
+	// to keep references (sanitizeToolResult). Never serialized.
+	maskSyntax secrets.Syntax
 }
 
 type Content struct {

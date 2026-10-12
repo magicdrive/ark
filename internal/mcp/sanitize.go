@@ -74,15 +74,30 @@ var identifierTextTools = map[string]bool{
 	"search_code":        true,
 }
 
-// sanitizeToolResult masks the secrets in a tool result in place.
+// sanitizeToolResult masks the secrets in a tool result in place. A result
+// built from one file the request read carries that file's syntax
+// (CallToolResult.maskSyntax, see fileMaskSyntax), which lets a reference in
+// it be told from a value (secrets.MaskAllIn); any other result is masked as
+// text of no known syntax.
 func sanitizeToolResult(tool string, r *CallToolResult) *CallToolResult {
 	if r == nil {
 		return nil
 	}
 	for i := range r.Content {
-		r.Content[i].Text = sanitizeText(r.Content[i].Text, identifierTextTools[tool])
+		if compactTextTools[tool] {
+			r.Content[i].Text = secrets.MaskCompactIn(r.Content[i].Text, r.maskSyntax)
+			continue
+		}
+		r.Content[i].Text = sanitizeTextIn(r.Content[i].Text, identifierTextTools[tool], r.maskSyntax)
 	}
 	return r
+}
+
+// compactTextTools are the tools whose text is in a compact format, whose
+// "␤" stands for a line break (secrets.MaskCompactIn): get_files_arklite,
+// which masks each file's content before it joins its lines (processFileContent).
+var compactTextTools = map[string]bool{
+	"get_files_arklite": true,
 }
 
 // sanitizeResourceResult masks the secrets in a resource read result.
@@ -99,23 +114,28 @@ func sanitizeResourceResult(r *ReadResourceResult) *ReadResourceResult {
 // sanitizeText masks one text: as JSON when it is a JSON object or array,
 // otherwise as plain text unless identifiersOnly.
 func sanitizeText(text string, identifiersOnly bool) string {
-	if masked, isJSON := maskJSON(text); isJSON {
+	return sanitizeTextIn(text, identifiersOnly, secrets.SyntaxUnknown)
+}
+
+// sanitizeTextIn is sanitizeText for a text built from a file in syntax.
+func sanitizeTextIn(text string, identifiersOnly bool, syntax secrets.Syntax) string {
+	if masked, isJSON := maskJSON(text, syntax); isJSON {
 		return masked
 	}
 	if identifiersOnly {
 		return text
 	}
-	return secrets.MaskAll(text)
+	return secrets.MaskAllIn(text, syntax)
 }
 
 // maskJSON masks the string values of a JSON object or array. isJSON is false
 // when text is not one, and the text must then be treated as plain text.
-func maskJSON(text string) (masked string, isJSON bool) {
+func maskJSON(text string, syntax secrets.Syntax) (masked string, isJSON bool) {
 	body := strings.TrimSpace(text)
 	if body == "" || (body[0] != '{' && body[0] != '[') || !json.Valid([]byte(body)) {
 		return "", false
 	}
-	compact, changed, err := rewriteJSON(body)
+	compact, changed, err := rewriteJSON(body, syntax)
 	if err != nil {
 		return secrets.MaskAll(text), true
 	}
@@ -154,7 +174,7 @@ type jsonFrame struct {
 // rewriteJSON re-encodes a JSON text token by token, compactly, masking every
 // string value whose key is not an identifier key. Array elements take the
 // key of the member that holds the array.
-func rewriteJSON(body string) ([]byte, bool, error) {
+func rewriteJSON(body string, syntax secrets.Syntax) ([]byte, bool, error) {
 	dec := json.NewDecoder(strings.NewReader(body))
 	dec.UseNumber()
 	var out bytes.Buffer
@@ -226,7 +246,7 @@ func rewriteJSON(body string) ([]byte, bool, error) {
 			beginValue()
 			value := t
 			if f := top(); f == nil || !identifierKeys[f.key] {
-				if m := secrets.MaskAll(t); m != t {
+				if m := secrets.MaskAllIn(t, syntax); m != t {
 					value, changed = m, true
 				}
 			}

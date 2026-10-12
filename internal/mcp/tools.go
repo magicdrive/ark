@@ -502,7 +502,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 		},
 		{
 			Name:        "get_file_content",
-			Description: "Get content of a single file with optional filtering",
+			Description: "Get content of a single file with optional filtering. The whole file is returned: for a large file, list its declarations with get_symbols and read the ones you need with get_symbol first, and read the whole file only when you need it",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -634,7 +634,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 		},
 		{
 			Name:        "get_file_info",
-			Description: "Get metadata information about a file",
+			Description: "Get metadata information about a file. language is the language Ark analyzes the file as (get_language_support), otherwise a highlighting tag from the file name",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -648,7 +648,7 @@ func (h *ToolsHandler) ListTools() []Tool {
 		},
 		{
 			Name:        "get_project_stats",
-			Description: "Get statistics about a project directory",
+			Description: "Get statistics about a project directory: files by extension (extensionStats), by language or highlighting tag (languageStats), and by the languages Ark analyzes (supportedLanguageStats, see get_language_support)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -830,7 +830,7 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 
 	// Decided and read in one operation on the request's pinned tree
 	// (request_access.go).
-	data, fullPath, _, gateErr, readErr := h.readToolFile(path)
+	data, fullPath, rel, gateErr, readErr := h.readToolFile(path)
 	if gateErr != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: gateErr.Error()}},
@@ -858,7 +858,8 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 		}
 	}
 
-	content, err := processFileContent(data, readErr, fullPath, &opt)
+	syntax := h.fileMaskSyntax(rel)
+	content, err := processFileContentIn(data, readErr, fullPath, &opt, syntax)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error: %v", err)}},
@@ -867,7 +868,8 @@ func (h *ToolsHandler) getFileContent(args map[string]interface{}) (*CallToolRes
 	}
 
 	return &CallToolResult{
-		Content: []Content{{Type: "text", Text: content}},
+		Content:    []Content{{Type: "text", Text: content}},
+		maskSyntax: syntax,
 	}, nil
 }
 

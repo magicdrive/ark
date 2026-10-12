@@ -2,7 +2,9 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/search"
 	"github.com/magicdrive/ark/internal/symbol"
@@ -13,7 +15,7 @@ func SearchToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "search_code",
-			Description: "Search for symbols using structural predicates: kind, name pattern, call relationships, type usage, and file filters. Predicates are combined with AND semantics.",
+			Description: "Search for symbols using structural predicates: kind, name pattern, call relationships, type usage, and file filters. Predicates are combined with AND semantics. Results list at most maxResults matches; the first line always states the total. With groupBy, return counts instead of matches: e.g. kind=resource with groupBy=resourceType counts Terraform resources by type, groupBy=directory by module (a Terraform module is a directory), groupBy=resourceType,directory both; namePattern=aws_rds narrows to types whose name contains it (a name filter, not a cloud-service classification). Counts come from the index; nothing is re-parsed.",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -23,7 +25,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"kind": map[string]interface{}{
 						"type":        "string",
-						"description": "Symbol kind filter (function/method/struct/interface/class/type/constant/variable/...)",
+						"description": "Symbol kind filter: function, method, class, struct, interface, type, constant, variable, ...; Terraform: resource (managed and ephemeral), data_source, module (a module call), output, variable (var.* and local.*), configuration (provider, terraform, check)",
 					},
 					"namePattern": map[string]interface{}{
 						"type":        "string",
@@ -43,7 +45,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"language": map[string]interface{}{
 						"type":        "string",
-						"description": "Language filter (go/typescript/tsx/javascript/python/php)",
+						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform (get_language_support lists them)",
 					},
 					"filePattern": map[string]interface{}{
 						"type":        "string",
@@ -61,8 +63,12 @@ func SearchToolDefinitions() []Tool {
 					},
 					"maxResults": map[string]interface{}{
 						"type":        "integer",
-						"description": "Maximum number of results",
+						"description": "Maximum number of matches listed (the total is always reported; narrow with namePattern, filePattern or kind when it is larger). With groupBy: maximum number of group lines, at most 1000",
 						"default":     50,
+					},
+					"groupBy": map[string]interface{}{
+						"type":        "string",
+						"description": "Count the matches instead of listing them, by one or two comma-separated keys: kind, language, directory, file, resourceType (Terraform resource type, with data sources as data.TYPE and ephemeral resources as ephemeral.TYPE; other symbols count as (none)). Groups are ordered by count, largest first",
 					},
 					"format": map[string]interface{}{
 						"type":    "string",
@@ -124,6 +130,32 @@ func (h *ToolsHandler) searchCode(args map[string]interface{}) (*CallToolResult,
 		format = v
 	}
 
+	var groupKeys []search.GroupKey
+	switch v := args["groupBy"].(type) {
+	case string:
+		if strings.TrimSpace(v) != "" {
+			keys, err := search.ParseGroupKeys(v)
+			if err != nil {
+				return &CallToolResult{Content: []Content{{Type: "text", Text: err.Error()}}, IsError: true}, nil
+			}
+			groupKeys = keys
+		}
+	case []interface{}:
+		var names []string
+		for _, k := range v {
+			s, ok := k.(string)
+			if !ok {
+				return &CallToolResult{Content: []Content{{Type: "text", Text: "groupBy: keys must be strings"}}, IsError: true}, nil
+			}
+			names = append(names, s)
+		}
+		keys, err := search.ParseGroupKeys(strings.Join(names, ","))
+		if err != nil {
+			return &CallToolResult{Content: []Content{{Type: "text", Text: err.Error()}}, IsError: true}, nil
+		}
+		groupKeys = keys
+	}
+
 	fullPath, _, pathErr := h.resolveToolPath(path)
 	if pathErr != nil {
 		return &CallToolResult{
@@ -138,6 +170,25 @@ func (h *ToolsHandler) searchCode(args map[string]interface{}) (*CallToolResult,
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Error building index: %v", err)}},
 			IsError: true,
 		}, nil
+	}
+
+	if groupKeys != nil {
+		grouped, err := search.GroupCount(context.Background(), idx, q, groupKeys, maxResults)
+		if err != nil {
+			return &CallToolResult{
+				Content: []Content{{Type: "text", Text: fmt.Sprintf("Error searching: %v", err)}},
+				IsError: true,
+			}, nil
+		}
+		text := search.FormatGroups(grouped, q)
+		if format == "json" {
+			b, err := json.MarshalIndent(grouped, "", "  ")
+			if err != nil {
+				return nil, err
+			}
+			text = string(b)
+		}
+		return &CallToolResult{Content: []Content{{Type: "text", Text: text}}}, nil
 	}
 
 	result, err := search.Search(context.Background(), idx, q, maxResults)

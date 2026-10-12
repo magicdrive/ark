@@ -34,7 +34,10 @@ The design rules behind this, and the tests that enforce them, are in
    confidence and the evidence it used.
 4. The **graph** keeps the unique `exact` / `strong` resolutions as edges and
    counts everything else. Context, impact and the repository map read only
-   the graph; they never look names up themselves.
+   the graph and what providers state about declarations (the repository
+   map: a declaration's role and the unit its member scope names, e.g. a
+   Terraform module call's local child); they never look names up
+   themselves.
 
 ## Confidence
 

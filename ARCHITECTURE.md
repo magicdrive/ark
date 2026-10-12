@@ -33,7 +33,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 | Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
-| Context / impact / repomap | Selecting and ranking from graph edges. | Look names up themselves (a second resolver without the evidence). |
+| Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
 | MCP (`internal/mcp`) | Target lookup, index reuse, path containment, serialization, output secret masking. | Pick one of several targets; reuse an index it has not proven current; return a result that has not passed the output sanitizer. |
 
 Composition: `internal/languages` is the one place that wires providers into
@@ -361,9 +361,30 @@ Tests: `TestSanitize_*`,
 `TestMCPSecretMasking_NoDetectableSecretLeaves`,
 `TestMCPSecretMasking_IdentifiersAreNotMasked`,
 `TestMCPSecretMasking_HTTPConcurrent`, `TestMCPSecretMasking_Settings`.
+A value that only names another value is kept as written: one GitHub
+Actions context reference (`${{ secrets.NAME }}`) anywhere, and a Terraform
+reference (`var.x`, `TYPE.NAME.attr`, …) only in a result built from one file
+the request read as a `.tf` file — decided from the gate's symlink-free
+resolution of the file read (`mcp/masking.go` `fileMaskSyntax`,
+`CallToolResult.maskSyntax`), never from the requested name or the content;
+any other value, an expression included, is masked whole, and every secret
+pattern still applies to the line, as written, before any value is masked
+(`secrets.MaskAllIn`). No part of a value is left out of its mask: an
+unquoted value runs to the end of its line short of a separator that ends
+it, a quoted one ends at its quote only when nothing continues it, a key may
+be quoted or an index; a value never ends inside a line break (`\r\n`) nor
+runs past one, and nothing written after a kept reference is kept with it; a
+heredoc or YAML block scalar value is masked on every line of its body
+(`valueBlock`). Only text whose `␤`s are line breaks — arklite output, each
+file masked before its lines are joined — is masked with `␤` as a line break
+(`secrets.MaskCompactIn`). Tests: `TestMaskAllIn_*`,
+`TestMaskCompactIn_LineBreakSymbol`, `TestMasking_KeepsReferencesNotValues`,
+`TestMasking_ValueBoundariesAtTheOutput`,
+`TestMasking_NoPartOfAValueLeaksThroughAnyTool`.
 Danger: masking during extraction "to be safe" — it changes what names
 resolve to and what the cache holds; or a string replace over the
-serialized response — it can break JSON and IDs.
+serialized response — it can break JSON and IDs; or trusting a file's name
+or content for its syntax — a `.tf` link to a `.env` file would unmask it.
 
 **`.arkignore` decides what the MCP server may read, where files are
 reached.** One policy (`mcp/access_policy.go`) — every `.arkignore` under the

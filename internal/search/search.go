@@ -43,6 +43,25 @@ func Search(ctx context.Context, idx *index.RepositoryIndex, q Query, maxResults
 		maxResults = 50
 	}
 
+	matches := collect(idx, q)
+
+	total := len(matches)
+	truncated := false
+	if total > maxResults {
+		matches = matches[:maxResults]
+		truncated = true
+	}
+
+	return &Result{
+		Matches:    matches,
+		TotalCount: total,
+		Truncated:  truncated,
+	}, nil
+}
+
+// collect returns every symbol of idx that q matches, ordered by (FileID,
+// Line, qualified name).
+func collect(idx *index.RepositoryIndex, q Query) []Match {
 	var matches []Match
 
 	// Collect all symbols, then filter.
@@ -90,19 +109,7 @@ func Search(ctx context.Context, idx *index.RepositoryIndex, q Query, maxResults
 		nameB := symbolName(b)
 		return nameA < nameB
 	})
-
-	total := len(matches)
-	truncated := false
-	if total > maxResults {
-		matches = matches[:maxResults]
-		truncated = true
-	}
-
-	return &Result{
-		Matches:    matches,
-		TotalCount: total,
-		Truncated:  truncated,
-	}, nil
+	return matches
 }
 
 func symbolName(m Match) string {

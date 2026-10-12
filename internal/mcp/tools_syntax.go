@@ -145,7 +145,7 @@ func SyntaxToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_symbols",
-			Description: "Extract code symbols (functions, classes, types, etc.) from a file using Tree-sitter parsing",
+			Description: "Extract code symbols (functions, classes, types, etc.) from a file using Tree-sitter parsing. For a large file, list its declarations here and read the one you need with get_symbol instead of reading the whole file. Code in comments declares nothing: a commented-out declaration (e.g. a commented-out Terraform resource) is no symbol; find it with search_in_files (e.g. regex `^\\s*(#|//)\\s*resource \"`)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -194,7 +194,7 @@ func SyntaxToolDefinitions() []Tool {
 		},
 		{
 			Name:        "get_symbol",
-			Description: "Get detailed information about a specific symbol including its source code",
+			Description: "Get detailed information about a specific symbol including its source code: read one declaration of a large file (names from get_symbols) instead of the whole file",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -611,7 +611,8 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 	}
 
 	return &CallToolResult{
-		Content: []Content{{Type: "text", Text: string(output)}},
+		Content:    []Content{{Type: "text", Text: string(output)}},
+		maskSyntax: h.fileMaskSyntax(path),
 	}, nil
 }
 
