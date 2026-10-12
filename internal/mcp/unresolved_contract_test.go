@@ -289,25 +289,32 @@ func TestUnresolved_CrossLanguage(t *testing.T) {
 		"p/a.py": "def py_run(o):\n    o.go()\n    py_local()\n\ndef py_local():\n    pass\n",
 	})
 	cases := []struct {
-		sym, edge  string
+		sym        string
+		edges      []string
 		unresolved []string
 		outside    int
 	}{
 		// Go: an interface method call through a parameter and a func value
 		// have no target in the index; a call qualified by an import of a
 		// package outside the repository (fmt) is proven outside, as the
-		// TypeScript named import below.
-		{"Run", "helper", []string{"Println [outside_repository]", "Do [unresolved]", "f [unresolved]"}, 1},
+		// TypeScript named import below. The parameter's type Svc is a type
+		// use (an edge).
+		{"Run", []string{"Svc", "helper"}, []string{"Println [outside_repository]", "Do [unresolved]", "f [unresolved]"}, 1},
 		// TypeScript: a named import of an external package is proven outside.
-		{"tsRun", "tsLocal", []string{"thing [outside_repository]", "foo [unresolved]"}, 1},
-		{"jsRun", "jsLocal", []string{"go [unresolved]"}, 0},
-		{"py_run", "py_local", []string{"go [unresolved]"}, 0},
+		{"tsRun", []string{"tsLocal"}, []string{"thing [outside_repository]", "foo [unresolved]"}, 1},
+		{"jsRun", []string{"jsLocal"}, []string{"go [unresolved]"}, 0},
+		{"py_run", []string{"py_local"}, []string{"go [unresolved]"}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.sym, func(t *testing.T) {
 			out, text := callees(t, root, tc.sym)
-			if got := edgeTargets(out.Edges); len(got) != 1 || !strings.HasPrefix(got[0], tc.edge+" [") {
-				t.Errorf("edges = %v, want only %s\n%s", got, tc.edge, text)
+			got := edgeTargets(out.Edges)
+			ok := len(got) == len(tc.edges)
+			for i := 0; ok && i < len(got); i++ {
+				ok = strings.HasPrefix(got[i], tc.edges[i]+" [")
+			}
+			if !ok {
+				t.Errorf("edges = %v, want %v\n%s", got, tc.edges, text)
 			}
 			if got := unresolvedNames(out.UnresolvedReferences); !reflect.DeepEqual(got, tc.unresolved) {
 				t.Errorf("unresolvedReferences = %v, want %v\n%s", got, tc.unresolved, text)

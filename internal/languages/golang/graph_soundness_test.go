@@ -50,7 +50,7 @@ func build(d int) {
 				continue
 			}
 			for _, e := range idx.GetCallees(s.ID) {
-				if to, ok := idx.GetSymbol(e.To); ok {
+				if to, ok := idx.GetSymbol(e.To); ok && e.Kind == index.EdgeCalls {
 					out[to.Qualified] = fmt.Sprint(e.Confidence)
 				}
 			}
@@ -114,7 +114,7 @@ func useI()                  { Generic[Key](k) }
 		for _, s := range idx.SymbolsByFile(f) {
 			for _, e := range idx.GetCallees(s.ID) {
 				if to, ok := idx.GetSymbol(e.To); ok {
-					got[s.Qualified+" -> "+to.Qualified+"@"+string(to.Location.File)] = fmt.Sprint(e.Confidence)
+					got[s.Qualified+" -"+string(e.Kind)+"-> "+to.Qualified+"@"+string(to.Location.File)] = fmt.Sprint(e.Confidence)
 				}
 			}
 			for _, c := range idx.CandidateCallers(s.ID) {
@@ -125,11 +125,30 @@ func useI()                  { Generic[Key](k) }
 		}
 	}
 	want := map[string]string{
-		"useC -> Identity@a/a.go": "exact",
-		"useD -> Box@a/a.go":      "exact",
-		"useG -> Identity@a/a.go": "exact",
+		"useC -calls-> Identity@a/a.go": "exact",
+		"useD -calls-> Box@a/a.go":      "exact",
+		"useG -calls-> Identity@a/a.go": "exact",
 		// Both names declared in another file: decided by the target.
-		"useI -> Generic@a/b.go": "strong",
+		"useI -calls-> Generic@a/b.go": "strong",
+		// An element call reads the variable (a reference, never a call)
+		// of its own package — not b's functions of the same names.
+		"useA -references-> handlers@a/a.go": "exact",
+		"useB -references-> table@a/a.go":    "exact",
+		// Declared in another file, others[i](1) and others[Mode](1) cannot
+		// be told from instantiations by their syntax: the reference keeps
+		// the parser's reading (a type), so the edge's kind is uses_type —
+		// its target, the variable of this package, is right. A known
+		// limit: the kind of a name the file does not declare is the
+		// syntax's.
+		"useE -uses_type-> others@a/b.go": "strong",
+		"useH -uses_type-> Mode@a/b.go":   "strong",
+		// Values and types named as arguments and type arguments.
+		"useG -references-> k@a/b.go":       "strong",
+		"useG -uses_type-> Key@a/b.go":      "strong",
+		"useI -references-> k@a/b.go":       "strong",
+		"useI -uses_type-> Key@a/b.go":      "strong",
+		"useF -uses_type-> Registry@a/a.go": "exact",
+		"k -uses_type-> Key@a/b.go":         "exact",
 	}
 	for k, v := range want {
 		if got[k] != v {

@@ -67,15 +67,7 @@ func key(file string, line, col int) siteKey {
 // goOracle type-checks every package under root and classifies every callee.
 // symbolsByFile maps a root-relative file to Ark's symbols in it.
 func goOracle(root string, symbolsByFile map[string][]symbol.Symbol) (map[siteKey]oracleSite, oracleStats) {
-	o := &oracle{
-		root:    root,
-		fset:    token.NewFileSet(),
-		units:   map[string]*unit{},
-		checked: map[string]*types.Package{},
-		syms:    symbolsByFile,
-		sites:   map[siteKey]oracleSite{},
-	}
-	o.std = importer.ForCompiler(o.fset, "source", nil)
+	o := newOracle(root, symbolsByFile)
 	o.discover()
 	paths := make([]string, 0, len(o.units))
 	for p := range o.units {
@@ -88,8 +80,26 @@ func goOracle(root string, symbolsByFile map[string][]symbol.Symbol) (map[siteKe
 	return o.sites, o.stats
 }
 
+func newOracle(root string, symbolsByFile map[string][]symbol.Symbol) *oracle {
+	o := &oracle{
+		root:    root,
+		fset:    token.NewFileSet(),
+		units:   map[string]*unit{},
+		checked: map[string]*types.Package{},
+		syms:    symbolsByFile,
+		sites:   map[siteKey]oracleSite{},
+	}
+	o.std = importer.ForCompiler(o.fset, "source", nil)
+	return o
+}
+
 type oracleStats struct {
 	Packages, Files, TypeErrors, RedeclaredPackages int
+	// DepPackages: dependencies type-checked from the module cache.
+	DepPackages int
+	// SingleFilePrograms: files of packages with redeclarations, each
+	// checked as a program of its own (the reference-level oracle).
+	SingleFilePrograms int
 }
 
 // unit is one package of one directory: its import path, and its files with
@@ -111,6 +121,10 @@ type oracle struct {
 	syms    map[string][]symbol.Symbol
 	sites   map[siteKey]oracleSite
 	stats   oracleStats
+	// refSites: the reference-level oracle's sites (oracle_refs_test.go).
+	refSites map[refKey]refSite
+	// requires: the repository's go.mod requirements (importFromModCache).
+	requires map[string]string
 }
 
 // discover parses every directory's Go files (build constraints of the host
@@ -236,6 +250,13 @@ func (o *oracle) Import(path string) (*types.Package, error) {
 		o.checked[path] = p
 		return p, nil
 	}
+	if p, ok := o.importFromModCache(path); ok {
+		o.checked[path] = p
+		if p == nil {
+			return nil, fmt.Errorf("%s: not importable", path)
+		}
+		return p, nil
+	}
 	p, err := o.std.Import(path)
 	if err != nil {
 		o.checked[path] = nil
@@ -245,9 +266,99 @@ func (o *oracle) Import(path string) (*types.Package, error) {
 	return p, nil
 }
 
+// importFromModCache type-checks a dependency of the repository from the
+// module cache named by ARK_GO_ORACLE_MODCACHE (read-only: no network, no go
+// command): the module of the longest prefix of path among the repository's
+// go.mod requirements, at the required version. ok is false when path is no
+// such dependency (the standard library, an unlisted or absent module): the
+// caller falls back. A dependency's own imports go through Import again.
+func (o *oracle) importFromModCache(path string) (*types.Package, bool) {
+	cache := os.Getenv("ARK_GO_ORACLE_MODCACHE")
+	if cache == "" {
+		return nil, false
+	}
+	if o.requires == nil {
+		o.requires = map[string]string{}
+		data, _ := os.ReadFile(filepath.Join(o.root, "go.mod"))
+		inBlock := false
+		for _, line := range strings.Split(string(data), "\n") {
+			f := strings.Fields(strings.TrimSpace(strings.SplitN(line, "//", 2)[0]))
+			switch {
+			case len(f) == 0:
+			case f[0] == "require" && len(f) >= 2 && f[1] == "(":
+				inBlock = true
+			case inBlock && f[0] == ")":
+				inBlock = false
+			case inBlock && len(f) >= 2:
+				o.requires[f[0]] = f[1]
+			case f[0] == "require" && len(f) >= 3:
+				o.requires[f[1]] = f[2]
+			}
+		}
+	}
+	mod := ""
+	for m := range o.requires {
+		if (path == m || strings.HasPrefix(path, m+"/")) && len(m) > len(mod) {
+			mod = m
+		}
+	}
+	if mod == "" {
+		return nil, false
+	}
+	dir := filepath.Join(cache, escapeModulePath(mod)+"@"+o.requires[mod], filepath.FromSlash(strings.TrimPrefix(path, mod)))
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil, false
+	}
+	var files []*ast.File
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
+			continue
+		}
+		if ok, err := build.Default.MatchFile(dir, name); err != nil || !ok {
+			continue
+		}
+		f, err := parser.ParseFile(o.fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
+		if err == nil && f != nil {
+			files = append(files, f)
+		}
+	}
+	if len(files) == 0 {
+		return nil, false
+	}
+	if o.busy == nil {
+		o.busy = map[string]bool{}
+	}
+	if o.busy[path] {
+		return nil, true
+	}
+	o.busy[path] = true
+	defer delete(o.busy, path)
+	conf := types.Config{Importer: o, FakeImportC: true, Error: func(error) {}}
+	p, _ := conf.Check(path, o.fset, files, nil)
+	o.stats.DepPackages++
+	return p, true
+}
+
+// escapeModulePath is the module cache's case encoding: an upper-case letter
+// becomes '!' and its lower case.
+func escapeModulePath(p string) string {
+	var b strings.Builder
+	for _, r := range p {
+		if r >= 'A' && r <= 'Z' {
+			b.WriteByte('!')
+			r += 'a' - 'A'
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
+}
+
 func (o *oracle) check(u *unit, files []*ast.File) (*types.Package, *types.Info) {
 	redeclared := false
 	info := &types.Info{
+		Defs:       map[*ast.Ident]types.Object{},
 		Uses:       map[*ast.Ident]types.Object{},
 		Selections: map[*ast.SelectorExpr]*types.Selection{},
 		Types:      map[ast.Expr]types.TypeAndValue{},

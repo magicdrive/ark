@@ -59,8 +59,10 @@ func (s *Svc) Run(p *Repo, q Repo) {
 // Unproven receivers must carry no ReceiverType.
 func TestGoReceiverType_Unproven(t *testing.T) {
 	cases := map[string]string{
-		"qualified type":   `package p; func f(t *testing.T) { t.Find() }`,
-		"generic type":     `package p; func f(r Repo[int]) { r.Find() }`,
+		// A type parameter or a local type named like a package type is not
+		// that type.
+		"type parameter":   `package p; type Repo struct{}; func f[Repo any](r Repo) { r.Find() }`,
+		"local type":       `package p; type Repo struct{}; func f() { type Repo struct{}; var r Repo; r.Find() }`,
 		"inferred":         `package p; func f() { r := NewRepo(); r.Find() }`,
 		"shadowed":         `package p; func f(r *Repo) { if x { r := &Other{}; _ = r }; r.Find() }`,
 		"closure param":    `package p; func f(r *Repo) { g := func(r *Other) {}; _ = g; r.Find() }`,
@@ -76,6 +78,28 @@ func TestGoReceiverType_Unproven(t *testing.T) {
 		for expr, typ := range callReceiverTypes(t, src, "Find") {
 			if typ != "" {
 				t.Errorf("%s: %s got ReceiverType %q, want none", name, expr, typ)
+			}
+		}
+	}
+}
+
+// A type written as pkg.T, or as an instantiation, is the receiver's type as
+// written: the resolver looks pkg up through the file's imports, the generic
+// type up as any other.
+func TestGoReceiverType_QualifiedAndGeneric(t *testing.T) {
+	for src, want := range map[string]string{
+		`package p; func f(t *testing.T) { t.Find() }`:                             "testing.T",
+		`package p; func f(r Repo[int]) { r.Find() }`:                              "Repo",
+		`package p; func f() { var r *store.Repo[int]; r.Find() }`:                 "store.Repo",
+		`package p; type S struct{ r *store.Repo }; func (s S) m() { s.r.Find() }`: "store.Repo",
+	} {
+		got := callReceiverTypes(t, src, "Find")
+		if len(got) != 1 {
+			t.Errorf("%s: %v", src, got)
+		}
+		for expr, typ := range got {
+			if typ != want {
+				t.Errorf("%s: %s got ReceiverType %q, want %q", src, expr, typ, want)
 			}
 		}
 	}

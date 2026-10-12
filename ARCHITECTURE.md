@@ -155,19 +155,39 @@ A provider that sets `PackageScoped` states its language's rules: a name
 without a receiver is a declaration of the file's own package (same file:
 Exact; same directory and `Package`: Strong) or of a dot-imported package
 (Exact, exported only); a receiver naming an import is that package (Exact,
-exported, non-test files only; an import path naming no repository package is
-`OutsideRepository`). An import path names the repository directory it ends
-with, under a prefix two import paths establish (or the only candidate prefix
-ending in the root directory's name). No repository-wide name stage applies:
-a local function value, a builtin or an external declaration is never a
-same-named repository declaration. The provider caps (Candidate) a name a
-local declaration shadows at its position (`languages/golang/scopes.go`).
-Measured against an independent `go/types` oracle
-(`languages/golang/oracle_test.go`). Authority: `resolver/packagescope.go`.
-Tests: `TestPackageScope_*`, `TestGoOracle_SyntheticModule`,
-`TestScopes_ShadowingFollowsGoScopes`.
+exported, non-test files only). An import path names the repository directory
+it ends with, under a prefix two import paths establish (or the only candidate
+prefix ending in the root directory's name); importing the prefix itself
+counts as one of the two when the root directory's package is named after its
+last element, so a module checked out under another name still maps. A
+prefix without a host (no dot in its first element: `encoding`, `log`) may be
+the standard library's, whose paths coincide with repository directories in
+twos (`encoding/json`, `encoding/xml` beside `json/`, `xml/`): only the root
+directory's own name establishes it. An
+import path naming no repository directory is `OutsideRepository` only when
+nothing in the repository could be it: one ending in a repository directory,
+or naming the root package, without an established prefix is missing
+evidence — Unresolved, without that claim. A receiver declared as `pkg.T`
+(R2) is looked up through the import of `pkg` the same way. No
+repository-wide name stage applies: a local function value, a builtin or an
+external declaration is never a same-named repository declaration. The
+provider caps (Candidate) a name a local declaration or a type parameter
+shadows at its position (`languages/golang/scopes.go`); a capped receiver is a
+value, so the resolver reads it neither as an import nor as a type. Besides
+calls and constructions the provider records type uses, value references and
+writes (`languages/golang/refs_values.go`) — only names that can denote a
+package-level declaration: no local, no predeclared name, no declaring
+position, no struct-literal key, no field selection, nothing inside a parse
+ERROR. Measured against independent `go/types` oracles: the callee oracle
+(`languages/golang/oracle_test.go`) and the reference-level oracle
+(`languages/golang/oracle_refs_test.go`, every identifier the type checker
+resolves, by role). Authority: `resolver/packagescope.go`. Tests:
+`TestPackageScope_*`, `TestGoOracle_SyntheticModule`,
+`TestGoRefOracle_SyntheticModule`, `TestScopes_ShadowingFollowsGoScopes`,
+`TestGoReceiverType_*`.
 Danger: "it is the only `cancel` in the repository" — in Go an unqualified
-name never denotes another package's declaration.
+name never denotes another package's declaration; and "the import found no
+package, so it is external" — an unproven prefix is not proof.
 
 **Names resolve within one name space.** Every name-based stage (same
 directory, receiver-name match, type receiver, repository-wide uniqueness and

@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/magicdrive/ark/internal/reference"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -15,6 +16,18 @@ func isTypeLike(k symbol.SymbolKind) bool {
 		return true
 	}
 	return false
+}
+
+// ownsMembers reports whether a symbol of kind k can be the type a receiver
+// is declared as, for member lookup: a type-like kind, or a plain type
+// declaration (KindType). The latter owns members only where a language
+// attaches them by receiver name — a Go defined type of any underlying type
+// (type Level int, type graph map[string]nodeset) has methods — and
+// membersOf finds no member of one that has none, so such a receiver
+// resolves to nothing rather than to an outside type. isTypeLike, which
+// also decides identity and inheritance, is unchanged.
+func ownsMembers(k symbol.SymbolKind) bool {
+	return isTypeLike(k) || k == symbol.KindType
 }
 
 // isMember reports whether a symbol is reached through a receiver.
@@ -105,18 +118,21 @@ func capModuleScope(res Resolution, fi FileIndex) Resolution {
 // membersOf returns the members named name of type t. Lexically contained
 // members (ParentQualified == t.Qualified in t's file) are structural proof.
 // Languages without lexical containment attach members by receiver type name
-// within the declaring type's directory (e.g. Go methods); that association
-// is weaker, so it is reported via contained == false.
+// within the declaring type's directory and package (e.g. Go methods — an
+// external test package beside it, package foo_test, declares its own
+// types); that association is weaker, so it is reported via contained ==
+// false.
 func (r *Resolver) membersOf(t symbol.Symbol, name string) (members []symbol.Symbol, contained bool) {
 	var attached []symbol.Symbol
 	dir := filepath.Dir(string(t.Location.File))
+	pkg := r.packageOf(t.Location.File)
 	for _, s := range r.byName[nameKey{r.spaceOf[t.Location.File], name}] {
 		switch {
 		case s.ParentQualified != "":
 			if s.ParentQualified == t.Qualified && s.Location.File == t.Location.File {
 				members = append(members, s)
 			}
-		case s.Receiver != "" && s.Receiver == t.Name && filepath.Dir(string(s.Location.File)) == dir:
+		case s.Receiver != "" && s.Receiver == t.Name && filepath.Dir(string(s.Location.File)) == dir && r.packageOf(s.Location.File) == pkg:
 			attached = append(attached, s)
 		}
 	}
@@ -126,6 +142,14 @@ func (r *Resolver) membersOf(t symbol.Symbol, name string) (members []symbol.Sym
 	}
 	sortSymbols(attached)
 	return attached, false
+}
+
+// packageOf is the Package a file states ("" when none).
+func (r *Resolver) packageOf(file source.FileID) string {
+	if fi, ok := r.byFile[file]; ok {
+		return fi.Package
+	}
+	return ""
 }
 
 // memberResolution builds the resolution for members found under resolved
@@ -179,7 +203,7 @@ func (r *Resolver) resolveTypeName(name string, ref reference.Reference, fi File
 	}
 	var types []symbol.Symbol
 	for _, c := range sub.Candidates {
-		if s, ok := r.byID[c.SymbolID]; ok && isTypeLike(s.Kind) {
+		if s, ok := r.byID[c.SymbolID]; ok && ownsMembers(s.Kind) {
 			types = append(types, s)
 		}
 	}

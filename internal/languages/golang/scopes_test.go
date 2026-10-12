@@ -125,7 +125,9 @@ func f() {
 			types[r.ReceiverExpr] = r.ReceiverType
 		}
 	}
-	if want := map[string]string{"a": "", "b": "T", "c": "T", "d": "T"}; !reflect.DeepEqual(types, want) {
+	// a: the declared type (an interface of another package), not the
+	// constructed one.
+	if want := map[string]string{"a": "fmt.Stringer", "b": "T", "c": "T", "d": "T"}; !reflect.DeepEqual(types, want) {
 		t.Errorf("receiver types %v, want %v", types, want)
 	}
 }

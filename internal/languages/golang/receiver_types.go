@@ -18,10 +18,14 @@ import (
 //   - one field step on such a variable when the struct is declared in the
 //     same file with an explicitly typed field (`s.repo` → repo's type).
 //
-// Only unqualified type names (type_identifier, optionally behind a pointer)
-// are recorded; package-qualified and generic types are left unproven. A name
-// declared more than once anywhere in the function (shadowing, closures,
-// range variables, ...) is poisoned and yields no evidence.
+// A type name is recorded as written: T, or pkg.T for a type of an imported
+// package (the resolver looks it up through the file's import of pkg), either
+// behind a pointer; an instantiation T[X] or pkg.T[X] records its generic
+// type. Any other type (a slice, a map, a function type, ...) is left
+// unproven. A name declared more than once anywhere in the function
+// (shadowing, closures, range variables, ...) is poisoned and yields no
+// evidence; a type name a type parameter or a local type shadows where the
+// receiver is used is no evidence either (addCall).
 
 // goVarType is one proven local variable type.
 type goVarType struct {
@@ -36,16 +40,37 @@ type goTypeEnv map[string]goVarType
 // structs declared in the current file.
 type goStructFields map[string]map[string]string
 
-// goNamedType returns the unqualified type name of a type node
-// (type_identifier or *type_identifier), or "".
+// goNamedType returns the type name of a type node — T, pkg.T, either
+// behind a pointer, or the generic type of an instantiation — or "".
 func goNamedType(n *ts.Node, lang *ts.Language, src []byte) string {
 	switch n.Type(lang) {
 	case "type_identifier":
 		return n.Text(src)
+	case "qualified_type":
+		var pkg, name string
+		for i := 0; i < n.ChildCount(); i++ {
+			switch c := n.Child(i); c.Type(lang) {
+			case "package_identifier":
+				pkg = c.Text(src)
+			case "type_identifier":
+				name = c.Text(src)
+			}
+		}
+		if pkg != "" && name != "" {
+			return pkg + "." + name
+		}
 	case "pointer_type":
 		for i := 0; i < n.ChildCount(); i++ {
-			if c := n.Child(i); c.Type(lang) == "type_identifier" {
-				return c.Text(src)
+			switch c := n.Child(i); c.Type(lang) {
+			case "type_identifier", "qualified_type", "generic_type":
+				return goNamedType(c, lang, src)
+			}
+		}
+	case "generic_type":
+		if n.ChildCount() > 0 {
+			switch c := n.Child(0); c.Type(lang) {
+			case "type_identifier", "qualified_type":
+				return goNamedType(c, lang, src)
 			}
 		}
 	}
@@ -98,6 +123,16 @@ func collectGoStructFields(root *ts.Node, lang *ts.Language, src []byte) goStruc
 			if name == "" || st == nil {
 				continue
 			}
+			// A field whose type is one of the struct's own type parameters
+			// (type Box[Value any] struct{ v Value }) has no type of its own.
+			tparams := map[string]bool{}
+			for _, tpl := range namedChildren(spec, lang, "type_parameter_list") {
+				for _, d := range namedChildren(tpl, lang, "type_parameter_declaration") {
+					for _, id := range namedChildren(d, lang, "identifier") {
+						tparams[id.Text(src)] = true
+					}
+				}
+			}
 			fields := make(map[string]string)
 			for _, list := range namedChildren(st, lang, "field_declaration_list") {
 				for _, fd := range namedChildren(list, lang, "field_declaration") {
@@ -109,7 +144,7 @@ func collectGoStructFields(root *ts.Node, lang *ts.Language, src []byte) goStruc
 						case "field_identifier":
 							names = append(names, c.Text(src))
 						default:
-							if t := goNamedType(c, lang, src); t != "" && len(names) > 0 {
+							if t := goNamedType(c, lang, src); t != "" && len(names) > 0 && !tparams[t] {
 								typ = t
 							}
 						}
