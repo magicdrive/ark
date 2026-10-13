@@ -653,3 +653,159 @@ func TestSelectReports_LatestAttemptOfEachJob(t *testing.T) {
 		}
 	}
 }
+
+// A failing fuzz smoke target leaves what its next failure needs to be
+// diagnosed, and a wedged one cannot hold the job for hours: the step is
+// bounded, passes a diagnostics directory to fuzz-smoke.sh and keeps it, on
+// failure or timeout, as an artifact of its own attempt — never one the
+// gate's test-report-* download would take for a test report.
+func TestCIWorkflow_FuzzSmokeKeepsFailureDiagnostics(t *testing.T) {
+	b, err := os.ReadFile(".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ci := string(b)
+	run := strings.Index(ci, "timeout-minutes: 20\n"+
+		`        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}" "$RUNNER_TEMP/fuzz-diagnostics"`)
+	upload := strings.Index(ci, "if: failure() || cancelled()\n"+
+		"        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2\n"+
+		"        with:\n"+
+		"          name: fuzz-diagnostics-${{ matrix.group }}-attempt-${{ github.run_attempt }}\n"+
+		"          path: ${{ runner.temp }}/fuzz-diagnostics\n")
+	// Diagnostics are kept by target name: within a group, names are unique.
+	seen := map[string]string{}
+	for _, e := range fuzzList(t) {
+		if e.group == "-" {
+			continue
+		}
+		if pkg, ok := seen[e.group+" "+e.target]; ok {
+			t.Errorf("fuzz-smoke.txt: group %s has %s in both %s and %s: their diagnostics would share a name", e.group, e.target, pkg, e.pkg)
+		}
+		seen[e.group+" "+e.target] = e.pkg
+	}
+	if run < 0 || upload < 0 || upload < run {
+		t.Error("ci.yml: the fuzz smoke must be bounded (timeout-minutes: 20), write its diagnostics to $RUNNER_TEMP/fuzz-diagnostics and upload them on failure or timeout as fuzz-diagnostics-<group>-attempt-<n>")
+	}
+}
+
+// fuzz-smoke.sh runs every target of its group, fails when any fails, and
+// keeps each failing target's output and the inputs its run added (the
+// crash input go test writes to testdata/fuzz/<target>), not the corpus
+// that was there before.
+func TestFuzzSmoke_ReportsEveryFailingTarget(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not found: the fuzz smoke runs on Linux runners")
+	}
+	script, err := os.ReadFile(".github/ci/fuzz-smoke.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The log exists before go test starts (not when tee gets to open it): a
+	// step its timeout stops keeps it, and the stand-in below can check it.
+	create, run := strings.Index(string(script), `: > "$log"`), strings.Index(string(script), `| tee "$log"`)
+	if create < 0 || run < 0 || create > run {
+		t.Error(`fuzz-smoke.sh: each target's log must be created (: > "$log") before its go test runs`)
+	}
+	root := t.TempDir()
+	write := func(path, content string, mode os.FileMode) {
+		p := filepath.Join(root, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(content), mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(".github/ci/fuzz-smoke.sh", string(script), 0o755)
+	write(".github/ci/fuzz-smoke.txt", "# test list\n"+
+		"7 ./a FuzzOK\n7 ./a FuzzBad\n8 ./a FuzzOther\n7 ./b FuzzCrash\n- ./b FuzzLeftOut\n"+
+		"10 ./a FuzzBad\n10 ./a FuzzOK\n11 ./a FuzzMissing\n12 ./c FuzzNoFiles\n", 0o644)
+	write("a/testdata/fuzz/FuzzBad/old", "go test fuzz v1\n", 0o644)
+	// A stand-in for go: FuzzBad fails on a new input it records, FuzzCrash
+	// dies without one, FuzzMissing is not there and FuzzNoFiles's package
+	// has no test file (go test passes either way). The others pass after
+	// reading all their stdin (were that the target list, the targets after
+	// them would never run), once their log is in the diagnostics directory
+	// while they run (a step stopped by its timeout keeps it). Every
+	// invocation is logged.
+	write("bin/go", `#!/bin/sh
+[ "$1" = version ] && { echo "go version stub"; exit 0; }
+echo "$*" >> "$CALLS"
+case "$*" in
+*FuzzBad*) mkdir -p ./a/testdata/fuzz/FuzzBad && echo crash > ./a/testdata/fuzz/FuzzBad/1f2e
+	echo "--- FAIL: FuzzBad (0.10s)"; echo "    Failing input written to testdata/fuzz/FuzzBad/1f2e"; exit 1 ;;
+*FuzzCrash*) echo "fuzzing process hung or terminated unexpectedly: exit status 2"; exit 2 ;;
+*FuzzMissing*) echo "testing: warning: no fuzz tests to fuzz"; echo PASS; exit 0 ;;
+*FuzzNoFiles*) echo "?   	example/c	[no test files]"; exit 0 ;;
+esac
+cat >/dev/null
+target=${4#-fuzz=^}; target=${target%$}
+[ -f "$DIAG/$target.log" ] || { echo "no $DIAG/$target.log while running"; exit 3; }
+echo "fuzz: elapsed: 0s, execs: 1 (1/sec), new interesting: 0 (total: 1)"
+echo ok
+`, 0o755)
+	runGroup := func(group string) (string, string, string, error) {
+		diag := filepath.Join(t.TempDir(), "diag")
+		calls := filepath.Join(t.TempDir(), "calls")
+		summary := filepath.Join(t.TempDir(), "summary.md")
+		cmd := exec.Command(bash, ".github/ci/fuzz-smoke.sh", group, diag)
+		cmd.Dir = root
+		cmd.Env = append(os.Environ(), "PATH="+filepath.Join(root, "bin")+string(os.PathListSeparator)+os.Getenv("PATH"),
+			"CALLS="+calls, "GITHUB_STEP_SUMMARY="+summary, "DIAG="+diag)
+		out, err := cmd.CombinedOutput()
+		c, _ := os.ReadFile(calls)
+		s, _ := os.ReadFile(summary)
+		return diag, string(out) + "\n" + string(c), string(s), err
+	}
+
+	diag, out, summary, err := runGroup("7")
+	if err == nil {
+		t.Fatalf("group 7 has failing targets but passed:\n%s", out)
+	}
+	for _, want := range []string{
+		"-fuzz=^FuzzOK$ -fuzztime=10s ./a", "-fuzz=^FuzzBad$ -fuzztime=10s ./a", "-fuzz=^FuzzCrash$ -fuzztime=10s ./b",
+		"fuzz FuzzBad (./a): exit 1", "fuzz FuzzCrash (./b): exit 2", "failed: FuzzBad FuzzCrash (of 3 targets",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("group 7: no %q in\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "FuzzOther") || strings.Contains(out, "FuzzLeftOut") {
+		t.Errorf("group 7 ran another group's target:\n%s", out)
+	}
+	var kept []string
+	filepath.WalkDir(diag, func(p string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			rel, _ := filepath.Rel(diag, p)
+			kept = append(kept, filepath.ToSlash(rel))
+		}
+		return nil
+	})
+	if got, want := strings.Join(kept, ","), "FuzzBad/1f2e,FuzzBad.log,FuzzCrash.log"; got != want {
+		t.Errorf("diagnostics %s, want %s", got, want)
+	}
+	for _, want := range []string{"### fuzz FuzzBad (./a): exit 1", "Failing input written to testdata/fuzz/FuzzBad/1f2e",
+		"### fuzz FuzzCrash (./b): exit 2", "hung or terminated", "No new input in ./b/testdata/fuzz/FuzzCrash"} {
+		if !strings.Contains(summary, want) {
+			t.Errorf("step summary: no %q in\n%s", want, summary)
+		}
+	}
+
+	// A failure, then a pass: the group fails on any target, not its last.
+	if _, out, _, err := runGroup("10"); err == nil || !strings.Contains(out, "failed: FuzzBad (of 2 targets") {
+		t.Errorf("group 10 has a failing target, then a passing one, and must fail: %v\n%s", err, out)
+	}
+	// A target go test passes without fuzzing has not run.
+	for group, target := range map[string]string{"11": "FuzzMissing (./a)", "12": "FuzzNoFiles (./c)"} {
+		if _, out, _, err := runGroup(group); err == nil || !strings.Contains(out, "fuzz "+target+": passed without fuzzing") {
+			t.Errorf("group %s fuzzes nothing and must fail: %v\n%s", group, err, out)
+		}
+	}
+	if _, out, _, err := runGroup("8"); err != nil {
+		t.Errorf("group 8 passes: %v\n%s", err, out)
+	}
+	if _, out, _, err := runGroup("9"); err == nil || !strings.Contains(out, "no target in group 9") {
+		t.Errorf("group 9 has no target and must fail: %v\n%s", err, out)
+	}
+}

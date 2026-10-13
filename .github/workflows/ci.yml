@@ -189,8 +189,25 @@ jobs:
             go.sum
             .github/ci/cache-keys/fuzz-${{ matrix.group }}
 
+      # go test sets no timeout while it fuzzes (testing stops its alarm
+      # before the fuzzing phase): a wedged target would hold the job for
+      # GitHub's 6 hours. A group takes about a minute; past 20 the step
+      # fails, its log showing the target it was in.
       - name: Run fuzz smoke
-        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}"
+        timeout-minutes: 20
+        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}" "$RUNNER_TEMP/fuzz-diagnostics"
+
+      # A failing target's go test output and the inputs its run added to
+      # testdata/fuzz/<target> (the crash input, when the failure was an
+      # input's): put one back there and go test -run '<target>/<input>'
+      # runs it again.
+      - name: Upload the fuzz failure diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-diagnostics-${{ matrix.group }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fuzz-diagnostics
+          if-no-files-found: warn
 
   # The descriptor-anchored file access foundation (internal/fsroot,
   # internal/accesspolicy) and the case-insensitive name tests (C1: the MCP
