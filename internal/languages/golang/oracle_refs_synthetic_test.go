@@ -102,8 +102,8 @@ func uses(g graph, l syn.Level, s Svc, r Runner, w Wrap) {
 	counter = 2         // want:counter=counter
 	u.Var = 3           // want:Var=Var@util
 	s.count = 1         // none:count
-	r.Run()             // none:Run
-	w.Hello()           // none:Hello
+	r.Run()             // want:Run=Runner.Run
+	w.Hello()           // want:Hello=Base.Hello
 	_ = Map[Pair[string, T]] // want:Pair=Pair
 	var _ Alias         // want:Alias=Alias
 	_ = first + second  // want:second=second
@@ -179,12 +179,12 @@ func localWrite() {
 }
 
 // A package variable named like an import's last element (math/rand/v2)
-// is that variable, not the import.
+// is that variable, not the import: its initializer states its type.
 var v2 = &Svc{}
 
 func useV2() {
 	_ = rand.IntN(3)
-	v2.Run()    // none:Run
+	v2.Run()    // want:Run=Svc.Run
 	v2.count = 1
 }
 
@@ -195,11 +195,10 @@ func useJSON() {
 }
 
 func shadowedImport() {
-	// A variable named like the import, of a type Ark cannot prove (it
-	// needs the function's result type): the receiver is neither the
-	// import nor outside the repository.
+	// A variable named like the import: the receiver is neither the import
+	// nor outside the repository — it is newPair's declared result.
 	atomic := newPair()
-	_ = atomic.Key() // none:Key
+	_ = atomic.Key() // want:Key=Pair.Key
 }
 
 func methodExpressions() {
@@ -271,7 +270,18 @@ func Print() {}
 }
 
 func TestGoRefOracle_SyntheticModule(t *testing.T) {
-	root := writeModule(t, refSyntheticModule)
+	checkRefAnnotations(t, refSyntheticModule)
+}
+
+// checkRefAnnotations writes module, compares Ark with the reference-level
+// oracle over it and checks its annotations: no answer the type checker
+// contradicts anywhere (no false Exact or Strong, no false
+// OutsideRepository), every `// want:Name=Qualified[@dir]` site resolved to
+// that declaration, no target for any `// none:Name` site, and every
+// `// outside:Name` site proven outside the repository (no target).
+func checkRefAnnotations(t *testing.T, module map[string]string) *refReport {
+	t.Helper()
+	root := writeModule(t, module)
 	rep, err := compareRefs(root, "synthetic")
 	if err != nil {
 		t.Fatal(err)
@@ -305,7 +315,7 @@ func TestGoRefOracle_SyntheticModule(t *testing.T) {
 		}
 		return out
 	}
-	for file, src := range refSyntheticModule {
+	for file, src := range module {
 		if !strings.HasSuffix(file, ".go") {
 			continue
 		}
@@ -330,6 +340,19 @@ func TestGoRefOracle_SyntheticModule(t *testing.T) {
 					t.Errorf("%s:%d %s: want %s, Ark answered %v", file, i+1, name, target, answers)
 				}
 			}
+			if _, outside, ok := strings.Cut(line, "// outside:"); ok {
+				name := strings.TrimSpace(outside)
+				got := sitesOn(file, i+1, name)
+				if len(got) == 0 {
+					t.Errorf("%s:%d %s: no reference, want one proven outside the repository", file, i+1, name)
+				}
+				for _, a := range got {
+					if a.target != "" || !a.outside {
+						t.Errorf("%s:%d %s: want outside the repository, Ark answered %s %s %s (outside %v)",
+							file, i+1, name, a.kind, a.conf, qualified[string(a.target)], a.outside)
+					}
+				}
+			}
 			if _, none, ok := strings.Cut(line, "// none:"); ok {
 				name := strings.TrimSpace(none)
 				for _, a := range sitesOn(file, i+1, name) {
@@ -341,6 +364,7 @@ func TestGoRefOracle_SyntheticModule(t *testing.T) {
 			}
 		}
 	}
+	return rep
 }
 
 func itoa(n int) string {

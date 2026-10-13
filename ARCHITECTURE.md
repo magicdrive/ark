@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; `Extraction.Aliases`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -189,6 +189,39 @@ Danger: "it is the only `cancel` in the repository" — in Go an unqualified
 name never denotes another package's declaration; and "the import found no
 package, so it is external" — an unproven prefix is not proof.
 
+**A receiver's type is derived from declarations, never guessed.** Where a
+provider cannot prove a receiver's type from local syntax, it states how the
+receiver is built (`ReferenceDraft.ReceiverChain`: `x := NewServer()` is
+"the result of calling NewServer", `s.repo` "field repo of s", a range
+variable "an element of xs") and, for every declaration, the types its own
+text writes (`Extraction.TypeFacts`: struct fields, embedded types, result
+types, underlying and aliased types, a package variable's type or
+initializer). The resolver evaluates a chain step by step by the file's own
+scoping; every step must name exactly one declaration — a name declared
+twice in its package (build-tag variants, several programs in one
+directory), declared outside the repository, or a result typed by a type
+parameter ends the evaluation, and the reference resolves as an untyped
+receiver (at most Candidate). A chain proves at most Strong. Member lookup
+on a proven type finds the type's own member first; otherwise the members
+its embedded types promote, depth by depth: the shallowest depth decides,
+two members there are ambiguous, a field hides a method, and an embedded
+type whose members are unknown stops the search above that depth and leaves
+a member found beside it a Candidate. An interface's methods are symbols of
+their own (the static target of a call through the interface; dynamic
+dispatch is not guessed), and its members include those of the interfaces
+it embeds. A selector that may be a field read (`x.f`, fields are no
+symbols) is recorded `Speculative`: kept only if it resolves to a candidate
+(a method value, a method expression), dropped by the index otherwise —
+never counted as unresolved, never resolved by a name match. Authority:
+`resolver/typefacts.go`, `language/typefacts.go`,
+`languages/golang/chains.go`, `languages/golang/typefacts.go`. Tests:
+`TestTypeFacts_*`, `TestGoRefOracle_MethodMatrix`, `TestGoReceiverChains`,
+`TestGoTypeFacts_*`, `TestSpeculativeReferences`.
+Danger: "the variable's type is probably the function's", or resolving a
+promoted method past an embedded type of unknown members — a type parameter's
+instantiation, a build-tag variant or an external embedded type decides
+which declaration it is.
+
 **Names resolve within one name space.** Every name-based stage (same
 directory, receiver-name match, type receiver, repository-wide uniqueness and
 candidate sets, qualified-name suffix, legacy import paths, members attached
@@ -324,6 +357,23 @@ improvement and is not.
    Danger: keying anything by (file, qualified name) alone — it merges
    namesakes, mixing their sources, callees and callers; deriving an ID from
    a name instead of finding the declaration.
+   A reference's `ReferenceID` is derived from (language, file, kind, name,
+   span) — its end included: references of one name and kind may start at
+   one position (Go `f(x).V.f()`, JavaScript `$(a).data().data()`), and an
+   ID two references shared would join one's resolution to the other
+   (`reference.NewReferenceID`). It is unique within an index — the builder
+   leaves out a reference whose ID another already has (a provider stating
+   one reference twice, or a hash collision) with a
+   `reference_id_collision` warning — and the same
+   for the same sources, built cold, from the cache or not (IDs are not
+   cached; they are derived from the cached drafts); it is no identity
+   across Ark versions — it changes when an extraction states another span,
+   name or kind — and no tool takes it as input: `find_references` reports
+   it as an opaque `id`, never a `symbolId`. Authority: `index/builder.go`
+   (`uniqueReferences`). Tests: `TestReferenceIdentity_*`,
+   `TestNewReferenceID_*`, `TestFindReferences_IDContract`.
+   Danger: deriving a reference's ID from its start alone, or from anything
+   two references can share.
 
 **Diagnostics are what the index reports, not a completeness proof.** A
 diagnostic says Ark could not analyze part of a file (`parse_error`: the
@@ -801,7 +851,9 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
   evidence, never as resolver guessing.
 
 **Not implemented yet** (may be added if the invariants above still hold):
-general type inference and return-type propagation; control/data-flow analysis;
+general type inference (a receiver's type is derived only through
+declarations' written types — Go receiver chains — never inferred from
+uses, assignments or generic instantiation); control/data-flow analysis;
 explicit cross-language references (JavaScript importing a TypeScript file —
 JavaScript emits no module bindings — or any other language pair); Rust
 paths into another crate of the repository (the crate name is in

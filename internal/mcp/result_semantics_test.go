@@ -425,8 +425,9 @@ func TestAnalyzeChangeImpact_DefiniteAndPossible(t *testing.T) {
 	contains(t, "zero", text, "Unattributed references: 0")
 }
 
-// Strong + unresolved in Go: a typed call resolves (Strong), a call promoted
-// through an embedded struct does not — it is reported, not dropped.
+// Strong + unresolved in Go: a typed call resolves (Strong), and so does a
+// call promoted through an embedded struct; a call two embedded types both
+// promote (ambiguous at one depth) does not — it is reported, not dropped.
 func TestGetCallers_GoStrongPlusUnresolved(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
@@ -436,11 +437,22 @@ type Inner struct{}
 
 func (Inner) Do() {}
 
+type Other struct{}
+
+func (Other) Do() {}
+
 type Wrapper struct{ Inner }
+
+type Mixed struct {
+	Inner
+	Other
+}
 
 func UseInner() { var i Inner; i.Do() }
 
 func UseWrapper() { var w Wrapper; w.Do() }
+
+func UseMixed() { var m Mixed; m.Do() }
 
 func Lonely() {}
 `,
@@ -449,7 +461,7 @@ func Lonely() {}
 	if isErr {
 		t.Fatalf("unexpected error:\n%s", text)
 	}
-	if got, want := edgeTargets(out.Edges), []string{"UseInner [strong]"}; !reflect.DeepEqual(got, want) {
+	if got, want := edgeTargets(out.Edges), []string{"UseInner [strong]", "UseWrapper [strong]"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("edges = %v, want %v", got, want)
 	}
 	if *out.Unattributed != 1 {

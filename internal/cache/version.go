@@ -28,7 +28,9 @@ package cache
 // (go-5, javascript 4, python 4, ts-5, php-14, terraform-7), and when those
 // readings took only what a file proves (go-6, ts-6). Extraction.Package /
 // PackageScoped are optional the same way; the Go provider, which emits them
-// (and splits pkg.T{} into receiver and name), is go-7.
+// (and splits pkg.T{} into receiver and name), is go-7. ReferenceDraft.
+// ReceiverChain / Speculative and Extraction.TypeFacts are optional the same
+// way; the Go provider, which emits them, is go-9.
 //
 // SymbolIDs are not cached: the index derives them from the cached drafts
 // (index.NewFileIndex), so a change of identity scheme (declaration ordinals)

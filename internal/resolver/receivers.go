@@ -155,6 +155,17 @@ func (r *Resolver) packageOf(file source.FileID) string {
 // memberResolution builds the resolution for members found under resolved
 // type evidence. typeConf is the confidence of the type evidence itself.
 func (r *Resolver) memberResolution(res Resolution, ref reference.Reference, types []symbol.Symbol, typeConf Confidence, ek EvidenceKind, detail string) Resolution {
+	if ref.Speculative {
+		// A selector that may name a field resolves only to members known
+		// to be the type's own: not those attached by receiver name to a
+		// type its package declares more than once (typeNamesakes).
+		for _, t := range types {
+			if r.typeNamesakes(t) {
+				res.Evidence = []ResolutionEvidence{{Kind: ek, Detail: detail + fmt.Sprintf("; %s is declared more than once in its package", t.Name)}}
+				return res
+			}
+		}
+	}
 	var members []symbol.Symbol
 	seen := make(map[symbol.SymbolID]bool)
 	allContained := true
@@ -171,6 +182,13 @@ func (r *Resolver) memberResolution(res Resolution, ref reference.Reference, typ
 		}
 	}
 	if len(members) == 0 {
+		// A member of the type's embedded types (typefacts.go), when the
+		// type is identified.
+		if len(types) == 1 {
+			if out, ok := r.promotedResolution(res, ref, types[0], typeConf, detail); ok {
+				return out
+			}
+		}
 		res.Evidence = []ResolutionEvidence{{Kind: ek, Detail: detail + fmt.Sprintf("; no member %q", ref.Name)}}
 		return res
 	}

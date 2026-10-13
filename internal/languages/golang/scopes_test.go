@@ -84,7 +84,7 @@ label:
 		"L23 call packages.Load cap=candidate type=",
 		"L25 call .cancel cap=candidate type=", // if-header local
 		"L28 call T.M cap=candidate type=",     // range variable T hides the type
-		"L30 call T{}.M cap= type=",            // a composite value's method
+		"L30 call T{}.M cap=strong type=",      // a composite value's method
 		"L30 construction .T cap= type=",
 		"L32 construction .T cap= type=", // var o T declares o, not T
 		"L34 call .any cap= type=",       // the conversion any(1)

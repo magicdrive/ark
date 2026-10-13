@@ -146,7 +146,10 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 			if len(results) >= maxResults {
 				break
 			}
-			if ref.Name != name {
+			if ref.Name != name || ref.Speculative {
+				// A Speculative reference is one only once resolved to a
+				// declaration (language.ReferenceDraft.Speculative); this
+				// syntactic listing resolves nothing.
 				continue
 			}
 			if kindFilter != "" && ref.Kind != kindFilter {

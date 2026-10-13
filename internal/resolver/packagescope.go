@@ -65,7 +65,13 @@ import (
 //     package's test files.
 //
 // A receiver that is a variable keeps the existing rules (R2 with a proven
-// type, R4 otherwise), and providers cap names they know to be local.
+// type, R4 otherwise), and providers cap names they know to be local. A
+// receiver without a proven type but with a ReceiverChain is resolved
+// through the declarations the chain names (typefacts.go) when the chain
+// proves its type, and as an untyped value receiver (R4) otherwise — never
+// as an import or a type its name happens to spell. A Speculative
+// reference (a selector that may name a field) is resolved through its
+// evidence only: without a result it is Unresolved, never a name match.
 
 // EvidencePackageScope: a package-scoped reference resolved, or found
 // unresolvable, by package scoping.
@@ -193,6 +199,21 @@ func (r *Resolver) resolvePackageScoped(res Resolution, ref reference.Reference,
 		}
 		return r.resolveViaReceiverType(res, ref, fi)
 	}
+	if ref.ReceiverChain != "" {
+		if out, ok := r.resolveViaReceiverChain(res, ref, fi); ok {
+			return out
+		}
+		if !ref.Speculative {
+			// The chain describes a value (a local, a package variable, a
+			// call's result): proving no type for it, it is an untyped
+			// receiver — never read as an import or a type of its name.
+			return capUntypedReceiver(r.resolveByName(res, ref, fi), ref)
+		}
+	}
+	if ref.Speculative {
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceReceiverChain, Detail: fmt.Sprintf("%s.%s: the receiver's evidence names no declaration", ref.ReceiverExpr, ref.Name)}}
+		return res
+	}
 	if ref.ConfidenceCap == ConfidenceCandidate.String() {
 		// The provider caps a receiver it found a local declaration shadows
 		// (a variable named like an import or a type: var atomic T;
@@ -250,7 +271,10 @@ func (r *Resolver) resolveViaImportedReceiverType(res Resolution, ref reference.
 
 // resolvePackageName resolves a receiverless name by package scoping.
 func (r *Resolver) resolvePackageName(res Resolution, ref reference.Reference, fi FileIndex) Resolution {
-	if c := r.sameFileContainerMatch(ref, fi); len(c) > 0 {
+	// A receiverless name never denotes a member, not even one its
+	// container encloses (an interface's method beside a type of that name:
+	// type Provider interface { Language() Language }).
+	if c := withoutMembers(r.sameFileContainerMatch(ref, fi)); len(c) > 0 {
 		return r.pickBest(res, c, ConfidenceExact, EvidenceSameLexicalScope,
 			fmt.Sprintf("symbol %q defined in same container %q", ref.Name, ref.Container))
 	}

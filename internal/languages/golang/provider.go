@@ -25,7 +25,7 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "go-8" }
+func (p *Provider) CacheVersion() string        { return "go-9" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
@@ -39,9 +39,12 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 
 	root := tree.RootNode()
 	drafts := extractGoSymbols(root, lang, src, file)
-	refs, imports := extractGoReferences(root, lang, src, file)
+	refs, imports, facts := extractGoReferences(root, lang, src, file)
 	return language.Extraction{
 		Symbols: drafts, References: refs, Imports: imports, Diagnostics: treediag.ParseErrors(root, lang, file),
+		// Declared-type facts (typefacts.go): what receiver chains and
+		// promoted members are evaluated against.
+		TypeFacts: facts,
 		// Go's package scoping: an unqualified name is a declaration of this
 		// package (or of a dot import); pkg.Name is the imported package's.
 		Package:       goPackageName(root, lang, src),
@@ -180,6 +183,7 @@ func goTypeDecl(node *ts.Node, lang *ts.Language, src []byte, file source.FileID
 		if t := child.Type(lang); t == "type_spec" || t == "type_alias" {
 			if d := goTypeSpec(child, lang, src, file); d != nil {
 				drafts = append(drafts, *d)
+				drafts = append(drafts, goInterfaceMethods(child, d.Name, lang, src, file)...)
 			}
 		}
 	}
@@ -299,7 +303,7 @@ func isExported(name string) bool {
 }
 
 // extractGoReferences walks the AST and collects syntactic references and imports.
-func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft) {
+func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file source.FileID) ([]language.ReferenceDraft, []language.ImportDraft, []language.TypeFact) {
 	c := &goRefCollector{lang: lang, src: src, file: file, fields: collectGoStructFields(root, lang, src),
 		values: goFileValues(root, lang, src), types: goFileTypes(root, lang, src), tparams: goTypeParamScopes(root, lang, src)}
 	// Imports first: whether a selector's operand is an import name decides
@@ -309,8 +313,21 @@ func extractGoReferences(root *ts.Node, lang *ts.Language, src []byte, file sour
 			c.collectImports(ch)
 		}
 	}
+	facts := c.typeFacts(root)
+	c.ownFields = map[string]map[string]bool{}
+	for _, f := range facts {
+		if f.Struct && f.Complete {
+			names := map[string]bool{}
+			for _, fd := range f.Fields {
+				if fd.Name != "" {
+					names[fd.Name] = true
+				}
+			}
+			c.ownFields[f.Decl] = names
+		}
+	}
 	c.walk(root, "", nil)
-	return c.refs, c.imports
+	return c.refs, c.imports, facts
 }
 
 type goRefCollector struct {
@@ -319,15 +336,19 @@ type goRefCollector struct {
 	file    source.FileID
 	refs    []language.ReferenceDraft
 	imports []language.ImportDraft
-	fields  goStructFields       // same-file struct field types (receiver evidence)
-	locals  map[string]int       // goDeclCounts of the enclosing function; nil outside
-	scopes  map[string][]goScope // local declarations of the enclosing function by scope
-	values  map[string]bool      // package-level var / const names of this file
-	types   map[string]bool      // package-level type names of this file
-	tparams map[string][]goScope // type parameters of the file's declarations by scope
-	handled map[uint64]bool      // spans of call / construction names already recorded
-	inError int                  // depth of enclosing ERROR nodes
-	ltypes  map[string][]goScope // local type declarations of the enclosing function by scope
+	fields  goStructFields          // same-file struct field types (receiver evidence)
+	locals  map[string]int          // goDeclCounts of the enclosing function; nil outside
+	scopes  map[string][]goScope    // local declarations of the enclosing function by scope
+	values  map[string]bool         // package-level var / const names of this file
+	types   map[string]bool         // package-level type names of this file
+	tparams map[string][]goScope    // type parameters of the file's declarations by scope
+	handled map[uint64]bool         // spans of call / construction names already recorded
+	inError int                     // depth of enclosing ERROR nodes
+	ltypes  map[string][]goScope    // local type declarations of the enclosing function by scope
+	defs    map[string][]goLocalDef // local declarations of the enclosing function, with what they state (chains.go)
+	// ownFields: the field names of the structs this file declares whose
+	// fields were all read (TypeFact.Complete), by struct name.
+	ownFields map[string]map[string]bool
 }
 
 // goFileTypes collects the file's package-level type names.
@@ -391,6 +412,7 @@ func (c *goRefCollector) walkFunction(node *ts.Node, container string) {
 	c.locals = counts
 	c.scopes = goLocalScopes(node, c.lang, c.src)
 	c.ltypes = goLocalTypeScopes(node, c.lang, c.src)
+	c.defs = goLocalDefs(node, c.lang, c.src)
 	named := false
 	for i := 0; i < node.ChildCount(); i++ {
 		ch := node.Child(i)
@@ -400,7 +422,7 @@ func (c *goRefCollector) walkFunction(node *ts.Node, container string) {
 		}
 		c.walk(ch, container, env)
 	}
-	c.locals, c.scopes, c.ltypes = nil, nil, nil
+	c.locals, c.scopes, c.ltypes, c.defs = nil, nil, nil, nil
 }
 
 // walkDeclaring walks n but its direct children of type declared (the
@@ -541,7 +563,8 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 			goDeclCounts(node, c.lang, c.src, c.locals)
 			c.scopes = goLocalScopes(node, c.lang, c.src)
 			c.ltypes = goLocalTypeScopes(node, c.lang, c.src)
-			defer func() { c.locals, c.scopes, c.ltypes = nil, nil, nil }()
+			c.defs = goLocalDefs(node, c.lang, c.src)
+			defer func() { c.locals, c.scopes, c.ltypes, c.defs = nil, nil, nil, nil }()
 		}
 	case "call_expression":
 		c.collectCall(node, container, env)
@@ -739,6 +762,15 @@ func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices [
 		kinds = goGenericKinds
 	}
 	recvType := c.receiverType(recv, funcNode.StartByte(), env)
+	capped := c.localCap(name, recv, recvType, funcNode.StartByte())
+	chain := ""
+	if recv != "" && recvType == "" {
+		// Without a proven type, how the receiver is built (chains.go):
+		// at most Strong, as derived from other declarations' types.
+		if chain = c.receiverChain(funcNode); chain != "" {
+			capped = "strong"
+		}
+	}
 	c.markHandled(funcNode)
 	c.refs = append(c.refs, language.ReferenceDraft{
 		Name:          name,
@@ -747,9 +779,10 @@ func (c *goRefCollector) addCall(name, recv string, funcNode *ts.Node, indices [
 		Location:      nodeLocation(funcNode, c.file),
 		ReceiverExpr:  recv,
 		ReceiverType:  recvType,
+		ReceiverChain: chain,
 		IsCall:        true,
 		TargetKinds:   kinds,
-		ConfidenceCap: c.localCap(name, recv, recvType, funcNode.StartByte()),
+		ConfidenceCap: capped,
 	})
 }
 

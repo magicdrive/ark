@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -114,7 +114,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -252,6 +252,20 @@ func dynamicName(d bool) string {
 		return " dynamic=true"
 	}
 	return ""
+}
+
+// receiverChain renders a receiver chain and the Speculative marker;
+// nothing when absent, so snapshots of providers that never emit them are
+// unaffected.
+func receiverChain(chain string, speculative bool) string {
+	out := ""
+	if chain != "" {
+		out += fmt.Sprintf(" receiver_chain=%q", chain)
+	}
+	if speculative {
+		out += " speculative=true"
+	}
+	return out
 }
 
 func receiverType(t string) string {

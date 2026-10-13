@@ -294,12 +294,12 @@ func TestUnresolved_CrossLanguage(t *testing.T) {
 		unresolved []string
 		outside    int
 	}{
-		// Go: an interface method call through a parameter and a func value
-		// have no target in the index; a call qualified by an import of a
-		// package outside the repository (fmt) is proven outside, as the
-		// TypeScript named import below. The parameter's type Svc is a type
-		// use (an edge).
-		{"Run", []string{"Svc", "helper"}, []string{"Println [outside_repository]", "Do [unresolved]", "f [unresolved]"}, 1},
+		// Go: a func value has no target in the index; an interface method
+		// call through a parameter resolves to the interface's method (its
+		// static target); a call qualified by an import of a package outside
+		// the repository (fmt) is proven outside, as the TypeScript named
+		// import below. The parameter's type Svc is a type use (an edge).
+		{"Run", []string{"Svc", "Svc.Do", "helper"}, []string{"Println [outside_repository]", "f [unresolved]"}, 1},
 		// TypeScript: a named import of an external package is proven outside.
 		{"tsRun", []string{"tsLocal"}, []string{"thing [outside_repository]", "foo [unresolved]"}, 1},
 		{"jsRun", []string{"jsLocal"}, []string{"go [unresolved]"}, 0},
