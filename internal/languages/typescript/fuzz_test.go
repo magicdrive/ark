@@ -56,14 +56,46 @@ func FuzzExtractTypeScript(f *testing.F) {
 				t.Fatalf("ReceiverType without a receiver: %+v", r)
 			}
 		}
-		if errs := language.ValidateModuleBindings(ext); len(errs) > 0 {
+		if errs := language.ValidateModuleBindings(locatedIn(ext, file)); len(errs) > 0 {
 			t.Fatalf("module binding contract violated: %v", errs)
+		}
+		for _, b := range ext.Bindings {
+			if b.Location.File != source.FileID(file) {
+				t.Fatalf("binding %q located in %q, not the file %q", b.Local, b.Location.File, file)
+			}
+		}
+		for _, e := range ext.Exports {
+			if e.Location.File != source.FileID(file) {
+				t.Fatalf("export %q located in %q, not the file %q", e.Exported, e.Location.File, file)
+			}
 		}
 		again, _ := p.Extract(context.Background(), source.FileID(file), []byte(src))
 		if !reflect.DeepEqual(ext, again) {
 			t.Fatal("non-deterministic extraction")
 		}
 	})
+}
+
+// locatedIn is ext as the module binding contract sees it. A FileID is the
+// repository-relative path of the file whose extension chose this provider
+// (the index, the syntax package and the MCP tools all choose by it), never
+// empty; the provider records the FileID it is given, so the empty one the
+// fuzzer can pass leaves every Location.File empty by construction. For it
+// the contract's other rules are checked under a stand-in file; for any
+// other file, ext is checked as it is.
+func locatedIn(ext language.Extraction, file string) language.Extraction {
+	if file != "" {
+		return ext
+	}
+	ext.Bindings = append([]language.BindingDraft(nil), ext.Bindings...)
+	for i := range ext.Bindings {
+		ext.Bindings[i].Location.File = "<no file>"
+	}
+	ext.Exports = append([]language.ExportDraft(nil), ext.Exports...)
+	for i := range ext.Exports {
+		ext.Exports[i].Location.File = "<no file>"
+	}
+	return ext
 }
 
 // FuzzModuleSpec checks path normalisation: candidates are always clean,
