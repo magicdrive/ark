@@ -73,6 +73,8 @@ Every resolution names the evidence it rests on. Graph answers show it in the
 | `explicit_import` | Declared in an imported package (Go), or in a file under an imported path (JavaScript, Python) | exact |
 | `qualified_identity` | The language fixed the fully qualified name (PHP namespaces, Terraform addresses) | exact |
 | `receiver_type` | Member of the receiver's declared type | exact or strong |
+| `receiver_chain` | Member of the type the receiver is built as, derived through declarations (Go: `x := NewServer(); x.Run()`) | strong |
+| `promoted_member` | Member promoted through an embedded type (Go embedding) | strong (candidate beside an embedded type of unknown members) |
 | `member_scope` | Member of a scope the declaration states (Terraform module outputs and inputs) | exact |
 | `same_package` | Only declaration of the name in the file's package or directory | strong |
 | `unique_repo_match` | Only declaration of the name in the repository, within the file's language | strong (candidate when capped) |
@@ -194,10 +196,33 @@ only candidate prefix that ends in the repository directory's name. A prefix
 without a host (`encoding` of `encoding/json`, `log`) may be the standard
 library's: only the repository directory's own name establishes it.
 
-Go method calls whose receiver type is not written down locally — through a
-struct field of a struct declared in another file or a function's return
-value — stay `candidate`; an interface method or a promoted (embedded)
-method has no edge. See [Language support](language-support.md#go).
+A method's receiver is typed by declarations, never by guessing:
+
+- A receiver whose type is written down locally (a parameter, the method
+  receiver, `x := &T{}`) is a member of that type.
+- Otherwise its type is derived from what the code names: a function's or
+  method's declared result (`x := NewServer(); x.Run()`, `pkg.Open().Close()`),
+  a struct field's declared type (`s.repo.Find()`, in any file), an element
+  of a slice or map (`for _, it := range items`, `m[k].Run()`), a type
+  assertion or `new(T)`, a package variable's type or initializer. Each step
+  must name exactly one declaration of the repository: a name declared in
+  build-tagged variants, a declaration outside the repository or a result
+  typed by a type parameter leaves the receiver untyped (`candidate`). These
+  resolutions are at most `strong` (`receiver_chain`).
+- A method promoted through embedding (`type Outer struct{ Inner }`,
+  `o.M()` with `M` declared on `Inner`) resolves to `Inner.M` — the method
+  the type checker selects: the shallowest embedding depth wins, two at that
+  depth are ambiguous (`candidate`), a field hides a method, and an embedded
+  type outside the repository above that depth leaves the call unresolved
+  (`promoted_member`).
+- A call through an interface (`r.Read()` with `r Reader`) resolves to the
+  interface's method — its static target. The concrete method run-time
+  dispatch picks is not guessed.
+- Method values (`f := t.Run`) and method expressions (`T.Run`, `(*T).Run`,
+  `pkg.T.Run`, `T[int].Run`) resolve the same way; a field read (`t.name`)
+  is no reference.
+
+See [Language support](language-support.md#go).
 
 ## Ambiguity, identity and `symbolId`
 
@@ -238,7 +263,9 @@ method and numbers.
 
 ## What Ark does not do
 
-- Type inference, return-type propagation, control- or data-flow analysis.
+- Type inference or control- and data-flow analysis. (Go receivers are typed
+  only through declarations' written types: a declared result, field or
+  variable type — never from uses, assignments or generic instantiation.)
 - Compiler-equivalent module resolution: `tsconfig` paths, Composer / PSR-4
   autoloading and `package.json` are not interpreted.
 - Framework semantics (dependency-injection containers, routing, decorators).

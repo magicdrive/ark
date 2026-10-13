@@ -43,3 +43,50 @@ func TestNewReferenceID_DifferentKinds(t *testing.T) {
 		t.Error("NewReferenceID should differ for different kinds")
 	}
 }
+
+// Two references of one name and kind starting at one position (Go
+// f(x).Value.f(): the call of f, and the call of the method f over the whole
+// selector) have distinct IDs: one's resolution is never joined to the other.
+func TestNewReferenceID_SameStartDistinctSpans(t *testing.T) {
+	file := source.FileID("slog/attr_test.go")
+	start := source.Position{Line: 25, Column: 7}
+	inner := source.Location{File: file, Range: source.Range{Start: start, End: source.Position{Line: 25, Column: 12}}}
+	outer := source.Location{File: file, Range: source.Range{Start: start, End: source.Position{Line: 25, Column: 34}}}
+	if NewReferenceID("go", file, KindCall, "Int64", inner) == NewReferenceID("go", file, KindCall, "Int64", outer) {
+		t.Error("references of one start but different spans share an ID")
+	}
+}
+
+// Every ingredient of the ID tells references apart on its own: changing any
+// one of language, file, kind, name, start or end gives another ID.
+func TestNewReferenceID_EveryIngredientCounts(t *testing.T) {
+	type in struct {
+		lang string
+		file source.FileID
+		kind ReferenceKind
+		name string
+		rg   source.Range
+	}
+	base := in{"go", "a/a.go", KindCall, "F", source.Range{Start: source.Position{Line: 3, Column: 5}, End: source.Position{Line: 3, Column: 9}}}
+	id := func(x in) ReferenceID {
+		return NewReferenceID(x.lang, x.file, x.kind, x.name, source.Location{File: x.file, Range: x.rg})
+	}
+	variants := map[string]func(*in){
+		"language":    func(x *in) { x.lang = "javascript" },
+		"file":        func(x *in) { x.file = "a/b.go" },
+		"kind":        func(x *in) { x.kind = KindTypeUse },
+		"name":        func(x *in) { x.name = "G" },
+		"startLine":   func(x *in) { x.rg.Start.Line = 2 },
+		"startColumn": func(x *in) { x.rg.Start.Column = 6 },
+		"endLine":     func(x *in) { x.rg.End.Line = 4 },
+		"endColumn":   func(x *in) { x.rg.End.Column = 10 },
+	}
+	want := id(base)
+	for what, change := range variants {
+		x := base
+		change(&x)
+		if id(x) == want {
+			t.Errorf("another %s gives the same ID", what)
+		}
+	}
+}

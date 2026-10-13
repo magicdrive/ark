@@ -40,6 +40,12 @@ const (
 	// DiagSymbolIDCollision: two distinct declarations share a SymbolID.
 	// The index is then not built at all (index.IdentityCollisionError).
 	DiagSymbolIDCollision = "symbol_id_collision"
+
+	// DiagReferenceIDCollision: a reference whose ReferenceID another
+	// reference of the index already has — a provider stating one reference
+	// twice, or a hash collision. It is left out of the index (a warning):
+	// joining one reference's resolution to the other would be fabrication.
+	DiagReferenceIDCollision = "reference_id_collision"
 )
 
 // SymbolDraft is the raw extraction result from a language provider before
@@ -178,6 +184,28 @@ type ReferenceDraft struct {
 	// that declaration's parameter (SymbolDraft.ParameterScope), never one of
 	// its members. Without a stated parameter scope it is Unresolved.
 	NamedArgument bool `json:",omitempty"`
+
+	// ReceiverChain states how the receiver is built from declarations it
+	// names (typefacts.go: x := NewServer() makes x "decl:NewServer|call:0"),
+	// for a receiver without a proven ReceiverType. It is no inference: each
+	// step is what the code writes, and the resolver evaluates it against
+	// the declarations' own TypeFacts — authoritative only when every step
+	// names exactly one declaration; otherwise the reference resolves as if
+	// it carried no chain. A provider sets it only where its language's
+	// rules make the derivation the receiver's static type (a variable whose
+	// type cannot change, used where its one declaration is in scope).
+	ReceiverChain string `json:",omitempty"`
+
+	// Speculative marks a reference the provider records only in case Name
+	// denotes a declaration Ark extracts: a selector x.f whose receiver has
+	// type evidence, where f may equally be a member no provider extracts
+	// as a symbol (a Go struct field). Resolved to a candidate it is an
+	// ordinary reference; resolved to none — unresolved, or even proven
+	// outside the repository (a member of an external type may as well be a
+	// field) — it is no reference at all: the index drops it, and it is
+	// never counted as unresolved or outside. Its resolution never falls
+	// back to name matching.
+	Speculative bool `json:",omitempty"`
 }
 
 // AliasDraft states that the qualified identity Qualified names, by the
@@ -330,6 +358,12 @@ type Extraction struct {
 	// path ends the import path, under the repository's import-path prefix.
 	// A receiver naming an import denotes that package's declarations only.
 	PackageScoped bool
+
+	// TypeFacts are the declared-type facts of the file's declarations
+	// (typefacts.go), the evidence ReceiverChain and promoted-member lookup
+	// are evaluated against. A provider states only what a declaration's own
+	// text writes.
+	TypeFacts []TypeFact `json:",omitempty"`
 }
 
 // Dialect is implemented by a provider whose language is a dialect of

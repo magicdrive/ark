@@ -74,14 +74,24 @@ type Reference struct {
 	// language.ReferenceDraft.NamedArgument).
 	NamedArgument bool
 	IsCall        bool
+	// ReceiverChain derives the receiver's type from declarations (see
+	// language.ReferenceDraft.ReceiverChain); "" when there is none.
+	ReceiverChain string
+	// Speculative: recorded only in case Name denotes an extracted
+	// declaration (see language.ReferenceDraft.Speculative).
+	Speculative bool
 }
 
 // NewReferenceID returns a deterministic ID derived from
-// (lang, fileID, kind, name, start position).
+// (lang, fileID, kind, name, span). The span's end is part of it: two
+// references of one name and kind may start at one position — Go
+// f(x).Value.f() is a call of f over f(x) and a call of the method f over
+// the whole selector — and must not share an ID, which would join one's
+// resolution to the other.
 func NewReferenceID(lang string, file source.FileID, kind ReferenceKind, name string, loc source.Location) ReferenceID {
-	raw := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d:%d",
+	raw := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d:%d-%d:%d",
 		lang, string(file), string(kind), name,
-		loc.Range.Start.Line, loc.Range.Start.Column)
+		loc.Range.Start.Line, loc.Range.Start.Column, loc.Range.End.Line, loc.Range.End.Column)
 	sum := sha256.Sum256([]byte(raw))
 	return ReferenceID(hex.EncodeToString(sum[:8]))
 }

@@ -39,6 +39,9 @@ type FileIndex struct {
 	// Language. Name-based stages see only declarations of files of the
 	// referencing file's name space.
 	NameSpace string
+	// TypeFacts are the declared-type facts of the file's declarations (see
+	// language.Extraction.TypeFacts and typefacts.go).
+	TypeFacts []language.TypeFact
 }
 
 // nameSpace returns fi's name space.
@@ -99,6 +102,10 @@ type Resolver struct {
 
 	// spaceOf maps each file to its name space (FileIndex.nameSpace).
 	spaceOf map[source.FileID]string
+
+	// facts indexes the declared-type facts by declaration (typefacts.go),
+	// built on first use.
+	facts factIndex
 }
 
 // New builds a Resolver from a set of file indexes.

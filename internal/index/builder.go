@@ -22,6 +22,9 @@ type builder struct {
 
 	// referencesByFile: all references per file
 	referencesByFile map[source.FileID][]reference.Reference
+	// referenceIDs: the ReferenceIDs of the references ingested so far
+	// (uniqueReferences).
+	referenceIDs map[reference.ReferenceID]bool
 	// referencesByContainer: populated in freeze() after symbol IDs are known
 	referencesByContainer map[symbol.SymbolID][]reference.Reference
 	// referencesByTarget: populated in resolve()
@@ -92,6 +95,37 @@ func newBuilder() *builder {
 	}
 }
 
+// uniqueReferences keeps the references whose ReferenceID no reference of
+// the index has yet. Every map from a reference's ID to the reference (the
+// resolver's results, completeness, relations) relies on it: a reference
+// sharing an ID — stated twice by a provider, or a hash collision — is left
+// out with a diagnostic (language.DiagReferenceIDCollision), never joined to
+// the other's resolution. IDs differ for distinct spans by construction
+// (reference.NewReferenceID), so no provider of the repository triggers it.
+// The first stated is kept, Speculative or not (dropSpeculative runs later):
+// a Speculative reference never shares a span and kind with another (Go
+// states it as a value_reference of a selector it calls nothing on).
+func (b *builder) uniqueReferences(refs []reference.Reference) []reference.Reference {
+	if b.referenceIDs == nil {
+		b.referenceIDs = make(map[reference.ReferenceID]bool)
+	}
+	kept := refs[:0:0]
+	for _, r := range refs {
+		if b.referenceIDs[r.ID] {
+			b.addDiagnostic(language.Diagnostic{
+				Severity: language.SeverityWarning,
+				Message:  fmt.Sprintf("reference %s %q shares its ID %s with another reference: left out of the index", r.Kind, r.Name, r.ID),
+				Location: r.Location,
+				Code:     language.DiagReferenceIDCollision,
+			})
+			continue
+		}
+		b.referenceIDs[r.ID] = true
+		kept = append(kept, r)
+	}
+	return kept
+}
+
 func (b *builder) addDiagnostic(d language.Diagnostic) {
 	b.diagnostics = append(b.diagnostics, d)
 }
@@ -107,6 +141,7 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 	}
 
 	fi := newFileIndex(lang, b.nameSpaces[lang], fileID, ex, b.ids)
+	fi.References = b.uniqueReferences(fi.References)
 	for _, sym := range fi.Symbols {
 		b.observeID(sym)
 		b.symbolsByFile[fileID] = append(b.symbolsByFile[fileID], sym)
@@ -186,6 +221,8 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			IdentityInRepository:  rd.IdentityInRepository,
 			NamedArgument:         rd.NamedArgument,
 			IsCall:                rd.IsCall,
+			ReceiverChain:         rd.ReceiverChain,
+			Speculative:           rd.Speculative,
 		})
 	}
 	// Also index imports as KindImport references so package-dependency queries
@@ -215,6 +252,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 		PackageScoped: ex.PackageScoped,
 		NameSpace:     space,
 		Aliases:       ex.Aliases,
+		TypeFacts:     ex.TypeFacts,
 	}
 }
 
@@ -371,12 +409,19 @@ func (b *builder) resolve() {
 		}
 	}
 
+	dropped := b.dropSpeculative(resolutions, func(id reference.ReferenceID) *reference.Reference {
+		if m, ok := refMetaMap[id]; ok {
+			return m.ref
+		}
+		return nil
+	})
+
 	b.completeness = NewCompleteness(b.symbolsByName)
 	b.nonEdge = newNonEdgeRelations()
 	b.unidentified = newUnidentifiedSources()
 	for _, res := range resolutions {
 		meta, ok := refMetaMap[res.ReferenceID]
-		if !ok {
+		if !ok || dropped[res.ReferenceID] {
 			continue
 		}
 		// The container is identified by (file, qualified) — never by a
@@ -440,7 +485,7 @@ func (b *builder) resolve() {
 	// Populate referencesByContainer using qualified name → SymbolID lookup.
 	for _, fi := range b.resolverFiles {
 		for _, ref := range fi.References {
-			if ref.Container == "" {
+			if ref.Container == "" || dropped[ref.ID] {
 				continue
 			}
 			cid, ok := b.containerSymbol(fi.FileID, ref.Container, ref.Location)
@@ -450,6 +495,39 @@ func (b *builder) resolve() {
 			b.referencesByContainer[cid] = append(b.referencesByContainer[cid], ref)
 		}
 	}
+}
+
+// dropSpeculative returns the Speculative references resolved to no
+// candidate (language.ReferenceDraft.Speculative): a selector that names a
+// member no provider extracts as a symbol, which is no reference at all. They
+// are removed from the per-file lists and the statistics here, and from
+// completeness, relations and the per-container lists by the caller —
+// before anything counts them.
+func (b *builder) dropSpeculative(resolutions []resolver.Resolution, refOf func(reference.ReferenceID) *reference.Reference) map[reference.ReferenceID]bool {
+	dropped := map[reference.ReferenceID]bool{}
+	for _, res := range resolutions {
+		if ref := refOf(res.ReferenceID); ref != nil && ref.Speculative && len(res.Candidates) == 0 {
+			dropped[res.ReferenceID] = true
+		}
+	}
+	if len(dropped) == 0 {
+		return dropped
+	}
+	for i := range b.resolverFiles {
+		fid := b.resolverFiles[i].FileID
+		refs := b.referencesByFile[fid]
+		var kept []reference.Reference
+		for _, ref := range refs {
+			if !dropped[ref.ID] {
+				kept = append(kept, ref)
+			}
+		}
+		if len(kept) != len(refs) {
+			b.stats.References -= len(refs) - len(kept)
+			b.referencesByFile[fid] = kept
+		}
+	}
+	return dropped
 }
 
 // containerSymbol identifies the enclosing symbol of a reference at loc by

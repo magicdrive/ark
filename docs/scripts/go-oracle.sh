@@ -17,11 +17,13 @@
 # judge is reported, never counted as Ark's error nor as its success: an
 # identifier without an object (a dependency absent from the cache, a type
 # error), a file the host's build constraints exclude, a repository
-# declaration Ark has no symbol for (a field, an interface method, a local).
+# declaration Ark has no symbol for (a field, a local).
 #
-# Per corpus: <out-dir>/<name>.txt (the report), .json (the counts), .sites
-# (one line per representable site: key, role, target, ok|missed — two runs
-# compare site by site).
+# Per corpus: <out-dir>/<name>.txt (the report), .json (the counts: by role,
+# by method tag — a call, a method value or expression, promoted, generic,
+# on an interface, ... — and by where a method's receiver's type comes
+# from), .sites (one line per representable site: key, role, target,
+# ok|missed, method tags, receiver origin — two runs compare site by site).
 set -eu
 
 out=$1

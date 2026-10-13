@@ -125,6 +125,9 @@ type oracle struct {
 	refSites map[refKey]refSite
 	// requires: the repository's go.mod requirements (importFromModCache).
 	requires map[string]string
+	// defOrigin: how the variables of the file being collected are defined
+	// (definitionOrigins, oracle_refs_test.go).
+	defOrigin map[types.Object]string
 }
 
 // discover parses every directory's Go files (build constraints of the host
@@ -464,6 +467,14 @@ func (o *oracle) classify(obj types.Object, sel *ast.SelectorExpr, info *types.I
 	case *types.Func:
 		if sig, ok := v.Type().(*types.Signature); ok && sig.Recv() != nil {
 			if types.IsInterface(sig.Recv().Type()) {
+				// The static target is the interface's method declaration
+				// (dynamic dispatch picks the concrete one at run time): a
+				// declaration when Ark has a symbol for it.
+				if o.inRepo(v.Pos()) {
+					if id := o.methodSymbolAt(v); id != "" {
+						return oracleSite{kind: okDecl, target: id, what: what}
+					}
+				}
 				return oracleSite{kind: okInterface, what: what}
 			}
 		}

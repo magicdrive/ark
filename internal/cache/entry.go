@@ -33,4 +33,8 @@ type CachedExtraction struct {
 	// Aliases (language.Extraction.Aliases) are optional the same way: only
 	// the provider that emits them (rust) reads entries with them.
 	Aliases []language.AliasDraft `json:"aliases,omitempty"`
+
+	// TypeFacts (language.Extraction.TypeFacts) are optional the same way:
+	// the provider that emits them (go) bumped its CacheVersion (go-9).
+	TypeFacts []language.TypeFact `json:"typeFacts,omitempty"`
 }

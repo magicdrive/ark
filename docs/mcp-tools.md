@@ -442,14 +442,26 @@ imports, constructions, reads, writes — whether or not it resolves.
 Example:
 
 ```json
-{"name":"Place","results":[
-  {"name":"Place","kind":"call","language":"go","file":"api/handler.go","startLine":14,"startColumn":9,
+{"path":".","name":"Place","results":[
+  {"id":"9c1e40a7f3b26d58","name":"Place","kind":"call","language":"go","file":"api/handler.go","startLine":14,"startColumn":9,
    "container":"Handler.Checkout","receiverExpr":"orders","isCall":true}, …],
  "count":3}
 ```
 
 This is a name match, not resolution: references to a different declaration
 with the same name are included. Use `get_callers` for resolved callers.
+
+A selector that may be a field read rather than a method (Go `x.f` not
+called) is not among these results: it is a reference only once the index
+resolves it to a declaration, and `find_references` lists what extraction
+states, without resolving.
+
+Each result has an `id` (16 hex digits) telling the listed references
+apart: derived from the reference's language, file (its path relative to
+the server root, in the OS's path form), kind, name and span, it is the same
+for the same file, OS path form and Ark version, and may change when the
+file or Ark's extraction does. It is not a `symbolId` — no tool takes it as
+input — and not meant to be stored across Ark versions.
 
 ### `analyze_change_impact`
 
@@ -652,7 +664,10 @@ the languages Ark analyzes (`supportedLanguageStats`: the files of
 ### `get_diagnostics`
 
 Lists what Ark could not analyze while indexing: unreadable files, provider
-failures and `parse_error` regions the parser rejected.
+failures and `parse_error` regions the parser rejected. A
+`reference_id_collision` warning names a reference left out of the index
+because another reference already has its ID (a provider stating one
+reference twice, or a hash collision).
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|

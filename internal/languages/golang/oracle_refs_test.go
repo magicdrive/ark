@@ -17,6 +17,13 @@ package golang_test
 // a.b.c ends at c), so the end position and the name identify the
 // identifier, where a start position would make a.b and a.b.c collide.
 //
+// Method sites are also scored by what the type checker says about the
+// selection (methodTags, types.Info.Selections): its form (a call, a method
+// value, a method expression), whether the method is promoted through
+// embedding, reached through a pointer, declared with a pointer receiver,
+// on a generic type, on an interface or a type parameter, or in another
+// package of the repository — the method-specific report (by_method).
+//
 // What it cannot judge (reported, never counted as Ark's error nor as its
 // success): an identifier the type checker has no object for (an import
 // outside the standard library, a type error), a package with
@@ -83,6 +90,12 @@ type refSite struct {
 	target symbol.SymbolID
 	what   string
 	inRepo bool // the object is declared in the repository (any kind)
+	// method: the site's method tags (methodTags); nil when the identifier
+	// denotes no method.
+	method []string
+	// recv: for a method site, where its receiver's type comes from
+	// (receiverOrigin) — a diagnostic of what resolving it takes.
+	recv string
 }
 
 // refKey is "file:endLine:endCol:name".
@@ -106,7 +119,7 @@ func goRefOracle(root string, symbolsByFile map[string][]symbol.Symbol) (map[ref
 		u := o.units[p]
 		files := append(append([]*ast.File(nil), u.files...), u.tests...)
 		before := o.stats.RedeclaredPackages
-		_, info := o.check(u, files)
+		pkg, info := o.check(u, files)
 		o.stats.Packages++
 		if o.stats.RedeclaredPackages > before {
 			// Several programs in one directory (testdata): no ground truth
@@ -115,20 +128,21 @@ func goRefOracle(root string, symbolsByFile map[string][]symbol.Symbol) (map[ref
 			// without an object (unverifiable).
 			o.stats.SingleFilePrograms += len(files)
 			for _, f := range files {
-				_, alone := o.check(u, []*ast.File{f})
-				o.collectRefs(f, alone)
+				alonePkg, alone := o.check(u, []*ast.File{f})
+				o.collectRefs(f, alonePkg, alone)
 			}
 			continue
 		}
 		for _, f := range files {
-			o.collectRefs(f, info)
+			o.collectRefs(f, pkg, info)
 		}
 	}
 	return o.refSites, o.stats
 }
 
 // collectRefs records a site for every identifier of f in info.Uses.
-func (o *oracle) collectRefs(f *ast.File, info *types.Info) {
+func (o *oracle) collectRefs(f *ast.File, pkg *types.Package, info *types.Info) {
+	o.defOrigin = definitionOrigins(f, info)
 	var stack []ast.Node
 	ast.Inspect(f, func(n ast.Node) bool {
 		if n == nil {
@@ -139,14 +153,14 @@ func (o *oracle) collectRefs(f *ast.File, info *types.Info) {
 			return false // import names are package names, not uses of declarations
 		}
 		if id, ok := n.(*ast.Ident); ok {
-			o.refSite(id, stack, info)
+			o.refSite(id, stack, pkg, info)
 		}
 		stack = append(stack, n)
 		return true
 	})
 }
 
-func (o *oracle) refSite(id *ast.Ident, stack []ast.Node, info *types.Info) {
+func (o *oracle) refSite(id *ast.Ident, stack []ast.Node, pkg *types.Package, info *types.Info) {
 	if id.Name == "_" {
 		return
 	}
@@ -184,6 +198,10 @@ func (o *oracle) refSite(id *ast.Ident, stack []ast.Node, info *types.Info) {
 	if obj != nil {
 		site.kind, site.target, site.what = o.targetOf(obj)
 		site.inRepo = obj.Pkg() != nil && o.inRepo(obj.Pos())
+		site.method = methodTags(id, obj, stack, site.role, pkg, info)
+		if site.method != nil {
+			site.recv = o.receiverOrigin(id, stack, info)
+		}
 	}
 	o.refSites[k] = site
 }
@@ -296,6 +314,244 @@ func (o *oracle) roleOf(id *ast.Ident, obj types.Object, stack []ast.Node, info 
 	return roleValue
 }
 
+// methodTags classifies a use of a method by the type checker's selection:
+//
+//	method          every use of a method (a function with a receiver)
+//	m:call          the callee of a call, x.M(...)
+//	m:value         a method value, x.M not called
+//	m:expr          a method expression, T.M or (*T).M
+//	m:promoted      selected through embedding (Selection.Index longer than 1)
+//	m:indirect      the selection goes through a pointer (Selection.Indirect)
+//	m:ptr_recv      the method is declared with a pointer receiver
+//	m:generic       the method's receiver type is generic
+//	m:interface     an interface method (dynamic dispatch)
+//	m:type_param    selected on a type parameter (its constraint's method)
+//	m:cross_package declared in another package than the use
+//
+// A method the checker reports without a selection (an identifier that is
+// not the selector of x.M) has only "method".
+func methodTags(id *ast.Ident, obj types.Object, stack []ast.Node, role refRole, pkg *types.Package, info *types.Info) []string {
+	fn, ok := obj.(*types.Func)
+	if !ok {
+		return nil
+	}
+	sig, ok := fn.Type().(*types.Signature)
+	if !ok || sig.Recv() == nil {
+		return nil
+	}
+	tags := []string{"method"}
+	switch role {
+	case roleCall:
+		tags = append(tags, "m:call")
+	case roleMethodValue:
+		tags = append(tags, "m:value")
+	case roleMethodExpr:
+		tags = append(tags, "m:expr")
+	}
+	recv := sig.Recv().Type()
+	if p, isPtr := recv.(*types.Pointer); isPtr {
+		tags = append(tags, "m:ptr_recv")
+		recv = p.Elem()
+	}
+	if types.IsInterface(recv) {
+		tags = append(tags, "m:interface")
+	}
+	if n, isNamed := types.Unalias(recv).(*types.Named); isNamed && n.Origin().TypeParams().Len() > 0 {
+		tags = append(tags, "m:generic")
+	}
+	if pkg != nil && fn.Pkg() != nil && fn.Pkg().Path() != pkg.Path() {
+		tags = append(tags, "m:cross_package")
+	}
+	if n := len(stack); n > 0 {
+		if sel, isSel := stack[n-1].(*ast.SelectorExpr); isSel && sel.Sel == id {
+			if s := info.Selections[sel]; s != nil {
+				if len(s.Index()) > 1 {
+					tags = append(tags, "m:promoted")
+				}
+				if s.Indirect() {
+					tags = append(tags, "m:indirect")
+				}
+				if _, isTP := types.Unalias(s.Recv()).(*types.TypeParam); isTP {
+					tags = append(tags, "m:type_param")
+				}
+			}
+		}
+	}
+	return tags
+}
+
+// definitionOrigins maps each variable f defines to how it is defined:
+// param, receiver, result, var (a var spec with a written type), var_value
+// (a var spec without), define_<rhs> (x := rhs, by the form of rhs),
+// range, type_switch, or other.
+func definitionOrigins(f *ast.File, info *types.Info) map[types.Object]string {
+	out := map[types.Object]string{}
+	rhsForm := func(e ast.Expr) string {
+		switch x := ast.Unparen(e).(type) {
+		case *ast.CallExpr:
+			if tv, ok := info.Types[x.Fun]; ok && tv.IsType() {
+				return "conversion"
+			}
+			if id, ok := ast.Unparen(x.Fun).(*ast.Ident); ok && id.Name == "new" {
+				return "new"
+			}
+			return "call"
+		case *ast.CompositeLit:
+			return "composite"
+		case *ast.UnaryExpr:
+			if _, ok := ast.Unparen(x.X).(*ast.CompositeLit); ok && x.Op == token.AND {
+				return "addr_composite"
+			}
+			return "unary"
+		case *ast.TypeAssertExpr:
+			return "assert"
+		case *ast.Ident:
+			return "ident"
+		case *ast.SelectorExpr:
+			return "selector"
+		case *ast.IndexExpr, *ast.IndexListExpr:
+			return "index"
+		case *ast.FuncLit:
+			return "func_lit"
+		}
+		return "other"
+	}
+	set := func(id *ast.Ident, origin string) {
+		if obj := info.Defs[id]; obj != nil {
+			out[obj] = origin
+		}
+	}
+	ast.Inspect(f, func(n ast.Node) bool {
+		switch x := n.(type) {
+		case *ast.FuncDecl:
+			if x.Recv != nil {
+				for _, fl := range x.Recv.List {
+					for _, id := range fl.Names {
+						set(id, "receiver")
+					}
+				}
+			}
+		case *ast.FuncType:
+			if x.Params != nil {
+				for _, fl := range x.Params.List {
+					for _, id := range fl.Names {
+						set(id, "param")
+					}
+				}
+			}
+			if x.Results != nil {
+				for _, fl := range x.Results.List {
+					for _, id := range fl.Names {
+						set(id, "result")
+					}
+				}
+			}
+		case *ast.ValueSpec:
+			for _, id := range x.Names {
+				if x.Type != nil {
+					set(id, "var")
+				} else {
+					set(id, "var_value")
+				}
+			}
+		case *ast.AssignStmt:
+			if x.Tok != token.DEFINE {
+				break
+			}
+			for i, l := range x.Lhs {
+				id, ok := l.(*ast.Ident)
+				if !ok {
+					continue
+				}
+				switch {
+				case len(x.Rhs) == len(x.Lhs):
+					set(id, "define_"+rhsForm(x.Rhs[i]))
+				case len(x.Rhs) == 1:
+					set(id, "define_"+rhsForm(x.Rhs[0])+"_multi")
+				}
+			}
+		case *ast.RangeStmt:
+			for _, e := range []ast.Expr{x.Key, x.Value} {
+				if id, ok := e.(*ast.Ident); ok && x.Tok == token.DEFINE {
+					set(id, "range")
+				}
+			}
+		case *ast.TypeSwitchStmt:
+			if a, ok := x.Assign.(*ast.AssignStmt); ok {
+				for _, l := range a.Lhs {
+					if id, ok := l.(*ast.Ident); ok {
+						set(id, "type_switch")
+					}
+				}
+			}
+		}
+		return true
+	})
+	// A type switch's binding is declared per clause (implicit objects).
+	for _, obj := range info.Implicits {
+		if v, ok := obj.(*types.Var); ok {
+			out[v] = "type_switch"
+		}
+	}
+	return out
+}
+
+// receiverOrigin classifies the receiver x of a method site x.M: by the
+// variable's definition (definitionOrigins) when x is a variable of the
+// file — or package_var, a variable of the package — or by x's form: field
+// (a selector), call (a call's result), index, type (a method expression's
+// type), other.
+func (o *oracle) receiverOrigin(id *ast.Ident, stack []ast.Node, info *types.Info) string {
+	n := len(stack)
+	if n == 0 {
+		return "none"
+	}
+	sel, ok := stack[n-1].(*ast.SelectorExpr)
+	if !ok || sel.Sel != id {
+		return "none"
+	}
+	switch x := ast.Unparen(sel.X).(type) {
+	case *ast.Ident:
+		switch obj := info.Uses[x].(type) {
+		case *types.Var:
+			if obj.Parent() != nil && obj.Pkg() != nil && obj.Parent() == obj.Pkg().Scope() {
+				return "package_var"
+			}
+			if origin, ok := o.defOrigin[obj]; ok {
+				return origin
+			}
+			return "var_other"
+		case *types.TypeName:
+			return "type"
+		case nil:
+			return "unknown"
+		}
+		return "ident_other"
+	case *ast.SelectorExpr:
+		if s := info.Selections[x]; s != nil && s.Kind() == types.FieldVal {
+			return "field"
+		}
+		return "selector_other"
+	case *ast.CallExpr:
+		if tv, ok := info.Types[x.Fun]; ok && tv.IsType() {
+			return "conversion"
+		}
+		return "call"
+	case *ast.IndexExpr, *ast.IndexListExpr:
+		if tv, ok := info.Types[x]; ok && tv.IsType() {
+			return "type"
+		}
+		return "index"
+	case *ast.StarExpr:
+		return "type"
+	case *ast.CompositeLit:
+		return "composite"
+	case *ast.TypeAssertExpr:
+		return "assert"
+	}
+	return "other"
+}
+
 func contextBackground() context.Context { return context.Background() }
 
 func isFunc(obj types.Object) bool {
@@ -337,6 +593,15 @@ func (o *oracle) targetOf(obj types.Object) (targetKind, symbol.SymbolID, string
 	case *types.Func:
 		v = v.Origin()
 		if sig, ok := v.Type().(*types.Signature); ok && sig.Recv() != nil && types.IsInterface(sig.Recv().Type()) {
+			// An interface method: the selection's static target is the
+			// interface's declaration (dynamic dispatch picks the concrete
+			// method at run time). It is a declaration to score when Ark
+			// declares a symbol for it, else unrepresentable.
+			if o.inRepo(v.Pos()) {
+				if sid := o.methodSymbolAt(v); sid != "" {
+					return tkDecl, sid, what
+				}
+			}
 			return tkInterface, "", what
 		}
 		obj = v
@@ -348,6 +613,27 @@ func (o *oracle) targetOf(obj types.Object) (targetKind, symbol.SymbolID, string
 		return tkDecl, sid, what
 	}
 	return tkUnmapped, "", what
+}
+
+// methodSymbolAt maps an interface method to the method symbol declared at
+// it: same file, same name, starting at the method's name. Not symbolAt's
+// narrowest enclosing symbol — an interface on one line with a method of its
+// name (type Error interface{ Error() string }) is as narrow, and a namesake
+// method enclosing an interface literal (func (T) M(x interface{ M() }))
+// encloses it.
+func (o *oracle) methodSymbolAt(obj types.Object) symbol.SymbolID {
+	pos := o.fset.Position(obj.Pos())
+	rel, err := filepath.Rel(o.root, pos.Filename)
+	if err != nil {
+		return ""
+	}
+	for _, s := range o.syms[filepath.ToSlash(rel)] {
+		st := s.Location.Range.Start
+		if s.Kind == symbol.KindMethod && s.Name == obj.Name() && int(st.Line) == pos.Line && int(st.Column) == pos.Column {
+			return s.ID
+		}
+	}
+	return ""
 }
 
 // --- Ark's side -------------------------------------------------------------------
@@ -391,7 +677,9 @@ func arkGoRefs(root string) (map[refKey][]arkRef, map[string][]symbol.Symbol, in
 			continue
 		}
 		r := a.fi.References[a.i]
-		if r.Kind == "import" {
+		if r.Kind == "import" || (r.Speculative && len(res.Candidates) == 0) {
+			// A Speculative reference resolved to no candidate is no
+			// reference: the index drops it (index/builder.go).
 			continue
 		}
 		s := arkRef{name: r.Name, recv: r.ReceiverExpr, kind: string(r.Kind), conf: res.Confidence, outside: res.OutsideRepository}
@@ -474,21 +762,28 @@ type refCount struct {
 }
 
 type refReport struct {
-	Corpus       string                `json:"corpus"`
-	Stats        oracleStats           `json:"oracle"`
-	ArkRefs      int                   `json:"ark_refs"`
-	ArkUnjoined  map[string]int        `json:"ark_unjoined_by_kind"` // Ark references at no oracle site
-	Collisions   int                   `json:"ark_key_collisions"`
-	OracleSites  int                   `json:"oracle_sites"`
-	ByRole       map[refRole]*refCount `json:"by_role"`
-	Total        refCount              `json:"total"`
-	ByTargetKind map[string]int        `json:"sites_by_target_kind"`
-	FPSamples    []string              `json:"fp_samples"`
-	OutsideFP    []string              `json:"false_outside_samples"`
-	FNSamples    map[string][]string   `json:"fn_samples"`
-	// Sites: one line per representable site — "key\trole\ttarget\tanswer",
-	// answer "ok" when recovered — for comparing two runs site by site
-	// (ARK_GO_ORACLE_SITES).
+	Corpus      string                `json:"corpus"`
+	Stats       oracleStats           `json:"oracle"`
+	ArkRefs     int                   `json:"ark_refs"`
+	ArkUnjoined map[string]int        `json:"ark_unjoined_by_kind"` // Ark references at no oracle site
+	Collisions  int                   `json:"ark_key_collisions"`
+	OracleSites int                   `json:"oracle_sites"`
+	ByRole      map[refRole]*refCount `json:"by_role"`
+	// ByMethod: the method sites by tag (methodTags), each counted under
+	// every tag it has.
+	ByMethod map[string]*refCount `json:"by_method"`
+	// ByReceiver: the method sites by where their receiver's type comes
+	// from (receiverOrigin), a diagnostic.
+	ByReceiver   map[string]*refCount `json:"by_receiver_origin"`
+	Total        refCount             `json:"total"`
+	ByTargetKind map[string]int       `json:"sites_by_target_kind"`
+	FPSamples    []string             `json:"fp_samples"`
+	OutsideFP    []string             `json:"false_outside_samples"`
+	FNSamples    map[string][]string  `json:"fn_samples"`
+	// Sites: one line per representable site —
+	// "key\trole\ttarget\tanswer\tmethod tags\treceiver origin", answer
+	// "ok" when recovered —
+	// for comparing two runs site by site (ARK_GO_ORACLE_SITES).
 	Sites []string `json:"-"`
 	// FNCounts: missed representable sites by role and Ark's answer.
 	FNCounts map[string]int `json:"fn_counts"`
@@ -504,7 +799,7 @@ func compareRefs(root, corpus string) (*refReport, error) {
 	}
 	sites, stats := goRefOracle(root, syms)
 	rep := &refReport{Corpus: corpus, Stats: stats, ArkRefs: len(ark), Collisions: collisions, OracleSites: len(sites),
-		ArkUnjoined: map[string]int{}, ByRole: map[refRole]*refCount{}, ByTargetKind: map[string]int{}, FNSamples: map[string][]string{}, FNCounts: map[string]int{}, Unverifiable: map[string]int{}, UnverifiableSamples: map[string][]string{}}
+		ArkUnjoined: map[string]int{}, ByRole: map[refRole]*refCount{}, ByMethod: map[string]*refCount{}, ByReceiver: map[string]*refCount{}, ByTargetKind: map[string]int{}, FNSamples: map[string][]string{}, FNCounts: map[string]int{}, Unverifiable: map[string]int{}, UnverifiableSamples: map[string][]string{}}
 	cell := func(r refRole) *refCount {
 		c := rep.ByRole[r]
 		if c == nil {
@@ -521,8 +816,30 @@ func compareRefs(root, corpus string) (*refReport, error) {
 	for _, ks := range keys {
 		k := refKey(ks)
 		o := sites[k]
-		c := cell(o.role)
-		c.Sites++
+		cells := []*refCount{cell(o.role)}
+		for _, tag := range o.method {
+			mc := rep.ByMethod[tag]
+			if mc == nil {
+				mc = &refCount{}
+				rep.ByMethod[tag] = mc
+			}
+			cells = append(cells, mc)
+		}
+		if o.recv != "" {
+			rc := rep.ByReceiver[o.recv]
+			if rc == nil {
+				rc = &refCount{}
+				rep.ByReceiver[o.recv] = rc
+			}
+			cells = append(cells, rc)
+		}
+		// bump applies one count to the site's role and method tags.
+		bump := func(f func(c *refCount)) {
+			for _, c := range cells {
+				f(c)
+			}
+		}
+		bump(func(c *refCount) { c.Sites++ })
 		rep.ByTargetKind[string(o.kind)]++
 		answers := ark[k]
 		ok := len(answers) > 0
@@ -531,7 +848,7 @@ func compareRefs(root, corpus string) (*refReport, error) {
 			if a.target != "" {
 				switch {
 				case o.kind == tkUnverified || o.kind == tkUnmapped:
-					c.Unverifiable++
+					bump(func(c *refCount) { c.Unverifiable++ })
 					why := string(o.kind) + " " + string(o.role)
 					rep.Unverifiable[why]++
 					if len(rep.UnverifiableSamples[why]) < 4 {
@@ -539,15 +856,15 @@ func compareRefs(root, corpus string) (*refReport, error) {
 					}
 				case o.kind == tkDecl && o.target == a.target:
 					if a.conf == resolver.ConfidenceExact {
-						c.ExactTP++
+						bump(func(c *refCount) { c.ExactTP++ })
 					} else {
-						c.StrongTP++
+						bump(func(c *refCount) { c.StrongTP++ })
 					}
 				default:
 					if a.conf == resolver.ConfidenceExact {
-						c.ExactFP++
+						bump(func(c *refCount) { c.ExactFP++ })
 					} else {
-						c.StrongFP++
+						bump(func(c *refCount) { c.StrongFP++ })
 					}
 					if len(rep.FPSamples) < 60 {
 						rep.FPSamples = append(rep.FPSamples, fmt.Sprintf("%s [%s %s %s %s] -> oracle %s %s %s", k, a.kind, recvPrefix(a.recv)+a.name, a.rule, a.conf, o.role, o.kind, o.what))
@@ -557,19 +874,19 @@ func compareRefs(root, corpus string) (*refReport, error) {
 			// OutsideRepository is wrong for any object the repository
 			// declares — a declaration, a field, a local, an interface method.
 			if a.outside && o.inRepo {
-				c.FalseOutside++
+				bump(func(c *refCount) { c.FalseOutside++ })
 				if len(rep.OutsideFP) < 40 {
 					rep.OutsideFP = append(rep.OutsideFP, fmt.Sprintf("%s [%s %s %s] -> %s %s", k, a.kind, recvPrefix(a.recv)+a.name, a.rule, o.kind, o.what))
 				}
 			}
 			if a.target == "" && len(a.candidates) > 0 && o.kind != tkDecl && o.kind != tkUnverified && o.kind != tkUnmapped {
-				c.CandSpurious++
+				bump(func(c *refCount) { c.CandSpurious++ })
 			}
 		}
 		if o.kind != tkDecl {
 			continue
 		}
-		c.Representable++
+		bump(func(c *refCount) { c.Representable++ })
 		// Recall: the site is recovered when one of its references resolves
 		// to the declaration; otherwise the best answer is reported.
 		var a arkRef
@@ -591,14 +908,14 @@ func compareRefs(root, corpus string) (*refReport, error) {
 		if recovered {
 			answer = "ok"
 		}
-		rep.Sites = append(rep.Sites, fmt.Sprintf("%s\t%s\t%s\t%s", k, o.role, o.what, answer))
+		rep.Sites = append(rep.Sites, fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s", k, o.role, o.what, answer, strings.Join(o.method, ","), o.recv))
 		var cat string
 		switch {
 		case !ok:
-			c.NotExtracted++
+			bump(func(c *refCount) { c.NotExtracted++ })
 			cat = "not extracted"
 		case recovered:
-			c.Recovered++
+			bump(func(c *refCount) { c.Recovered++ })
 			continue
 		case a.target != "":
 			cat = "wrong target"
@@ -608,14 +925,14 @@ func compareRefs(root, corpus string) (*refReport, error) {
 				hit = hit || id == o.target
 			}
 			if hit {
-				c.CandHit++
+				bump(func(c *refCount) { c.CandHit++ })
 			} else {
-				c.CandMiss++
+				bump(func(c *refCount) { c.CandMiss++ })
 			}
-			c.CandSize += len(a.candidates)
+			bump(func(c *refCount) { c.CandSize += len(a.candidates) })
 			cat = fmt.Sprintf("candidate (%s)", a.rule)
 		default:
-			c.Unresolved++
+			bump(func(c *refCount) { c.Unresolved++ })
 			cat = fmt.Sprintf("unresolved (%s)", a.rule)
 		}
 		fk := string(o.role) + " | " + cat
@@ -683,6 +1000,22 @@ func (r *refReport) String() string {
 		row(k, *r.ByRole[refRole(k)])
 	}
 	row("TOTAL", r.Total)
+	tags := make([]string, 0, len(r.ByMethod))
+	for k := range r.ByMethod {
+		tags = append(tags, k)
+	}
+	sort.Strings(tags)
+	for _, k := range tags {
+		row(k, *r.ByMethod[k])
+	}
+	origins := make([]string, 0, len(r.ByReceiver))
+	for k := range r.ByReceiver {
+		origins = append(origins, k)
+	}
+	sort.Strings(origins)
+	for _, k := range origins {
+		row("recv:"+k, *r.ByReceiver[k])
+	}
 	fmt.Fprintf(&b, "Exact precision %s, Strong precision %s (over verifiable)\n",
 		pct(r.Total.ExactTP, r.Total.ExactTP+r.Total.ExactFP), pct(r.Total.StrongTP, r.Total.StrongTP+r.Total.StrongFP))
 	for _, s := range r.FPSamples {

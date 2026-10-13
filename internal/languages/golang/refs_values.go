@@ -42,9 +42,12 @@ import (
 //     names, and a literal whose type is a name (or elided) may be a struct;
 //   - anything inside an ERROR node: the parser's recovery is no evidence;
 //   - a selector x.f whose operand is neither one of the file's imports nor
-//     a type the file declares (T.M, a method expression): f is a field or
-//     a method of a value, which needs the value's type. Only its operand
-//     is a use (of a package variable, say).
+//     a type the file declares (T.M, a method expression) is a field or a
+//     method of a value: recorded only when the operand has type evidence
+//     (a proven ReceiverType or a ReceiverChain, chains.go), and only
+//     Speculatively — a field is no symbol, so the reference is kept only
+//     when it resolves to a method (a method value, or a method expression
+//     (*T).M, pkg.T.M, T[X].M). Its operand is a use too.
 //
 // A call's or construction's own name was recorded as that (collectCall,
 // collectComposite, collectGenericConversion) and is not recorded again.
@@ -256,6 +259,43 @@ func (c *goRefCollector) selectorUse(n *ts.Node, container string, env goTypeEnv
 				Location:     nodeLocation(n, c.file),
 				ReceiverExpr: operand.Text(c.src),
 			})
+		case !write:
+			// x.f read: a method value when f is a method of x's type, a
+			// method expression when x is a type ((*T).M, pkg.T.M, T[X].M),
+			// a field read otherwise — no symbol. Recorded Speculatively, and
+			// only with evidence of what x is: the resolver keeps it only if
+			// it resolves to a declaration.
+			recv := operand.Text(c.src)
+			recvType := ""
+			if operand.Type(c.lang) == "identifier" {
+				recvType = c.receiverType(recv, n.StartByte(), env)
+				if c.ownFields[strings.TrimPrefix(recvType, "*")][field.Text(c.src)] {
+					// A field the file's own struct declares: the selection
+					// (depth 0) is that field, no method.
+					break
+				}
+			}
+			chain := ""
+			if recvType == "" {
+				chain = c.receiverChain(n)
+			}
+			if recvType != "" || chain != "" {
+				capped := ""
+				if chain != "" {
+					capped = "strong"
+				}
+				c.refs = append(c.refs, language.ReferenceDraft{
+					Name:          field.Text(c.src),
+					Kind:          string(reference.KindValueReference),
+					Container:     container,
+					Location:      nodeLocation(n, c.file),
+					ReceiverExpr:  recv,
+					ReceiverType:  recvType,
+					ReceiverChain: chain,
+					ConfidenceCap: capped,
+					Speculative:   true,
+				})
+			}
 		case write:
 			recv := operand.Text(c.src)
 			recvType := c.receiverType(recv, n.StartByte(), env)

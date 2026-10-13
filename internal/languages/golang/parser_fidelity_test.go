@@ -16,7 +16,8 @@ import (
 )
 
 // goParserFuncs lists the functions and methods go/parser finds in src, as
-// Ark names them (Receiver.Name for a method), sorted.
+// Ark names them (Receiver.Name for a method; Interface.Name for a method a
+// package-level interface declares), sorted.
 func goParserFuncs(t *testing.T, src []byte) []string {
 	t.Helper()
 	f, err := parser.ParseFile(token.NewFileSet(), "x.go", src, parser.SkipObjectResolution)
@@ -25,6 +26,25 @@ func goParserFuncs(t *testing.T, src []byte) []string {
 	}
 	var out []string
 	for _, d := range f.Decls {
+		if gd, ok := d.(*ast.GenDecl); ok && gd.Tok == token.TYPE {
+			for _, sp := range gd.Specs {
+				ts, ok := sp.(*ast.TypeSpec)
+				if !ok {
+					continue
+				}
+				if it, ok := ts.Type.(*ast.InterfaceType); ok && it.Methods != nil {
+					for _, m := range it.Methods.List {
+						if _, isFunc := m.Type.(*ast.FuncType); !isFunc {
+							continue // an embedded type or a type set
+						}
+						for _, n := range m.Names {
+							out = append(out, ts.Name.Name+"."+n.Name)
+						}
+					}
+				}
+			}
+			continue
+		}
 		fd, ok := d.(*ast.FuncDecl)
 		if !ok {
 			continue
