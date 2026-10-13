@@ -562,3 +562,94 @@ func keys(m map[string]string) []string {
 	}
 	return out
 }
+
+// A run re-run keeps every attempt's artifacts, and download-artifact keeps,
+// of several artifacts of one name, the one of the highest artifact id —
+// which need not be the latest attempt (run 38325791896: the failed first
+// attempt's race report outranked its successful rerun's, and the gate
+// failed on every later attempt). So every test report is named by attempt,
+// and the gate checks each job's latest (select-reports.py).
+func TestCIWorkflow_GateChecksEachJobsLatestAttempt(t *testing.T) {
+	_, jobs := workflowJobs(t, ".github/workflows/ci.yml")
+	uploads := 0
+	for name, body := range jobs {
+		for _, m := range regexp.MustCompile(`(?m)^\s*name: (test-report-[^\n]*)$`).FindAllStringSubmatch(body, -1) {
+			uploads++
+			if !strings.HasSuffix(m[1], "-attempt-${{ github.run_attempt }}") {
+				t.Errorf("ci.yml %s: test report artifact %s is not named by attempt", name, m[1])
+			}
+		}
+	}
+	if uploads != 3 {
+		t.Errorf("ci.yml: %d test report uploads, want 3 (unit, race, filesystem-security)", uploads)
+	}
+	gate := jobs["ci-gate"]
+	steps := []string{
+		"pattern: test-report-*\n          path: downloaded-reports",
+		// whatever the jobs did: a skipped selection would hide the coverage
+		// check's own diagnosis behind a missing directory
+		"if: always()\n        run: python3 .github/ci/select-reports.py downloaded-reports reports",
+		"python3 .github/ci/check-coverage.py reports windows macos",
+	}
+	at := 0
+	for _, s := range steps {
+		i := strings.Index(gate[at:], s)
+		if i < 0 {
+			t.Fatalf("ci-gate: no %q after the previous step", s)
+		}
+		at += i + len(s)
+	}
+}
+
+// select-reports.py keeps, of each job, the report of its highest attempt —
+// by number, not by name or order — and refuses what it cannot attribute.
+func TestSelectReports_LatestAttemptOfEachJob(t *testing.T) {
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found: the CI gate selects the reports at run time")
+	}
+	src, dest := t.TempDir(), filepath.Join(t.TempDir(), "reports")
+	write := func(dir, content string) {
+		if err := os.MkdirAll(filepath.Join(src, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(src, dir, "report.tests.tsv"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("test-report-race-4-attempt-1", "failed")
+	write("test-report-race-4-attempt-2", "passed")
+	write("test-report-unit-attempt-9", "attempt 9")
+	write("test-report-unit-attempt-10", "attempt 10")
+	write("test-report-race-1-attempt-1", "only attempt")
+	out, err := exec.Command(py, ".github/ci/select-reports.py", src, dest).CombinedOutput()
+	if err != nil {
+		t.Fatalf("select-reports.py: %v\n%s", err, out)
+	}
+	for job, want := range map[string]string{
+		"test-report-race-4": "passed", "test-report-unit": "attempt 10", "test-report-race-1": "only attempt",
+	} {
+		got, err := os.ReadFile(filepath.Join(dest, job, "report.tests.tsv"))
+		if err != nil || string(got) != want {
+			t.Errorf("%s: %q (%v), want %q", job, got, err, want)
+		}
+	}
+	if entries, _ := os.ReadDir(dest); len(entries) != 3 {
+		t.Errorf("selected %d reports, want 3", len(entries))
+	}
+	for _, bad := range []string{"test-report-unit", "test-report-unit-attempt-0", "lone-file.tests.tsv"} {
+		dir := t.TempDir()
+		p := filepath.Join(dir, bad)
+		if strings.HasSuffix(bad, ".tsv") {
+			err = os.WriteFile(p, nil, 0o644)
+		} else {
+			err = os.MkdirAll(p, 0o755)
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if out, err := exec.Command(py, ".github/ci/select-reports.py", dir, filepath.Join(t.TempDir(), "r")).CombinedOutput(); err == nil {
+			t.Errorf("%s: selected without an attempt\n%s", bad, out)
+		}
+	}
+}
