@@ -106,7 +106,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-report-unit
+          name: test-report-unit-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/reports
           if-no-files-found: error
 
@@ -164,7 +164,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-report-race-${{ matrix.shard }}
+          name: test-report-race-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/reports
           if-no-files-found: error
 
@@ -189,8 +189,25 @@ jobs:
             go.sum
             .github/ci/cache-keys/fuzz-${{ matrix.group }}
 
+      # go test sets no timeout while it fuzzes (testing stops its alarm
+      # before the fuzzing phase): a wedged target would hold the job for
+      # GitHub's 6 hours. A group takes about a minute; past 20 the step
+      # fails, its log showing the target it was in.
       - name: Run fuzz smoke
-        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}"
+        timeout-minutes: 20
+        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}" "$RUNNER_TEMP/fuzz-diagnostics"
+
+      # A failing target's go test output and the inputs its run added to
+      # testdata/fuzz/<target> (the crash input, when the failure was an
+      # input's): put one back there and go test -run '<target>/<input>'
+      # runs it again.
+      - name: Upload the fuzz failure diagnostics
+        if: failure() || cancelled()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-diagnostics-${{ matrix.group }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fuzz-diagnostics
+          if-no-files-found: warn
 
   # The descriptor-anchored file access foundation (internal/fsroot,
   # internal/accesspolicy) and the case-insensitive name tests (C1: the MCP
@@ -246,7 +263,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: test-report-filesystem-security-${{ matrix.os }}
+          name: test-report-filesystem-security-${{ matrix.os }}-attempt-${{ github.run_attempt }}
           path: ${{ runner.temp }}/reports
           if-no-files-found: error
 
@@ -306,12 +323,20 @@ jobs:
         if: always()
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # Every attempt of a re-run run keeps its artifacts: the reports are
+      # named by attempt, and each job's latest is the one checked
+      # (select-reports.py) — never a failed attempt's report a rerun job
+      # replaced, whatever artifact ids download-artifact would prefer.
       - name: Download the test reports
         if: always()
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: test-report-*
-          path: reports
+          path: downloaded-reports
+
+      - name: Each job's report of its latest attempt
+        if: always()
+        run: python3 .github/ci/select-reports.py downloaded-reports reports
 
       - name: Race shards ran exactly the unit tests; skips per system
         if: always()
