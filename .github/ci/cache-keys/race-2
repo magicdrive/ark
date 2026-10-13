@@ -1,1 +1,1 @@
-race-2: bump this line to drop the job's Go build cache
+race-2: bump this line to drop the job's Go build cache (4 shards since the CPU-time rebalance)

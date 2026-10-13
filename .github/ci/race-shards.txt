@@ -11,20 +11,28 @@
 # first (a slow package started late is what bounds a shard); the packages
 # "*" takes follow in `go list` order. A package named twice (other than the
 # two halves of a split), a split whose halves differ, a package that does
-# not exist or an empty shard fails the job. The comments are race run
-# times measured with 4 CPUs (seconds).
+# not exist or an empty shard fails the job.
+#
+# Balance by CPU time, not by wall time: on a 4-vCPU runner the race shards
+# are CPU-bound (CI run 38305819365: about 1.8 to 2 cores' worth of CPU per
+# second of a shard, the lower for the busier shards), so a shard takes about
+# max(its slowest package's wall time, its packages' CPU time / 1.8). The
+# comments are each package's race run alone with GOMAXPROCS=4, warm build
+# cache: wall time / CPU time (user + sys), in seconds. Changing the shards
+# changes what each shard compiles: bump its line in cache-keys/ too.
 [1]
-./internal/resolver                                                    # 140
-./internal/languages/golang -run ^TestFidelity_RepositoryReferencesMatchGoAST$  # 78
+./internal/tsparse                    # 110 / 292
 [2]
-./internal/mcp                                                         # 105
-./internal/languages/typescript                                        # 102
-./internal/languages/golang -skip ^TestFidelity_RepositoryReferencesMatchGoAST$ # 82
-./internal/tsparse                                                     # 32
-./internal/index                                                       # 4
+./internal/resolver                   #  67 / 236
+./internal/completion                 #  58 /  14 (mostly waiting)
+./internal/languages/rust             #  16 /  15
+./internal/languages/php              #  13 /  12
 [3]
-./internal/golden                                                      # 79
-./internal/completion                                                  # 59
-./tests/integration                                                    # 40
-./internal/languages/php                                               # 30
-*
+./internal/languages/golang           #  65 / 203
+./internal/languages/typescript       #  40 /  41
+./tests/integration                   #  40 /  37
+[4]
+./internal/mcp                        #  93 / 108
+./internal/golden                     #  52 /  56
+./internal/secrets                    #  45 /  57
+*                                     # the rest: about 72 CPU seconds
