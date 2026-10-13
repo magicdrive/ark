@@ -6,8 +6,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/index"
@@ -22,7 +25,9 @@ import (
 // they are a performance change and never a semantic one.
 
 // extractTree builds FileIndexes for every supported file under root with the
-// canonical providers and the repository-index conversion.
+// canonical providers and the repository-index conversion, in walk order. The
+// files are read in the walk and extracted by GOMAXPROCS goroutines, as the
+// index builder's workers do (providers are safe for concurrent use).
 func extractTree(t *testing.T, root string) []resolver.FileIndex {
 	t.Helper()
 	providers := languages.Registry().Providers()
@@ -32,7 +37,12 @@ func extractTree(t *testing.T, root string) []resolver.FileIndex {
 			byExt[ext] = i
 		}
 	}
-	var files []resolver.FileIndex
+	type job struct {
+		provider int
+		rel      source.FileID
+		src      []byte
+	}
+	var jobs []job
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -52,15 +62,49 @@ func extractTree(t *testing.T, root string) []resolver.FileIndex {
 			return err
 		}
 		rel, _ := filepath.Rel(root, path)
-		ex, err := providers[i].Extract(context.Background(), source.FileID(rel), src)
-		if err != nil {
-			return nil // partial failure is tolerated, as in indexing
-		}
-		files = append(files, index.NewFileIndex(providers[i], source.FileID(rel), ex))
+		jobs = append(jobs, job{i, source.FileID(rel), src})
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	extracted := make([]*resolver.FileIndex, len(jobs))
+	panics := make([]any, len(jobs)) // a provider's panic, reported by file below
+	next := make(chan int)
+	var wg sync.WaitGroup
+	for range runtime.GOMAXPROCS(0) {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for k := range next {
+				func() {
+					defer func() { panics[k] = recover() }()
+					j := jobs[k]
+					ex, err := providers[j.provider].Extract(context.Background(), j.rel, j.src)
+					if err != nil {
+						return // partial failure is tolerated, as in indexing
+					}
+					fi := index.NewFileIndex(providers[j.provider], j.rel, ex)
+					extracted[k] = &fi
+				}()
+			}
+		}()
+	}
+	for k := range jobs {
+		next <- k
+	}
+	close(next)
+	wg.Wait()
+	for k, p := range panics {
+		if p != nil {
+			t.Fatalf("extracting %s panicked: %v", jobs[k].rel, p)
+		}
+	}
+	var files []resolver.FileIndex
+	for _, fi := range extracted {
+		if fi != nil {
+			files = append(files, *fi)
+		}
 	}
 	return files
 }
@@ -86,6 +130,42 @@ func sortedKeys(syms []symbol.Symbol) []string {
 // the same-package scan walks files in order, so its order must match too.
 func assertStagesMatchScans(t *testing.T, files []resolver.FileIndex, probes ...reference.Reference) int {
 	t.Helper()
+	return assertStagesMatchScansIn(t, files, 0, 1, probes...)
+}
+
+// stagePartitions is the number of parallel subtests that share the
+// references of one tree (assertStagesMatchScansParallel): fixed, so that the
+// subtests are the same on every machine; -parallel bounds how many run at
+// once.
+const stagePartitions = 8
+
+// assertStagesMatchScansParallel is assertStagesMatchScans over the
+// references of files, split by file into stagePartitions parallel subtests
+// (part/0 ...), each with a resolver of its own over the same files (a
+// resolver is not shared between goroutines). Every reference is checked
+// exactly once, as in the sequential form; it returns how many (an eighth of
+// them when -run selects one part).
+func assertStagesMatchScansParallel(t *testing.T, files []resolver.FileIndex) int {
+	t.Helper()
+	counts := make([]int, stagePartitions)
+	t.Run("part", func(t *testing.T) {
+		for p := range stagePartitions {
+			t.Run(strconv.Itoa(p), func(t *testing.T) {
+				t.Parallel()
+				counts[p] = assertStagesMatchScansIn(t, files, p, stagePartitions)
+			})
+		}
+	})
+	total := 0
+	for _, n := range counts {
+		total += n
+	}
+	return total
+}
+
+// assertStagesMatchScansIn checks the files whose index is part modulo parts.
+func assertStagesMatchScansIn(t *testing.T, files []resolver.FileIndex, part, parts int, probes ...reference.Reference) int {
+	t.Helper()
 	r := resolver.New(files)
 	checked := 0
 	check := func(ref reference.Reference, fi resolver.FileIndex) {
@@ -102,7 +182,10 @@ func assertStagesMatchScans(t *testing.T, files []resolver.FileIndex, probes ...
 			t.Fatalf("byNameSuffix(%q):\n got  %v\n want %v", ref.Name, got, want)
 		}
 	}
-	for _, fi := range files {
+	for i, fi := range files {
+		if i%parts != part {
+			continue
+		}
 		for _, ref := range fi.References {
 			check(ref, fi)
 		}
@@ -132,10 +215,19 @@ func TestLookupIndexes_MatchScansOnFixtures(t *testing.T) {
 			if len(files) == 0 {
 				t.Fatalf("no files extracted under %s", root)
 			}
-			if n := assertStagesMatchScans(t, files); n == 0 {
+			if n := assertStagesMatchScansParallel(t, files); n == 0 {
 				t.Fatalf("no references checked under %s", root)
 			}
 		})
+	}
+}
+
+// The parallel form checks exactly the references the sequential one does.
+func TestLookupIndexes_ParallelChecksEveryReferenceOnce(t *testing.T) {
+	files := extractTree(t, "../golden/testdata")
+	seq := assertStagesMatchScans(t, files)
+	if par := assertStagesMatchScansParallel(t, files); seq == 0 || par != seq {
+		t.Fatalf("parallel checked %d references, sequential %d", par, seq)
 	}
 }
 

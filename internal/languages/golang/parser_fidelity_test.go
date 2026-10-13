@@ -100,7 +100,7 @@ func TestFidelity_CompletenessTestFileHasAllEightFunctions(t *testing.T) {
 // reports no diagnostic.
 func TestFidelity_RepositoryFunctionsMatchGoParser(t *testing.T) {
 	root := filepath.Join("..", "..", "..")
-	n := 0
+	var paths []string
 	err := filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -111,26 +111,38 @@ func TestFidelity_RepositoryFunctionsMatchGoParser(t *testing.T) {
 			}
 			return nil
 		}
-		if !strings.HasSuffix(p, ".go") {
-			return nil
-		}
-		src, err := os.ReadFile(p)
-		if err != nil {
-			return err
-		}
-		want := goParserFuncs(t, src)
-		if want == nil {
-			return nil // not valid Go
-		}
-		n++
-		got, diags := arkFuncs(t, p, src)
-		if !slices.Equal(got, want) || diags != 0 {
-			t.Errorf("%s: Ark %v (%d diagnostics)\n  go/parser %v", p, got, diags, want)
+		if strings.HasSuffix(p, ".go") {
+			paths = append(paths, p)
 		}
 		return nil
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	// Every file is compared once, by one of fidelityPartitions parallel
+	// subtests (fidelity.go): the comparisons are independent.
+	checked := make([]bool, len(paths))
+	inPartitions(t, len(paths), func(t *testing.T, i int) {
+		p := paths[i]
+		src, err := os.ReadFile(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := goParserFuncs(t, src)
+		if want == nil {
+			return // not valid Go
+		}
+		checked[i] = true
+		got, diags := arkFuncs(t, p, src)
+		if !slices.Equal(got, want) || diags != 0 {
+			t.Errorf("%s: Ark %v (%d diagnostics)\n  go/parser %v", p, got, diags, want)
+		}
+	})
+	n := 0
+	for _, c := range checked {
+		if c {
+			n++
+		}
 	}
 	if n < 100 {
 		t.Fatalf("only %d files checked", n)

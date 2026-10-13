@@ -47,6 +47,23 @@ type fidelityReport struct {
 	held, generic int
 }
 
+// merge adds o's counts and problems after r's.
+func (r *fidelityReport) merge(o *fidelityReport) {
+	r.checked += o.checked
+	r.held += o.held
+	r.generic += o.generic
+	kinds := make([]string, 0, len(o.problems))
+	for k := range o.problems {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	for _, k := range kinds {
+		for _, w := range o.problems[k] {
+			r.add(k, w)
+		}
+	}
+}
+
 func (r *fidelityReport) add(kind, where string) {
 	if r.problems == nil {
 		r.problems = map[string][]string{}
@@ -230,7 +247,12 @@ func checkTree(t *testing.T, root string) *fidelityReport {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	for _, dir := range keys {
+	// Directories are compared independently, by fidelityPartitions parallel
+	// subtests, each into a report of its own; the reports are merged in
+	// directory order, as a sequential walk would have filled one.
+	reps := make([]fidelityReport, len(keys))
+	inPartitions(t, len(keys), func(t *testing.T, i int) {
+		dir, rep := keys[i], &reps[i]
 		fset := token.NewFileSet()
 		byPkg := map[string][]*ast.File{}
 		srcs := map[*ast.File][]byte{}
@@ -255,6 +277,9 @@ func checkTree(t *testing.T, root string) *fidelityReport {
 		for _, pkg := range pkgs {
 			checkPackage(t, fset, byPkg[pkg], srcs, names, rep)
 		}
+	})
+	for i := range reps {
+		rep.merge(&reps[i])
 	}
 	return rep
 }

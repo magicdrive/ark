@@ -129,8 +129,15 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 		if strings.Join(got, ",") != strings.Join(want, ",") {
 			t.Errorf("ci.yml: race matrix shards %v, race-shards.txt declares %v", got, want)
 		}
-		if strings.Join(want, ",") != "1,2,3" {
-			t.Errorf("race-shards.txt: shards %v, want 1, 2 and 3", want)
+		if strings.Join(want, ",") != "1,2,3,4" {
+			t.Errorf("race-shards.txt: shards %v, want 1, 2, 3 and 4", want)
+		}
+		// Each shard keys its Go build cache with a file of its own: a
+		// shard without one would share another's cache silently.
+		for _, s := range want {
+			if _, err := os.Stat(".github/ci/cache-keys/race-" + s); err != nil {
+				t.Errorf("race shard %s has no .github/ci/cache-keys/race-%s: %v", s, s, err)
+			}
 		}
 		if strings.Contains(jobs[race], "-short") {
 			t.Error("ci.yml: the race tests must not run with -short")

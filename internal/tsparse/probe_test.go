@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -310,7 +311,11 @@ func TestParse_PooledParsersShareNoState(t *testing.T) {
 func TestProbe_NeverSkipsADerivableSource(t *testing.T) {
 	lang := grammars.GoLanguage()
 	base := nestedRangeLiteral
-	checked := 0
+	type variant struct {
+		at  int
+		src string
+	}
+	var variants []variant
 	for i := 0; i < len(base); i++ {
 		if base[i] != ' ' && base[i] != '\n' {
 			continue
@@ -319,14 +324,36 @@ func TestProbe_NeverSkipsADerivableSource(t *testing.T) {
 			if c[1] == '/' && c[2] == '/' && base[i] != '\n' {
 				continue // a line comment only where a line ends
 			}
-			src := base[:i] + c + base[i+1:]
-			if !production(t, lang, src).RootNode().HasError() || !candidate(t, lang, src).RootNode().HasError() || !forestClean(t, lang, src) {
-				continue
-			}
+			variants = append(variants, variant{i, base[:i] + c + base[i+1:]})
+		}
+	}
+	// The variants are independent: checkedVariantParts parallel subtests
+	// share them (variant k in part k%checkedVariantParts), each recording
+	// which of its variants reach the forest route. The minimum below counts
+	// every part: -run selecting one part (…/part/3) fails it.
+	const checkedVariantParts = 8
+	reached := make([]bool, len(variants))
+	t.Run("part", func(t *testing.T) {
+		for p := range checkedVariantParts {
+			t.Run(strconv.Itoa(p), func(t *testing.T) {
+				t.Parallel()
+				for k := p; k < len(variants); k += checkedVariantParts {
+					i, src := variants[k].at, variants[k].src
+					if !production(t, lang, src).RootNode().HasError() || !candidate(t, lang, src).RootNode().HasError() || !forestClean(t, lang, src) {
+						continue
+					}
+					reached[k] = true
+					if _, r, tr := traced(t, lang, []byte(src)); r != routeForest || tr.forests != 1 {
+						t.Errorf("comment at %d: route %s (probes %d, forest runs %d), want the forest route", i, r, tr.probes, tr.forests)
+					}
+				}
+			})
+		}
+	})
+	checked := 0
+	for _, r := range reached {
+		if r {
 			checked++
-			if _, r, tr := traced(t, lang, []byte(src)); r != routeForest || tr.forests != 1 {
-				t.Errorf("comment at %d: route %s (probes %d, forest runs %d), want the forest route", i, r, tr.probes, tr.forests)
-			}
 		}
 	}
 	if checked < 20 {
