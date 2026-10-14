@@ -1,0 +1,46 @@
+## stats
+files=3 symbols=16 references=12 relations=11 skipped=0
+lang html=3
+## symbols
+symbol form.html kind=document lang=html qualified="docs/form.html" receiver="" exported=true @docs/form.html:1:1-12:1
+symbol signup kind=element lang=html qualified="docs/form.html#signup" receiver="" exported=true @docs/form.html:3:1-3:19
+symbol email kind=element lang=html qualified="docs/form.html#email" receiver="" exported=true @docs/form.html:5:3-5:79
+symbol email-help kind=element lang=html qualified="docs/form.html#email-help" receiver="" exported=true @docs/form.html:6:3-6:22
+symbol domains kind=element lang=html qualified="docs/form.html#domains" receiver="" exported=true @docs/form.html:7:3-7:26
+symbol send kind=function lang=html qualified="docs/form.html send" receiver="" exported=false @docs/form.html:10:9-10:27
+symbol guide.html kind=document lang=html qualified="docs/guide.html" receiver="" exported=true @docs/guide.html:1:1-7:1
+symbol guide kind=element lang=html qualified="docs/guide.html#guide" receiver="" exported=true @docs/guide.html:3:1-3:16
+symbol install kind=element lang=html qualified="docs/guide.html#install" receiver="" exported=true @docs/guide.html:4:1-4:18
+symbol card kind=element lang=html qualified="docs/guide.html#1 card" receiver="" exported=true @docs/guide.html:6:11-6:30
+symbol card-title kind=element lang=html qualified="docs/guide.html#1 card-title" receiver="" exported=true @docs/guide.html:6:30-6:50
+symbol index.html kind=document lang=html qualified="index.html" receiver="" exported=true @index.html:1:1-13:1
+symbol nav kind=element lang=html qualified="index.html#nav" receiver="" exported=true @index.html:5:1-5:15
+symbol main kind=element lang=html qualified="index.html#main" receiver="" exported=true @index.html:6:1-6:17
+symbol title kind=element lang=html qualified="index.html#title" receiver="" exported=true @index.html:7:3-7:18
+symbol g kind=element lang=html qualified="index.html#g" receiver="" exported=true @index.html:9:14-9:37
+## references
+ref email kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#email" identity_in_repository=true call=false @docs/form.html:4:15-4:20
+ref email-help kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#email-help" identity_in_repository=true call=false @docs/form.html:5:52-5:62
+ref domains kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#domains" identity_in_repository=true call=false @docs/form.html:5:70-5:77
+ref signup kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#signup" identity_in_repository=true call=false @docs/form.html:9:15-9:21
+ref main kind=id_reference container="docs/guide.html" receiver="" name_qualified="index.html#main" identity_in_repository=true call=false @docs/guide.html:5:21-5:39
+ref card-title kind=id_reference container="docs/guide.html" receiver="" name_qualified="docs/guide.html#1 card-title" identity_in_repository=true call=false @docs/guide.html:6:76-6:86
+ref main kind=id_reference container="index.html" receiver="" name_qualified="index.html#main" identity_in_repository=true call=false @index.html:5:25-5:29
+ref guide.html kind=resource_link container="index.html" receiver="" name_qualified="docs/guide.html" identity_in_repository=true call=false @index.html:5:60-5:75
+ref install kind=id_reference container="index.html" receiver="" name_qualified="docs/guide.html#install" identity_in_repository=true call=false @index.html:5:96-5:119
+ref title kind=id_reference container="index.html" receiver="" name_qualified="index.html#title" identity_in_repository=true call=false @index.html:8:23-8:28
+ref form.html kind=resource_link container="index.html" receiver="" name_qualified="docs/form.html" identity_in_repository=true call=false @index.html:8:47-8:61
+ref g kind=id_reference container="index.html" receiver="" name_qualified="index.html#g" identity_in_repository=true call=false @index.html:9:78-9:79
+## edges
+edge docs/form.html -references-> docs/form.html#domains confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/form.html#domains" is declared at docs/form.html]
+edge docs/form.html -references-> docs/form.html#email confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/form.html#email" is declared at docs/form.html]
+edge docs/form.html -references-> docs/form.html#email-help confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/form.html#email-help" is declared at docs/form.html]
+edge docs/form.html -references-> docs/form.html#signup confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/form.html#signup" is declared at docs/form.html]
+edge docs/guide.html -references-> index.html#main confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"index.html#main" is declared at index.html]
+edge index.html -links-> docs/form.html confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/form.html" is declared at docs/form.html]
+edge index.html -links-> docs/guide.html confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/guide.html" is declared at docs/guide.html]
+edge index.html -references-> docs/guide.html#install confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"docs/guide.html#install" is declared at docs/guide.html]
+edge index.html -references-> index.html#g confidence=exact evidence=[qualified_identity:"index.html#g" is declared at index.html]
+edge index.html -references-> index.html#main confidence=exact evidence=[qualified_identity:"index.html#main" is declared at index.html]
+edge index.html -references-> index.html#title confidence=exact evidence=[qualified_identity:"index.html#title" is declared at index.html]
+## diagnostics

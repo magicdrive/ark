@@ -36,7 +36,7 @@ Ark は、構造と根拠でこれらに対処します。
 リポジトリのファイル
       │
       ▼
-言語プロバイダー     Tree-sitter による 1 ファイル単位の構文解析:
+言語プロバイダー     Tree-sitter（HTML は x/net/html、CSS は CSS Syntax 3）による 1 ファイル単位の構文解析:
       │              宣言、参照、import、言語ごとの根拠
       ▼
 インデックス構築     安定した ID を持つシンボル、包含関係
@@ -209,7 +209,9 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 | PHP | graph | 名前空間、`use`、継承とトレイト。フレームワークやオートロードの意味論には非対応 |
 | Terraform | graph | モジュール単位のアドレス、ローカルモジュールの出力。`.tf.json` は読まない |
 | Rust | graph | crate 内のパス（`crate`/`self`/`super`、`use`、inherent と trait impl の区別）。値に対するメソッド呼び出し、ワークスペースの他 crate、マクロ展開は解決しない |
-| JavaScript | references | トップレベルの関数・クラス・`const`/`let`。クラスのメソッドは抽出しない |
+| HTML | graph | ブラウザが構築するとおりの文書の中の id とその参照（IDREF 属性、フラグメント）、相対パスによる文書・スタイルシート・スクリプトへのリンク、インラインの style・script の宣言、画像・フォント・メディアへのリンク。絶対 URL は扱わない |
+| CSS | graph | `@keyframes`・`@font-face`・`@property`・カスタムプロパティ・CSS Modules のクラスと、同じスタイルシートの中のそれらへの参照、相対パスの `@import`、JavaScript・TypeScript の import が使う CSS Modules のクラス、画像・フォントの `url()`。セレクタと要素の対応は扱わない |
+| JavaScript | references | 宣言、クラスのメンバー、ES module と CommonJS（TypeScript と同じ抽出器）、スコープを考慮。グラフと context の品質は未認定 |
 | Python | references | トップレベルの関数とクラス。メソッドは抽出しない |
 
 グラフ系のツールはすべての言語で動作しますが、認定レベルを超える結果はテストの対象外です。詳細と言語ごとの制限は[言語サポート](docs/language-support.md)を参照してください。
@@ -244,8 +246,8 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 - モジュール解決はコンパイラと同等ではありません。`tsconfig` のパス設定、Composer / PSR-4 のオートロード、`package.json`、`Cargo.toml` は解釈しません。
 - マクロは展開しません（Rust の `macro_rules!`、手続きマクロ、derive）。
 - フレームワークの意味論（DI コンテナ、ルーティング、デコレーター）は扱いません。
-- 明示的な import があっても、言語をまたぐ参照は解決しません（JavaScript から TypeScript のファイルを import する場合など）。
-- JavaScript と Python のクラスのメソッドは抽出しません。
+- 明示的な import があっても、名前による言語をまたぐ参照は解決しません（JavaScript から TypeScript のファイルを import する場合など）。言語をまたぐ関係はパスによるもの（HTML のスタイルシートとスクリプト、JavaScript・TypeScript の import が使う CSS Modules のクラス）だけです。
+- Python のクラスのメソッドは抽出しません。
 - 構文解析器が完全には読めなかったファイルは、読めた部分だけを解析します。残りは `get_diagnostics` で報告されます。
 
 ## そのほかの機能

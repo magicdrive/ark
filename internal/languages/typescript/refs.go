@@ -2,6 +2,8 @@ package typescript
 
 import (
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	ts "github.com/odvcencio/gotreesitter"
 
@@ -12,18 +14,73 @@ import (
 // addRef appends one reference. Extraction records syntax and structural
 // evidence only; resolution interprets it.
 func (e *extractor) addRef(at *ts.Node, name, kind, container, receiver, receiverType string, isCall bool) {
+	e.addRefCap(at, name, kind, container, receiver, receiverType, isCall, "")
+}
+
+// addRefCap is addRef with a ConfidenceCap.
+func (e *extractor) addRefCap(at *ts.Node, name, kind, container, receiver, receiverType string, isCall bool, cap string) {
 	if name == "" || at == nil {
 		return
 	}
 	e.refs = append(e.refs, language.ReferenceDraft{
-		Name:         name,
-		Kind:         kind,
-		Container:    container,
-		Location:     nodeLocation(at, e.file),
-		ReceiverExpr: receiver,
-		ReceiverType: receiverType,
-		IsCall:       isCall,
+		Name:          name,
+		Kind:          kind,
+		Container:     container,
+		Location:      nodeLocation(at, e.file),
+		ReceiverExpr:  receiver,
+		ReceiverType:  receiverType,
+		IsCall:        isCall,
+		ConfidenceCap: cap,
 	})
+}
+
+// localCap caps a value reference a local declaration shadows
+// (ecmascript): a called or constructed name, or the root of a receiver
+// without a proven type. The name is then a parameter, a variable, a nested
+// function or class — never the same-named top-level declaration or import,
+// though one may be listed as a Candidate (as golang's localCap).
+func (e *extractor) localCap(sc scope, name, receiver, receiverType string) string {
+	if sc.dynamic {
+		return "candidate" // with (obj) { f() }: f may be obj.f
+	}
+	if receiver == "" {
+		if sc.locals.Values[name] {
+			return "candidate"
+		}
+		return ""
+	}
+	if receiverType == "" && sc.locals.Values[receiverRoot(receiver)] {
+		return "candidate"
+	}
+	return ""
+}
+
+// typeLocalCap caps a type reference a local type declaration shadows.
+func (e *extractor) typeLocalCap(sc scope, name, receiver string) string {
+	if receiver == "" {
+		if sc.locals.Types[name] {
+			return "candidate"
+		}
+		return ""
+	}
+	if root := receiverRoot(receiver); sc.locals.Types[root] || sc.locals.Values[root] {
+		return "candidate"
+	}
+	return ""
+}
+
+// receiverRoot is the identifier a receiver expression starts with (a of
+// a.b.c, f of f().g), or "" when it starts with anything else.
+func receiverRoot(expr string) string {
+	end := 0
+	for i, r := range expr {
+		if r == '_' || r == '$' || unicode.IsLetter(r) || (i > 0 && unicode.IsDigit(r)) {
+			end = i + utf8.RuneLen(r)
+			continue
+		}
+		break
+	}
+	return expr[:end]
 }
 
 // splitQualified splits `a.b.C` (member_expression / nested_type_identifier)
@@ -68,13 +125,24 @@ func (e *extractor) walk(n *ts.Node, sc scope) {
 		e.call(n, sc)
 	case "new_expression":
 		e.construction(n, sc)
+	case "member_expression", "subscript_expression":
+		e.cssModuleMember(n, sc)
+	case "variable_declarator":
+		e.cssModuleDestructure(n, sc)
+	case "identifier", "shorthand_property_identifier":
+		if len(e.cssClasses) > 0 {
+			e.cssModuleName(n, sc)
+		}
+		e.valueRead(n, sc)
 	case "binary_expression":
-		e.misparsedGenericCall(n, sc)
+		if e.dialect == dialectTypeScript {
+			e.misparsedGenericCall(n, sc)
+		}
 	case "type_identifier":
 		// Type parameters are declarations, not uses; `bigint` is a keyword
 		// the grammar reads as a type name.
 		if name := e.text(n); !sc.tparams[name] && name != "bigint" {
-			e.addRef(n, name, string(reference.KindTypeUse), sc.container, "", "", false)
+			e.addRefCap(n, name, string(reference.KindTypeUse), sc.container, "", "", false, e.typeLocalCap(sc, name, ""))
 		}
 		return
 	case "function_type", "constructor_type", "call_signature", "construct_signature",
@@ -107,7 +175,7 @@ func (e *extractor) walk(n *ts.Node, sc scope) {
 		return
 	case "nested_type_identifier":
 		if name, recv := e.splitQualified(n); name != "" {
-			e.addRef(n, name, string(reference.KindTypeUse), sc.container, recv, "", false)
+			e.addRefCap(n, name, string(reference.KindTypeUse), sc.container, recv, "", false, e.typeLocalCap(sc, name, recv))
 		}
 		return
 	case "jsx_opening_element", "jsx_self_closing_element":
@@ -119,12 +187,21 @@ func (e *extractor) walk(n *ts.Node, sc scope) {
 		sc = e.enterFunction(n, sc, false)
 	case "class_declaration", "class", "abstract_class_declaration":
 		// A nested / expression class has no symbol: no `this` evidence.
-		sc.thisClass, sc.props = "", nil
+		sc.thisClass, sc.props, sc.superName = "", nil, ""
 		e.walkChildren(n, sc, "name")
 		return
 	case "interface_declaration", "type_alias_declaration", "type_parameter", "enum_declaration":
 		sc.tparams = unionSet(sc.tparams, e.typeParamNames(n))
+		sc.enumBody = sc.enumBody || e.typ(n) == "enum_declaration"
 		e.walkChildren(n, sc, "name")
+		return
+	case "with_statement":
+		// The body's names may be properties of the object (no symbols):
+		// no read is stated there, and a call names a candidate at most.
+		e.walk(e.field(n, "object"), sc)
+		body := sc
+		body.dynamic = true
+		e.walk(e.field(n, "body"), body)
 		return
 	case "ambient_declaration", "function_signature", "import_statement", "export_statement":
 		return
@@ -172,11 +249,23 @@ func (e *extractor) call(n *ts.Node, sc scope) {
 	fn := e.field(n, "function")
 	switch e.typ(fn) {
 	case "identifier":
-		e.addRef(fn, e.text(fn), string(reference.KindCall), sc.container, "", "", true)
+		name := e.text(fn)
+		e.addRefCap(fn, name, string(reference.KindCall), sc.container, "", "", true, e.localCap(sc, name, "", ""))
 	case "member_expression":
 		prop := e.field(fn, "property")
 		obj := e.unwrap(e.field(fn, "object"))
-		if obj == nil || e.typ(obj) == "super" {
+		if obj == nil {
+			return
+		}
+		if e.typ(obj) == "super" {
+			// super.m(): a member of the class the enclosing class
+			// extends, when it extends a plain name.
+			if sc.superName != "" {
+				switch e.typ(prop) {
+				case "property_identifier", "private_property_identifier":
+					e.addRef(prop, e.text(prop), string(reference.KindCall), sc.container, "super", sc.superName, true)
+				}
+			}
 			return
 		}
 		switch e.typ(prop) {
@@ -184,8 +273,9 @@ func (e *extractor) call(n *ts.Node, sc scope) {
 		default:
 			return
 		}
-		e.addRef(prop, e.text(prop), string(reference.KindCall), sc.container,
-			e.text(obj), e.receiverType(obj, prop.StartByte(), sc), true)
+		recv, recvType := e.text(obj), e.receiverType(obj, prop.StartByte(), sc)
+		e.addRefCap(prop, e.text(prop), string(reference.KindCall), sc.container,
+			recv, recvType, true, e.localCap(sc, "", recv, recvType))
 	}
 }
 
@@ -194,10 +284,11 @@ func (e *extractor) construction(n *ts.Node, sc scope) {
 	c := e.field(n, "constructor")
 	switch e.typ(c) {
 	case "identifier":
-		e.addRef(c, e.text(c), string(reference.KindConstruction), sc.container, "", "", false)
+		name := e.text(c)
+		e.addRefCap(c, name, string(reference.KindConstruction), sc.container, "", "", false, e.localCap(sc, name, "", ""))
 	case "member_expression":
 		if name, recv := e.splitQualified(c); name != "" {
-			e.addRef(c, name, string(reference.KindConstruction), sc.container, recv, "", false)
+			e.addRefCap(c, name, string(reference.KindConstruction), sc.container, recv, "", false, e.localCap(sc, name, recv, ""))
 		}
 	}
 }
@@ -225,11 +316,11 @@ func (e *extractor) jsx(n *ts.Node, sc scope) {
 	case "identifier":
 		txt := e.text(name)
 		if txt != "" && txt[0] >= 'A' && txt[0] <= 'Z' {
-			e.addRef(name, txt, string(reference.KindCall), sc.container, "", "", true)
+			e.addRefCap(name, txt, string(reference.KindCall), sc.container, "", "", true, e.localCap(sc, txt, "", ""))
 		}
 	case "member_expression", "nested_identifier":
 		if nm, recv := e.splitQualified(name); nm != "" {
-			e.addRef(name, nm, string(reference.KindCall), sc.container, recv, "", true)
+			e.addRefCap(name, nm, string(reference.KindCall), sc.container, recv, "", true, e.localCap(sc, nm, recv, ""))
 		}
 	}
 }

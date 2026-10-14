@@ -30,7 +30,22 @@ package cache
 // PackageScoped are optional the same way; the Go provider, which emits them
 // (and splits pkg.T{} into receiver and name), is go-7. ReferenceDraft.
 // ReceiverChain / Speculative and Extraction.TypeFacts are optional the same
-// way; the Go provider, which emits them, is go-9.
+// way; the Go provider, which emits them, is go-9. ReferenceDraft.
+// FileIdentity is optional the same way; the HTML provider, which emits it,
+// is html-3 (and the JavaScript provider, which emits the script symbols it
+// names, js-7); the JavaScript and TypeScript providers emit it too since
+// js-8 and ts-9 (CSS Modules classes, symbol.FileScoped). Since html-4 the
+// HTML provider's version joins the CSS and JavaScript providers' ones
+// ("html-6+css-4+js-12+ts-16"): it reads inline styles and scripts with
+// their extractors, and the JavaScript provider's joins the TypeScript
+// provider's ("js-12+ts-16"), whose extractor it shares. SymbolDraft.
+// Placement is optional the same way; the TypeScript and JavaScript
+// providers, which state it, are ts-10 and js-9.
+//
+// Asset files (internal/asset: images, fonts, media) have no extraction and
+// no entry: the index records their paths from the walk and makes a node for
+// each a reference names. The references to
+// them are ordinary drafts of the HTML (html-5 and later) and CSS (css-3 and later) providers.
 //
 // SymbolIDs are not cached: the index derives them from the cached drafts
 // (index.NewFileIndex), so a change of identity scheme (declaration ordinals)

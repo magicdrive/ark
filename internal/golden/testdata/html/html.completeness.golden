@@ -1,0 +1,4 @@
+symbol docs/guide.html unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  candidate_callee docs/guide.html#1 card-title kind=id_reference confidence=candidate refs=1
+symbol docs/guide.html#1 card-title unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller docs/guide.html kind=id_reference confidence=candidate refs=1

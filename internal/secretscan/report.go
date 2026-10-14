@@ -8,7 +8,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/secretpolicy"
 	"github.com/magicdrive/ark/internal/secrets"
@@ -54,10 +53,18 @@ func credentialFile(rel string) bool {
 }
 
 // codeFile reports whether a file is source code of a language Ark analyzes
-// (Terraform aside: its assignments are configuration).
+// (Terraform, HTML and CSS aside: their assignments are configuration,
+// markup text and declarations, not a program's variables).
 func codeFile(rel string) bool {
 	d, ok := languages.Registry().DetectByFilename(rel)
-	return ok && d.Language != language.Language("terraform")
+	if !ok {
+		return false
+	}
+	switch d.Language {
+	case "terraform", "html", "css":
+		return false
+	}
+	return true
 }
 
 // Suggestions sorts a scan's files and rules into what to do about them.

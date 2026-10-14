@@ -5,6 +5,7 @@ import (
 
 	ts "github.com/odvcencio/gotreesitter"
 
+	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -21,12 +22,12 @@ func (e *extractor) classDecl(n *ts.Node, exported bool) declInfo {
 	name := e.text(e.field(n, "name"))
 	body := e.field(n, "body")
 	if name == "" || body == nil {
-		e.walk(n, scope{})
+		e.walk(n, e.top(""))
 		return declInfo{}
 	}
 	e.addSymbol(e.draft(n, name, name, symbol.KindClass, exported))
 
-	csc := scope{container: name, tparams: setOf(e.typeParamNames(n))}
+	csc := e.topWith(name, setOf(e.typeParamNames(n)))
 	e.walkTypeParams(n, csc)
 	for i := range n.ChildCount() {
 		c := n.Child(i)
@@ -40,6 +41,7 @@ func (e *extractor) classDecl(n *ts.Node, exported bool) declInfo {
 
 	csc.thisClass = name
 	csc.props = e.classProps(body, csc.tparams)
+	csc.superName = e.superName(n, csc)
 
 	accessorIdx := map[string]int{} // accessor name → index into e.symbols
 	prevAccessor := ""              // accessor name of the previous member, if any
@@ -49,8 +51,12 @@ func (e *extractor) classDecl(n *ts.Node, exported bool) declInfo {
 		switch e.typ(m) {
 		case "method_definition", "method_signature", "abstract_method_signature":
 			cur = e.method(m, name, csc, accessorIdx, prevAccessor)
-		case "public_field_definition":
+		case "public_field_definition", "field_definition": // TypeScript, JavaScript
 			e.field_(m, name, csc)
+		case "class_static_block":
+			// static { ... }: `this` is the class itself (staticScope).
+			ssc := staticScope(csc)
+			e.walk(m, ssc)
 		}
 		prevAccessor = cur
 	}
@@ -67,6 +73,12 @@ func (e *extractor) classHeritage(h *ts.Node, class string, sc scope) {
 			e.heritage(c, "inheritance", class, sc)
 		case "implements_clause":
 			e.heritage(c, "implementation", class, sc)
+		case "identifier", "member_expression":
+			// JavaScript: `extends B` holds the expression itself.
+			if e.dialect == dialectJavaScript {
+				e.heritage(h, "inheritance", class, sc)
+				return
+			}
 		}
 	}
 }
@@ -102,6 +114,9 @@ func (e *extractor) heritage(clause *ts.Node, kind, container string, sc scope) 
 // stable identifier (computed or string-literal names).
 func (e *extractor) memberName(m *ts.Node) string {
 	nameNode := e.field(m, "name")
+	if nameNode == nil {
+		nameNode = e.field(m, "property") // JavaScript field_definition
+	}
 	// `static async *gen()` is parsed with `async` in the name field; the real
 	// name is the last name token before the parameters.
 	if e.hasToken(m, "*") {
@@ -157,6 +172,11 @@ func (e *extractor) method(m *ts.Node, class string, csc scope, accessorIdx map[
 	case e.typ(m) == "method_definition" && (e.hasToken(m, "get") || e.hasToken(m, "set")):
 		kind = symbol.KindProperty
 		accessor = name
+		if e.hasToken(m, "static") {
+			// A static accessor pairs only with a static one: a static
+			// and an instance accessor of one name are two members.
+			accessor += "\x00static"
+		}
 	}
 
 	if accessor != "" {
@@ -167,15 +187,18 @@ func (e *extractor) method(m *ts.Node, class string, csc scope, accessorIdx map[
 			}
 		} else {
 			accessorIdx[accessor] = len(e.symbols)
-			e.addSymbol(e.memberDraft(m, class, name, kind, exp))
+			e.addMember(e.memberDraft(m, class, name, kind, exp), e.hasToken(m, "static"))
 		}
 	} else {
-		e.addSymbol(e.memberDraft(m, class, name, kind, exp))
+		e.addMember(e.memberDraft(m, class, name, kind, exp), e.hasToken(m, "static"))
 	}
 
 	msc := csc
 	msc.container = q
 	msc = e.enterFunction(m, msc, true) // methods keep the class `this`
+	if e.hasToken(m, "static") {
+		msc = staticScope(msc)
+	}
 	e.walkChildren(m, msc, "name")
 
 	if kind == symbol.KindConstructor {
@@ -220,8 +243,68 @@ func (e *extractor) field_(m *ts.Node, class string, csc scope) {
 	case "arrow_function", "function_expression", "function":
 		kind = symbol.KindMethod
 	}
-	e.addSymbol(e.memberDraft(m, class, name, kind, e.exportedMember(m, name)))
+	e.addMember(e.memberDraft(m, class, name, kind, e.exportedMember(m, name)), e.hasToken(m, "static"))
 	fsc := csc
 	fsc.container = class + "." + name
+	if e.hasToken(m, "static") {
+		fsc = staticScope(fsc)
+	}
 	e.walkChildren(m, fsc, "name")
+}
+
+// staticScope is the scope of a static member's body: `this` is the class
+// itself and `super` the class it extends, not instances — and a member
+// symbol cannot tell a static member from an instance one of the same
+// class, so neither is evidence there.
+func staticScope(sc scope) scope {
+	sc.thisClass, sc.props, sc.superName = "", nil, ""
+	return sc
+}
+
+// addMember records a class member. A static and an instance member of one
+// name are two declarations (two symbols, told apart by the index's
+// ordinals): a reference to the name may denote either, so it is ambiguous —
+// never resolved to the one declared first.
+func (e *extractor) addMember(d language.SymbolDraft, static bool) bool {
+	key := string(d.Kind) + "\x00" + d.Qualified
+	d.Placement = symbol.PlacementInstance
+	if static {
+		key += "\x00static"
+		d.Placement = symbol.PlacementStatic
+	}
+	if d.Name == "" || (e.seen[key] && e.dialect == dialectTypeScript) {
+		return false
+	}
+	e.seen[key] = true
+	e.symbols = append(e.symbols, d)
+	return true
+}
+
+// superName is the class n extends when its extends clause names one by a
+// plain identifier that no local shadows (extends Base, extends Base<T>),
+// or "".
+func (e *extractor) superName(n *ts.Node, sc scope) string {
+	for i := range n.ChildCount() {
+		h := n.Child(i)
+		if e.typ(h) != "class_heritage" {
+			continue
+		}
+		for j := range h.ChildCount() {
+			c := h.Child(j)
+			switch e.typ(c) {
+			case "identifier": // JavaScript: extends Base
+				if name := e.text(c); !sc.locals.Values[name] {
+					return name
+				}
+				return ""
+			case "extends_clause": // TypeScript: extends Base / Base<T>
+				v := e.field(c, "value")
+				if e.typ(v) == "identifier" && !sc.locals.Values[e.text(v)] {
+					return e.text(v)
+				}
+				return ""
+			}
+		}
+	}
+	return ""
 }

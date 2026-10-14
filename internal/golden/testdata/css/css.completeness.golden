@@ -1,0 +1,10 @@
+symbol styles/base.css unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate inter var kind=value_reference receiver="" reason=unresolved @styles/base.css:2:32-2:43
+symbol styles/main.css unattributed_in=0 unattributed_out=2 unresolved=1 outside=0
+  no_candidate inter.woff2 kind=resource_link receiver="" reason=unresolved @styles/main.css:11:8-11:33
+  candidate_callee styles/main.css --spacing kind=value_reference confidence=candidate refs=1
+  candidate_callee styles/main.css --brand kind=value_reference confidence=candidate refs=1
+symbol styles/main.css --brand unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller styles/main.css kind=value_reference confidence=candidate refs=1
+symbol styles/main.css --spacing unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller styles/main.css kind=value_reference confidence=candidate refs=1

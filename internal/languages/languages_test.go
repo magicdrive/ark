@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "html", "css"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -23,8 +23,14 @@ func TestRegistry_CanonicalSet(t *testing.T) {
 	}
 }
 
+// withoutGrammar are the languages whose provider parses without
+// Tree-sitter (HTML: golang.org/x/net/html; CSS: its own CSS Syntax Level 3).
+var withoutGrammar = map[language.Language]bool{"html": true, "css": true}
+
 // TestRegistry_DescriptorIntegrity verifies each descriptor is coherent: the
-// extensions match the provider's own Extensions(), and a grammar exists.
+// extensions match the provider's own Extensions(), and a grammar exists —
+// except for the languages whose provider uses another parser
+// (withoutGrammar), which have none.
 func TestRegistry_DescriptorIntegrity(t *testing.T) {
 	for _, d := range languages.Registry().Descriptors() {
 		if d.Provider == nil {
@@ -39,6 +45,12 @@ func TestRegistry_DescriptorIntegrity(t *testing.T) {
 			t.Errorf("%s: descriptor extensions %v != provider extensions %v", d.Language, d.Extensions, pexts)
 		}
 		getter, ok := languages.Grammar(d.Language)
+		if withoutGrammar[d.Language] {
+			if ok {
+				t.Errorf("%s: a grammar is registered for a provider without one", d.Language)
+			}
+			continue
+		}
 		if !ok || getter == nil {
 			t.Errorf("%s: missing grammar", d.Language)
 			continue
@@ -68,6 +80,8 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"php":        language.SupportLevelGraph,
 		"terraform":  language.SupportLevelGraph,
 		"rust":       language.SupportLevelGraph,
+		"html":       language.SupportLevelGraph,
+		"css":        language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)

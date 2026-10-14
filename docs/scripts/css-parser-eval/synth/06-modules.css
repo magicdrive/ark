@@ -1,0 +1,6 @@
+.root { composes: base from "./base.module.css"; composes: other utility; }
+:global(.dark) .root { color: white }
+:local(.title) { font-weight: 600 }
+.a :global .b { x: y }
+@value primary: #BF4040;
+@value small from "./breakpoints.css";

@@ -104,12 +104,12 @@ secrets-scan options:
 
 syntax options:
   -h, --help                                       Show help message.
-  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php, terraform, rust).
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php, terraform, rust, html, css).
   --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
 
 symbol options:
   -h, --help                                       Show help message.
-  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php, terraform, rust).
+  --lang <language>                                Specify language (go, typescript, tsx, javascript, python, php, terraform, rust, html, css).
   --format <'text'|'json'>                         Specify output format. (optional. default: 'text')
 
 skill subcommands:

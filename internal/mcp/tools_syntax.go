@@ -145,7 +145,7 @@ func SyntaxToolDefinitions() []Tool {
 	return []Tool{
 		{
 			Name:        "get_symbols",
-			Description: "Extract code symbols (functions, classes, types, etc.) from a file using Tree-sitter parsing. For a large file, list its declarations here and read the one you need with get_symbol instead of reading the whole file. Code in comments declares nothing: a commented-out declaration (e.g. a commented-out Terraform resource) is no symbol; find it with search_in_files (e.g. regex `^\\s*(#|//)\\s*resource \"`)",
+			Description: "Extract code symbols (functions, classes, types, etc.) from a file (Tree-sitter parsing; HTML: its document, the elements with an id and the declarations of its inline styles and scripts; CSS: its stylesheet, @keyframes, @font-face, @property, custom properties and CSS Modules classes). For a large file, list its declarations here and read the one you need with get_symbol instead of reading the whole file. Code in comments declares nothing: a commented-out declaration (e.g. a commented-out Terraform resource) is no symbol; find it with search_in_files (e.g. regex `^\\s*(#|//)\\s*resource \"`)",
 			InputSchema: map[string]interface{}{
 				"type": "object",
 				"properties": map[string]interface{}{
@@ -155,7 +155,7 @@ func SyntaxToolDefinitions() []Tool {
 					},
 					"lang": map[string]interface{}{
 						"type":        "string",
-						"description": "Language override (go, typescript, tsx, javascript, python, php, terraform, rust). Auto-detected if not specified.",
+						"description": "Language override (go, typescript, tsx, javascript, python, php, terraform, rust, html, css). Auto-detected if not specified.",
 					},
 				},
 				"required": []string{"path"},
@@ -262,7 +262,7 @@ func (h *ToolsHandler) getSymbols(args map[string]interface{}) (*CallToolResult,
 	}
 
 	// Parse and extract symbols
-	result, err := syntax.Parse(lang, source)
+	result, err := syntax.ParseNamed(lang, path, source)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Parse error: %v", err)}},
@@ -404,7 +404,12 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 			return nil
 		}
 
-		parsed := h.fileSymbols(lang, source)
+		// The file is extracted as its repository-relative name, as
+		// get_symbols does: a provider may name symbols after their file
+		// (HTML's document, a Rust crate path), and an absolute path would
+		// leak the machine's layout into the output.
+		relPath, _ := filepath.Rel(h.rootDir, filePath)
+		parsed := h.fileSymbols(lang, filepath.ToSlash(relPath), source)
 		if !parsed.ok {
 			statsParseErr++
 			return nil
@@ -412,8 +417,6 @@ func (h *ToolsHandler) findSymbol(args map[string]interface{}) (*CallToolResult,
 
 		statsScanned++
 		symbols := parsed.symbols
-
-		relPath, _ := filepath.Rel(h.rootDir, filePath)
 
 		for _, sym := range symbols {
 			// Kind filter
@@ -543,7 +546,7 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 	}
 
 	// Parse and extract symbols
-	parseResult, err := syntax.Parse(lang, source)
+	parseResult, err := syntax.ParseNamed(lang, path, source)
 	if err != nil {
 		return &CallToolResult{
 			Content: []Content{{Type: "text", Text: fmt.Sprintf("Parse error: %v", err)}},
@@ -561,7 +564,7 @@ func (h *ToolsHandler) getSymbol(args map[string]interface{}) (*CallToolResult, 
 		var b strings.Builder
 		fmt.Fprintf(&b, "Ambiguous symbol %q in %s — %d matches found. Retry with one of the qualified names below:\n", name, path, len(ambiguous))
 		for _, a := range ambiguous {
-			fmt.Fprintf(&b, "  %s  (%s)  line %d\n", fileSymbolQualified(a), a.Kind, a.StartLine)
+			fmt.Fprintf(&b, "  %s  (%s)  line %d\n", retryName(a, ambiguous), a.Kind, a.StartLine)
 		}
 		return &CallToolResult{Content: []Content{{Type: "text", Text: b.String()}}, IsError: true}, nil
 	}
@@ -628,14 +631,40 @@ func fileSymbolQualified(s syntax.Symbol) string {
 	return owner + "." + s.Name
 }
 
+// retryName is the name to retry an ambiguous get_symbol with for a: its
+// Owner.name, unless its qualified identity selects fewer of the candidates
+// (an HTML document's id and inline function of one name share the owner,
+// the file) — then that identity. Declarations of one identity (an id
+// declared twice) stay apart only by symbolId, in the index tools.
+func retryName(a syntax.Symbol, ambiguous []syntax.Symbol) string {
+	q := fileSymbolQualified(a)
+	if a.Qualified == "" {
+		return q
+	}
+	byOwner, byQualified := 0, 0
+	for _, o := range ambiguous {
+		if fileSymbolQualified(o) == q {
+			byOwner++
+		}
+		if o.Qualified == a.Qualified {
+			byQualified++
+		}
+	}
+	if byQualified < byOwner {
+		return a.Qualified
+	}
+	return q
+}
+
 // pickFileSymbol selects the one symbol a (possibly qualified) name denotes in
-// a file. A qualified match ("UserService.create") wins over a bare-name
-// match; when the best tier has several symbols they are returned as
-// ambiguous and nothing is picked.
+// a file. A qualified match ("UserService.create", or the provider's qualified
+// identity, "page.html module#1 send") wins over a bare-name match; when the
+// best tier has several symbols they are returned as ambiguous and nothing is
+// picked.
 func pickFileSymbol(symbols []syntax.Symbol, name string) (picked *syntax.Symbol, ambiguous []syntax.Symbol) {
 	var byQualified, byName []syntax.Symbol
 	for _, s := range symbols {
-		if fileSymbolQualified(s) == name {
+		if fileSymbolQualified(s) == name || s.Qualified == name {
 			byQualified = append(byQualified, s)
 		}
 		if s.Name == name {

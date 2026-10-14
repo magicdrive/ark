@@ -22,7 +22,8 @@ The design rules behind this, and the tests that enforce them, are in
 ## From source to graph
 
 1. A **language provider** parses one file (Tree-sitter grammars on a pure-Go
-   runtime) and extracts declarations (symbols), references (calls,
+   runtime; HTML with golang.org/x/net/html; CSS with Ark's own CSS Syntax
+   Level 3) and extracts declarations (symbols), references (calls,
    constructions, type uses, reads, writes, imports) and the evidence the
    language's own rules prove: import bindings, a receiver's declared type, a
    package name, a qualified identity. A provider never reads other files.
@@ -46,14 +47,35 @@ never averaged or promoted; caps only lower it.
 
 | Confidence | What Ark knows | What it does not know | Edge |
 |---|---|---|---|
-| `exact` | The one target, by the language's scoping as Ark models it: same container or file, an import or module binding, a qualified identity, a member of a type proven by declaration. | Nothing within the model. It is static evidence, not compiler proof. | yes, if unique |
+| `exact` | The one target, by the language's scoping as Ark models it: same container or file, an import or module binding (not one through a CommonJS export: see below), a qualified identity, a member of a type proven by declaration. | Nothing within the model. It is static evidence, not compiler proof. | yes, if unique |
 | `strong` | The one target, by weaker evidence: the only declaration of the name in the same directory or package, or in the repository (for languages without package scoping); a receiver-name match. | Whether something outside the repository shadows it. | yes, if unique |
 | `candidate` | One or more plausible targets. | Which one, or whether an unseen target exists. | **never** |
 | unresolved | No candidate. | The target. For a builtin, an external package or a computed name this is the correct answer. | never |
-| `outsideRepository` | A flag on unresolved: authoritative evidence (an import, a qualified name, a declared type) places the target outside the repository. | — | never |
+| `outsideRepository` | A flag on unresolved: authoritative evidence (an import, a qualified name, a declared type) places the target outside the repository. Evidence that reaches the repository and finds nothing Ark represents (an import of a repository file without the export, a member of an exported object literal) is unresolved without this flag. | — | never |
 
 Several viable targets are always `candidate`, never a guess: Ark does not
 pick the first or the most likely.
+
+**CommonJS exports.** Ark keeps three things apart:
+
+- A *lexical binding* — a name to the declaration its scope binds
+  (`const fn = original`), also inside a CommonJS module — is `exact` as
+  above.
+- A *static export mapping* — which declaration an export statement names
+  (`module.exports = { parse }`, `exports.a = f`) — is recorded from the
+  source. It says nothing about the value at run time.
+- An *export value resolution* — a reference that reaches a declaration
+  through a CommonJS export (`require("./m").parse()`, an `import` of a
+  CommonJS module, a re-export of one, a class extended through one) — is
+  `candidate` at most. The exports object is a plain object that code may
+  change at run time by routes no static rule closes, so Ark does not claim
+  the value an importer reads is the exported declaration. The candidate
+  names that declaration: a usable reference, not a proof of run-time
+  identity.
+
+ESM and TypeScript exports are live bindings and keep the confidence their
+evidence proves. No confidence claims anything about arbitrary run-time
+behaviour (`eval`, reflection, monkey-patching).
 
 ### Evidence
 
@@ -69,7 +91,7 @@ Every resolution names the evidence it rests on. Graph answers show it in the
 |---|---|---|
 | `same_lexical_scope` | Declared in the same container | exact |
 | `same_file` | Declared in the same file | exact |
-| `module_binding` | Bound by an import statement to a declaration of a repository file (TypeScript, TSX) | exact |
+| `module_binding` | Bound by an import statement or a require to a declaration of a repository file (TypeScript, TSX, JavaScript) | exact; candidate through a CommonJS export |
 | `explicit_import` | Declared in an imported package (Go), or in a file under an imported path (JavaScript, Python) | exact |
 | `qualified_identity` | The language fixed the fully qualified name (PHP namespaces, Terraform addresses) | exact |
 | `receiver_type` | Member of the receiver's declared type | exact or strong |
@@ -147,8 +169,11 @@ module resolves through the binding:
 ```
 
 TypeScript module resolution lists only `.ts` / `.tsx` files and JavaScript
-emits no import bindings, so TypeScript and JavaScript files do not resolve
-each other's names.
+module resolution only JavaScript files, so TypeScript and JavaScript files
+do not resolve each other's names. The one relation between two languages
+is path evidence, which names its target's file: an HTML page's
+`<link rel="stylesheet">` and `<script src>`, a CSS Modules class that a
+JavaScript or TypeScript import of the `.module.css` file uses.
 
 ## Go: package scope
 

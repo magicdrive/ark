@@ -61,7 +61,33 @@ func (p *Provider) Extensions() []string {
 //	        type uses; forest-route trees (tsparse).
 //	"ts-6": the recovered type arguments follow TypeScript's lexical,
 //	        reserved-word and line-break rules.
-func (p *Provider) CacheVersion() string { return "ts-6" }
+//	"ts-7": local scopes (ecmascript) cap names a local shadows; CommonJS
+//	        require bindings and module.exports exports; utility types and
+//	        locally shadowed names are no receiver type.
+//	"ts-8": members of const objects and constructor functions' prototypes,
+//	        super references, static and instance members of one name
+//	        apart, Extraction.MembersShareNames.
+//	"ts-9": the classes of CSS Modules files used through an import
+//	        (cssmodules.go), by path evidence.
+//	"ts-10": the placement of class members (static or instance,
+//	        SymbolDraft.Placement).
+//	"ts-11": value reads of declared and bound names (reads.go).
+//	"ts-12": CSS Modules classes of `export default s.x` and of a
+//	        destructuring of the class map (cssmodules.go).
+//	"ts-13": value reads denote values only (no interface or type alias),
+//	        none in an enum's members or a with body; calls in a with body
+//	        are candidates.
+//	"ts-14": no CommonJS export of a name the module may write another value
+//	        to: a later spread, computed or same key in the module.exports
+//	        object, any other write of exports.a or the exports object
+//	        (commonjs.go).
+//	"ts-16": CommonJS exports are Mutable (language.ExportDraft): a
+//	        resolution through one is a Candidate at most, the exports
+//	        object being changeable by routes no static rule closes
+//	        (docs/development/web-semantic-fidelity/commonjs-boundary).
+//	        ts-15 (an unreleased audit of those routes) is skipped so that
+//	        no cache of it is read.
+func (p *Provider) CacheVersion() string { return "ts-16" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()
@@ -73,16 +99,17 @@ func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) 
 	}
 	defer tree.Release()
 
-	e := newExtractor(tsLang, src, file)
+	e := newExtractor(tsLang, src, file, dialectTypeScript)
 	e.program(tree.RootNode())
 	return language.Extraction{
-		Symbols:      e.symbols,
-		References:   e.refs,
-		Imports:      e.imports,
-		Bindings:     e.bindings,
-		Exports:      e.exports,
-		ModuleScoped: e.isModule,
-		Diagnostics:  treediag.ParseErrors(tree.RootNode(), tsLang, file),
+		Symbols:           e.symbols,
+		References:        e.refs,
+		Imports:           e.imports,
+		Bindings:          e.bindings,
+		Exports:           e.exports,
+		ModuleScoped:      e.isModule,
+		MembersShareNames: true,
+		Diagnostics:       treediag.ParseErrors(tree.RootNode(), tsLang, file),
 	}, nil
 }
 

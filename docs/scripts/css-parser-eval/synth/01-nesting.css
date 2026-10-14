@@ -1,0 +1,2 @@
+.card { color: red; &:hover { color: blue; } .title { font: bold 1em/1.2 serif; } @media (width >= 40em) { padding: 2rem; } }
+.a { b:c; d e { f: g } h: i }

@@ -15,16 +15,20 @@ import (
 var (
 	ErrUnsupportedLanguage = errors.New("unsupported syntax language")
 	ErrParseFailed         = errors.New("failed to parse source")
+	// ErrNoSyntaxTree: the language's provider parses without Tree-sitter,
+	// so there is no syntax tree to print (its symbols are still extracted).
+	ErrNoSyntaxTree = errors.New("no Tree-sitter syntax tree for this language")
 )
 
 // ParseResult holds the result of parsing a source file.
 // It is used by RunSyntaxCommand for raw AST output; symbol extraction now
 // goes through the language Provider instead of this struct.
 type ParseResult struct {
-	Tree     *ts.Tree
+	Tree     *ts.Tree // nil for a language without a Tree-sitter grammar
 	Language *ts.Language
 	Source   []byte
 	Lang     SupportedLanguage
+	File     source.FileID // the file's name when known (ParseNamed)
 }
 
 // Release releases resources associated with the parse result.
@@ -43,10 +47,28 @@ func ParseFile(filename string, source []byte) (*ParseResult, error) {
 	return Parse(lang, source)
 }
 
-// Parse parses source code with a specific language.
+// ParseNamed is Parse for the file named file (repository-relative): the
+// symbols ExtractSymbols returns are extracted as that file's. A provider may
+// name symbols after their file — HTML's document, a Rust crate path, a
+// Terraform module directory or override file — which a synthetic name
+// would get wrong.
+func ParseNamed(lang SupportedLanguage, file string, src []byte) (*ParseResult, error) {
+	r, err := Parse(lang, src)
+	if err == nil {
+		r.File = source.FileID(file)
+	}
+	return r, err
+}
+
+// Parse parses source code with a specific language. A language whose
+// provider parses without Tree-sitter has no Tree: the result serves
+// ExtractSymbols only.
 func Parse(lang SupportedLanguage, src []byte) (*ParseResult, error) {
 	tsLang := grammarFor(lang)
 	if tsLang == nil {
+		if _, ok := languages.Registry().Provider(lang); ok {
+			return &ParseResult{Source: src, Lang: lang}, nil
+		}
 		return nil, ErrUnsupportedLanguage
 	}
 
@@ -102,9 +124,12 @@ func ExtractSymbols(result *ParseResult) []Symbol {
 		return nil
 	}
 
-	// Use a synthetic filename to satisfy the Provider API.
-	fakeFile := source.FileID("_." + string(result.Lang))
-	ext, err := p.Extract(context.Background(), fakeFile, result.Source)
+	// Without the file's name, a synthetic one satisfies the Provider API.
+	file := result.File
+	if file == "" {
+		file = source.FileID("_." + string(result.Lang))
+	}
+	ext, err := p.Extract(context.Background(), file, result.Source)
 	if err != nil || ext.Symbols == nil {
 		return nil
 	}
@@ -129,6 +154,7 @@ func draftsToSymbols(drafts []language.SymbolDraft) []Symbol {
 			Receiver:  d.Receiver,
 			Parent:    d.Parent,
 			Exported:  d.Exported,
+			Qualified: d.Qualified,
 		})
 	}
 	return symbols

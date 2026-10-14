@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/magicdrive/ark/internal/asset"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/source"
 )
@@ -48,7 +49,10 @@ func fsFrom(ctx context.Context) FS {
 // walkSources visits, in lexical (filepath.WalkDir) order, every file an index
 // built over root reads: files with a provider extension, outside skipped
 // directories (SkipDirName) and not excluded. visit receives the file's
-// content, or the error reading it. Building an index and fingerprinting its
+// content, or the error reading it. It visits the assets too
+// (internal/asset: regular files of an asset extension), with a nil provider
+// and no content: an index records their paths (and makes a node for each
+// a reference names), and its fingerprint covers the paths. Building an index and fingerprinting its
 // sources use this one walk, so they always see the same set of files — which
 // is why a change of what exclude leaves out changes the fingerprint.
 func walkSources(ctx context.Context, root string, providers []language.Provider, exclude Exclude,
@@ -90,6 +94,13 @@ func sourceStep(root string, providers []language.Provider, exclude Exclude, rea
 		}
 		prov, ok := extMap[strings.ToLower(filepath.Ext(path))]
 		if !ok {
+			// An asset (internal/asset) is visited by its path alone, with
+			// a nil provider: never read. A symbolic link is none — where
+			// it leads is not known without following it.
+			if asset.Category(filepath.Ext(path)) != "" && d.Type().IsRegular() && (exclude == nil || !exclude(path, d)) {
+				relPath, _ := filepath.Rel(root, path)
+				visit(path, relPath, nil, nil, nil)
+			}
 			return nil
 		}
 		if exclude != nil && exclude(path, d) {
@@ -161,6 +172,12 @@ func (d *sourceDigest) add(rel string, src []byte, readErr error) {
 	fmt.Fprintf(d.h, "file %q %x\n", rel, sum)
 }
 
+// addAsset adds an asset's path — its existence, not its content: an index
+// depends on which assets there are, never on what they hold.
+func (d *sourceDigest) addAsset(rel string) {
+	fmt.Fprintf(d.h, "asset %q\n", rel)
+}
+
 func (d *sourceDigest) sum() string { return hex.EncodeToString(d.h.Sum(nil)) }
 
 // SourceFingerprint returns the fingerprint an index built now over root with
@@ -183,7 +200,11 @@ func SourceFingerprintListed(ctx context.Context, root string, providers []langu
 		return "", fmt.Errorf("index: listing of %s does not start at it", root)
 	}
 	d := newSourceDigest(providers)
-	err := listedSources(ctx, root, providers, exclude, entries, func(_, rel string, _ language.Provider, src []byte, readErr error) {
+	err := listedSources(ctx, root, providers, exclude, entries, func(_, rel string, prov language.Provider, src []byte, readErr error) {
+		if prov == nil {
+			d.addAsset(rel)
+			return
+		}
 		d.add(rel, src, readErr)
 	})
 	if ctx.Err() != nil {
@@ -202,7 +223,11 @@ func SourceFingerprintExcluding(ctx context.Context, root string, providers []la
 		return "", err
 	}
 	d := newSourceDigest(providers)
-	err := walkSources(ctx, root, providers, exclude, func(_, rel string, _ language.Provider, src []byte, readErr error) {
+	err := walkSources(ctx, root, providers, exclude, func(_, rel string, prov language.Provider, src []byte, readErr error) {
+		if prov == nil {
+			d.addAsset(rel)
+			return
+		}
 		d.add(rel, src, readErr)
 	})
 	if ctx.Err() != nil {

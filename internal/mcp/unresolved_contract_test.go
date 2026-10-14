@@ -287,6 +287,10 @@ func TestUnresolved_CrossLanguage(t *testing.T) {
 		"t/a.ts": "import { thing } from 'lib';\nexport function tsRun(o: any) {\n  thing();\n  o.foo();\n  tsLocal();\n}\nfunction tsLocal() {}\n",
 		"j/a.js": "function jsRun(o) {\n  o.go();\n  jsLocal();\n}\nfunction jsLocal() {}\n",
 		"p/a.py": "def py_run(o):\n    o.go()\n    py_local()\n\ndef py_local():\n    pass\n",
+		// Web: a name of another language is unresolved (never its target),
+		// a missing file is unresolved (not outside); the path of an
+		// existing script is the one relation to another language.
+		"w/page.html": "<label for=jsRun>x</label><script src=\"../j/a.js\"></script><script src=\"missing.js\"></script>\n",
 	})
 	cases := []struct {
 		sym        string
@@ -304,6 +308,7 @@ func TestUnresolved_CrossLanguage(t *testing.T) {
 		{"tsRun", []string{"tsLocal"}, []string{"thing [outside_repository]", "foo [unresolved]"}, 1},
 		{"jsRun", []string{"jsLocal"}, []string{"go [unresolved]"}, 0},
 		{"py_run", []string{"py_local"}, []string{"go [unresolved]"}, 0},
+		{"w/page.html", []string{"j/a.js"}, []string{"jsRun [unresolved]", "missing.js [unresolved]"}, 0},
 	}
 	for _, tc := range cases {
 		t.Run(tc.sym, func(t *testing.T) {

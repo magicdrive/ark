@@ -41,7 +41,10 @@ subdirectory `path` indexes only that subtree.
 (`Place`, `Handler.Checkout`; a namespace prefix is optional). When several
 declarations match, the call fails with the list of declarations and their
 `symbolId`; pass `symbolId` or `filePattern` to select one. Ark never picks
-one for you.
+one for you. A name that is some declaration's exact qualified name selects
+that declaration (`index.html` is the document at the root, not
+`sub/index.html`, whose qualified name is its path); with `filePattern`, the
+lookup keeps to the matching files.
 
 **Confidence and completeness.** Edges carry `confidence` and `evidence`;
 `candidates` are possibilities, not edges; `unattributed`, `unresolved` and
@@ -243,7 +246,10 @@ Results are in path order; when more than `maxResults` match, `truncated` is
 Finds symbols by structural predicates, combined with AND: kind, name
 substring, exported status, a call to a name, use of a type, file pattern,
 language. It lists at most `maxResults` matches; the first line always states
-the total. With `groupBy` it counts the matches instead.
+the total. With `groupBy` it counts the matches instead. With `format: json`
+each match carries the symbol's fields; a JavaScript or TypeScript class
+member also its `Placement` (`static` or `instance`), a field other
+languages omit.
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -255,8 +261,8 @@ the total. With `groupBy` it counts the matches instead.
 | `filePattern` | string |  |  | File path substring filter (case-insensitive) |
 | `format` | string (`text`, `json`) |  | `text` |  |
 | `groupBy` | string |  |  | Count the matches instead of listing them, by one or two comma-separated keys: `kind`, `language`, `directory`, `file`, `resourceType` |
-| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro) |
-| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust |
+| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro); HTML: `document` (a file), `element` (an element with an id); CSS: `stylesheet`, `keyframes`, `font_face`, `property_registration`, `custom_property`, `css_class` (a CSS Modules class); JavaScript: `script` (a file); `asset` (an image, a font or a media file web documents link to) |
+| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, html, css |
 | `maxResults` | integer |  | `50` | Maximum number of matches listed (the total is always reported); with `groupBy`, of group lines (at most 1000) |
 | `namePattern` | string |  |  | Name substring filter (case-insensitive) |
 | `usesType` | string |  |  | Only symbols that reference a type whose name contains this string |
@@ -296,7 +302,11 @@ under each type. In JSON: `{"totalCount", "groupBy", "groups": [{"name",
 
 ### `get_symbols`
 
-Lists the declarations of one file, parsed with Tree-sitter. For a large
+Lists the declarations of one file, parsed with Tree-sitter (an HTML file
+with golang.org/x/net/html: its document, the elements with an id and the
+declarations of its inline styles and scripts; a CSS
+file as CSS Syntax Level 3: its stylesheet, @keyframes, @font-face,
+@property, custom properties and CSS Modules classes). For a large
 file, list its declarations here and read the ones you need with
 [`get_symbol`](#get_symbol) rather than the whole file. Code in comments
 declares nothing: a commented-out declaration — a commented-out Terraform
@@ -307,7 +317,7 @@ it with [`search_in_files`](#search_in_files), e.g. the regex
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `path` | string | yes |  | File path to analyze |
-| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust). Auto-detected if not specified. |
+| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, html, css). Auto-detected if not specified. |
 
 Example:
 
@@ -367,7 +377,8 @@ reference may be a missing caller; otherwise `candidates` samples the possible
 callers (at most 10; `candidatesTotal` and `candidateRelationsTotal` count
 all). Each reverse edge reports what the reference is: `called_by` for a
 call or a construction, and otherwise `referenced_by` (a value; Terraform
-dependents), `depended_on_by` (Terraform `depends_on`), `implemented_by`,
+dependents; an HTML element's id), `depended_on_by` (Terraform `depends_on`),
+`linked_from` (an HTML document or a stylesheet linking it), `implemented_by`,
 `extended_by`, `trait_used_by`, `type_used_by` or `imported_by` — an
 implementation, a type use or an import is never shown as a call.
 `maxDepth` above 1 follows callers transitively.
@@ -375,7 +386,12 @@ implementation, a type use or an import is never shown as a call.
 ### `get_callees`
 
 Lists what the target calls, constructs or uses, and accounts for every
-observed reference it contains.
+observed reference it contains. For an HTML document the callees are what it
+refers to: `references` (an element by its id; a declaration of its inline
+styles), `links` (another document, a stylesheet, a script) and `calls` (a
+function or class of its inline scripts, from their top level); for a CSS
+stylesheet `references` (an animation name, a font
+family, a composed class) and `links` (an `@import`).
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -436,7 +452,7 @@ imports, constructions, reads, writes — whether or not it resolves.
 |---|---|---|---|---|
 | `name` | string | yes |  | Symbol name to search for (exact match) |
 | `path` | string | yes |  | File or directory path to search in |
-| `kind` | string |  |  | Filter by reference kind: call, type_use, import, construction, read, write, unknown |
+| `kind` | string |  |  | Filter by reference kind: call, type_use, import, construction, read, write, value_reference, depends_on, id_reference, resource_link, unknown |
 | `maxResults` | integer |  | `100` | Maximum number of results |
 
 Example:
@@ -700,7 +716,9 @@ Example:
 ```json
 [{"language":"go","level":"context_quality_certified","extensions":[".go"]}, …,
  {"language":"terraform","level":"graph","extensions":[".tf",".tfvars"]},
- {"language":"rust","level":"graph","extensions":[".rs"]}]
+ {"language":"rust","level":"graph","extensions":[".rs"]},
+ {"language":"html","level":"graph","extensions":[".html",".htm"]},
+ {"language":"css","level":"graph","extensions":[".css"]}]
 ```
 
 See [Language support](language-support.md).

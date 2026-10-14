@@ -216,6 +216,25 @@ func TestScan_Suggestions(t *testing.T) {
 	}
 }
 
+// HTML and CSS files are no source code to the suggestions: one dense with
+// findings is suggested for exclusion like a configuration file.
+func TestScan_SuggestionsHTMLIsNotCode(t *testing.T) {
+	for _, name := range []string{"page.html", "theme.css"} {
+		root := t.TempDir()
+		write(t, root, map[string]string{
+			name: "password: a\ntoken: b\nsecret: c\nname: d\n",
+		})
+		r, err := secretscan.Scan(root, secretscan.Options{AllowGitignore: true})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s := r.Suggest()
+		if len(s.Exclude) != 1 || s.Exclude[0].Path != name {
+			t.Errorf("exclude %+v, want %s", s.Exclude, name)
+		}
+	}
+}
+
 // A configuration that cannot be compiled stops the scan: no report with
 // the rules it could not read.
 func TestScan_BrokenConfiguration(t *testing.T) {

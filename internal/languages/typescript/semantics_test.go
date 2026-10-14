@@ -393,7 +393,8 @@ func TestRefs_ReceiverTypeProven(t *testing.T) {
 	}
 }
 
-// Computed access, super and dynamic callees are not guessed at.
+// Computed access and dynamic callees are not guessed at. super.go() names
+// the member go of the class C extends (B): the receiver is super, its type B.
 func TestRefs_NoFabrication(t *testing.T) {
 	ext := extractTS(t, `
 class C extends B {
@@ -406,11 +407,19 @@ class C extends B {
     this[k]();
   }
 }`)
+	superGo := false
 	for _, r := range refRows(ext) {
+		if r.kind == "call" && r.name == "go" && r.recv == "super" && r.recvType == "B" {
+			superGo = true
+			continue
+		}
 		// `getCtor()` is a genuine nested call; nothing else may be emitted.
 		if (r.kind == "call" && r.name != "getCtor") || r.kind == "construction" {
 			t.Errorf("unexpected reference %+v", r)
 		}
+	}
+	if !superGo {
+		t.Errorf("no super.go() reference of type B: %s", dumpRows(refRows(ext)))
 	}
 }
 

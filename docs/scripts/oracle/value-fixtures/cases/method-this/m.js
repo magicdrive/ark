@@ -1,0 +1,3 @@
+function a() {}
+function b() {}
+module.exports = { a, X: 1, set() { this.a = null } }

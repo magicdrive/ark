@@ -74,27 +74,30 @@ func (e *extractor) misparsedGenericCall(n *ts.Node, sc scope) {
 		return
 	}
 	if recvNode == nil {
-		e.addRef(callee, e.text(callee), string(reference.KindCall), sc.container, "", "", true)
+		name := e.text(callee)
+		e.addRefCap(callee, name, string(reference.KindCall), sc.container, "", "", true, e.localCap(sc, name, "", ""))
 	} else {
-		e.addRef(callee, e.text(callee), string(reference.KindCall), sc.container,
-			e.text(recvNode), e.receiverType(recvNode, callee.StartByte(), sc), true)
+		recv, recvType := e.text(recvNode), e.receiverType(recvNode, callee.StartByte(), sc)
+		e.addRefCap(callee, e.text(callee), string(reference.KindCall), sc.container,
+			recv, recvType, true, e.localCap(sc, "", recv, recvType))
 	}
 	for _, r := range p.refs {
 		if r.receiver == "" && sc.tparams[r.name] {
 			continue
 		}
-		e.addRefAt(r.start, r.end, r.name, string(reference.KindTypeUse), sc.container, r.receiver)
+		e.addRefAt(r.start, r.end, r.name, string(reference.KindTypeUse), sc.container, r.receiver, e.typeLocalCap(sc, r.name, r.receiver))
 	}
 }
 
 // addRefAt appends a non-call reference located by byte offsets.
-func (e *extractor) addRefAt(start, end uint32, name, kind, container, receiver string) {
+func (e *extractor) addRefAt(start, end uint32, name, kind, container, receiver, cap string) {
 	e.refs = append(e.refs, language.ReferenceDraft{
-		Name:         name,
-		Kind:         kind,
-		Container:    container,
-		Location:     source.Location{File: e.file, Range: source.Range{Start: e.positionAt(start), End: e.positionAt(end)}},
-		ReceiverExpr: receiver,
+		Name:          name,
+		Kind:          kind,
+		Container:     container,
+		Location:      source.Location{File: e.file, Range: source.Range{Start: e.positionAt(start), End: e.positionAt(end)}},
+		ReceiverExpr:  receiver,
+		ConfidenceCap: cap,
 	})
 }
 

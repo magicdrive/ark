@@ -32,6 +32,11 @@ type Symbol struct {
 	Receiver string `json:"receiver,omitempty"` // For methods: receiver type name
 	Parent   string `json:"parent,omitempty"`   // For nested symbols: parent name
 	Exported bool   `json:"exported,omitempty"` // Whether the symbol is exported/public
+	// Qualified is the provider's qualified identity (the index's
+	// Symbol.Qualified). It selects one of several symbols of a file that
+	// share Parent and Name (an HTML document's id and inline function of
+	// one name); it is not part of the JSON output.
+	Qualified string `json:"-"`
 }
 
 // FileSymbols holds all symbols found in a file

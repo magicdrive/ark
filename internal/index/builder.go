@@ -2,9 +2,12 @@ package index
 
 import (
 	"fmt"
+	"path/filepath"
 	"slices"
 	"sort"
+	"strings"
 
+	"github.com/magicdrive/ark/internal/asset"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
@@ -66,6 +69,12 @@ type builder struct {
 	// nameSpaces maps a language to its files' name space
 	// (language.NameSpace of its provider).
 	nameSpaces map[string]string
+
+	// assetPaths are the index's asset files (internal/asset) the walk
+	// found; assets the nodes made for those a reference names
+	// (materializeAssets), apart from the source files and their symbols.
+	assetPaths map[source.FileID]bool
+	assets     []symbol.Symbol
 }
 
 // nameSpaces returns each provider's language's name space.
@@ -157,6 +166,75 @@ func (b *builder) ingestExtraction(fileID source.FileID, lang string, ex languag
 	b.resolverFiles = append(b.resolverFiles, fi)
 }
 
+// addAsset records an asset file (internal/asset) the walk found: its path
+// only. Its node is made by materializeAssets when a reference names it.
+func (b *builder) addAsset(fileID source.FileID) {
+	if b.assetPaths == nil {
+		b.assetPaths = make(map[source.FileID]bool)
+	}
+	b.assetPaths[fileID] = true
+}
+
+// materializeAssets makes the node of each asset file a reference names by
+// path evidence (FileIdentity with the asset kind among its targets): an
+// asset nothing links to costs its path only. It runs once every file is
+// ingested, before identities are checked and references resolved.
+func (b *builder) materializeAssets() {
+	if len(b.assetPaths) == 0 {
+		return
+	}
+	named := map[source.FileID]bool{}
+	for _, fi := range b.resolverFiles {
+		for _, r := range fi.References {
+			if !r.FileIdentity || !strings.Contains(","+r.TargetKinds+",", ","+string(symbol.KindAsset)+",") {
+				continue
+			}
+			if id := source.FileID(r.NameQualified); b.assetPaths[id] && !named[id] {
+				named[id] = true
+			}
+		}
+	}
+	ids := make([]source.FileID, 0, len(named))
+	for id := range named {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	for _, id := range ids {
+		b.addAssetNode(id)
+	}
+}
+
+// addAssetNode adds the node of an asset file: a symbol of kind asset whose
+// identity is its path alone — its content is never read, so changing it
+// changes nothing — reached by path evidence only (symbol.DeclaresFile). It
+// is no source file of the index (Files, SymbolsByFile and the statistics
+// leave it out) and has no name in the name index; GetSymbol and
+// FindSymbolsByQualified find it, and the resolver sees it as a file of the
+// asset language declaring itself.
+func (b *builder) addAssetNode(fileID source.FileID) {
+	path := string(fileID)
+	sym := symbol.Symbol{
+		ID:        b.ids(asset.Language, path, symbol.KindAsset, path, 1),
+		Name:      filepath.Base(filepath.FromSlash(path)),
+		Qualified: path,
+		Kind:      symbol.KindAsset,
+		Language:  asset.Language,
+		Location:  source.Location{File: fileID},
+		Signature: asset.Category(filepath.Ext(path)),
+	}
+	b.observeID(sym)
+	b.symbolsByQualified[sym.Qualified] = append(b.symbolsByQualified[sym.Qualified], sym)
+	b.symbolsByKind[sym.Kind] = append(b.symbolsByKind[sym.Kind], sym)
+	b.assets = append(b.assets, sym)
+	b.resolverFiles = append(b.resolverFiles, resolver.FileIndex{
+		FileID:       fileID,
+		Language:     asset.Language,
+		NameSpace:    asset.Language,
+		Symbols:      []symbol.Symbol{sym},
+		IdentityOnly: true,
+	})
+}
+
 // NewFileIndex converts one file's Extraction by provider p into the
 // resolver's FileIndex, exactly as repository indexing does (newFileIndex):
 // symbol identity, containment, reference evidence and the name space
@@ -191,6 +269,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			MemberScope:    sd.MemberScope,
 			ParameterScope: sd.ParameterScope,
 			MembersOutside: sd.MembersOutside,
+			Placement:      sd.Placement,
 		}
 		// ParentQualified is the provider's statement, kept as is for the
 		// resolver's name rules; Parent, the identity, is resolved below.
@@ -219,6 +298,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			TargetKinds:           rd.TargetKinds,
 			Dynamic:               rd.Dynamic,
 			IdentityInRepository:  rd.IdentityInRepository,
+			FileIdentity:          rd.FileIdentity,
 			NamedArgument:         rd.NamedArgument,
 			IsCall:                rd.IsCall,
 			ReceiverChain:         rd.ReceiverChain,
@@ -248,11 +328,12 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 		ModuleScoped: ex.ModuleScoped,
 		IdentityOnly: ex.IdentityOnly,
 
-		Package:       ex.Package,
-		PackageScoped: ex.PackageScoped,
-		NameSpace:     space,
-		Aliases:       ex.Aliases,
-		TypeFacts:     ex.TypeFacts,
+		Package:           ex.Package,
+		PackageScoped:     ex.PackageScoped,
+		MembersShareNames: ex.MembersShareNames,
+		NameSpace:         space,
+		Aliases:           ex.Aliases,
+		TypeFacts:         ex.TypeFacts,
 	}
 }
 
@@ -275,7 +356,14 @@ func resolveParents(syms []symbol.Symbol) {
 			continue
 		}
 		found := -1
-		for _, j := range byQualified[c.ParentQualified] {
+		cands := byQualified[c.ParentQualified]
+		// A file's own declaration (its Qualified is the file's path) may
+		// share the name of a member (a method js of app, in app.js): the
+		// member is the parent, when there is one.
+		if slices.ContainsFunc(cands, func(j int) bool { return !symbol.DeclaresFile(syms[j].Kind) }) {
+			cands = slices.DeleteFunc(slices.Clone(cands), func(j int) bool { return symbol.DeclaresFile(syms[j].Kind) })
+		}
+		for _, j := range cands {
 			if j == i || syms[j].ID == c.ID || !rangeEncloses(syms[j].Location.Range, c.Location.Range) {
 				continue
 			}
@@ -416,7 +504,17 @@ func (b *builder) resolve() {
 		return nil
 	})
 
-	b.completeness = NewCompleteness(b.symbolsByName)
+	// A file's own declaration (symbol.DeclaresFile) is reached by path
+	// evidence only: its name (the file's) is no name a reference may mean.
+	byName := make(map[string][]symbol.Symbol, len(b.symbolsByName))
+	for name, syms := range b.symbolsByName {
+		for _, s := range syms {
+			if !symbol.DeclaresFile(s.Kind) {
+				byName[name] = append(byName[name], s)
+			}
+		}
+	}
+	b.completeness = NewCompleteness(byName)
 	b.nonEdge = newNonEdgeRelations()
 	b.unidentified = newUnidentifiedSources()
 	for _, res := range resolutions {
@@ -555,6 +653,12 @@ func (b *builder) containerSymbol(file source.FileID, qualified string, loc sour
 		b.containers[file] = byQual
 	}
 	ids := byQual[qualified]
+	// A file's own declaration (its Qualified is the file's path) contains
+	// everything: when a member shares the name (a method js of app, in
+	// app.js), the member is the container.
+	if len(ids) > 1 && slices.ContainsFunc(ids, func(id symbol.SymbolID) bool { return !symbol.DeclaresFile(b.symbolsByID[id].Kind) }) {
+		ids = slices.DeleteFunc(slices.Clone(ids), func(id symbol.SymbolID) bool { return symbol.DeclaresFile(b.symbolsByID[id].Kind) })
+	}
 	switch len(ids) {
 	case 0:
 		return "", false
@@ -635,7 +739,14 @@ func (b *builder) freeze() *RepositoryIndex {
 		diagnostics:           b.diagnostics,
 		stats:                 b.stats,
 		aliases:               b.aliases(),
+		assets:                b.sortedAssets(),
+		assetPaths:            b.assetPaths,
 	}
+}
+
+func (b *builder) sortedAssets() []symbol.Symbol {
+	sort.Slice(b.assets, func(i, j int) bool { return b.assets[i].Qualified < b.assets[j].Qualified })
+	return b.assets
 }
 
 // aliases collects the files' aliases (language.AliasDraft) by language and
@@ -671,7 +782,8 @@ func refKindRank(k reference.ReferenceKind) int {
 	for i, r := range []reference.ReferenceKind{
 		reference.KindCall, reference.KindConstruction, reference.KindImplements,
 		reference.KindInheritance, reference.KindUsesTrait, reference.KindTypeUse,
-		reference.KindValueReference, reference.KindExplicitDependency, reference.KindImport,
+		reference.KindValueReference, reference.KindIDReference, reference.KindExplicitDependency,
+		reference.KindResourceLink, reference.KindImport,
 	} {
 		if k == r {
 			return i
@@ -742,7 +854,8 @@ func dedupeEdges(edges []GraphEdge) []GraphEdge {
 // `new T()` depends on T much like a call (this preserves the pre-D4 behaviour
 // that relied on the old default). A value reference and an explicit
 // dependency (configuration languages) form dependency edges of their own,
-// never call edges. Every other kind (read/write/unknown or any
+// never call edges; an identifier reference (markup) is a reference edge, a
+// resource link a links edge. Every other kind (read/write/unknown or any
 // future kind) has no graph semantics and never forms an edge.
 func edgeKindFor(k reference.ReferenceKind) (EdgeKind, bool) {
 	switch k {
@@ -758,8 +871,10 @@ func edgeKindFor(k reference.ReferenceKind) (EdgeKind, bool) {
 		return EdgeImplements, true
 	case reference.KindUsesTrait:
 		return EdgeUsesTrait, true
-	case reference.KindValueReference:
+	case reference.KindValueReference, reference.KindIDReference:
 		return EdgeReferences, true
+	case reference.KindResourceLink:
+		return EdgeLinks, true
 	case reference.KindExplicitDependency:
 		return EdgeDependsOn, true
 	}

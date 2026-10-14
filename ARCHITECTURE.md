@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -129,6 +129,51 @@ Danger: binding a method call or an unresolved path by its last name — a
 trait implementation's method and an inherent one of the same name are
 different functions, and so are two crates' `crate::helper`.
 
+**What the browser builds, not what the bytes look like** (HTML). An HTML
+tag is an element only where the standard's tree builder says so: inside
+`<script>`, `<style>`, `<title>`, SVG `CDATA`, a select or a frameset the same
+bytes may be text, an attribute value or an ignored tag, and a duplicate or
+merged attribute is no attribute of the element. The provider parses with
+golang.org/x/net/html — the tokenizer for positions, the tree builder for
+facts — and uses an attribute only when the tree has it on an element of its
+own tag's name: it reparses the file with a marker attribute inserted into
+every tag the tokenizer reported, and checks that the marked tree, markers
+removed, is the source's tree (otherwise it states no id or reference and
+reports `html_tree_unverified`). Every file is `IdentityOnly`: an element's
+identity is `<file>#<id>` (a `<template>`'s content is a tree scope of its
+own), a document's its path; references (`id_reference`, `resource_link`)
+carry it with `IdentityInRepository`, capped at Strong where the DOM may
+change at run time or a URL's file depends on the server, at Candidate inside
+template content. A tag cut off by the end of the file is dropped as the
+standard does and reported as an error (`html_eof_in_tag`). Authority:
+`languages/html/provider.go` (header), `languages/html/document.go`
+(`verify`). Tests: `TestSymbols_OnlyWhatTheTreeHas`, `TestIDReferences_*`,
+`TestLinks`, `FuzzExtractHTML` (the tree as oracle), the opt-in
+`TestHarnessAgreement` against the independent implementation of the rules
+in `docs/scripts/html-parser-eval/attrlib.go`.
+Danger: "it looks like `<b id=x>`, so it is an element" — a script's text, an
+SVG style's content or a second `id` is not.
+
+**A stylesheet's names are its own** (CSS). Which stylesheets one page loads
+together, and in which order, is decided by documents and build tools, not
+by CSS: an `@keyframes spin` of another file may or may not be the one an
+`animation-name: spin` uses, and the last definition wins. Every CSS file is
+`IdentityOnly`; a declaration's identity holds its file
+(`<file> @keyframes <name>`, `<file> @font-face <family>`, `<file> --x`,
+`<file> .<class>` of a CSS Modules file), and a reference names its own
+stylesheet's (Strong at most: a later stylesheet may win; a CSS Modules
+`composes` of a local class of the same file is Exact), or the file an
+`@import` / `composes … from` path names (Strong). `var()` is a Candidate: a custom
+property's value comes from the element tree. The stylesheet is read as CSS
+Syntax Level 3 has it (`languages/css/reader.go`: one pass of recursive
+descent, nesting bounded at 256 so no input exhausts the stack, measured
+against the css-parsing-tests suite and other parsers in
+`docs/scripts/css-parser-eval`). Authority: `languages/css/provider.go`
+(header). Tests: `TestReferences`, `TestImportsAndComposes`,
+`TestModuleClasses`, `TestWorstCases`, `FuzzExtractCSS`.
+Danger: "the only `@keyframes spin` in the repository is the one" — a
+stylesheet's name resolves within that stylesheet.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -137,18 +182,19 @@ untyped receiver, module scope, unknown participant) only lower it.
 
 | Class | Known | Unknown | Graph edge |
 |---|---|---|---|
-| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding, qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
-| Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap — except in package-scoped files, where only the file's own package (directory and `Package`) is Strong evidence. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
+| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding (not through a CommonJS export, whose value code may replace at run time: `ExportDraft.Mutable` caps it at Candidate, `TestMutableExport_*`), qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
+| Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap, a member of a value (an object literal, a constructor function's prototype: code may reassign it) — except in package-scoped files, where only the file's own package (directory and `Package`) is Strong evidence. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
 | Candidate | Plausible targets (one or several), kept as evidence. | Which one, or whether another unseen target exists. | **never** |
 | Unresolved | No candidate. | The target. This is a correct, sound answer — not a gap to fill. | never |
-| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding, a receiver whose members are declared outside) places the referent outside the repository's declarations. An identity that names a repository scope (`IdentityInRepository`) never does. | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
+| `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding, a receiver whose members are declared outside) places the referent outside the repository's declarations. An identity that names a repository scope (`IdentityInRepository`) never does, nor does evidence that reaches the repository and finds nothing Ark represents: an import binding whose module is a repository file (a relative specifier, also of a file no provider indexes) without the export, a binding or receiver type that names a repository value (an object literal: its members are no symbols). | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
 
 Strong is a closed-world claim ("the only `X` here"). That is why module-scoped
 files cap proximity/uniqueness at Candidate and why `OutsideRepository`
 exists: a vendor `Request` must never become the repository's own `Request`.
 Authority: `resolver/confidence.go`, `resolver/result.go`
 (`HasUniqueTarget`), `resolver/evidence.go`, `TestConfidenceCap_OnlyLowers`,
-`TestOutsideRepository`, `TestR4_*`, `TestModuleScoped_*`.
+`TestOutsideRepository`, `TestR4_*`, `TestModuleScoped_*`, `TestECMAScriptScopes`
+(`internal/languages/typescript/scope_fidelity_test.go`).
 
 **Package-scoped files (Go) resolve by package scoping, never by spelling.**
 A provider that sets `PackageScoped` states its language's rules: a name
@@ -238,13 +284,26 @@ identity is keyed by language. `FileIndex.NameSpace` is
 `language.NameSpace` of the file's provider, set by the one conversion
 (`index/builder.go`, `newFileIndex`) that the index builder and
 `index.NewFileIndex` (which takes the provider) share; a hand-built
-`FileIndex` without it has its language as its name space. Tests: `TestNameSpace_*`,
+`FileIndex` without it has its language as its name space. One relation joins two name spaces, and it is no name: path evidence. A
+reference whose text names another repository file by its path — an HTML
+`<link rel="stylesheet" href>`, a `<script src>` — carries the path as its
+identity with `FileIdentity`, and resolves to the declaration of that file
+itself (a kind that declares its file, `symbol.DeclaresFile`: an HTML
+document, a stylesheet, a script) in any language (`resolver/identity.go`,
+`fileDecls`), never by a name. The same evidence names a declaration that
+belongs to its file by identity (`symbol.FileScoped`, `<FileID> <name>`: a
+CSS Modules class a JavaScript or TypeScript import of the file uses).
+Text embedded in an HTML document (inline `<style>`, `<script>`) is the
+document's: its declarations are prefixed by the document's path, in the
+HTML name space, and the script's references reach them by that identity
+only. Tests: `TestNameSpace_*`,
 `TestNameSpaces_SameForEveryFileIndexPath`,
-`TestNameSpaces_NoRelationJoinsTwoNameSpaces`,
-`TestMCPNameSpaces_NoCrossLanguageRelations`.
+`TestNameSpaces_NoRelationJoinsTwoNameSpaces` (path evidence is the only
+crossing it allows), `TestMCPNameSpaces_NoCrossLanguageRelations`,
+`TestUnresolved_CrossLanguage`.
 Danger: "JavaScript and TypeScript interoperate, so let names match across
 them" — a name match is no import; a JavaScript `run()` is not a TypeScript
-`run`.
+`run`, nor an HTML `id="run"` or a CSS `@keyframes run`.
 
 ## 3. Soundness invariants
 
@@ -854,8 +913,10 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
 general type inference (a receiver's type is derived only through
 declarations' written types — Go receiver chains — never inferred from
 uses, assignments or generic instantiation); control/data-flow analysis;
-explicit cross-language references (JavaScript importing a TypeScript file —
-JavaScript emits no module bindings — or any other language pair); Rust
+cross-language references other than path evidence (§2: an HTML page's
+stylesheets and scripts, a CSS Modules class a JavaScript or TypeScript import
+uses) — JavaScript importing a TypeScript file resolves nothing (a JavaScript
+module binding's candidates are JavaScript files) —; Rust
 paths into another crate of the repository (the crate name is in
 Cargo.toml) and glob re-exports through another file;
 `ReferenceKind × SymbolKind` compatibility in name-based stages; trait

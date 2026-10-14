@@ -32,6 +32,9 @@ type FileIndex struct {
 	// Package / PackageScoped: package scoping (see language.Extraction).
 	Package       string
 	PackageScoped bool
+	// MembersShareNames: methods and properties share one name space (see
+	// language.Extraction).
+	MembersShareNames bool
 	// Aliases are the identities the file declares to name others (see
 	// language.AliasDraft).
 	Aliases []language.AliasDraft
@@ -79,6 +82,10 @@ type Resolver struct {
 	// identities pay nothing for it.
 	qualOnce  sync.Once
 	qualified map[langQualified][]symbol.Symbol
+	// files maps a repository file's path to the declarations of the file
+	// itself (a symbol whose Qualified is its own file), of every language.
+	fileOnce sync.Once
+	fileDecl map[string][]symbol.Symbol
 	// aliases maps (language, qualified) to the identities the aliases of
 	// that identity name (language.AliasDraft); built with qualified.
 	aliases map[langQualified][]string
@@ -89,6 +96,11 @@ type Resolver struct {
 	// structural indexes type declarations' qualified relations for member
 	// lookup through supertypes and traits (see inheritance.go).
 	structural structuralIndex
+
+	// owners holds file + "\x00" + qualified name of every symbol that
+	// lexically contains members (a class, and a value with members: an
+	// object literal, a constructor function with prototype methods).
+	owners map[string]bool
 
 	// packages: package scoping (packagescope.go), built on first use;
 	// rootName is the repository root directory's name ("" if unknown).
@@ -124,6 +136,7 @@ func NewInRoot(files []FileIndex, rootName string) *Resolver {
 		exportMemo:  make(map[string]bindResult),
 		rootName:    rootName,
 		spaceOf:     make(map[source.FileID]string, len(files)),
+		owners:      make(map[string]bool),
 	}
 	for i := range files {
 		fi := &files[i]
@@ -131,9 +144,13 @@ func NewInRoot(files []FileIndex, rootName string) *Resolver {
 		r.spaceOf[fi.FileID] = fi.nameSpace()
 		for _, sym := range fi.Symbols {
 			r.byID[sym.ID] = sym
-			if fi.IdentityOnly {
+			if sym.ParentQualified != "" {
+				r.owners[string(fi.FileID)+"\x00"+sym.ParentQualified] = true
+			}
+			if fi.IdentityOnly || symbol.DeclaresFile(sym.Kind) {
 				// Reached only through the qualified-identity index
-				// (identity.go), never through a name-based stage.
+				// (identity.go) — a file's own declaration through path
+				// evidence (fileDecls) —, never through a name-based stage.
 				continue
 			}
 			k := nameKey{fi.nameSpace(), sym.Name}
@@ -183,7 +200,7 @@ func (r *Resolver) Resolve() []Resolution {
 // R1 and R2 are authoritative: when they cannot resolve, the reference is
 // Unresolved — they never fall back to name heuristics.
 func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resolution {
-	return applyConfidenceCap(restrictTargetKinds(r.resolveReference(ref, fi), ref), ref)
+	return applyConfidenceCap(r.restrictPlacement(restrictTargetKinds(r.resolveReference(ref, fi), ref), ref), ref)
 }
 
 // restrictTargetKinds removes the candidates of kinds the reference cannot
@@ -205,6 +222,48 @@ func restrictTargetKinds(res Resolution, ref reference.Reference) Resolution {
 		return res
 	}
 	ev := ResolutionEvidence{Kind: EvidenceTargetKind, Detail: fmt.Sprintf("the reference can denote only %s", ref.TargetKinds)}
+	if len(kept) == 0 {
+		return Resolution{
+			ReferenceID:   res.ReferenceID,
+			ReferenceName: res.ReferenceName,
+			Confidence:    ConfidenceUnresolved,
+			Evidence:      append(append([]ResolutionEvidence(nil), res.Evidence...), ev),
+		}
+	}
+	res.Candidates = kept
+	return capConfidence(res, ConfidenceCandidate, ev)
+}
+
+// restrictPlacement removes the member candidates the reference's receiver
+// cannot reach, whichever rule found them: a static member when the
+// receiver is a value of a proven type (ReceiverType), an instance member
+// when the receiver is the name of the member's own type itself (Clock.i(),
+// no local hiding it: no cap). A receiver of unknown type keeps both. Like
+// restrictTargetKinds it never raises a confidence: removing some leaves
+// Candidate at most, removing all leaves Unresolved.
+func (r *Resolver) restrictPlacement(res Resolution, ref reference.Reference) Resolution {
+	if ref.ReceiverExpr == "" || len(res.Candidates) == 0 {
+		return res
+	}
+	reaches := func(s symbol.Symbol) bool {
+		switch s.Placement {
+		case symbol.PlacementStatic:
+			return ref.ReceiverType == ""
+		case symbol.PlacementInstance:
+			return ref.ReceiverType != "" || ref.ReceiverExpr != s.Receiver || ref.ConfidenceCap != ""
+		}
+		return true
+	}
+	var kept []Candidate
+	for _, c := range res.Candidates {
+		if s, ok := r.byID[c.SymbolID]; !ok || reaches(s) {
+			kept = append(kept, c)
+		}
+	}
+	if len(kept) == len(res.Candidates) {
+		return res
+	}
+	ev := ResolutionEvidence{Kind: EvidenceTargetKind, Detail: fmt.Sprintf("receiver %q cannot reach a static member through a value, nor an instance member through its type", ref.ReceiverExpr)}
 	if len(kept) == 0 {
 		return Resolution{
 			ReferenceID:   res.ReferenceID,
@@ -244,6 +303,11 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceDynamicName, Detail: "the name is computed at run time"}}
 		return res
 	}
+	// A file's path is the identity of the file's own declaration, in any
+	// language (explicit path evidence: language.ReferenceDraft.FileIdentity).
+	if ref.FileIdentity && ref.NameQualified != "" {
+		return r.resolveFileIdentity(res, ref)
+	}
 	// R0: a provider-determined qualified identity is authoritative and is
 	// resolved before — and instead of — every other rule below.
 	if ref.NameQualified != "" || ref.ReceiverTypeQualified != "" {
@@ -275,6 +339,24 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 	}
 }
 
+// withoutModuleScoped drops the declarations of other module-scoped files
+// from the candidates of a free name in a file that is not one (a classic
+// JavaScript or TypeScript script): a module's top-level declarations —
+// exported or not — are its own scope's, never the global scope a script's
+// names are looked up in; only an import reaches them.
+func (r *Resolver) withoutModuleScoped(cands []symbol.Symbol, fi FileIndex) []symbol.Symbol {
+	out := cands[:0:0]
+	for _, s := range cands {
+		if s.Location.File != fi.FileID {
+			if other, ok := r.byFile[s.Location.File]; ok && other.ModuleScoped {
+				continue
+			}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
 // resolveByName runs the name-based stages. For a module-scoped file, names
 // without a local declaration or explicit binding are capped at Candidate and
 // the legacy implicit ImportDraft alias match is not applied.
@@ -292,6 +374,9 @@ func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi Fil
 		cands = r.constrainReceiver(cands, ref, typeRecv)
 		if free {
 			cands = withoutMembers(cands)
+			if !fi.ModuleScoped {
+				cands = r.withoutModuleScoped(cands, fi)
+			}
 		}
 		return cands
 	}
@@ -424,7 +509,7 @@ func (r *Resolver) sameFileContainerMatch(ref reference.Reference, fi FileIndex)
 func (r *Resolver) sameFileMatch(ref reference.Reference, fi FileIndex) []symbol.Symbol {
 	var out []symbol.Symbol
 	for _, sym := range fi.Symbols {
-		if sym.Name == ref.Name {
+		if sym.Name == ref.Name && !symbol.DeclaresFile(sym.Kind) {
 			out = append(out, sym)
 		}
 	}

@@ -1,6 +1,6 @@
 # Language support
 
-Ark analyzes eight languages. They are not supported equally: each language
+Ark analyzes ten languages. They are not supported equally: each language
 has a **support level**, the highest stage its tests certify, and every
 language has constructs Ark deliberately leaves unresolved.
 
@@ -13,7 +13,7 @@ Levels build on each other:
 
 | Level | What the tests certify |
 |---|---|
-| `parse` | The Tree-sitter grammar parses the language |
+| `parse` | The parser parses the language (Tree-sitter; HTML: golang.org/x/net/html; CSS: Ark's CSS Syntax Level 3) |
 | `symbols` | Declarations are extracted with correct names, kinds and ranges |
 | `references` | Calls, constructions, type uses and imports are extracted |
 | `resolution` | References are resolved with the confidence rules of [the resolution model](resolution-model.md) |
@@ -28,12 +28,14 @@ Levels build on each other:
 | PHP | `.php` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Terraform | `.tf`, `.tfvars` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Rust | `.rs` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| HTML | `.html`, `.htm` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
 | Python | `.py`, `.pyw` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript and Python, and `get_context` still works for PHP,
-Terraform and Rust, but those results are not covered by the tests the level names.
+Terraform, Rust, HTML and CSS, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -142,6 +144,11 @@ arrow-function fields (a getter/setter pair is one property). Module bindings
 (local, aliased, default, re-exports, `export *`, `export * as ns`, barrel
 chains), references (calls, `this.m()`, static and namespace-qualified calls,
 construction, type references, JSX components) and `extends` / `implements`.
+The classes of a CSS Modules file a relative import of it uses, as in
+JavaScript (below).
+A static member is reached only through the class name and an instance
+member only through an instance (`this`, a typed or constructed variable),
+as in JavaScript.
 
 **Resolution:** relative imports (`./user`, `../domain/user`, `./user.ts`,
 `./user/index`) resolve through aliases and barrel chains (bounded and
@@ -154,13 +161,25 @@ Files without `import` / `export` are scripts and keep the proximity rules.
 
 | | |
 |---|---|
-| **Certified** | relative-import resolution, aliases, default / namespace / type-only imports, barrels, members under proven receiver types, `this` / static members, `extends` / `implements`, JSX components |
-| **Unresolved by design** | external packages (`react`, `node:fs`), path aliases (`@/foo`, tsconfig `paths`), receivers without a proven type (`repo.save()` with an unannotated `repo`), inherited members, declaration merging, computed access (`a[k]()`), `.js`-suffixed specifiers when both `.ts` and `.tsx` exist, anonymous default exports |
+| **Certified** | relative-import resolution, aliases, default / namespace / type-only imports, barrels, members under proven receiver types, `this` / static members, `extends` / `implements`, JSX components; members inherited through an identified supertype and `super.m()` (since the web semantic fidelity work, outside the certification benchmark) |
+| **Unresolved by design** | external packages (`react`, `node:fs`), path aliases (`@/foo`, tsconfig `paths`), receivers without a proven type (`repo.save()` with an unannotated `repo`), members inherited through a supertype that is not identified (`extends` a package's class, a mixin call), declaration merging, computed access (`a[k]()`), `.js`-suffixed specifiers when both `.ts` and `.tsx` exist, anonymous default exports |
 | **Not implemented** | return-type propagation and type inference, control-flow narrowing, overload resolution, `.d.ts` / `.mts` / `package.json` resolution, `tsconfig` interpretation, `namespace` bodies, enum members, destructured declarations, framework semantics (React, Next.js, NestJS, Angular), decorator and DI inference |
 
 TypeScript module resolution is not compiler-equivalent: Ark ranks only the
-repository-local, configuration-independent subset above. Same-named static
-and instance members of one class share one symbol.
+repository-local, configuration-independent subset above. A static and an
+instance member of one name are two symbols, and a reference to the name is
+ambiguous; in a static method `this` and `super` are no receiver type.
+
+A name a parameter, a local declaration, a nested function or class, or a
+catch or loop binding shadows is never resolved `strong` or `exact` to a
+top-level declaration or import of that name (`function f(helper) {
+helper() }`); a local type declaration shadows a type the same way. A member
+call on an exported object literal (`export const Cache = { get() {} }`,
+then `Cache.get()`) is unresolved, not outside the repository. TypeScript's
+utility types (`Partial<T>`, `Exclude<T, U>`, …) are no receiver type.
+
+A declaration whose `export` keyword stands on the line before it is not
+read as exported: an import of it stays unresolved.
 
 ## PHP
 
@@ -191,7 +210,12 @@ statement whose block contains the use; an assignment inside a branch, loop,
 `$fn()`, `new $c()`, except `$c = Foo::class; new $c()` with `$c` never
 reassigned), container lookups (`make(Foo::class)` is a type use of `Foo`,
 never a call to it), Composer / PSR-4 autoloading, framework semantics
-(Laravel, Symfony). Function and constant names are resolved conservatively.
+(Laravel, Symfony).
+
+**Known false `strong`:** function calls are resolved by name, not by
+namespace — `\json_encode()` (the global function) can resolve to a
+repository function `json_encode` declared in a namespace. References to
+global constants are not extracted.
 
 ## Terraform
 
@@ -321,21 +345,236 @@ Ark never runs `cargo`, `rustc` or build scripts, and never reads
 `.gitignore` excludes it (as `cargo new` writes it): code generated into
 `target/` would otherwise be indexed like any source.
 
+## HTML
+
+**Extracted:** the document (kind `document`, one per file, named by the
+file) and every element with an `id` (kind `element`, its start tag).
+References: an element's id named by an IDREF attribute — `for` (`label`,
+`output`), `form`, `list`, `headers`, `popovertarget`, `commandfor`,
+`itemref` and the ARIA relationship attributes (`aria-labelledby`,
+`aria-describedby`, `aria-controls`, `aria-owns`, `aria-flowto`,
+`aria-activedescendant`, `aria-details`, `aria-errormessage`) — or by a
+fragment (`<a href="#x">`, `<area>`, SVG `href` / `xlink:href="#x"`,
+SVG `fill="url(#x)"` and the other paint, clip, mask, filter and marker
+attributes) (kind `id_reference`); and a link to another HTML document of
+the repository by a relative path (`<a href="docs/b.html">`, `<area>`,
+`<iframe src>`, `<frame src>`; kind `resource_link`, or `id_reference` with a
+fragment: `b.html#x`); and the stylesheets and scripts a page loads by a
+relative path (`<link rel="stylesheet" href="a.css">` to the CSS stylesheet,
+`<script src="a.js">` — no type, `module` or a JavaScript type — and
+`<link rel="modulepreload">` to the JavaScript file's `script` symbol;
+`resource_link`, Strong at most). These are the only relations between two
+languages, by path, never by a name: an `id="run"` is not a JavaScript
+`run()`.
+
+**What the browser sees.** The file is parsed as the HTML standard does
+(golang.org/x/net/html): an id or a reference counts only when the
+standard's tree has it on the element its own tag builds — text inside
+`<script>`, `<style>`, `<title>` or SVG `CDATA` that merely looks like a tag
+is none, nor is a later duplicate attribute, an attribute merged away
+(`<body>` written twice), or a tag the standard ignores. A tag cut off by the
+end of the file is dropped, as the standard does, and reported as an error
+diagnostic (`html_eof_in_tag`). Where Ark's parser cannot build the standard's tree to the
+end (a `<template>` inside SVG `<foreignObject>`, `<desc>` or MathML text, or
+a document whose last tag the parser ignores, such as a frameset's), it
+states no id and no reference for the file and reports
+`html_tree_unverified`.
+
+**Identity.** An element's qualified name is `<file>#<id>`; inside a
+`<template>`, whose content is a tree of its own, `<file>#<k> <id>` with `k`
+the template's ordinal in the file. A document's is its path. References
+reach a declaration only by this identity, never by a matching name in
+another file.
+
+**Resolution:**
+
+| | |
+|---|---|
+| **Exact** | an id reference within a static document, to the one element declaring the id in the same tree (the document, or one template's content) |
+| **Strong** | the same in a document whose DOM may change at run time (a `<script>` — also one only the browser builds, inside an SVG `<style>` —, an `on*` attribute, a `javascript:` URL, an `<iframe srcdoc>` or a frame, object or embed loading another document (of the same origin, it may change this one), template syntax such as `{{ }}`, `{% %}`, `<% %>`, `<?php`, a framework binding or control flow such as `[id]`, `*ngIf`, `@for (…)`, `@foreach(…)`, `{#each …}`, `v-for`, `x-data`, `th:each`, a server-side include `<!--#include …-->`); a link to another document, or to an id in one, and a page's stylesheet or script (which file a URL serves depends on the server) |
+| **Candidate** | an id declared twice in one tree; a reference inside a `<template>` to an id of its content — the tree its content is cloned into is not known — unless the template is a declarative shadow root (`shadowrootmode`, on an element that can host one and has no earlier one below it, outside any other template); a hyperlink's `#x` always names the document's element |
+| **Unresolved** | an id no element declares, a missing document (never outside the repository) |
+| **Not stated** | `<a name>` and `<map name>` targets, `usemap`; an id the browser gives to more elements than Ark can see (an element inside an SVG `<style>` or `<title>`, a reconstructed formatting element) — it declares nothing then, so no reference resolves to it; `<iframe src="#x">`; run-time changes by SMIL (`<set attributeName="href">`); the form-associated custom elements' `form`; root-relative (`/x.html`) and absolute URLs, `//cdn/…`; directory links (`docs/`); links and fragments of a document with `<base href>`; percent-encoded and text fragments, `#top`; ids and references holding template syntax or whitespace; files that are neither a source nor an asset (below), and an asset attribute the browser does not fetch (`source src` in `picture`, `rel=prefetch`, `preload` of another destination, `a href` to an image); a stylesheet or script the browser does not fetch (a `<script>` type or `language` that is no JavaScript, a stylesheet `type` other than `text/css` — an empty one included —, a `disabled` stylesheet, a `modulepreload` of a destination that is no script); `.ts` and `.cjs` scripts; `style` attributes and event handler attributes (`onclick`); in an inline script, references with a receiver (`a.m()`, `this.m()`), imports and exports (CSS Modules included); a script that does not run — one the end of the file closes, a classic `nomodule` script, a classic script whose `for` / `event` is other than `window` / `onload`, one with `src`; an inline `<style>` or `<script>` inside a `<template>` (a declarative shadow root's included), in MathML, holding a NUL, or in SVG holding a character reference or a CDATA section (an SVG `<script>` with `href`, or of type `module`) |
+
+**Graph.** An id reference forms a `references` edge from the document to the
+element (`referenced_by` in reverse), a link a `links` edge to the other
+document (`linked_from` in reverse). An unresolved reference to another
+document's id is reported by the id's name (`x` of `b.html#x`).
+
+**Assets.** Images, fonts, audio, video and text tracks (`.png .jpg .jpeg
+.gif .webp .avif .svg .ico .bmp .apng .woff .woff2 .ttf .otf .eot .mp4 .webm
+.ogg .ogv .oga .mp3 .wav .m4a .flac .vtt`) are nodes of the index (kind
+`asset`, named by their path; their content is never read, and a symbolic
+link is none). A document links to one (`links`, Strong at most) from `img
+src` and `srcset`, `source src` (in `video` / `audio`) and `srcset` (in
+`picture`), `video poster` / `src`, `audio src`, `track src`, `input
+type=image src`, `link` `rel=icon` / `apple-touch-icon` or `rel=preload` with
+`as` image, font, audio, video or track, and SVG `image` / `use` `href`; a
+stylesheet from `url()`, `src()` and `image-set()` strings in a declaration
+(`@font-face src` included). A missing file, or one named with another case,
+is unresolved (never outside); root-relative, absolute and protocol-relative
+URLs and a document with `<base href>` state no link. An asset has a node
+only when something links to it, and its location is line 0 (it has no
+text): tools print it as `path:0`.
+
+**Inline style and script.** The text of a `<style>` (no `type`, or an empty
+one or `text/css`) is read as CSS, and that of a `<script>` without `src`
+whose type is JavaScript as JavaScript, each by its language's extractor;
+their locations are the document's. A style element's declarations have the
+identities a stylesheet of the document's path would (`page.html @keyframes
+spin`, `page.html --x`), shared by the document's style elements, and resolve
+as in a stylesheet (an `@import` links to the stylesheet, unless the document
+has a `<base href>`). A classic script's top-level declarations are the
+document's globals, `page.html init` (and `page.html Widget.run` for a
+member); a module script's are its own, `page.html module#1 init` (the
+document's first module script). A script's call or `new` of a name reaches
+the document's declaration of that identity only — never another
+document's, nor a JavaScript file's — `strong` at most (an external script
+may declare the same global; scripts run in order); in a module script, its
+own declaration first, then a global. An embedded declaration is not
+exported. A text is read only when the standard's tree holds exactly that
+text as the element's content.
+
+`ark syntax` prints no syntax tree for HTML (there is no Tree-sitter grammar,
+so `--lang html` always fails there); `ark symbol`, `get_symbols` and the
+other tools work as for every language.
+
+## CSS
+
+**Extracted:** the stylesheet (kind `stylesheet`), `@keyframes` (kind
+`keyframes`, an ident or string name), the family an `@font-face` declares
+(kind `font_face`), `@property` registrations (kind
+`property_registration`), custom property declarations (`--x: …`, kind
+`custom_property`), and, in a CSS Modules file (`*.module.css`), its local
+classes (kind `css_class`; not inside `:global(…)` or after `:global`).
+References: animation names (`animation-name`, and the `animation`
+shorthand when it holds exactly one name), font families (`font-family`;
+generic families excluded), `var(--x)` (fallbacks and nested `var()`
+included), `composes` (CSS Modules) and `@import` of a stylesheet by a
+relative path. An `@import` counts only where the browser reads it: at the
+top level, before every rule but `@charset`, `@layer` statements and other
+`@import`s. An `@font-face` names a face only with a `src` (its last valid
+`font-family` names it); `@keyframes`, `@font-face` and `@property` nested
+in a style rule declare nothing (in `@media` or `@supports` they do).
+
+**Reading.** Ark reads CSS as CSS Syntax Level 3 has it (its own
+implementation; nested rules and custom properties as the current draft
+has them): the byte order mark, newlines, NUL and invalid UTF-8 as the
+standard decodes them, the browsers' recovery from errors. Where written
+content is lost or cannot be read it reports an error diagnostic
+(`css_bad_url`, `css_bad_string`, `css_rule_from_declaration` — a
+declaration whose `;` is missing before a nested rule —,
+`css_stray_in_prelude`, `css_encoding`); where nothing is lost a warning
+(`css_invalid` — e.g. the `*zoom: 1` hack —, `css_eof_in_block`,
+`css_eof_in_comment`, `css_eof_in_string`, `css_eof_in_url`,
+`css_replacement_character`, `css_charset`, `css_too_deep` for blocks
+nested past 256 levels).
+
+**Identity.** A declaration's qualified name holds its file:
+`styles/main.css @keyframes spin`, `styles/main.css @font-face inter var`
+(families in lower case: they match case-insensitively),
+`styles/main.css --brand`, `components/card.module.css .title`. A reference
+reaches a declaration only of its own stylesheet (or the file a `composes
+… from` or `@import` names): which stylesheets one page loads together is
+not CSS's to say.
+
+**Resolution:**
+
+| | |
+|---|---|
+| **Exact** | `composes: name` of a class of the same CSS Modules file |
+| **Strong** | an animation name or a font family declared once in the same stylesheet (another stylesheet of the page may define the name later and win); `composes: name from "./other.module.css"`; `@import` of a repository stylesheet (which file a URL serves depends on the server) |
+| **Candidate** | `var(--x)` of a custom property the stylesheet declares (its value comes from the element tree's inheritance); a name declared twice in the stylesheet (two `@font-face` weights of one family) |
+| **Unresolved** | a name the stylesheet does not declare — also one another stylesheet declares — and a missing `@import` target (never outside the repository) |
+| **Not stated** | `url()` in a custom propertys value (resolved where it is substituted); an `@import` after another rule (a `@layer` statement after an `@import` included) or with a block; root-relative and absolute URLs; `composes: x from global`, `@value`; families in the `font` shorthand; names computed by `var()` or holding template syntax (`{{ }}`, `{% %}`, …); the classes of a stylesheet that is not a CSS Modules file (global names with no declaration site); selectors and the elements they match |
+
+**Graph.** A name reference forms a `references` edge from the stylesheet
+to the declaration (`referenced_by` in reverse), an `@import` a `links`
+edge (`linked_from`). `var()` forms no edge (Candidate).
+
+`ark syntax` prints no syntax tree for CSS (there is no Tree-sitter grammar,
+so `--lang css` always fails there); `ark symbol`, `get_symbols` and the
+other tools work as for every language.
+
 ## JavaScript
 
 Level `references`.
 
-**Extracted:** top-level function declarations, class declarations, and
-`const` / `let` declarations (including exported ones); calls, `new`
-expressions and imports.
+JavaScript is extracted by the extractor TypeScript uses: the two languages
+share declarations, module bindings and exports, class members, receiver
+evidence and scopes. JavaScript keeps its own name space — a JavaScript file
+and a TypeScript file never resolve each other's names, even through an
+`import` (a known gap, not a design choice).
 
-**Not extracted:** class methods and other class members, functions nested
-in other functions, object-literal methods.
+**Extracted:** the file itself (kind `script`, the target of an HTML
+`<script src>`), top-level functions, classes, `const` / `let` / `var`
+declarations and their exports; class members (methods, constructors,
+fields, accessors); the members of a top-level `const` object
+(`const api = { get() {}, n: 1 }`, and `api.m = function () {}` assigned
+later) and a constructor function's prototype methods
+(`F.prototype.m = function () {}`, `F.prototype = { m() {} }`); ES module
+imports, exports and re-exports; the classes of a CSS Modules file used
+through a relative import of it (`import s from "./a.module.css"` or
+`import * as s` and then `s.btn`, `s?.btn`, `s["btn"]`; `import { btn }`
+and then `btn`), which reach that file's class `.btn` by its path —
+`strong` at most (a bundler setting may export a class under another name),
+unresolved when the file declares no such class (TypeScript and TSX
+alike; also `export default s.btn` and a destructuring of the class map,
+`const { btn, "x-y": xy } = s`, at its keys); CommonJS `const x = require("./m")`,
+`const { a, b: c } = require("./m")`, `const y = require("./m").y`, and
+top-level `module.exports = x`, `module.exports = { a, b: c }`,
+`exports.a = f`; calls, `new` and JSX components; reads of a value — a
+function passed as an argument, a constant in an expression, the object of a
+member access, `export default x`, `export { x }` — of a name the file
+declares at its top level or binds by an import or a require, where no local
+declaration hides it (`references` edges, as Go's value references).
 
-**Resolution (not certified):** JavaScript emits no import bindings; an import
-is matched by path, and other names by the shared name rules within
-JavaScript. A JavaScript file and a TypeScript file never resolve each other's
-names, even through an `import` — this is a known gap, not a design choice.
+**Resolution (not certified):** a file with `import` / `export` or CommonJS
+is module-scoped: a name resolves through its own declarations and its
+bindings, never by name similarity across the repository. `./x` is `x.js`;
+without it, one of `x.jsx`, `x.mjs`, `x.cjs` or `x/index.*` (several existing
+files are ambiguous). A file with neither (a classic script) reaches by a
+free name another classic script's declaration, never a module's (exported
+or not: a module's top level is its own scope). A CommonJS module that
+replaces `module.exports` exports none of its `exports.a = …` properties, an
+export another assignment overwrites (`module.exports = { a }` then
+`module.exports.a = b`, `exports.a = function () {}` after `exports.a = a`)
+is not stated, and a `var` / `let` require the file
+reassigns binds nothing; `const u = require("./u")` of a module that does not
+replace `module.exports` is its namespace (`u.a()`). A reference through a
+CommonJS export — a require, an `import` of a CommonJS module, a re-export of
+one — keeps the exported declaration as a `candidate`, never `strong` or
+`exact`: the exports object is a plain object code may change at run time by
+routes no static rule closes, so Ark records which declaration the source
+exports but does not claim the value an importer reads is that declaration.
+The module's own references to its declarations, and ESM and TypeScript
+exports, keep their confidence. A name a parameter, a
+local declaration, a nested function or class, or a catch or loop binding
+shadows is never resolved `strong` or `exact` to a top-level declaration or
+import of that name. A member call resolves under a proven receiver (`this`,
+`const x = new T()`, a `const` object, a constructor function's `this`),
+through the class's supertypes (`extends` an identifier its import or file
+declares) and for `super.m()`; a static member is reached through the class
+name, an instance member (a prototype's included) through an instance —
+`Clock.now()` is never the instance member `now`, `new Clock().tick()` never
+a static `tick`, and a constructor function's name never reaches its
+prototype's members; a member of a value (an object, a prototype) is
+`strong` at most — code may reassign it. A package import
+(`require("express")`) is outside the repository — also when the package is
+the repository itself (`import … from "preact"` inside preact): Ark does not
+read `package.json`.
+
+**Not modelled:** CSS Modules through `require` (with css-loader's default
+`esModule`, it returns the module namespace, not the class map), `import()`,
+`{ default as s }`, aliases (`@/a.module.css`) or a
+converted name (`s.fooBar` for `.foo-bar`); an import with attributes
+(`with { type: "css" }`) is a stylesheet object, no class map, and binds
+none; a use of a class is a read of a value (an argument, an operand, an
+initializer, a JSX expression, …), never a callee, `new`, an assignment's
+target, `delete`, a parameter or a name in a type; a function's own properties (`F.m = …`), objects held by
+`let` / `var` or with a declared type, members added at run time
+(`Object.assign`, mixins), computed access (`a[k]()`), dynamic `import()`,
+other CommonJS shapes (a require inside a function or branch).
 
 ## Python
 
@@ -349,6 +588,9 @@ ones); calls and imports (`import`, `from … import`, aliases).
 **Resolution (not certified):** imports are matched by path; there are no
 import bindings, so `from .util import helper` resolves `helper` by the name
 rules (for example `strong` when it is the only `helper` in the directory).
+Names are not scoped: a parameter or local that shadows a repository name,
+and a standard-library or package name that matches one (`json.loads`,
+`open`), can resolve `strong` or `exact` to that declaration.
 
 ## Known gaps
 

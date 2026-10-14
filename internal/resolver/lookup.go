@@ -47,6 +47,9 @@ func (r *Resolver) buildLookupIndexes() {
 		}
 		for k := range fi.Symbols {
 			sym := &fi.Symbols[k]
+			if symbol.DeclaresFile(sym.Kind) {
+				continue // reached by path evidence only (identity.go, fileDecls)
+			}
 			key := nameKey{space, sym.Name}
 			// samePackageMatch: every symbol of every file, by (directory, name).
 			byName[key] = append(byName[key], dirSymbol{file: fi.FileID, sym: sym})

@@ -1,0 +1,10 @@
+/* unterminated comment at the end follows */
+.a { color: red
+.b { color: blue; }
+.c { background: url(bad url); content: "unterminated
+; }
+@media screen { .d { e: f }
+.g } h { i: j }
+} } }
+.k { l: m }
+/* never closed

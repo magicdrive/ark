@@ -1,0 +1,2 @@
+:root { --brand: #0af; --spacing: calc(4px * 2); --empty:; --json: { "a": [1, 2] }; --nested: var(--brand, var(--fallback, red)); }
+.u { color: var(--brand); margin: var(--spacing,8px); background: var( --missing , url(x.png) ); }

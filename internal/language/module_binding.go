@@ -103,3 +103,11 @@ func validateModuleSpec(m ModuleSpec) []error {
 	}
 	return errs
 }
+
+// ModuleExportsName is the export name of a CommonJS module's whole export
+// value (module.exports). A BindingDraft importing it (const m =
+// require("./m")) denotes the value an ExportDraft of that name states
+// (module.exports = X); a module that states none exports the object its
+// other exports fill (exports.a = f): the binding then denotes the module's
+// namespace.
+const ModuleExportsName = "module.exports"

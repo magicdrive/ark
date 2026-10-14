@@ -5,6 +5,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -51,6 +52,11 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 	ex := newExtractor(ctx, store, extractWorkers())
 	defer ex.stop() // also when the walk panics: no worker is left behind
 	err := walkSources(ctx, root, providers, exclude, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
+		if prov == nil {
+			digest.addAsset(relPath)
+			b.addAsset(source.FileID(relPath))
+			return
+		}
 		digest.add(relPath, src, readErr)
 		ex.add(relPath, prov, src, readErr)
 		ex.drain(b, false)
@@ -63,6 +69,7 @@ func newWithCache(ctx context.Context, root string, providers []language.Provide
 		return nil, ctx.Err()
 	}
 
+	b.materializeAssets()
 	// Distinct declarations sharing a SymbolID stop the build before anything
 	// is derived from the merged ID (identity.go).
 	if err := b.identityError(); err != nil {
