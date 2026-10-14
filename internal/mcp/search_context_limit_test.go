@@ -228,7 +228,14 @@ func TestSearchContext_BudgetSweepByContextLimit(t *testing.T) {
 		{"limit": 2, "contextLimit": 2}, // fewer slots than matches
 	} {
 		seen := map[string]bool{}
-		for budget := 1; budget <= 1200; budget++ {
+		// Every budget without the race detector (the unit job); every 7th
+		// under it (the race shards): the sweep is sequential, so the race
+		// detector finds nothing more in the budgets it skips.
+		step := 1
+		if raceEnabled {
+			step = 7
+		}
+		for budget := 1; budget <= 1200; budget += step {
 			args := map[string]interface{}{"query": "u", "maxTokens": budget}
 			for k, v := range cfg {
 				args[k] = v

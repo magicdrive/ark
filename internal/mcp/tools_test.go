@@ -402,8 +402,12 @@ func TestGetProjectStatsViaTool(t *testing.T) {
 func TestFindSymbol_StatsOnNoMatch(t *testing.T) {
 	h := createTestToolsHandler(t)
 
+	// A small directory: the test pins the response's shape on no match;
+	// scanning the package's own sources added nothing but parse time (20x
+	// under the race detector).
 	result, err := h.CallTool("find_symbol", map[string]interface{}{
 		"pattern": "ThisSymbolDefinitelyDoesNotExist_XYZ123",
+		"path":    "testdata",
 	})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
