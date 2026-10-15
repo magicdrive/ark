@@ -429,34 +429,44 @@ func scriptDiagnosticAt(t *testing.T, content string) {
 
 // Many style elements cost time linear in the document (each region's
 // locations are its own and mapped by the document's one line table): four
-// times the regions take well under the sixteen times a quadratic cost would
-// (the best of three runs, a ratio, so a slow machine or the race detector
-// does not matter).
+// times the regions take well under the sixteen times a quadratic cost would.
+// The two sizes run alternately, three times each, and their best runs are
+// compared, so a load that comes and goes on a shared machine (other
+// packages' tests run at the same time) slows both alike. A ratio above the
+// bound is measured again, up to three times in all: a quadratic cost exceeds
+// it every time, a burst of load does not.
 func TestEmbedded_ManyRegions(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing test")
 	}
 	p := html.NewProvider()
-	best := func(src []byte) time.Duration {
-		d := time.Duration(1 << 62)
-		for i := 0; i < 3; i++ {
-			t0 := time.Now()
-			if _, err := p.Extract(context.Background(), "m.html", src); err != nil {
-				t.Fatal(err)
-			}
-			if e := time.Since(t0); e < d {
-				d = e
-			}
+	run := func(src []byte) time.Duration {
+		t0 := time.Now()
+		if _, err := p.Extract(context.Background(), "m.html", src); err != nil {
+			t.Fatal(err)
 		}
-		return d
+		return time.Since(t0)
 	}
 	for _, c := range []struct {
 		el string
 		n  int
 	}{{"<style>a{animation:k 1s}</style>\n", 2000}, {"<script>f()</script>\n", 500}} {
-		small, large := best([]byte(strings.Repeat(c.el, c.n))), best([]byte(strings.Repeat(c.el, 4*c.n)))
-		if large > 8*small {
-			t.Errorf("%q: %d regions %v, %d regions %v (more than linear)", c.el, c.n, small, 4*c.n, large)
+		small, large := []byte(strings.Repeat(c.el, c.n)), []byte(strings.Repeat(c.el, 4*c.n))
+		var attempts []string
+		for attempt := 0; attempt < 3; attempt++ {
+			bestSmall, bestLarge := time.Duration(1<<62), time.Duration(1<<62)
+			for i := 0; i < 3; i++ {
+				bestSmall = min(bestSmall, run(small))
+				bestLarge = min(bestLarge, run(large))
+			}
+			if bestLarge <= 8*bestSmall {
+				attempts = nil
+				break
+			}
+			attempts = append(attempts, fmt.Sprintf("%v / %v", bestSmall, bestLarge))
+		}
+		if attempts != nil {
+			t.Errorf("%q: %d / %d regions took %s (more than linear in every attempt)", c.el, c.n, 4*c.n, strings.Join(attempts, ", "))
 		}
 	}
 }
