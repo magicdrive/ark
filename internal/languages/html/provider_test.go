@@ -13,6 +13,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/html"
 	"github.com/magicdrive/ark/internal/resolver"
 	"github.com/magicdrive/ark/internal/source"
+	xhtml "golang.org/x/net/html"
 )
 
 // The HTML provider states the document, its id elements, the id references
@@ -67,7 +68,6 @@ func TestSymbols_OnlyWhatTheTreeHas(t *testing.T) {
 		"fake in svg style":     `<svg><style><a title="</style><b id=fake>">x</a></style></svg>`,
 		"fake in svg title":     `<svg><title><a title="</title><b id=fake>">x</a></title></svg>`,
 		"fake in cdata":         `<svg><![CDATA[ a > <a id="fake"> ]]></svg>`,
-		"fake in select xmp":    `<select><xmp><a title="</xmp><b id=fake>">`,
 		"hidden real and fake":  `<svg><style><b id="fake"></style></svg><p>-</p><svg><title><a title="</title><b id=fake>">x</a></title></svg>`,
 		"ignored by frameset":   `<input id=fake type=hidden><frameset>`,
 		"later duplicate":       `<p id=real id=fake>`,
@@ -82,6 +82,13 @@ func TestSymbols_OnlyWhatTheTreeHas(t *testing.T) {
 		"cut off by eof":        `<p id=real></p><div id="fake`,
 		"noah's ark unverified": `<p><b id=fake><b id=fake><b id=fake><b id=fake><p>x`,
 	}
+	// The b after an xmp in a select: no element in a tree built with the
+	// select insertion mode (the xmp is ignored, the b is in an attribute
+	// value), a real one in the standard's tree without it.
+	selectXmp := `<select><xmp><a title="</xmp><b id=%s>">`
+	if !selectKeepsContent(t) {
+		cases["fake in select xmp"] = fmt.Sprintf(selectXmp, "fake")
+	}
 	for name, src := range cases {
 		t.Run(name, func(t *testing.T) {
 			for _, s := range symbols(t, "f.html", src) {
@@ -92,13 +99,17 @@ func TestSymbols_OnlyWhatTheTreeHas(t *testing.T) {
 		})
 	}
 	// The real ones stay.
-	for src, want := range map[string]string{
+	reals := map[string]string{
 		`<body id=real><p>x</p><body id=fake>`:                      "f.html#real",
 		`<body id=real><body id=real class=c>`:                      "f.html#real",
 		`<p id=real></p><div id="fake`:                              "f.html#real",
 		`<p id=real id=fake>`:                                       "f.html#real",
 		`<svg><foreignObject><b id=real></b></foreignObject></svg>`: "f.html#real",
-	} {
+	}
+	if selectKeepsContent(t) {
+		reals[fmt.Sprintf(selectXmp, "real")] = "f.html#real"
+	}
+	for src, want := range reals {
 		n := 0
 		for _, s := range symbols(t, "f.html", src) {
 			if strings.Contains(s, " "+want+" ") {
@@ -391,8 +402,10 @@ func TestReviewB_NoFalseExact(t *testing.T) {
 		{"truncated tree, last tag kept", `<p id=a></p><a href="#a">x</a><svg><desc><template></template></desc><title><base href="o/"></title></svg>`, "f.html:1:a", "", ""},
 		// R4: an earlier declaration the adoption agency moved
 		{"moved earlier shadow root", `<b><div><template shadowrootmode=open></template></b></b><template shadowrootmode=open><i id=s></i><label for=s>x</label></template></div>`, "f.html:1:s", "candidate", ""},
-		// R5: a tag the tree builder ignores may be an element in a browser
-		{"select keeps a div now", `<select><div id=x></div></select><p id=x></p><label for=x>y</label>`, "f.html:1:x", "unresolved", ""},
+		// R5: a tag the tree builder ignores may be an element in a browser;
+		// in the standard's tree (no select insertion mode) it is one, and
+		// two elements have the id (selectR5, below)
+		{"select keeps a div now", `<select><div id=x></div></select><p id=x></p><label for=x>y</label>`, "f.html:1:x", selectR5(t), ""},
 		// R6: no valid custom element name, no host
 		{"reserved custom element name", `<font-face><template shadowrootmode=open><i id=s></i><label for=s>x</label></template></font-face>`, "f.html:1:s", "candidate", ""},
 		{"invalid custom element name", `<a-b!><template shadowrootmode=open><i id=s></i><label for=s>x</label></template></a-b!>`, "f.html:1:s", "candidate", ""},
@@ -432,4 +445,41 @@ func TestReviewB_NoFalseExact(t *testing.T) {
 			t.Errorf("cut-off end tag: %s", d.Severity)
 		}
 	}
+}
+
+// selectKeepsContent reports whether x/net builds the tree of the HTML
+// standard as it now is for select: no "in select" insertion mode (removed
+// with customizable select; x/net v0.60.0), so a div or an xmp in a select
+// is an element of the tree, as in a browser (Chrome 155). Older x/net
+// builds the earlier standard's tree, which drops them. Either tree is the
+// standard's at its version; the tests below pin both.
+func selectKeepsContent(t *testing.T) bool {
+	t.Helper()
+	doc, err := xhtml.Parse(strings.NewReader("<select><div></div></select>"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var sel *xhtml.Node
+	var find func(n *xhtml.Node)
+	find = func(n *xhtml.Node) {
+		for ; n != nil && sel == nil; n = n.NextSibling {
+			if n.Type == xhtml.ElementNode && n.Data == "select" {
+				sel = n
+			}
+			find(n.FirstChild)
+		}
+	}
+	find(doc)
+	return sel != nil && sel.FirstChild != nil
+}
+
+// selectR5 is the confidence of the label in <select><div id=x></div>
+// </select><p id=x>: Unresolved where the tree drops the div (a browser may
+// keep it: no claim on p#x), a Candidate where the tree keeps it (two
+// elements have the id). Never Strong or Exact.
+func selectR5(t *testing.T) string {
+	if selectKeepsContent(t) {
+		return "candidate"
+	}
+	return "unresolved"
 }
