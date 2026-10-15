@@ -181,13 +181,16 @@ export class Child extends Base { run() { this.log(); } }
 	})
 	edges := edgeSet(t, idx)
 	checkGraphInvariants(t, idx)
+	// The class a static call reads is referenced too (reads.go).
 	wantEdges(t, edges, "a.ts:UserService.create",
 		"-calls-> a.ts:UserService.save exact",
-		"-calls-> a.ts:UserService.make exact")
+		"-calls-> a.ts:UserService.make exact",
+		"-references-> a.ts:UserService exact")
 	// Explicit static receiver is constrained to that type: Other has no make.
-	wantEdges(t, edges, "a.ts:UserService.other")
-	// Inherited member: not resolved (no inheritance-aware lookup) — never guessed.
-	wantEdges(t, edges, "b.ts:Child.run")
+	wantEdges(t, edges, "a.ts:UserService.other", "-references-> a.ts:Other exact")
+	// Inherited member: found on the supertype the extends clause identifies
+	// (resolver/inheritance.go), under the receiver's own evidence.
+	wantEdges(t, edges, "b.ts:Child.run", "-calls-> b.ts:Base.log exact")
 }
 
 // --- modules -------------------------------------------------------------------
@@ -224,7 +227,7 @@ export function fn() { helper(); }
 	wantEdges(t, edges, "app.ts:alias", "-calls-> a/user.ts:User exact")
 	wantEdges(t, edges, "app.ts:dflt", "-calls-> a/user.ts:makeUser exact")
 	wantEdges(t, edges, "app.ts:viaNs", "-calls-> a/user.ts:helper exact", "-calls-> a/user.ts:User exact")
-	wantEdges(t, edges, "app.ts:staticAlias", "-calls-> a/user.ts:User.create exact")
+	wantEdges(t, edges, "app.ts:staticAlias", "-calls-> a/user.ts:User.create exact", "-references-> a/user.ts:User exact")
 	wantEdges(t, edges, "app.ts:typeOnly", "-uses_type-> a/user.ts:UserId exact")
 	wantEdges(t, edges, "app.ts:fn", "-calls-> a/user.ts:helper exact")
 }
@@ -411,11 +414,15 @@ export const Home = () => <UserCard n="x" />;
 	})
 	edges := edgeSet(t, idx)
 	checkGraphInvariants(t, idx)
+	// <Layout.Header />: a member of the exported const object Layout —
+	// Strong at most, code may reassign it (resolver: a value with members).
 	wantEdges(t, edges, "page.tsx:UserPage",
+		"-calls-> ui/card.tsx:Layout.Header strong",
 		"-calls-> ui/card.tsx:UserCard exact",
 		"-calls-> ui/card.tsx:Badge exact",
 		"-calls-> ui/card.tsx:useUser exact",
-		"-calls-> ui/button.tsx:Button exact")
+		"-calls-> ui/button.tsx:Button exact",
+		"-references-> ui/card.tsx:Layout exact") // the object <Layout.Header /> reads
 	wantEdges(t, edges, "page.tsx:Home", "-calls-> ui/card.tsx:UserCard exact")
 	for _, e := range edges {
 		if strings.Contains(e, "-> other/card.tsx") {

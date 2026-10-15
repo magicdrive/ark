@@ -61,11 +61,11 @@ func use() {
 }
 
 // sharedStartDirs are the fixture's directories whose provider states
-// references of one name and kind starting at one position (Go, JavaScript,
-// Python: a member reference spans its whole selector). TypeScript, PHP and
+// references of one name and kind starting at one position (Go, Python: a
+// member reference spans its whole selector). JavaScript, TypeScript, PHP and
 // Rust span a member reference from its name, so theirs never share a start;
 // their IDs must be unique all the same.
-var sharedStartDirs = []string{"g", "j", "y"}
+var sharedStartDirs = []string{"g", "y"}
 
 // refRow is a reference as identity sees it.
 type refRow struct {

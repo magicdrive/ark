@@ -18,21 +18,24 @@
 # second of a shard, the lower for the busier shards), so a shard takes about
 # max(its slowest package's wall time, its packages' CPU time / 1.8). The
 # comments are each package's race run alone with GOMAXPROCS=4, warm build
-# cache: wall time / CPU time (user + sys), in seconds. Changing the shards
-# changes what each shard compiles: bump its line in cache-keys/ too.
+# cache: wall time / CPU time (user + sys), in seconds — measured for v6.5.0
+# on a developer machine (Xeon W-2140B, macOS), about 1.1 to 1.5 times the
+# 4-vCPU runner's time; what matters is their proportion. Changing the
+# shards changes what each shard compiles: bump its line in cache-keys/ too.
 [1]
-./internal/tsparse                    # 110 / 292
+./internal/tsparse                    # 142 / 342
 [2]
-./internal/resolver                   #  67 / 236
-./internal/completion                 #  58 /  14 (mostly waiting)
-./internal/languages/rust             #  16 /  15
-./internal/languages/php              #  13 /  12
+./internal/resolver                   # 111 / 365
 [3]
-./internal/languages/golang           #  65 / 203
-./internal/languages/typescript       #  40 /  41
-./tests/integration                   #  40 /  37
+./internal/languages/golang           # 103 / 255
+./internal/languages/typescript       #  50 /  47
+./tests/integration                   #  47 /  39
 [4]
-./internal/mcp                        #  93 / 108
-./internal/golden                     #  52 /  56
-./internal/secrets                    #  45 /  57
-*                                     # the rest: about 72 CPU seconds
+./internal/completion                 #  63 /  14 (mostly waiting)
+./internal/golden                     #  61 /  60
+./internal/secrets                    #  52 /  60
+./internal/mcp                        #  36 /  46
+./internal/languages/rust             #  21 /  15
+./internal/languages/html             #  18 /  17
+./internal/languages/php              #  15 /  15
+*                                     # the rest: about 90 CPU seconds

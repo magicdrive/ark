@@ -19,6 +19,9 @@ func ExtractCommentRanges(filename string, source []byte) ([]CommentRange, error
 		return nil, err
 	}
 	defer result.Release()
+	if result.Tree == nil {
+		return nil, ErrNoSyntaxTree // a language without a Tree-sitter grammar
+	}
 
 	return extractCommentRangesFromTree(result.Tree, result.Language), nil
 }

@@ -18,7 +18,9 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/css"
 	"github.com/magicdrive/ark/internal/languages/golang"
+	"github.com/magicdrive/ark/internal/languages/html"
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
@@ -29,7 +31,9 @@ import (
 
 // spec couples a provider with its Tree-sitter grammar and tested support
 // level. Language identity and file extensions are taken from the provider
-// itself so they have exactly one source of truth.
+// itself so they have exactly one source of truth. A provider that parses
+// with another parser has no grammar (nil): Grammar reports none, and only
+// the raw syntax-tree output (ark syntax) is unavailable for it.
 type spec struct {
 	provider     language.Provider
 	grammar      func() *ts.Language
@@ -62,6 +66,16 @@ func specList() []spec {
 		// covers it, and method calls on values (type inference) and
 		// cross-crate paths are not resolved; see docs/language-support.md.
 		{rust.NewProvider(), grammars.RustLanguage, language.SupportLevelGraph},
+		// HTML (.html / .htm): the document, id elements, same-document
+		// id references and links between documents, resolved by identity
+		// (golang.org/x/net/html; no Tree-sitter grammar). Graph, not
+		// ContextQualityCertified: no context-quality benchmark covers it.
+		{html.NewProvider(), nil, language.SupportLevelGraph},
+		// CSS (.css): the stylesheet, @keyframes, @font-face, @property,
+		// custom properties, CSS Modules classes, and the references to
+		// them within a stylesheet, @import links (CSS Syntax Level 3; no
+		// Tree-sitter grammar). Graph, not ContextQualityCertified.
+		{css.NewProvider(), nil, language.SupportLevelGraph},
 	}
 }
 
@@ -82,7 +96,9 @@ func build() (*language.Registry, map[language.Language]func() *ts.Language) {
 			SupportLevel: s.supportLevel,
 			Provider:     s.provider,
 		})
-		grammarMap[id] = s.grammar
+		if s.grammar != nil {
+			grammarMap[id] = s.grammar
+		}
 	}
 	return language.MustNewRegistry(descriptors...), grammarMap
 }

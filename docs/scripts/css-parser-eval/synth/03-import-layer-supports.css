@@ -1,0 +1,6 @@
+@import url(./base.css) layer(base) supports(display: grid) screen;
+@import "theme.css";
+@import url("print.css") print;
+@layer reset, base, components;
+@layer components { .btn { padding: 0 } }
+@supports (display: grid) and (not (display: inline-grid)) { .g { display: grid } }

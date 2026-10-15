@@ -50,6 +50,9 @@ func RunSyntaxCommand(opts SyntaxOptions) error {
 		return fmt.Errorf("failed to parse: %w", err)
 	}
 	defer result.Release()
+	if result.Tree == nil {
+		return fmt.Errorf("%s: %w", lang, ErrNoSyntaxTree)
+	}
 
 	// Output
 	switch opts.Format {
@@ -83,7 +86,7 @@ func RunSymbolCommand(opts SymbolOptions) error {
 	}
 
 	// Parse and extract symbols
-	result, err := Parse(lang, source)
+	result, err := ParseNamed(lang, opts.FilePath, source)
 	if err != nil {
 		return fmt.Errorf("failed to parse: %w", err)
 	}

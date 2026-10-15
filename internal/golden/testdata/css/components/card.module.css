@@ -1,0 +1,6 @@
+.card {
+  composes: surface from "./base.module.css";
+  padding: 1rem;
+}
+.title { composes: card; font-weight: 600; }
+:global(.dark) .card { background: black; }

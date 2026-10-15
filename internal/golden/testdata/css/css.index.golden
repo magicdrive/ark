@@ -1,0 +1,39 @@
+## stats
+files=5 symbols=15 references=11 relations=7 skipped=0
+lang css=5
+## symbols
+symbol base.module.css kind=stylesheet lang=css qualified="components/base.module.css" receiver="" exported=true @components/base.module.css:1:1-2:1
+symbol surface kind=css_class lang=css qualified="components/base.module.css .surface" receiver="" exported=true @components/base.module.css:1:1-1:9
+symbol card.module.css kind=stylesheet lang=css qualified="components/card.module.css" receiver="" exported=true @components/card.module.css:1:1-7:1
+symbol card kind=css_class lang=css qualified="components/card.module.css .card" receiver="" exported=true @components/card.module.css:1:1-1:6
+symbol title kind=css_class lang=css qualified="components/card.module.css .title" receiver="" exported=true @components/card.module.css:5:1-5:7
+symbol base.css kind=stylesheet lang=css qualified="styles/base.css" receiver="" exported=true @styles/base.css:1:1-3:1
+symbol --brand kind=custom_property lang=css qualified="styles/base.css --brand" receiver="" exported=true @styles/base.css:1:9-1:22
+symbol main.css kind=stylesheet lang=css qualified="styles/main.css" receiver="" exported=true @styles/main.css:1:1-32:1
+symbol spin kind=keyframes lang=css qualified="styles/main.css @keyframes spin" receiver="" exported=true @styles/main.css:4:1-7:2
+symbol inter var kind=font_face lang=css qualified="styles/main.css @font-face inter var" receiver="" exported=true @styles/main.css:9:1-12:2
+symbol --angle kind=property_registration lang=css qualified="styles/main.css @property --angle" receiver="" exported=true @styles/main.css:14:1-18:2
+symbol --brand kind=custom_property lang=css qualified="styles/main.css --brand" receiver="" exported=true @styles/main.css:21:3-21:16
+symbol --spacing kind=custom_property lang=css qualified="styles/main.css --spacing" receiver="" exported=true @styles/main.css:22:3-22:17
+symbol theme.css kind=stylesheet lang=css qualified="styles/theme.css" receiver="" exported=true @styles/theme.css:1:1-4:1
+symbol --brand kind=custom_property lang=css qualified="styles/theme.css --brand" receiver="" exported=true @styles/theme.css:2:11-2:24
+## references
+ref surface kind=value_reference container="components/card.module.css" receiver="" name_qualified="components/base.module.css .surface" identity_in_repository=true call=false @components/card.module.css:2:13-2:20
+ref card kind=value_reference container="components/card.module.css" receiver="" name_qualified="components/card.module.css .card" identity_in_repository=true call=false @components/card.module.css:5:20-5:24
+ref inter var kind=value_reference container="styles/base.css" receiver="" name_qualified="styles/base.css @font-face inter var" identity_in_repository=true call=false @styles/base.css:2:32-2:43
+ref base.css kind=resource_link container="styles/main.css" receiver="" name_qualified="styles/base.css" identity_in_repository=true call=false @styles/main.css:1:9-1:19
+ref theme.css kind=resource_link container="styles/main.css" receiver="" name_qualified="styles/theme.css" identity_in_repository=true call=false @styles/main.css:2:9-2:25
+ref inter.woff2 kind=resource_link container="styles/main.css" receiver="" name_qualified="fonts/inter.woff2" identity_in_repository=true call=false @styles/main.css:11:8-11:33
+ref spin kind=value_reference container="styles/main.css" receiver="" name_qualified="styles/main.css @keyframes spin" identity_in_repository=true call=false @styles/main.css:26:33-26:37
+ref inter var kind=value_reference container="styles/main.css" receiver="" name_qualified="styles/main.css @font-face inter var" identity_in_repository=true call=false @styles/main.css:27:16-27:27
+ref --brand kind=value_reference container="styles/main.css" receiver="" name_qualified="styles/main.css --brand" identity_in_repository=true call=false @styles/main.css:28:14-28:21
+ref --spacing kind=value_reference container="styles/main.css" receiver="" name_qualified="styles/main.css --spacing" identity_in_repository=true call=false @styles/main.css:29:16-29:25
+ref spin kind=value_reference container="styles/main.css" receiver="" name_qualified="styles/main.css @keyframes spin" identity_in_repository=true call=false @styles/main.css:30:29-30:33
+## edges
+edge components/card.module.css -references-> components/base.module.css .surface confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"components/base.module.css .surface" is declared at components/base.module.css]
+edge components/card.module.css -references-> components/card.module.css .card confidence=exact evidence=[qualified_identity:"components/card.module.css .card" is declared at components/card.module.css]
+edge styles/main.css -links-> styles/base.css confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"styles/base.css" is declared at styles/base.css]
+edge styles/main.css -links-> styles/theme.css confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"styles/theme.css" is declared at styles/theme.css]
+edge styles/main.css -references-> styles/main.css @font-face inter var confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"styles/main.css @font-face inter var" is declared at styles/main.css]
+edge styles/main.css -references-> styles/main.css @keyframes spin confidence=strong evidence=[confidence_cap:the reference's evidence permits at most strong; qualified_identity:"styles/main.css @keyframes spin" is declared at styles/main.css]
+## diagnostics

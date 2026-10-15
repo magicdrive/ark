@@ -97,6 +97,13 @@ type SymbolDraft struct {
 	// OutsideRepository. Never set together with MemberScope or
 	// ParameterScope.
 	MembersOutside bool `json:",omitempty"`
+
+	// Placement states, for a member of a language that has both, whether
+	// it is static (symbol.PlacementStatic: on the type itself, reached
+	// through its name) or an instance member (symbol.PlacementInstance:
+	// reached through a value of the type). The resolver then looks a member
+	// up only where the receiver can reach it. "" states nothing.
+	Placement string `json:",omitempty"`
 }
 
 // ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.
@@ -178,6 +185,18 @@ type ReferenceDraft struct {
 	// name. Without it a qualified identity with no declaration is taken to
 	// lie outside the repository.
 	IdentityInRepository bool `json:",omitempty"`
+
+	// FileIdentity qualifies NameQualified: it is the path of a repository
+	// file (root-relative, slash-separated, clean) that the reference's own
+	// text names as a file — an HTML <link rel="stylesheet" href>, a
+	// <script src> — whatever the language of that file. The target is the
+	// declaration of the file itself: a symbol whose Qualified is its own
+	// FileID (an HTML document, a CSS stylesheet, a JavaScript script), of
+	// any language. Explicit path evidence names its target itself, so this
+	// is the one relation that joins two name spaces; no name of one
+	// language ever reaches a declaration of another. TargetKinds restricts
+	// the kinds it may denote.
+	FileIdentity bool `json:",omitempty"`
 
 	// NamedArgument marks a reference whose Name is a named argument passed
 	// to the declaration its ReceiverTypeQualified identifies: it denotes
@@ -306,6 +325,13 @@ type ExportDraft struct {
 	Module   ModuleSpec // zero value for ExportLocal
 	Except   []string   `json:",omitempty"` // ExportAll only: names never forwarded
 	TypeOnly bool       `json:",omitempty"`
+	// Mutable marks an export whose value code may replace at run time by
+	// routes no static rule closes (a CommonJS exports object property:
+	// module.exports = { a }, exports.a = f). The export maps the name to its
+	// source declaration, but the value an importer reads is not proven to
+	// be that declaration: the resolver caps a resolution through it at
+	// Candidate. An ESM export (a live binding) is not Mutable.
+	Mutable  bool `json:",omitempty"`
 	Location source.Location
 }
 
@@ -358,6 +384,13 @@ type Extraction struct {
 	// path ends the import path, under the repository's import-path prefix.
 	// A receiver naming an import denotes that package's declarations only.
 	PackageScoped bool
+
+	// MembersShareNames declares that the language gives a type's methods
+	// and properties one name space (ECMAScript): a call of a member name
+	// denotes whichever member of that name is nearest — a function-typed
+	// property hides a supertype's method. Without it, a call names a
+	// callable member only (PHP keeps methods and properties apart).
+	MembersShareNames bool
 
 	// TypeFacts are the declared-type facts of the file's declarations
 	// (typefacts.go), the evidence ReceiverChain and promoted-member lookup

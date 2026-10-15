@@ -78,6 +78,7 @@ func TestGraphBuilder_KindMapping(t *testing.T) {
 			sym("TExtends"), sym("TImpl"), sym("TTrait"),
 			sym("TRead"), sym("TUnknown"),
 			sym("TValue"), sym("TDepends"),
+			sym("TID"), sym("TLink"),
 		},
 		refs: []language.ReferenceDraft{
 			ref("TCall", "call"),
@@ -88,6 +89,8 @@ func TestGraphBuilder_KindMapping(t *testing.T) {
 			ref("TTrait", "uses_trait"),
 			ref("TValue", "value_reference"),
 			ref("TDepends", "depends_on"),
+			ref("TID", "id_reference"),
+			ref("TLink", "resource_link"),
 			ref("TRead", "read"),              // not mapped → no edge
 			ref("TUnknown", "future_unknown"), // unknown → no edge
 		},
@@ -105,6 +108,9 @@ func TestGraphBuilder_KindMapping(t *testing.T) {
 		// Dependencies of configuration languages are never calls.
 		"TValue":   index.EdgeReferences,
 		"TDepends": index.EdgeDependsOn,
+		// Markup: an id reference is a reference, a link a links edge.
+		"TID":   index.EdgeReferences,
+		"TLink": index.EdgeLinks,
 	}
 	for target, wantKind := range want {
 		if got := edgeKindTo(idx, target); got != wantKind {

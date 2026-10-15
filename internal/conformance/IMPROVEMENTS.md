@@ -99,3 +99,14 @@ probe has no computed-name call, so 0 is its correct count. Q3/Q4 do not
 apply to it either: Terraform declarations have no members (an attribute
 such as `.id` is not a declaration), and a check-scoped data source is its
 only symbol with `Parent`.
+
+HTML has no call syntax either: event handler attributes hold another
+language's code (not analyzed); inline scripts are read by the JavaScript
+extractor, their references only by the document's identities (never
+Dynamic). Its probe is a document with an `onclick` attribute; 0 Dynamic
+references is its correct count. Q3/Q4 count
+its id elements, whose `Parent` is the document.
+
+CSS has no calls either: `var()` names a custom property (a reference, not a
+computed call). Its probe is an `animation-name: var(--name)`; 0 Dynamic
+references is its correct count.

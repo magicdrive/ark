@@ -16,9 +16,11 @@
 2 ./internal/index FuzzIdentityCollision
 2 ./internal/languages/golang FuzzExtract
 2 ./internal/languages/php FuzzExtractPHP
+2 ./internal/languages/html FuzzExtractHTML
 3 ./internal/languages/typescript FuzzExtractTypeScript
 3 ./internal/languages/typescript FuzzModuleSpec
 3 ./internal/languages/typescript FuzzTypeArgParser
 3 ./internal/languages/terraform FuzzExtractTerraform
+3 ./internal/languages/css FuzzExtractCSS
 3 ./internal/secretpolicy FuzzBuild
 - ./internal/mcp FuzzRouteNotificationInvariant

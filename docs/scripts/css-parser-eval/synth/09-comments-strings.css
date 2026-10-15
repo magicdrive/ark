@@ -1,0 +1,4 @@
+.a/* c */.b { content: "/* not a comment */"; x: '}'; y: "\"{"; }
+.c { background: url(data:image/svg+xml;charset=utf8,%3Csvg%3E%3C/svg%3E) }
+<!-- .d { e: f } -->
+.e { f: g !important; h: i ! IMPORTANT }

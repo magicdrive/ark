@@ -51,6 +51,63 @@ const (
 	// through the implemented type, or as the trait implementation's).
 	KindMacro SymbolKind = "macro"
 	KindImpl  SymbolKind = "impl"
+
+	// Declarations of markup (HTML). A document is a markup file itself (the
+	// target of a link to it); an element is an element that declares an
+	// identifier (an HTML id), the target of references to that identifier
+	// within its document.
+	KindDocument SymbolKind = "document"
+	KindElement  SymbolKind = "element"
+
+	// Declarations of stylesheets (CSS). A stylesheet is a CSS file itself
+	// (the target of an @import); keyframes an @keyframes rule; a font face
+	// the family an @font-face declares; a property registration an
+	// @property rule; a custom property a --name declaration; a CSS class a
+	// local class of a CSS Modules file.
+	KindStylesheet           SymbolKind = "stylesheet"
+	KindKeyframes            SymbolKind = "keyframes"
+	KindFontFace             SymbolKind = "font_face"
+	KindPropertyRegistration SymbolKind = "property_registration"
+	KindCustomProperty       SymbolKind = "custom_property"
+	KindCSSClass             SymbolKind = "css_class"
+	// KindAsset is a repository file no provider extracts (an image, a
+	// font, a video) that web documents link to: a node the index makes for
+	// the file itself (internal/asset), not a declaration of a language.
+	KindAsset SymbolKind = "asset"
+
+	// KindScript is a JavaScript file itself (the target of an HTML
+	// <script src>).
+	KindScript SymbolKind = "script"
+)
+
+// DeclaresFile reports whether a symbol of kind k declares the file it is in
+// itself (its Qualified is the file's path): an HTML document, a stylesheet,
+// a script, an asset. Path evidence of any language names these
+// (language.ReferenceDraft.FileIdentity).
+func DeclaresFile(k SymbolKind) bool {
+	switch k {
+	case KindDocument, KindStylesheet, KindScript, KindAsset:
+		return true
+	}
+	return false
+}
+
+// FileScoped reports whether a symbol of kind k belongs to the file it is in
+// by identity: its Qualified is that file's path, a space, and its name (a
+// CSS Modules class, which a bundler exports from its file). Path evidence of
+// any language names these too (language.ReferenceDraft.FileIdentity).
+func FileScoped(k SymbolKind) bool {
+	return k == KindCSSClass
+}
+
+// Placement of a member: where a language that tells them apart puts it.
+const (
+	// PlacementStatic: on the type itself (a static member), reached
+	// through the type's name.
+	PlacementStatic = "static"
+	// PlacementInstance: on its instances (an instance member, a prototype
+	// member), reached through a value of the type.
+	PlacementInstance = "instance"
 )
 
 // Symbol is the canonical domain representation of a code symbol.
@@ -84,6 +141,10 @@ type Symbol struct {
 	MemberScope    string `json:",omitempty"`
 	ParameterScope string `json:",omitempty"`
 	MembersOutside bool   `json:",omitempty"`
+
+	// Placement is a member's PlacementStatic or PlacementInstance, "" when
+	// its language does not state it (language.SymbolDraft.Placement).
+	Placement string `json:",omitempty"`
 }
 
 // NewSymbolID returns a deterministic ID derived from (lang, repoRelPath, kind, qualified).

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/magicdrive/ark/internal/index"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -25,9 +26,13 @@ type targetLookup struct {
 }
 
 // targetCandidatesFromIndex gathers candidate target symbols for a user-supplied
-// name using repository-index semantics (see lookupTargetCandidates).
-func targetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []symbol.Symbol {
-	if c := lookupTargetCandidatesFromIndex(idx, name); len(c) > 0 {
+// name using repository-index semantics (see lookupTargetCandidates), among
+// the symbols of the files filePattern matches ("" for all): a stage whose
+// matches all lie elsewhere is no match (an HTML document's inline function
+// send, whose Qualified is "page.html send", is found by its name in the
+// document although a JavaScript file declares a send of Qualified "send").
+func targetCandidatesFromIndex(idx *index.RepositoryIndex, name, filePattern string) []symbol.Symbol {
+	if c := lookupTargetCandidatesFromIndex(idx, name, filePattern); len(c) > 0 {
 		return c
 	}
 	// A name of no declaration that an alias gives (a Rust re-export,
@@ -35,12 +40,24 @@ func targetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []symbol
 	return idx.SymbolsThroughAliases(name)
 }
 
-func lookupTargetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []symbol.Symbol {
-	return lookupTargetCandidates(name, idx.FindSymbolsByQualified,
+func lookupTargetCandidatesFromIndex(idx *index.RepositoryIndex, name, filePattern string) []symbol.Symbol {
+	in := func(s symbol.Symbol) bool {
+		return filePattern == "" || strings.Contains(string(s.Location.File), filePattern)
+	}
+	return lookupTargetCandidates(name,
+		func(q string) []symbol.Symbol {
+			var out []symbol.Symbol
+			for _, s := range idx.FindSymbolsByQualified(q) {
+				if in(s) {
+					out = append(out, s)
+				}
+			}
+			return out
+		},
 		func(n string) []symbol.Symbol {
 			var out []symbol.Symbol
 			for _, s := range idx.FindSymbols(n) {
-				if s.Name == n { // exact short name only; FindSymbols is a prefix match
+				if s.Name == n && in(s) { // exact short name only; FindSymbols is a prefix match
 					out = append(out, s)
 				}
 			}
@@ -49,7 +66,9 @@ func lookupTargetCandidatesFromIndex(idx *index.RepositoryIndex, name string) []
 		func(yield func(symbol.Symbol)) {
 			for _, f := range idx.Files() {
 				for _, s := range idx.SymbolsByFile(f) {
-					yield(s)
+					if in(s) {
+						yield(s)
+					}
 				}
 			}
 		})
@@ -263,8 +282,13 @@ func lookupToolTarget(idx *index.RepositoryIndex, args map[string]interface{}, n
 			return targetLookup{Symbol: s, Found: true}, nil
 		}
 	}
-	tl := resolveTarget(targetCandidatesFromIndex(idx, name), filePattern)
+	tl := resolveTarget(targetCandidatesFromIndex(idx, name, filePattern), filePattern)
 	if !tl.Found {
+		if idx.IsAsset(source.FileID(name)) {
+			// An asset nothing links to has no node: say so, rather than
+			// that the file does not exist.
+			return tl, toolError(fmt.Sprintf("symbol %q not found in %s: it is an asset file (an image, a font, a media file) that nothing in the index links to", name, path))
+		}
 		return tl, targetNotFoundResult(name, path)
 	}
 	if tl.Ambiguous {

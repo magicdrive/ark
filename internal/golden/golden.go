@@ -369,6 +369,9 @@ func writeModuleBindings(b *strings.Builder, ext language.Extraction) {
 			if ed.Kind != language.ExportLocal {
 				mod = " " + moduleSpec(ed.Module)
 			}
+			if ed.Mutable { // a CommonJS export (only then, so other snapshots stay as they were)
+				mod += " mutable"
+			}
 			fmt.Fprintf(b, "export kind=%s exported=%q local=%q except=%q type_only=%t%s %s\n",
 				ed.Kind, ed.Exported, ed.Local, ed.Except, ed.TypeOnly, mod, loc(ed.Location))
 		}

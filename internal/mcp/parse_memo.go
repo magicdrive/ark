@@ -105,17 +105,18 @@ type parsedSymbols struct {
 	symbols []syntax.Symbol
 }
 
-// fileSymbols parses src as lang and extracts its symbols, as find_symbol
-// always did (syntax.Parse decides whether the file counts as parsed,
-// syntax.ExtractSymbols extracts) — once per content.
-func (h *ToolsHandler) fileSymbols(lang syntax.SupportedLanguage, src []byte) parsedSymbols {
+// fileSymbols parses src (the file named file) as lang and extracts its
+// symbols, as find_symbol always did (syntax.Parse decides whether the file
+// counts as parsed, syntax.ExtractSymbols extracts) — once per content and
+// file name (a provider may name a symbol after its file).
+func (h *ToolsHandler) fileSymbols(lang syntax.SupportedLanguage, file string, src []byte) parsedSymbols {
 	memo := h.parseMemo()
-	key := newMemoKey("symbols\x00"+string(lang), src)
+	key := newMemoKey("symbols\x00"+string(lang)+"\x00"+file, src)
 	if v, ok := memo.get(key); ok {
 		return v.(parsedSymbols)
 	}
 	var out parsedSymbols
-	if res, err := syntax.Parse(lang, src); err == nil {
+	if res, err := syntax.ParseNamed(lang, file, src); err == nil {
 		out = parsedSymbols{ok: true, symbols: syntax.ExtractSymbols(res)}
 		res.Release()
 	}

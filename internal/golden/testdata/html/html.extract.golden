@@ -1,0 +1,49 @@
+# file: docs/form.html
+## symbols
+symbol form.html kind=document qualified="docs/form.html" parent="" receiver="" exported=true @docs/form.html:1:1-12:1
+symbol signup kind=element qualified="docs/form.html#signup" parent="docs/form.html" receiver="" exported=true @docs/form.html:3:1-3:19
+symbol email kind=element qualified="docs/form.html#email" parent="docs/form.html" receiver="" exported=true @docs/form.html:5:3-5:79
+symbol email-help kind=element qualified="docs/form.html#email-help" parent="docs/form.html" receiver="" exported=true @docs/form.html:6:3-6:22
+symbol domains kind=element qualified="docs/form.html#domains" parent="docs/form.html" receiver="" exported=true @docs/form.html:7:3-7:26
+symbol send kind=function qualified="docs/form.html send" parent="docs/form.html" receiver="" exported=false @docs/form.html:10:9-10:27
+## references
+ref email kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#email" identity_in_repository=true call=false @docs/form.html:4:15-4:20
+ref email-help kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#email-help" identity_in_repository=true call=false @docs/form.html:5:52-5:62
+ref domains kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#domains" identity_in_repository=true call=false @docs/form.html:5:70-5:77
+ref signup kind=id_reference container="docs/form.html" receiver="" name_qualified="docs/form.html#signup" identity_in_repository=true call=false @docs/form.html:9:15-9:21
+## imports
+## identity_only
+## diagnostics
+
+# file: docs/guide.html
+## symbols
+symbol guide.html kind=document qualified="docs/guide.html" parent="" receiver="" exported=true @docs/guide.html:1:1-7:1
+symbol guide kind=element qualified="docs/guide.html#guide" parent="docs/guide.html" receiver="" exported=true @docs/guide.html:3:1-3:16
+symbol install kind=element qualified="docs/guide.html#install" parent="docs/guide.html" receiver="" exported=true @docs/guide.html:4:1-4:18
+symbol card kind=element qualified="docs/guide.html#1 card" parent="docs/guide.html" receiver="" exported=true @docs/guide.html:6:11-6:30
+symbol card-title kind=element qualified="docs/guide.html#1 card-title" parent="docs/guide.html" receiver="" exported=true @docs/guide.html:6:30-6:50
+## references
+ref main kind=id_reference container="docs/guide.html" receiver="" name_qualified="index.html#main" identity_in_repository=true call=false @docs/guide.html:5:21-5:39
+ref card-title kind=id_reference container="docs/guide.html" receiver="" name_qualified="docs/guide.html#1 card-title" identity_in_repository=true call=false @docs/guide.html:6:76-6:86
+## imports
+## identity_only
+## diagnostics
+
+# file: index.html
+## symbols
+symbol index.html kind=document qualified="index.html" parent="" receiver="" exported=true @index.html:1:1-13:1
+symbol nav kind=element qualified="index.html#nav" parent="index.html" receiver="" exported=true @index.html:5:1-5:15
+symbol main kind=element qualified="index.html#main" parent="index.html" receiver="" exported=true @index.html:6:1-6:17
+symbol title kind=element qualified="index.html#title" parent="index.html" receiver="" exported=true @index.html:7:3-7:18
+symbol g kind=element qualified="index.html#g" parent="index.html" receiver="" exported=true @index.html:9:14-9:37
+## references
+ref main kind=id_reference container="index.html" receiver="" name_qualified="index.html#main" identity_in_repository=true call=false @index.html:5:25-5:29
+ref guide.html kind=resource_link container="index.html" receiver="" name_qualified="docs/guide.html" identity_in_repository=true call=false @index.html:5:60-5:75
+ref install kind=id_reference container="index.html" receiver="" name_qualified="docs/guide.html#install" identity_in_repository=true call=false @index.html:5:96-5:119
+ref title kind=id_reference container="index.html" receiver="" name_qualified="index.html#title" identity_in_repository=true call=false @index.html:8:23-8:28
+ref form.html kind=resource_link container="index.html" receiver="" name_qualified="docs/form.html" identity_in_repository=true call=false @index.html:8:47-8:61
+ref g kind=id_reference container="index.html" receiver="" name_qualified="index.html#g" identity_in_repository=true call=false @index.html:9:78-9:79
+## imports
+## identity_only
+## diagnostics
+

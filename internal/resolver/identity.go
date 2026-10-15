@@ -191,7 +191,7 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		}
 		// Not declared by the type itself: the nearest structural declaration
 		// (traits, supertypes) — or nothing (inheritance.go).
-		if inherited, ok := r.inheritedResolution(res, ref, types, conf, detail); ok {
+		if inherited, ok := r.inheritedResolution(res, ref, types, conf, EvidenceQualifiedIdentity, false, detail); ok {
 			return inherited
 		}
 		return own
@@ -312,4 +312,61 @@ func enclosingDeclaration(types []symbol.Symbol, ref reference.Reference) *symbo
 		found = t
 	}
 	return found
+}
+
+// fileDecls returns the declarations of the file at path itself — symbols
+// of a kind that declares its file (symbol.DeclaresFile) whose Qualified is
+// their own FileID — and the declarations a path names inside its file
+// (symbol.FileScoped, Qualified "<FileID> <name>"), of every language, in
+// deterministic order, keyed by Qualified. It is the target index of path evidence (FileIdentity), the one
+// lookup not keyed by language: a path names one file whatever it holds,
+// while a qualified name means something else in each language.
+func (r *Resolver) fileDecls(path string) []symbol.Symbol {
+	r.fileOnce.Do(func() {
+		r.fileDecl = make(map[string][]symbol.Symbol)
+		for _, fi := range r.files {
+			for _, s := range fi.Symbols {
+				if symbol.DeclaresFile(s.Kind) && s.Qualified == string(s.Location.File) ||
+					symbol.FileScoped(s.Kind) && strings.HasPrefix(s.Qualified, string(s.Location.File)+" ") {
+					r.fileDecl[s.Qualified] = append(r.fileDecl[s.Qualified], s)
+				}
+			}
+		}
+		for _, syms := range r.fileDecl {
+			sortSymbols(syms)
+		}
+	})
+	return r.fileDecl[path]
+}
+
+// resolveFileIdentity resolves a reference whose NameQualified is a file's
+// path to the declaration of that file, or a file's path and a name to the
+// declaration of that name in that file (FileIdentity): Exact when one
+// declaration states it, Candidate when several, Unresolved — or
+// outside the repository, unless IdentityInRepository — when none. It never
+// falls back to names.
+func (r *Resolver) resolveFileIdentity(res Resolution, ref reference.Reference) Resolution {
+	// A reference to a declaration in a file (a CSS Modules class) reaches
+	// those only, one to a file's own declaration those only: a file named
+	// "a.module.css .c" is no class c of a.module.css.
+	inFile := false
+	for _, k := range strings.Split(ref.TargetKinds, ",") {
+		if symbol.FileScoped(symbol.SymbolKind(k)) {
+			inFile = true
+		}
+	}
+	var decls []symbol.Symbol
+	for _, s := range r.fileDecls(ref.NameQualified) {
+		if symbol.FileScoped(s.Kind) == inFile {
+			decls = append(decls, s)
+		}
+	}
+	detail := fmt.Sprintf("the file %q", ref.NameQualified)
+	if inFile {
+		detail = fmt.Sprintf("the declaration %q of a file", ref.NameQualified)
+	}
+	if len(decls) == 0 {
+		return noQualifiedDeclaration(res, ref, detail)
+	}
+	return r.pickBest(res, decls, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is declared")
 }

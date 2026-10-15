@@ -3,6 +3,7 @@ package index
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -117,7 +118,7 @@ func (b *builder) identityError() error {
 		return nil
 	}
 	byID := make(map[symbol.SymbolID][]symbol.Symbol, len(b.collided))
-	for _, syms := range b.symbolsByFile {
+	for _, syms := range append(slices.Collect(maps.Values(b.symbolsByFile)), b.assets) {
 		for _, s := range syms {
 			if !b.collided[s.ID] || slices.Contains(byID[s.ID], s) {
 				continue

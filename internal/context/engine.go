@@ -118,9 +118,17 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 			continue
 		}
 
-		src, err := e.readSource(e.root, sc.c.sym.Location.File,
-			sc.c.sym.Location.Range.Start.Line,
-			sc.c.sym.Location.Range.End.Line)
+		var src string
+		var err error
+		if sc.c.sym.Kind == symbol.KindAsset {
+			// An asset (an image, a font) has no source text: it is
+			// listed by its path, never read.
+			src = fmt.Sprintf("(%s asset %s)", sc.c.sym.Signature, sc.c.sym.Location.File)
+		} else {
+			src, err = e.readSource(e.root, sc.c.sym.Location.File,
+				sc.c.sym.Location.Range.Start.Line,
+				sc.c.sym.Location.Range.End.Line)
+		}
 		if err != nil {
 			// Non-fatal: skip this item.
 			continue
@@ -194,6 +202,8 @@ func reasonForEdge(k index.EdgeKind) string {
 		return "references"
 	case index.EdgeDependsOn:
 		return "depends_on"
+	case index.EdgeLinks:
+		return "links"
 	default:
 		return "direct callee"
 	}
@@ -201,7 +211,9 @@ func reasonForEdge(k index.EdgeKind) string {
 
 // expandsTransitively reports whether a depth-1 item's own outgoing edges are
 // followed at depth 2: callees, and the dependencies of a configuration
-// declaration (what it references or depends on). Typed relations are not.
+// declaration (what it references or depends on). Typed relations are not,
+// nor links: a linked document is related to the target, the documents it
+// links in turn are not.
 func expandsTransitively(reason string) bool {
 	switch reason {
 	case "direct callee", "references", "depends_on":

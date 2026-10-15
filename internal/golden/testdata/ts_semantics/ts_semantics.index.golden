@@ -1,5 +1,5 @@
 ## stats
-files=15 symbols=45 references=51 relations=27 skipped=0
+files=15 symbols=46 references=56 relations=32 skipped=0
 lang tsx=2
 lang typescript=13
 ## symbols
@@ -47,6 +47,7 @@ symbol open kind=method lang=typescript qualified="Account.open" receiver="Accou
 symbol useUser kind=function lang=tsx qualified="useUser" receiver="" exported=true @tsx/card.tsx:1:8-3:2
 symbol UserCard kind=function lang=tsx qualified="UserCard" receiver="" exported=true @tsx/card.tsx:5:8-7:2
 symbol Layout kind=constant lang=tsx qualified="Layout" receiver="" exported=true @tsx/card.tsx:9:14-11:2
+symbol Header kind=method lang=tsx qualified="Layout.Header" receiver="Layout" exported=true @tsx/card.tsx:10:3-10:27
 symbol UserPage kind=function lang=tsx qualified="UserPage" receiver="" exported=true @tsx/page.tsx:3:8-12:2
 ## references
 ref ./repositories kind=import container="" receiver="" call=false @ambiguity/orders.ts:1:1-1:49
@@ -61,15 +62,19 @@ ref @/shared/helper kind=import container="" receiver="" call=false @imports/con
 ref UserId kind=type_use container="build" receiver="" call=false @imports/consumer.ts:7:27-7:33
 ref DomainUser kind=type_use container="build" receiver="" call=false @imports/consumer.ts:7:36-7:46
 ref makeUser kind=call container="build" receiver="" call=true @imports/consumer.ts:8:13-8:21
+ref users kind=value_reference container="build" receiver="" call=false @imports/consumer.ts:9:13-9:18
 ref create kind=call container="build" receiver="users.User" call=true @imports/consumer.ts:9:24-9:30
 ref DomainUser kind=construction container="build" receiver="" call=false @imports/consumer.ts:10:17-10:27
+ref z kind=value_reference container="build" receiver="" call=false @imports/consumer.ts:11:3-11:4
 ref string kind=call container="build" receiver="z" call=true @imports/consumer.ts:11:5-11:11
 ref helper kind=call container="build" receiver="" call=true @imports/consumer.ts:12:3-12:9
+ref User kind=value_reference container="build" receiver="" call=false @imports/consumer.ts:13:10-13:14
 ref create kind=call container="build" receiver="User" call=true @imports/consumer.ts:13:15-13:21
 ref String kind=call container="build" receiver="" call=true @imports/consumer.ts:13:22-13:28
 ref User kind=type_use container="User.create" receiver="" call=false @imports/user.ts:3:32-3:36
 ref User kind=construction container="User.create" receiver="" call=false @imports/user.ts:4:16-4:20
 ref User kind=type_use container="makeUser" receiver="" call=false @imports/user.ts:8:49-8:53
+ref User kind=value_reference container="makeUser" receiver="" call=false @imports/user.ts:9:10-9:14
 ref create kind=call container="makeUser" receiver="User" call=true @imports/user.ts:9:15-9:21
 ref Parent kind=inheritance container="Child" receiver="" call=false @inheritance/shapes.ts:5:32-5:38
 ref Base kind=inheritance container="Impl" receiver="" call=false @inheritance/shapes.ts:11:27-11:31
@@ -99,6 +104,7 @@ ref ./domain kind=import container="" receiver="" call=false @reexports/index.ts
 ref ./card kind=import container="" receiver="" call=false @tsx/page.tsx:1:1-1:52
 ref useUser kind=call container="UserPage" receiver="" call=true @tsx/page.tsx:4:16-4:23
 ref Header kind=call container="UserPage" receiver="Layout" call=true @tsx/page.tsx:7:8-7:21
+ref Layout kind=value_reference container="UserPage" receiver="" call=false @tsx/page.tsx:7:8-7:14
 ref UserCard kind=call container="UserPage" receiver="" call=true @tsx/page.tsx:8:8-8:16
 ## edges
 edge Child -extends-> Parent confidence=exact evidence=[same_file:symbol "Parent" defined in same file inheritance/shapes.ts]
@@ -106,10 +112,13 @@ edge Impl -extends-> Base confidence=exact evidence=[same_file:symbol "Base" def
 edge Impl -implements-> Child confidence=exact evidence=[same_file:symbol "Child" defined in same file inheritance/shapes.ts]
 edge User.create -calls-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
 edge User.create -uses_type-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
+edge UserPage -calls-> Layout.Header confidence=strong evidence=[module_binding:receiver "Layout" is a module binding (tsx/page.tsx ← "./card" → tsx/card.tsx exports "Layout"); a member of a value]
 edge UserPage -calls-> UserCard confidence=exact evidence=[module_binding:"UserCard" bound by import (tsx/page.tsx ← "./card" → tsx/card.tsx exports "UserCard")]
 edge UserPage -calls-> useUser confidence=exact evidence=[module_binding:"useUser" bound by import (tsx/page.tsx ← "./card" → tsx/card.tsx exports "useUser")]
+edge UserPage -references-> Layout confidence=exact evidence=[module_binding:"Layout" bound by import (tsx/page.tsx ← "./card" → tsx/card.tsx exports "Layout")]
 edge UserService -extends-> BaseService confidence=exact evidence=[same_file:symbol "BaseService" defined in same file members/service.ts]
 edge UserService.constructor -uses_type-> UserRepository confidence=exact evidence=[module_binding:"UserRepository" bound by import (members/service.ts ← "../ambiguity/repositories" → ambiguity/repositories.ts exports "UserRepository")]
+edge UserService.create -calls-> BaseService.log confidence=exact evidence=[receiver_type:receiver "this" declared as "UserService"; "log" inherited from BaseService]
 edge UserService.create -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (members/service.ts ← "../imports/user" → imports/user.ts exports "User")]
 edge UserService.create -calls-> UserRepository.save confidence=exact evidence=[receiver_type:receiver "this.repo" declared as "UserRepository"]
 edge UserService.create -uses_type-> User confidence=exact evidence=[module_binding:"User" bound by import (members/service.ts ← "../imports/user" → imports/user.ts exports "User")]
@@ -119,9 +128,11 @@ edge UserService.from -uses_type-> UserService confidence=exact evidence=[same_f
 edge build -calls-> User confidence=exact evidence=[module_binding:"DomainUser" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
 edge build -calls-> User.create confidence=exact evidence=[module_binding:receiver "User" is a module binding (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
 edge build -calls-> makeUser confidence=exact evidence=[module_binding:"makeUser" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "default")]
+edge build -references-> User confidence=exact evidence=[module_binding:"User" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
 edge build -uses_type-> User confidence=exact evidence=[module_binding:"DomainUser" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "User")]
 edge build -uses_type-> UserId confidence=exact evidence=[module_binding:"UserId" bound by import (imports/consumer.ts ← "./user" → imports/user.ts exports "UserId")]
 edge makeUser -calls-> User.create confidence=exact evidence=[same_file:symbol "create" defined in same file imports/user.ts]
+edge makeUser -references-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
 edge makeUser -uses_type-> User confidence=exact evidence=[same_file:symbol "User" defined in same file imports/user.ts]
 edge persist -calls-> UserRepository.save confidence=exact evidence=[receiver_type:receiver "repo" declared as "UserRepository"]
 edge persist -uses_type-> UserRepository confidence=exact evidence=[module_binding:"UserRepository" bound by import (ambiguity/orders.ts ← "./repositories" → ambiguity/repositories.ts exports "UserRepository")]

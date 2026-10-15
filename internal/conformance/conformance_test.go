@@ -6,7 +6,9 @@ import (
 
 	"github.com/magicdrive/ark/internal/conformance"
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/languages/css"
 	"github.com/magicdrive/ark/internal/languages/golang"
+	"github.com/magicdrive/ark/internal/languages/html"
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
@@ -118,6 +120,31 @@ func fixtures() []providerFixture {
 			},
 			broken:  conformance.Case{Name: "broken", File: "src/broken.rs", Source: []byte("pub fn broken( {\n}\npub fn good() {}\n")},
 			dynamic: conformance.Case{Name: "dynamic", File: "src/dyn.rs", Source: []byte("pub fn run(m: &[fn()], k: usize) { m[k](); }\n")},
+		},
+		{
+			name:     "html",
+			provider: html.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "index.html", Source: []byte("<!doctype html>\n<title>T</title>\n<h1 id=top-heading>Hi</h1>\n<a href=\"#top-heading\">up</a>\n")},
+				{Name: "form", File: "docs/form.html", Source: []byte("<form id=f><label for=n>N</label><input id=n aria-describedby=\"h1 h2\" list=l></form><p id=h1></p><p id=h2></p><datalist id=l></datalist><button form=f>go</button>\n")},
+				{Name: "links_svg", File: "docs/links.htm", Source: []byte("<a href=\"../index.html#top-heading\">i</a><iframe src=form.html></iframe><svg><defs><linearGradient id=g></linearGradient></defs><rect fill=\"url(#g)\"/><use href=\"#g\"/></svg><template><p id=t></p></template>\n")},
+			},
+			// A tag cut off by the end of the file is dropped (the standard's
+			// recovery); the declaration before it is kept.
+			broken:  conformance.Case{Name: "broken", File: "broken.html", Source: []byte("<p id=good>x</p>\n<div id=\"broken")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.html", Source: []byte("<p id=a onclick=\"go()\"><label for=a>x</label>\n")},
+		},
+		{
+			name:     "css",
+			provider: css.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "main.css", Source: []byte("@import \"base.css\";\n@keyframes spin { to { transform: rotate(1turn) } }\n.a { animation: 1s spin; color: var(--x, red); }\n")},
+				{Name: "fonts_props", File: "styles/fonts.css", Source: []byte("@font-face { font-family: \"Inter\"; src: url(inter.woff2); }\n@property --a { syntax: '*'; inherits: false; }\n:root { --a: 1; }\n.t { font-family: Inter, sans-serif; }\n")},
+				{Name: "modules", File: "c/card.module.css", Source: []byte(".card { composes: base from \"./base.module.css\"; }\n.title { composes: card; &:hover { color: red } }\n:global(.dark) .card { color: white }\n")},
+			},
+			// A url() broken by a space drops its declaration; the rule after it stays.
+			broken:  conformance.Case{Name: "broken", File: "broken.css", Source: []byte(".a { background: url(bad url); }\n@keyframes good { }\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.css", Source: []byte(".a { animation-name: var(--name); }\n")},
 		},
 	}
 }

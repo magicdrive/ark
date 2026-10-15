@@ -2,6 +2,8 @@ package typescript
 
 import (
 	ts "github.com/odvcencio/gotreesitter"
+
+	"github.com/magicdrive/ark/internal/languages/internal/ecmascript"
 )
 
 // Receiver type evidence (language.ReferenceDraft.ReceiverType).
@@ -32,9 +34,20 @@ type varType struct {
 type scope struct {
 	container string             // qualified container symbol, "" at top level
 	thisClass string             // enclosing class for `this`, "" when unproven
+	superName string             // the class thisClass extends, by a plain name, for `super`
 	props     map[string]string  // typed instance properties of thisClass
 	vars      map[string]varType // proven local variable types
 	tparams   map[string]bool    // type parameters in scope
+
+	// locals are the names declared by the enclosing functions and blocks
+	// (ecmascript): a name they hold denotes a local, never a top-level
+	// declaration or an import of the same name.
+	locals ecmascript.Names
+
+	// enumBody: inside an enum's members, where an unqualified name is first
+	// the enum's own member (no symbol); dynamic: inside a with statement's
+	// body, where any name may be a property of its object.
+	enumBody, dynamic bool
 }
 
 func setOf(names []string) map[string]bool {
@@ -102,12 +115,27 @@ func (e *extractor) simpleType(n *ts.Node, tparams map[string]bool) string {
 	case "generic_type":
 		if nm := e.field(n, "name"); e.typ(nm) == "type_identifier" {
 			name = e.text(nm)
+			if typeOperators[name] {
+				return "" // Exclude<T, U> is no Exclude: its members are T's
+			}
 		}
 	}
 	if name == "" || tparams[name] {
 		return ""
 	}
 	return name
+}
+
+// typeOperators are TypeScript's standard utility types (lib.es5.d.ts and
+// later): a value of Partial<User> or Exclude<A, B> is not of a type named
+// Partial or Exclude, but of one its type arguments derive, so the name is
+// no receiver type.
+var typeOperators = map[string]bool{
+	"Awaited": true, "Partial": true, "Required": true, "Readonly": true, "Record": true,
+	"Pick": true, "Omit": true, "Exclude": true, "Extract": true, "NonNullable": true,
+	"Parameters": true, "ConstructorParameters": true, "ReturnType": true, "InstanceType": true,
+	"ThisParameterType": true, "OmitThisParameter": true, "ThisType": true, "NoInfer": true,
+	"Uppercase": true, "Lowercase": true, "Capitalize": true, "Uncapitalize": true,
 }
 
 // constructedType returns T for `new T(...)`, or "".
@@ -128,7 +156,7 @@ func (e *extractor) classProps(body *ts.Node, tparams map[string]bool) map[strin
 	for i := range body.ChildCount() {
 		m := body.Child(i)
 		switch e.typ(m) {
-		case "public_field_definition":
+		case "public_field_definition", "field_definition":
 			if e.hasToken(m, "static") {
 				continue
 			}
@@ -192,14 +220,28 @@ func (e *extractor) declCounts(n *ts.Node, counts map[string]int) {
 		e.patternIdents(e.field(n, "name"), counts)
 	case "required_parameter", "optional_parameter", "rest_parameter":
 		e.patternIdents(e.field(n, "pattern"), counts)
+	case "formal_parameters":
+		// JavaScript writes the parameter patterns directly.
+		for i := range n.NamedChildCount() {
+			switch p := n.NamedChild(i); e.typ(p) {
+			case "identifier", "object_pattern", "array_pattern", "rest_pattern":
+				e.patternIdents(p, counts)
+			case "assignment_pattern":
+				e.patternIdents(e.field(p, "left"), counts)
+			}
+		}
 	case "catch_clause":
 		e.patternIdents(e.field(n, "parameter"), counts)
 	case "for_in_statement":
 		e.patternIdents(e.field(n, "left"), counts)
 	case "function_declaration", "generator_function_declaration":
 		e.patternIdents(e.field(n, "name"), counts)
-	case "class_declaration":
-		counts[e.text(e.field(n, "name"))]++
+	case "class_declaration", "class", "function_expression", "function", "generator_function":
+		// A class's or a named function expression's own name (visible
+		// inside it) shadows like any declaration.
+		if nm := e.field(n, "name"); nm != nil {
+			counts[e.text(nm)]++
+		}
 	case "arrow_function":
 		if p := e.field(n, "parameter"); e.typ(p) == "identifier" {
 			counts[e.text(p)]++
@@ -264,10 +306,19 @@ func (e *extractor) functionEnv(fn *ts.Node, tparams map[string]bool) map[string
 func (e *extractor) enterFunction(fn *ts.Node, sc scope, keepThis bool) scope {
 	ns := sc
 	if !keepThis {
-		ns.thisClass, ns.props = "", nil
+		ns.thisClass, ns.props, ns.superName = "", nil, ""
 	}
 	ns.tparams = unionSet(sc.tparams, e.typeParamNames(fn))
+	ns.locals = sc.locals.Union(ecmascript.FunctionLocals(fn, e.lang, e.src))
 	if env := e.functionEnv(fn, ns.tparams); len(env) > 0 {
+		// A type named like a local (const Animal = require("m"); a
+		// parameter) is no evidence: the name denotes the local, not a
+		// declaration a name match could find.
+		for k, v := range env {
+			if ns.locals.Values[v.typ] || ns.locals.Types[v.typ] {
+				delete(env, k)
+			}
+		}
 		vars := make(map[string]varType, len(sc.vars)+len(env))
 		for k, v := range sc.vars {
 			vars[k] = v
@@ -289,6 +340,13 @@ func (e *extractor) receiverType(obj *ts.Node, at uint32, sc scope) string {
 	case "identifier":
 		if v, ok := sc.vars[e.text(obj)]; ok && at >= v.from {
 			return v.typ
+		}
+		// A top-level const object the program states members of
+		// (values.go) is its own type — unless a local hides the name
+		// (localCap caps only a receiver without a proven type, so the
+		// check belongs here).
+		if name := e.text(obj); e.objects[name] && !sc.locals.Values[name] && !sc.locals.Types[name] {
+			return name
 		}
 	case "member_expression": // this.field (one step)
 		o, p := e.field(obj, "object"), e.field(obj, "property")

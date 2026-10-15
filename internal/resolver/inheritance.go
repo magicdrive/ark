@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/magicdrive/ark/internal/reference"
@@ -62,6 +63,10 @@ type typeRelation struct {
 	kind    relationKind
 	name    string
 	targets []symbol.Symbol
+	// capped: the target was identified through a CommonJS export (a
+	// Mutable export): its value is not proven, so a member found through
+	// the relation is at most Candidate.
+	capped bool
 }
 
 // typeStructure is what the lookup needs to know about one type declaration.
@@ -112,10 +117,31 @@ func (r *Resolver) buildStructuralIndex() {
 					continue
 				}
 				var targets []symbol.Symbol
-				if ref.NameQualified != "" {
-					targets = r.typeDecls(ref.Language, ref.NameQualified)
+				capped := false
+				name := ref.NameQualified
+				switch {
+				case name != "":
+					targets = r.typeDecls(ref.Language, name)
+				case fi.ModuleScoped && ref.ReceiverExpr == "":
+					// No qualified identity (JavaScript, TypeScript): the
+					// name's own resolution — an import binding or a
+					// declaration of the file — identifies the supertype
+					// when it is Exact and one type; anything else leaves
+					// the relation unidentified, and the lookup stops there.
+					name = ref.Name
+					res := r.resolveByName(Resolution{Confidence: ConfidenceUnresolved}, ref, *fi)
+					// A supertype imported through a CommonJS export is a
+					// Candidate (contract: commonjs-boundary): the relation is
+					// identified, capped.
+					capped = res.Confidence == ConfidenceCandidate && len(res.Evidence) > 0 &&
+						strings.Contains(res.Evidence[0].Detail, mutableDetail)
+					if (res.Confidence == ConfidenceExact || capped) && len(res.Candidates) == 1 {
+						if s, ok := r.byID[res.Candidates[0].SymbolID]; ok && isTypeLike(s.Kind) {
+							targets = []symbol.Symbol{s}
+						}
+					}
 				}
-				st.relations = append(st.relations, typeRelation{kind: kind, name: ref.NameQualified, targets: targets})
+				st.relations = append(st.relations, typeRelation{kind: kind, name: name, targets: targets, capped: capped})
 			}
 		}
 	}
@@ -146,8 +172,13 @@ type inheritedLookup struct {
 // lookupInherited finds where member name of type t is declared when t does
 // not declare it itself. call selects callable members (a call never targets a
 // same-named property or constant); otherwise only non-callable members.
-func (r *Resolver) lookupInherited(t symbol.Symbol, name string, call bool) inheritedLookup {
-	l := memberLookup{name: name, call: call, visiting: make(map[symbol.SymbolID]bool)}
+//
+// anyKind drops the callable filter: the nearest member of the name, of any
+// kind, is the one found (a call of a function-typed property denotes the
+// property where methods and properties share one name space, as in
+// ECMAScript).
+func (r *Resolver) lookupInherited(t symbol.Symbol, name string, call, anyKind bool) inheritedLookup {
+	l := memberLookup{name: name, call: call, anyKind: anyKind, visiting: make(map[symbol.SymbolID]bool)}
 	return l.find(r, t, true, 0)
 }
 
@@ -155,6 +186,7 @@ func (r *Resolver) lookupInherited(t symbol.Symbol, name string, call bool) inhe
 type memberLookup struct {
 	name     string
 	call     bool
+	anyKind  bool
 	visiting map[symbol.SymbolID]bool
 }
 
@@ -169,7 +201,7 @@ func (l *memberLookup) find(r *Resolver, t symbol.Symbol, own bool, depth int) i
 	l.visiting[t.ID] = true
 	defer delete(l.visiting, t.ID)
 
-	if declared := r.declaredMembers(t, name, l.call); len(declared) > 0 {
+	if declared := r.declaredMembers(t, name, l.call, l.anyKind); len(declared) > 0 {
 		if !own && anyPrivate(declared) {
 			return inheritedLookup{blocked: true}
 		}
@@ -200,6 +232,7 @@ func (l *memberLookup) find(r *Resolver, t symbol.Symbol, own bool, depth int) i
 			continue
 		}
 		found.merge(sub, "trait "+rel.targets[0].Qualified)
+		found.ambiguous = found.ambiguous || rel.capped
 	}
 	if len(found.members) > 0 {
 		// An unidentified trait may declare n as well: the identified
@@ -231,7 +264,7 @@ func (l *memberLookup) find(r *Resolver, t symbol.Symbol, own bool, depth int) i
 				}
 				found.merge(sub, what)
 			}
-			if len(rel.targets) > 1 {
+			if len(rel.targets) > 1 || rel.capped {
 				found.ambiguous = true
 			}
 		}
@@ -269,13 +302,13 @@ func (l *inheritedLookup) merge(sub inheritedLookup, what string) {
 
 // declaredMembers returns the members named name lexically declared by t:
 // callable ones (methods, constructors) for a call, the others otherwise.
-func (r *Resolver) declaredMembers(t symbol.Symbol, name string, call bool) []symbol.Symbol {
+func (r *Resolver) declaredMembers(t symbol.Symbol, name string, call, anyKind bool) []symbol.Symbol {
 	var out []symbol.Symbol
 	for _, s := range r.byName[nameKey{r.spaceOf[t.Location.File], name}] {
 		if s.ParentQualified != t.Qualified || s.Location.File != t.Location.File {
 			continue
 		}
-		if callable := s.Kind == symbol.KindMethod || s.Kind == symbol.KindConstructor || s.Kind == symbol.KindFunction; callable != call {
+		if callable := s.Kind == symbol.KindMethod || s.Kind == symbol.KindConstructor || s.Kind == symbol.KindFunction; callable != call && !anyKind {
 			continue
 		}
 		out = append(out, s)
@@ -295,15 +328,29 @@ func anyPrivate(syms []symbol.Symbol) bool {
 // inheritedResolution resolves ref's member through the supertypes of types
 // (the receiver's type declarations, none of which declares the member). It
 // returns ok == false when the lookup yields no target.
-func (r *Resolver) inheritedResolution(res Resolution, ref reference.Reference, types []symbol.Symbol, typeConf Confidence, detail string) (Resolution, bool) {
+//
+// ek is the evidence kind of the receiver's type evidence (a qualified
+// identity, a declared receiver type, an import binding): the inherited
+// member is found under that evidence.
+//
+// anyKind is lookupInherited's: true for a type of a language whose methods
+// and properties share one name space (FileIndex.MembersShareNames).
+func (r *Resolver) inheritedResolution(res Resolution, ref reference.Reference, types []symbol.Symbol, typeConf Confidence, ek EvidenceKind, anyKind bool, detail string) (Resolution, bool) {
 	var found inheritedLookup
 	for _, t := range types {
-		l := r.lookupInherited(t, ref.Name, ref.Kind == reference.KindCall)
+		l := r.lookupInherited(t, ref.Name, ref.Kind == reference.KindCall, anyKind)
 		if l.blocked {
 			return res, false
 		}
 		found.merge(l, l.via)
 	}
+	fits := found.members[:0:0]
+	for _, m := range found.members {
+		if placementFits(ref, m) {
+			fits = append(fits, m)
+		}
+	}
+	found.members = fits
 	if len(found.members) == 0 {
 		return res, false
 	}
@@ -313,6 +360,6 @@ func (r *Resolver) inheritedResolution(res Resolution, ref reference.Reference, 
 	}
 	sortSymbols(found.members)
 	// pickBest lowers several members (a collision) to Candidate.
-	return r.pickBest(res, found.members, conf, EvidenceQualifiedIdentity,
+	return r.pickBest(res, found.members, conf, ek,
 		fmt.Sprintf("%s; %q %s", detail, ref.Name, found.via)), true
 }

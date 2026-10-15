@@ -386,7 +386,8 @@ func symbolWeight(k symbol.SymbolKind) int {
 		return 8
 	case symbol.KindMethod:
 		return 4
-	case symbol.KindConstant, symbol.KindProperty, symbol.KindVariable:
+	case symbol.KindConstant, symbol.KindProperty, symbol.KindVariable,
+		symbol.KindCustomProperty, symbol.KindElement: // values and anchors, often hundreds
 		return 1
 	}
 	return 2

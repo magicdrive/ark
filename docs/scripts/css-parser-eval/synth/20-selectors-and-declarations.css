@@ -1,0 +1,4 @@
+@media print{a:hover{color:red} li:first-child{x:y}}
+.a{input:focus{x:y} a::marker{z:w} b:not(.c){d:e}}
+.f{g: {} !important; h:i}
+.j{color:1px .k{l:m}}

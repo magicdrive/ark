@@ -3,6 +3,7 @@ package typescript
 import (
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -38,25 +39,35 @@ import (
 // `.d.ts`, `.mts`/`.cts`, `.json`, moduleSuffixes and package.json resolution
 // are not modelled.
 
-// moduleSpec builds the ModuleSpec for specifier written in importer.
-func moduleSpec(importer source.FileID, spec string) language.ModuleSpec {
-	m := language.ModuleSpec{Specifier: spec}
+// relativeTarget joins a relative specifier written in importer into a
+// repository-relative path. ok is false for a bare, aliased or absolute
+// specifier, one with a backslash or control character (it could name a
+// different file on another platform), and one that would leave the
+// repository root: none is ever matched against the repository.
+func relativeTarget(importer source.FileID, spec string) (joined string, ok bool) {
 	if spec != "." && spec != ".." && !strings.HasPrefix(spec, "./") && !strings.HasPrefix(spec, "../") {
-		return m // bare / aliased / absolute: not repository-resolvable
+		return "", false
 	}
-	// Module specifiers use `/`; a backslash or control character is not a
-	// path this provider will interpret (it could name a different file on
-	// another platform), so it is never matched against the repository.
 	imp := filepath.ToSlash(string(importer))
 	for _, r := range spec + imp {
 		if r == '\\' || r < 0x20 || r == 0x7f {
-			return m
+			return "", false
 		}
 	}
-	dir := path.Dir(imp)
-	joined := path.Join(dir, spec)
+	joined = path.Join(path.Dir(imp), spec)
 	if joined == ".." || strings.HasPrefix(joined, "../") || path.IsAbs(joined) {
-		return m // would escape the repository root
+		return "", false
+	}
+	return joined, true
+}
+
+// moduleSpec builds the ModuleSpec for specifier written in importer by a
+// TypeScript file.
+func moduleSpec(importer source.FileID, spec string) language.ModuleSpec {
+	m := language.ModuleSpec{Specifier: spec}
+	joined, ok := relativeTarget(importer, spec)
+	if !ok {
+		return m
 	}
 	at := func(p string) source.FileID {
 		if joined == "." {
@@ -83,14 +94,81 @@ func moduleSpec(importer source.FileID, spec string) language.ModuleSpec {
 			{File: at("index.tsx"), Priority: 3},
 		}
 	}
+	m.Candidates = sortCandidates(c)
+	return m
+}
+
+func sortCandidates(c []language.ModuleCandidate) []language.ModuleCandidate {
 	sort.SliceStable(c, func(i, j int) bool {
 		if c[i].Priority != c[j].Priority {
 			return c[i].Priority < c[j].Priority
 		}
 		return c[i].File < c[j].File
 	})
-	m.Candidates = c
+	return c
+}
+
+// jsModuleSpec builds the ModuleSpec for specifier written in importer by a
+// JavaScript file. A JavaScript import names JavaScript: TypeScript files are
+// another name space and never candidates.
+//
+//	./x.js (any written extension)   → exactly that file
+//	./x                              → x.js (0), then x.jsx, x.mjs, x.cjs and
+//	                                   x/index.js, .jsx, .mjs, .cjs (1, equal: several are ambiguous)
+//	. / ./dir/                       → index.js (0), then index.jsx, .mjs, .cjs (1, equal)
+//
+// Node.js and the bundlers agree that ./x is x.js before the directory
+// index; they rank the other extensions differently (Node.js's require tries
+// none of them), so Ark does not.
+func jsModuleSpec(importer source.FileID, spec string) language.ModuleSpec {
+	m := language.ModuleSpec{Specifier: spec}
+	joined, ok := relativeTarget(importer, spec)
+	if !ok {
+		return m
+	}
+	exts := []string{".js", ".jsx", ".mjs", ".cjs"}
+	prio := func(ext string) int {
+		if ext == ".js" {
+			return 0
+		}
+		return 1
+	}
+	in := func(dir string) []language.ModuleCandidate {
+		var out []language.ModuleCandidate
+		for _, ext := range exts {
+			f := "index" + ext
+			if dir != "." {
+				f = path.Join(dir, f)
+			}
+			out = append(out, language.ModuleCandidate{File: source.FileID(f), Priority: prio(ext)})
+		}
+		return out
+	}
+	var c []language.ModuleCandidate
+	switch {
+	case spec == "." || spec == ".." || strings.HasSuffix(spec, "/") || strings.HasSuffix(spec, "/."):
+		c = in(joined)
+	case path.Ext(joined) != "" && slices.Contains(append(exts, ".json"), path.Ext(joined)):
+		c = []language.ModuleCandidate{{File: source.FileID(joined)}}
+	default:
+		for _, ext := range exts {
+			c = append(c, language.ModuleCandidate{File: source.FileID(joined + ext), Priority: prio(ext)})
+		}
+		for _, x := range in(joined) {
+			x.Priority = 1 // the directory index never before x.js
+			c = append(c, x)
+		}
+	}
+	m.Candidates = sortCandidates(c)
 	return m
+}
+
+// moduleSpec is the ModuleSpec of spec for the extractor's dialect.
+func (e *extractor) moduleSpec(spec string) language.ModuleSpec {
+	if e.dialect == dialectJavaScript {
+		return jsModuleSpec(e.file, spec)
+	}
+	return moduleSpec(e.file, spec)
 }
 
 // importStatement records the legacy module dependency (ImportDraft, one per
@@ -102,7 +180,7 @@ func (e *extractor) importStatement(n *ts.Node) {
 	}
 	e.imports = append(e.imports, language.ImportDraft{Path: spec, Location: nodeLocation(n, e.file)})
 
-	mod := moduleSpec(e.file, spec)
+	mod := e.moduleSpec(spec)
 	typeOnly := e.hasToken(n, "type")
 	bind := func(at *ts.Node, local, imported string, kind language.BindingKind, to bool) {
 		if local == "" {
@@ -164,7 +242,7 @@ func (e *extractor) exportStatement(n *ts.Node) {
 	if decl := e.field(n, "declaration"); decl != nil {
 		info, ok := e.declaration(decl, true)
 		if !ok {
-			e.walk(decl, scope{})
+			e.walk(decl, e.top(""))
 			return
 		}
 		if isDefault {
@@ -183,8 +261,9 @@ func (e *extractor) exportStatement(n *ts.Node) {
 	if val := e.field(n, "value"); val != nil {
 		if e.typ(val) == "identifier" {
 			export(language.ExportDraft{Kind: language.ExportLocal, Exported: "default", Local: e.text(val)})
+			e.readAt(val, e.text(val), "") // the name is read (reads.go)
 		} else {
-			e.walk(val, scope{}) // anonymous default export: no symbol identity
+			e.walk(val, e.top("")) // anonymous default export: no symbol identity
 		}
 		return
 	}
@@ -198,7 +277,7 @@ func (e *extractor) exportStatement(n *ts.Node) {
 			return
 		}
 		e.imports = append(e.imports, language.ImportDraft{Path: spec, Location: loc})
-		mod = moduleSpec(e.file, spec)
+		mod = e.moduleSpec(spec)
 	}
 
 	for i := range n.ChildCount() {
@@ -223,6 +302,9 @@ func (e *extractor) exportStatement(n *ts.Node) {
 					d.Kind, d.Module = language.ExportFrom, mod
 				} else {
 					d.Kind = language.ExportLocal
+					if !d.TypeOnly && e.typ(e.field(spc, "name")) == "identifier" {
+						e.readAt(e.field(spc, "name"), name, "") // reads.go
+					}
 				}
 				export(d)
 			}

@@ -30,6 +30,11 @@ type CachedExtraction struct {
 	PackageScoped bool      `json:"packageScoped,omitempty"`
 	CachedAt      time.Time `json:"cachedAt"`
 
+	// MembersShareNames (language.Extraction) is optional the same way: the
+	// providers that emit it (typescript ts-8, javascript js-6) changed
+	// their CacheVersion with it.
+	MembersShareNames bool `json:"membersShareNames,omitempty"`
+
 	// Aliases (language.Extraction.Aliases) are optional the same way: only
 	// the provider that emits them (rust) reads entries with them.
 	Aliases []language.AliasDraft `json:"aliases,omitempty"`

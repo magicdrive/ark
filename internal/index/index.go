@@ -2,6 +2,7 @@ package index
 
 import (
 	"context"
+	"slices"
 	"sort"
 	"strings"
 
@@ -32,6 +33,9 @@ const (
 	// generic EdgeCalledBy, its RefKind keeping the meaning.
 	EdgeReferences EdgeKind = "references"
 	EdgeDependsOn  EdgeKind = "depends_on"
+	// EdgeLinks: From links to the file To by its path (an HTML document
+	// linking another). A resource relation, forward-only like the above.
+	EdgeLinks EdgeKind = "links"
 )
 
 // GraphEdge is a directed relationship between two symbols with confidence.
@@ -93,7 +97,11 @@ type RepositoryIndex struct {
 	aliases map[aliasKey][]string
 
 	// --- meta ---
-	files       []source.FileID // sorted
+	files []source.FileID // sorted
+	// assets are the nodes of the asset files (internal/asset) a reference
+	// names, by path; assetPaths every asset file the walk found.
+	assets      []symbol.Symbol
+	assetPaths  map[source.FileID]bool
 	diagnostics []language.Diagnostic
 	stats       IndexStats
 }
@@ -112,6 +120,11 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 	digest := newSourceDigest(providers)
 
 	err := walkSources(ctx, root, providers, nil, func(path, relPath string, prov language.Provider, src []byte, readErr error) {
+		if prov == nil {
+			digest.addAsset(relPath)
+			b.addAsset(source.FileID(relPath))
+			return
+		}
 		digest.add(relPath, src, readErr)
 		if readErr != nil {
 			b.addDiagnostic(fileFailure(relPath, language.DiagReadError, "read error", readErr))
@@ -139,6 +152,7 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 		return nil, ctx.Err()
 	}
 
+	b.materializeAssets()
 	// Distinct declarations sharing a SymbolID stop the build before anything
 	// is derived from the merged ID (identity.go).
 	if err := b.identityError(); err != nil {
@@ -405,6 +419,19 @@ func (idx *RepositoryIndex) GetRelatedSymbols(id symbol.SymbolID) []GraphEdge {
 }
 
 // ---- Meta ----
+
+// Assets returns the nodes of the index's asset files (internal/asset: the
+// images, fonts and media web documents link to) that a reference names,
+// sorted by path. They are no source files: Files leaves them out.
+func (idx *RepositoryIndex) Assets() []symbol.Symbol {
+	return slices.Clone(idx.assets)
+}
+
+// IsAsset reports whether path is an asset file of the index, whether or
+// not anything links to it (an asset nothing links to has no node).
+func (idx *RepositoryIndex) IsAsset(path source.FileID) bool {
+	return idx.assetPaths[path]
+}
 
 // Files returns all indexed file IDs in deterministic order.
 func (idx *RepositoryIndex) Files() []source.FileID {

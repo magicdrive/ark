@@ -1,0 +1,31 @@
+@import "base.css";
+@import url(./theme.css) layer(theme);
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@font-face {
+  font-family: "Inter Var";
+  src: url(../fonts/inter.woff2) format("woff2");
+}
+
+@property --angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+:root {
+  --brand: #0af;
+  --spacing: 8px;
+}
+
+.loader {
+  animation: 1s linear infinite spin;
+  font-family: "Inter Var", system-ui, sans-serif;
+  color: var(--brand);
+  padding: var(--spacing, 4px);
+  &:hover { animation-name: spin; }
+}

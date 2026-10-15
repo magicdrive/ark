@@ -1,24 +1,37 @@
 ## stats
-files=5 symbols=4 references=12 relations=0 skipped=0
+files=5 symbols=14 references=12 relations=3 skipped=0
 lang javascript=5
 ## symbols
+symbol broken.js kind=script lang=javascript qualified="broken.js" receiver="" exported=false @broken.js:1:1-4:1
+symbol repository.js kind=script lang=javascript qualified="repository.js" receiver="" exported=false @repository.js:1:1-10:1
 symbol Repository kind=class lang=javascript qualified="Repository" receiver="" exported=true @repository.js:3:8-9:2
+symbol find kind=method lang=javascript qualified="Repository.find" receiver="Repository" exported=true @repository.js:4:3-8:4
+symbol service.js kind=script lang=javascript qualified="service.js" receiver="" exported=false @service.js:1:1-16:1
 symbol UserService kind=class lang=javascript qualified="UserService" receiver="" exported=true @service.js:4:8-15:2
+symbol constructor kind=constructor lang=javascript qualified="UserService.constructor" receiver="UserService" exported=true @service.js:5:3-7:4
+symbol create kind=method lang=javascript qualified="UserService.create" receiver="UserService" exported=true @service.js:9:3-14:4
+symbol service.test.js kind=script lang=javascript qualified="service.test.js" receiver="" exported=false @service.test.js:1:1-7:1
 symbol User kind=class lang=javascript qualified="User" receiver="" exported=true @user.js:1:8-8:2
+symbol user.js kind=script lang=javascript qualified="user.js" receiver="" exported=false @user.js:1:1-11:1
+symbol constructor kind=constructor lang=javascript qualified="User.constructor" receiver="User" exported=true @user.js:2:3-5:4
+symbol save kind=method lang=javascript qualified="User.save" receiver="User" exported=true @user.js:7:3-7:12
 symbol DEFAULT_ROLE kind=constant lang=javascript qualified="DEFAULT_ROLE" receiver="" exported=true @user.js:10:14-10:37
 ## references
 ref ./user.js kind=import container="" receiver="" call=false @repository.js:1:1-1:34
-ref User kind=construction container="" receiver="" call=false @repository.js:5:15-5:25
+ref User kind=construction container="Repository.find" receiver="" call=false @repository.js:5:19-5:23
 ref ./repository.js kind=import container="" receiver="" call=false @service.js:1:1-1:46
 ref ./user.js kind=import container="" receiver="" call=false @service.js:2:1-2:34
-ref Repository kind=construction container="" receiver="" call=false @service.js:6:17-6:33
-ref User kind=construction container="" receiver="" call=false @service.js:10:15-10:25
-ref find kind=call container="" receiver="this.repo" call=true @service.js:12:19-12:33
-ref save kind=call container="" receiver="found" call=true @service.js:13:5-13:15
+ref Repository kind=construction container="UserService.constructor" receiver="" call=false @service.js:6:21-6:31
+ref User kind=construction container="UserService.create" receiver="" call=false @service.js:10:19-10:23
+ref find kind=call container="UserService.create" receiver="this.repo" call=true @service.js:12:29-12:33
+ref save kind=call container="UserService.create" receiver="found" call=true @service.js:13:11-13:15
 ref ./service.js kind=import container="" receiver="" call=false @service.test.js:1:1-1:44
 ref test kind=call container="" receiver="" call=true @service.test.js:3:1-3:5
-ref UserService kind=construction container="" receiver="" call=false @service.test.js:4:13-4:30
-ref create kind=call container="" receiver="s" call=true @service.test.js:5:3-5:11
+ref UserService kind=construction container="" receiver="" call=false @service.test.js:4:17-4:28
+ref create kind=call container="" receiver="s" receiver_type="UserService" call=true @service.test.js:5:5-5:11
 ## edges
+edge Repository.find -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (repository.js ← "./user.js" → user.js exports "User")]
+edge UserService.constructor -calls-> Repository confidence=exact evidence=[module_binding:"Repository" bound by import (service.js ← "./repository.js" → repository.js exports "Repository")]
+edge UserService.create -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (service.js ← "./user.js" → user.js exports "User")]
 ## diagnostics
 diag error code=parse_error "parse error: this region is not analyzed as written (the parser rejected it; the source itself may be valid)" @broken.js:1:1-3:23

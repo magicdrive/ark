@@ -228,7 +228,9 @@ func TestSearchContext_BudgetSweepByContextLimit(t *testing.T) {
 		{"limit": 2, "contextLimit": 2}, // fewer slots than matches
 	} {
 		seen := map[string]bool{}
-		for budget := 1; budget <= 1200; budget++ {
+		// check runs one budget and returns the response's state: where it
+		// changes between two budgets is a boundary of the sweep.
+		check := func(budget int) string {
 			args := map[string]interface{}{"query": "u", "maxTokens": budget}
 			for k, v := range cfg {
 				args[k] = v
@@ -240,7 +242,7 @@ func TestSearchContext_BudgetSweepByContextLimit(t *testing.T) {
 					t.Fatalf("%v budget %d: %s", cfg, budget, text)
 				}
 				seen["budget_exceeded"] = true
-				continue
+				return "budget_exceeded"
 			}
 			if n := arkctx.EstimateTokens(text); n > budget {
 				t.Fatalf("%v budget %d: response is %d tokens", cfg, budget, n)
@@ -272,6 +274,33 @@ func TestSearchContext_BudgetSweepByContextLimit(t *testing.T) {
 			if r.DroppedForBudget > 0 {
 				seen["dropped"] = true
 			}
+			state := fmt.Sprintf("%d/%d", r.ReturnedMatches, r.DroppedForBudget)
+			for _, x := range r.Results {
+				state += " " + x.Context.Status
+			}
+			return state
+		}
+		// Every budget without the race detector (the unit job). Under it (the
+		// race shards) every 7th, and every budget between two samples whose
+		// states differ: each boundary of the sweep, and its neighbours, still
+		// runs under the race detector; the budgets skipped return the same
+		// state as both samples around them.
+		step := 1
+		if raceEnabled {
+			step = 7
+		}
+		prev, prevState := 0, ""
+		for budget := 1; budget <= 1200; budget += step {
+			state := check(budget)
+			if prev > 0 && state != prevState {
+				for b := prev + 1; b < budget; b++ {
+					check(b)
+				}
+			}
+			prev, prevState = budget, state
+		}
+		if prev != 1200 {
+			check(1200)
 		}
 		if !seen["budget_exceeded"] || (cfg["limit"] == 20 && !seen["dropped"]) {
 			t.Errorf("%v: sweep did not reach %v", cfg, seen)

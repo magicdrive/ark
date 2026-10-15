@@ -151,10 +151,11 @@ func (x *extractor) extract(j *extractJob) {
 		ModuleScoped: ext.ModuleScoped,
 		IdentityOnly: ext.IdentityOnly,
 
-		Package:       ext.Package,
-		PackageScoped: ext.PackageScoped,
-		Aliases:       ext.Aliases,
-		TypeFacts:     ext.TypeFacts,
+		Package:           ext.Package,
+		PackageScoped:     ext.PackageScoped,
+		MembersShareNames: ext.MembersShareNames,
+		Aliases:           ext.Aliases,
+		TypeFacts:         ext.TypeFacts,
 	})
 }
 
@@ -219,10 +220,11 @@ func (x *extractor) ingest(b *builder, j *extractJob) {
 			ModuleScoped: cached.ModuleScoped,
 			IdentityOnly: cached.IdentityOnly,
 
-			Package:       cached.Package,
-			PackageScoped: cached.PackageScoped,
-			Aliases:       cached.Aliases,
-			TypeFacts:     cached.TypeFacts,
+			Package:           cached.Package,
+			PackageScoped:     cached.PackageScoped,
+			MembersShareNames: cached.MembersShareNames,
+			Aliases:           cached.Aliases,
+			TypeFacts:         cached.TypeFacts,
 		})
 		return
 	}

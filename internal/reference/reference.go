@@ -36,8 +36,16 @@ const (
 	// explicitly ordered after without using its value (Terraform
 	// `depends_on`).
 	KindExplicitDependency ReferenceKind = "depends_on"
-	KindConstruction       ReferenceKind = "construction"
-	KindUnknown            ReferenceKind = "unknown"
+	// KindIDReference names an element by its identifier (HTML: an IDREF
+	// attribute such as label for="x", a fragment href="#x"). It is a
+	// reference, not a call.
+	KindIDReference ReferenceKind = "id_reference"
+	// KindResourceLink names another file the enclosing one links to by its
+	// path (HTML: a href="page.html", iframe src): a resource relation, not
+	// a call or an import.
+	KindResourceLink ReferenceKind = "resource_link"
+	KindConstruction ReferenceKind = "construction"
+	KindUnknown      ReferenceKind = "unknown"
 )
 
 // Reference is a syntactic use of a name in source code.
@@ -70,6 +78,10 @@ type Reference struct {
 	// IdentityInRepository qualifies the qualified identities (see
 	// language.ReferenceDraft.IdentityInRepository).
 	IdentityInRepository bool
+	// FileIdentity: NameQualified is a repository file's path, naming the
+	// declaration of that file itself in any language
+	// (language.ReferenceDraft.FileIdentity).
+	FileIdentity bool
 	// NamedArgument: Name is a named argument passed to the receiver (see
 	// language.ReferenceDraft.NamedArgument).
 	NamedArgument bool

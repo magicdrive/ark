@@ -32,7 +32,7 @@ func ReferenceToolDefinitions() []Tool {
 					},
 					"kind": map[string]interface{}{
 						"type":        "string",
-						"description": "Filter by reference kind: call, type_use, import, construction, read, write, unknown",
+						"description": "Filter by reference kind: call, type_use, import, construction, read, write, value_reference, depends_on, id_reference, resource_link, unknown",
 					},
 					"maxResults": map[string]interface{}{
 						"type":        "integer",

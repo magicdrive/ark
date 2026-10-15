@@ -1,0 +1,4 @@
+@container sidebar (min-width: 400px) { .x { display: grid } }
+@container (inline-size > 30em) and style(--responsive: true) { .y { gap: 1rem } }
+@media (400px <= width <= 700px) { body { line-height: 1.4 } }
+@media screen and (prefers-reduced-motion: no-preference) { .z { animation: spin 1s infinite } }

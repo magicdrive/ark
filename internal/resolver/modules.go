@@ -95,12 +95,48 @@ type bindResult struct {
 	ambiguous bool // some step offered several equally-valid options
 	typeOnly  bool // some step was type-only
 	complete  bool // no cycle / depth / budget cut-off was hit
-	chain     []string
+	// mutable: some step was a Mutable export (a CommonJS exports object
+	// property): the target is the export's source declaration, not a
+	// proven run-time value — at most Candidate.
+	mutable bool
+	chain   []string
+
+	// external: some step named a module the repository does not have (a
+	// package, an unsupported specifier) — the name may be declared there.
+	// dangling: some step reached a repository file that neither declares
+	// nor binds nor exports the name (an export Ark does not extract, a
+	// CommonJS module) — the name is the repository's, unrepresented.
+	// A lookup with no target is outside the repository only when it is
+	// external and not dangling.
+	external bool
+	dangling bool
+}
+
+// outside reports whether a lookup without a target proves its name lies
+// outside the repository.
+func (b bindResult) outside() bool { return b.external && !b.dangling }
+
+// unresolvedModule records a module m that matched no indexed file: one the
+// provider gave no repository candidate (a package, an unsupported
+// specifier) is external; one it did (a relative path to a file no provider
+// indexes — ./data.json, ./style.css) is the repository's, unrepresented.
+func (b *bindResult) unresolvedModule(m language.ModuleSpec, st moduleStatus) {
+	if st != moduleUnresolved {
+		return
+	}
+	if len(m.Candidates) == 0 {
+		b.external = true
+	} else {
+		b.dangling = true
+	}
 }
 
 func (b *bindResult) merge(o bindResult) {
+	b.external = b.external || o.external
+	b.dangling = b.dangling || o.dangling
 	b.ambiguous = b.ambiguous || o.ambiguous
 	b.typeOnly = b.typeOnly || o.typeOnly
+	b.mutable = b.mutable || o.mutable
 	b.complete = b.complete && o.complete
 	b.chain = append(b.chain, o.chain...)
 	for _, t := range o.targets {
@@ -139,6 +175,7 @@ func (w *exportWalk) bindingTargets(fi *FileIndex, local string, depth int) bind
 		if st == moduleAmbiguous {
 			out.ambiguous = true
 		}
+		out.unresolvedModule(b.Module, st)
 		if b.TypeOnly {
 			out.typeOnly = true
 		}
@@ -148,7 +185,17 @@ func (w *exportWalk) bindingTargets(fi *FileIndex, local string, depth int) bind
 			case language.BindingNamespace:
 				out.merge(bindResult{targets: []bindTarget{{module: m}}, complete: true})
 			case language.BindingNamed:
-				out.merge(w.export(m, b.Imported, depth+1))
+				sub := w.export(m, b.Imported, depth+1)
+				if b.Imported == language.ModuleExportsName && len(sub.targets) == 0 && sub.complete {
+					// CommonJS: a module that states no module.exports
+					// export exports the object its other exports fill —
+					// its namespace (a provider states no property export
+					// of a module that replaces module.exports).
+					// A CommonJS value, as a module.exports export is.
+					out.merge(bindResult{targets: []bindTarget{{module: m}}, complete: true, mutable: true})
+					continue
+				}
+				out.merge(sub)
 			}
 		}
 	}
@@ -194,6 +241,9 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 		if e.TypeOnly {
 			out.typeOnly = true
 		}
+		if e.Mutable {
+			out.mutable = true
+		}
 		switch e.Kind {
 		case language.ExportLocal:
 			out.merge(w.local(fi, e.Local, depth))
@@ -202,6 +252,7 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 			if st == moduleAmbiguous {
 				out.ambiguous = true
 			}
+			out.unresolvedModule(e.Module, st)
 			for _, m := range mods {
 				if e.Kind == language.ExportNamespace {
 					out.merge(bindResult{targets: []bindTarget{{module: m}}, complete: true})
@@ -223,10 +274,14 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 			if st == moduleAmbiguous {
 				out.ambiguous = true
 			}
+			out.unresolvedModule(e.Module, st)
 			for _, m := range mods {
 				out.merge(w.export(m, name, depth+1))
 			}
 		}
+	}
+	if len(out.targets) == 0 && !out.external && out.complete {
+		out.dangling = true // the file is the repository's; the name is not found in it
 	}
 	if len(out.targets) > 0 {
 		out.chain = append([]string{fmt.Sprintf("%s exports %q", file, name)}, out.chain...)
@@ -242,11 +297,15 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 func (w *exportWalk) local(fi *FileIndex, name string, depth int) bindResult {
 	out := bindResult{complete: true}
 	for _, s := range fi.Symbols {
-		if s.Name == name && s.ParentQualified == "" {
+		if s.Name == name && s.ParentQualified == "" && !symbol.DeclaresFile(s.Kind) {
 			out.merge(bindResult{targets: []bindTarget{{sym: s}}, complete: true})
 		}
 	}
 	if len(out.targets) > 0 {
+		return out
+	}
+	if !hasBinding(fi, name) {
+		out.dangling = true // exported but declared by nothing Ark extracts
 		return out
 	}
 	return w.bindingTargets(fi, name, depth)
