@@ -115,26 +115,24 @@ func tokenize(src []byte) *document {
 				d.dynAttr = true
 			}
 		}
-		scanned := scanAttrs(raw)
-		tg.matched = len(scanned) == len(t.Attr)
+		// A later attribute of a name the tag already has is removed
+		// (§13.2.5.33): from both lists before they are compared. x/net
+		// removes it since v0.60.0 and kept it before, so either version
+		// gives the same tag.
+		scanned := firstOfEachName(scanAttrs(raw), func(a scannedAttr) string { return a.name })
+		xattrs := firstOfEachName(t.Attr, func(a xhtml.Attribute) string { return a.Key })
+		tg.matched = len(scanned) == len(xattrs)
 		for i := 0; tg.matched && i < len(scanned); i++ {
 			v := ""
 			if s := scanned[i].valS; s.start >= 0 {
 				v = attrValue(string(raw[s.start:s.end]))
 			}
-			tg.matched = scanned[i].name == t.Attr[i].Key && v == t.Attr[i].Val
+			tg.matched = scanned[i].name == xattrs[i].Key && v == xattrs[i].Val
 		}
 		if !tg.matched {
 			d.mismatch = append(d.mismatch, len(d.tags))
 		}
-		seen := map[string]bool{}
-		for i, a := range t.Attr {
-			// A later attribute of a name the tag already has is removed
-			// (§13.2.5.33); x/net keeps it.
-			if seen[a.Key] {
-				continue
-			}
-			seen[a.Key] = true
+		for i, a := range xattrs {
 			at := attr{key: a.Key, val: a.Val, nameS: span{-1, -1}, valS: span{-1, -1}}
 			if tg.matched {
 				at.nameS = span{start + scanned[i].nameS.start, start + scanned[i].nameS.end}
@@ -146,6 +144,19 @@ func tokenize(src []byte) *document {
 		}
 		d.tags = append(d.tags, tg)
 	}
+}
+
+// firstOfEachName keeps the first of the attributes that share a name.
+func firstOfEachName[A any](as []A, name func(A) string) []A {
+	seen := map[string]bool{}
+	var out []A
+	for _, a := range as {
+		if n := name(a); !seen[n] {
+			seen[n] = true
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 // verify decides, for each attribute of each tag, whether the tree the
