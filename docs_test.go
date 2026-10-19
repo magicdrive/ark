@@ -25,7 +25,12 @@ func userDocs(t *testing.T) []string {
 	if err != nil || len(more) == 0 {
 		t.Fatalf("no docs/*.md (%v)", err)
 	}
-	return append(docs, more...)
+	// The maintainers' runbooks are followed step by step: their links too.
+	runbooks, err := filepath.Glob("docs/maintenance/*.md")
+	if err != nil || len(runbooks) == 0 {
+		t.Fatalf("no docs/maintenance/*.md (%v)", err)
+	}
+	return append(append(docs, more...), runbooks...)
 }
 
 var (

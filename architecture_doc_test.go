@@ -18,6 +18,7 @@ import (
 var knowledgeDocs = []string{
 	"ARCHITECTURE.md",
 	"internal/conformance/IMPROVEMENTS.md",
+	"docs/maintenance/renovate.md",
 }
 
 var (
