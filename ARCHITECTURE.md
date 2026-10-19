@@ -483,7 +483,7 @@ production route's parsers come from gotreesitter's ParserPool (building a
 parser costs more than parsing a small file); a panic drops the pool.
 Authority:
 `tsparse/tsparse.go`. Tests: `TestParse_*` (the contract), `TestRoute_*`
-(gotreesitter v0.55.1 route behavior — the upgrade gate), `TestProbe_*`
+(gotreesitter v0.56.0 route behavior — the upgrade gate), `TestProbe_*`
 (the probe agrees with the forest route, never skips a derivable source,
 runs only for Go and Rust; linear cost), `TestBlankComments*`,
 `TestParse_PooledParsersShareNoState`,

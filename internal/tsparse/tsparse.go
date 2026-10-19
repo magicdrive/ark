@@ -62,7 +62,7 @@
 // a fallback is kept, a rejected fallback tree, any tree on an error or a
 // panic — it releases itself, once.
 //
-// Dependency gate: the routes are gotreesitter v0.55.1 behavior, and the
+// Dependency gate: the routes are gotreesitter v0.56.0 behavior, and the
 // forest route is not part of its stable API. When upgrading gotreesitter,
 // TestRoute_* must still pass (they pin which route each known input takes;
 // a failure means the route behavior changed and the fallback must be
