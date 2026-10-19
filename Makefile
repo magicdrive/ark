@@ -48,20 +48,40 @@ test-verbose:
 	@$(GO) clean -testcache
 	@$(GO) test -v $(CURDIR)/...
 
-# Run go test with race detector
+# Run go test with race detector (with cgo, which -race requires on Linux)
 .PHONY: race
 race:
-	@$(GO) test -race $(CURDIR)/...
+	@GO111MODULE=on go test -race $(CURDIR)/...
 
 # Run go vet
 .PHONY: vet
 vet:
 	@$(GO) vet $(CURDIR)/...
 
-# Run staticcheck (install with: go install honnef.co/go/tools/cmd/staticcheck@latest)
+# Run staticcheck as the lint job of ci.yml does: its version and its
+# packages (TestMakefile_StaticcheckMatchesCI keeps them equal).
+# staticcheck 2026.2.1 cannot read Go 1.27.2's export data.
+STATICCHECK_VERSION = v0.7.0-0.dev.0.20261009230814-452d5bb86b45
+STATICCHECK_PACKAGES = \
+	./internal/cache/... \
+	./internal/context/... \
+	./internal/index/... \
+	./internal/resolver/... \
+	./internal/language/... \
+	./internal/languages/... \
+	./internal/mcp/... \
+	./internal/symbol/... \
+	./internal/reference/... \
+	./internal/repomap/... \
+	./internal/impact/... \
+	./internal/search/... \
+	./internal/fsroot/... \
+	./internal/accesspolicy/... \
+	./internal/safewalk/...
+
 .PHONY: staticcheck
 staticcheck:
-	@staticcheck $(CURDIR)/...
+	@cd $(CURDIR) && go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) $(STATICCHECK_PACKAGES)
 
 # Run all quality gates: vet + test + race + staticcheck
 .PHONY: lint
@@ -140,7 +160,7 @@ help:
 	@echo "  make test-verbose      - Run go test -v with go clean -testcache"
 	@echo "  make race              - Run go test -race"
 	@echo "  make vet               - Run go vet"
-	@echo "  make staticcheck       - Run staticcheck"
+	@echo "  make staticcheck       - Run staticcheck (the version and packages of CI)"
 	@echo "  make lint              - Run all quality gates (vet+test+race+staticcheck)"
 	@echo "  make fuzz              - Run fuzz smoke tests (10s each)"
 	@echo "  make ts-oracle         - Run the TypeScript compiler differential (Node.js)"

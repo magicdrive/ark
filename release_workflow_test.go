@@ -809,3 +809,38 @@ echo ok
 		t.Errorf("group 9 has no target and must fail: %v\n%s", err, out)
 	}
 }
+
+// make staticcheck runs what the lint job of ci.yml runs: the same pinned
+// version over the same packages, so the local gate fails exactly when CI's
+// does.
+func TestMakefile_StaticcheckMatchesCI(t *testing.T) {
+	mk, err := os.ReadFile("Makefile")
+	if err != nil {
+		t.Fatal(err)
+	}
+	variable := func(name string) string {
+		m := regexp.MustCompile(`(?m)^` + name + ` = ((?:.*\\\n)*.*)$`).FindSubmatch(mk)
+		if m == nil {
+			t.Fatalf("Makefile: no %s", name)
+		}
+		return strings.Join(strings.Fields(strings.ReplaceAll(string(m[1]), "\\\n", " ")), " ")
+	}
+	_, jobs := workflowJobs(t, ".github/workflows/ci.yml")
+	lint := jobs["lint"]
+	install := regexp.MustCompile(`go install honnef\.co/go/tools/cmd/staticcheck@(\S+)`).FindStringSubmatch(lint)
+	run := regexp.MustCompile(`(?s)run: \|\n\s+staticcheck \\\n(.*?)\n\n`).FindStringSubmatch(lint + "\n\n")
+	if install == nil || run == nil {
+		t.Fatal("ci.yml: the lint job does not install and run staticcheck")
+	}
+	if got := variable("STATICCHECK_VERSION"); got != install[1] {
+		t.Errorf("Makefile: STATICCHECK_VERSION %s, ci.yml installs %s", got, install[1])
+	}
+	ci := strings.Join(strings.Fields(strings.ReplaceAll(run[1], "\\", " ")), " ")
+	if got := variable("STATICCHECK_PACKAGES"); got != ci {
+		t.Errorf("Makefile: STATICCHECK_PACKAGES\n  %s\nci.yml runs staticcheck over\n  %s", got, ci)
+	}
+	recipe := regexp.MustCompile(`(?m)^staticcheck:\n((?:\t.*\n)+)`).FindSubmatch(mk)
+	if recipe == nil || !strings.Contains(string(recipe[1]), "go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) $(STATICCHECK_PACKAGES)") {
+		t.Error("Makefile: make staticcheck must run STATICCHECK_VERSION over STATICCHECK_PACKAGES")
+	}
+}
