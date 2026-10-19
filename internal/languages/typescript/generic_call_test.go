@@ -25,9 +25,15 @@ func refKeys(t *testing.T, src string, kinds ...string) []string {
 	return out
 }
 
+// misparsedGenericCall is valid TypeScript whose one argument is the generic
+// call a<b, c>(d), as the compiler parses it; gotreesitter v0.56.0 derives two
+// comparison arguments instead, without an error (v0.55.1 parsed the call).
+const misparsedGenericCall = "f(a < b, c > (d));\n"
+
 // misparsedGenericCalls is valid TypeScript whose two generic calls
-// gotreesitter v0.55.1 derives as comparisons, without an error. The defect
-// depends on the context: the first statement alone parses as a call.
+// gotreesitter v0.55.1 derived as comparisons, without an error; v0.56.0
+// parses both as calls. The defect depended on the context: the first
+// statement alone parsed as a call.
 const misparsedGenericCalls = `const c = processors.aggregateChecks<number>(inst).minimum ?? null;
 z.number().apply<z.ZodMiniNumber>((schema) => schema.check(0));
 `
@@ -36,35 +42,47 @@ z.number().apply<z.ZodMiniNumber>((schema) => schema.check(0));
 // which the parser reads as a call: the control for the contract below.
 const parsedAsCall = "const c = processors.aggregateChecks<number>(inst).minimum ?? null;\n"
 
-// --- gotreesitter v0.55.1 behavior (the upgrade gate) ---
+// --- gotreesitter v0.56.0 behavior (the upgrade gate) ---
 //
-// It pins the misparse the recovery exists for. A failure after a
-// gotreesitter upgrade means the parser changed: the contract test below must
-// still pass; re-measure the recovery (ARCHITECTURE.md §3) before updating
-// this one.
+// It pins the misparse the recovery exists for, and the trees of the source
+// v0.55.1 misparsed. A failure after a gotreesitter upgrade means the parser
+// changed: the contract test below must still pass; re-measure the recovery
+// (ARCHITECTURE.md §3) before updating this one.
 func TestParserBehavior_GenericCallsDerivedAsComparisons(t *testing.T) {
 	lang := grammars.TypescriptLanguage()
+	mis, err := tsparse.Parse(lang, []byte(misparsedGenericCall))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer mis.Release()
+	if mis.RootNode().HasError() {
+		t.Fatal("the misparse has no error: the tree must not have one")
+	}
+	// f(a < b, c > (d))
+	wantMis := "(program (expression_statement (call_expression (identifier) (arguments " +
+		"(binary_expression (identifier) (identifier)) " +
+		"(binary_expression (identifier) (parenthesized_expression (identifier)))))))"
+	if got := mis.RootNode().SExpr(lang); got != wantMis {
+		t.Errorf("gotreesitter's tree changed:\n got %s\nwant %s", got, wantMis)
+	}
 	tree, err := tsparse.Parse(lang, []byte(misparsedGenericCalls))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer tree.Release()
-	if tree.RootNode().HasError() {
-		t.Fatal("the misparse has no error: the tree must not have one")
-	}
 	want := "(program " +
-		// (processors.aggregateChecks < number) > ((inst).minimum) ?? null
-		"(lexical_declaration (variable_declarator (identifier) (binary_expression (binary_expression " +
-		"(binary_expression (member_expression (identifier) (property_identifier)) (identifier)) " +
-		"(member_expression (parenthesized_expression (identifier)) (property_identifier))) (null)))) " +
-		// (z.number().apply < z.ZodMiniNumber) > ((schema) => ...)
-		"(expression_statement (binary_expression (binary_expression " +
+		// processors.aggregateChecks<number>(inst).minimum ?? null
+		"(lexical_declaration (variable_declarator (identifier) (binary_expression " +
+		"(member_expression (call_expression (member_expression (identifier) (property_identifier)) " +
+		"(type_arguments (predefined_type)) (arguments (identifier))) (property_identifier)) (null)))) " +
+		// z.number().apply<z.ZodMiniNumber>((schema) => ...)
+		"(expression_statement (call_expression " +
 		"(member_expression (call_expression (member_expression (identifier) (property_identifier)) (arguments)) (property_identifier)) " +
-		"(member_expression (identifier) (property_identifier))) " +
-		"(parenthesized_expression (arrow_function (formal_parameters (required_parameter (identifier))) " +
+		"(type_arguments (nested_type_identifier (identifier) (type_identifier))) " +
+		"(arguments (arrow_function (formal_parameters (required_parameter (identifier))) " +
 		"(call_expression (member_expression (identifier) (property_identifier)) (arguments (number))))))))"
-	if got := tree.RootNode().SExpr(lang); got != want {
-		t.Errorf("gotreesitter's tree changed:\n got %s\nwant %s", got, want)
+	if got := tree.RootNode().SExpr(lang); tree.RootNode().HasError() || got != want {
+		t.Errorf("the source v0.55.1 misparsed is no longer parsed as calls:\n got %s\nwant %s", got, want)
 	}
 	ctl, err := tsparse.Parse(lang, []byte(parsedAsCall))
 	if err != nil {
@@ -84,6 +102,10 @@ func TestParserBehavior_GenericCallsDerivedAsComparisons(t *testing.T) {
 // The generic calls and their type arguments are extracted exactly — kind,
 // name, receiver, position, once each — however the parser derives them.
 func TestExtract_GenericCallReadAsComparison(t *testing.T) {
+	wantMis := []string{"call .a L1:3", "call .f L1:1", "type_use .b L1:7", "type_use .c L1:10"}
+	if got := refKeys(t, misparsedGenericCall, "call", "type_use", "construction"); !slices.Equal(got, wantMis) {
+		t.Errorf("misparsed source:\n got %v\nwant %v", got, wantMis)
+	}
 	want := []string{
 		"call processors.aggregateChecks L1:22",
 		"call schema.check L2:54",
@@ -93,7 +115,7 @@ func TestExtract_GenericCallReadAsComparison(t *testing.T) {
 	}
 	slices.Sort(want)
 	if got := refKeys(t, misparsedGenericCalls, "call", "type_use", "construction"); !slices.Equal(got, want) {
-		t.Errorf("misparsed source:\n got %v\nwant %v", got, want)
+		t.Errorf("source v0.55.1 misparsed:\n got %v\nwant %v", got, want)
 	}
 	// The statement parsed as a call yields the same reference.
 	if got := refKeys(t, parsedAsCall, "call", "type_use", "construction"); !slices.Equal(got, want[:1]) {

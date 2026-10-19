@@ -228,7 +228,7 @@ func TestParse_ReturnedTreeSurvivesLaterParses(t *testing.T) {
 	}
 }
 
-// --- gotreesitter v0.55.1 route behavior (the dependency gate) ---
+// --- gotreesitter v0.56.0 route behavior (the dependency gate) ---
 //
 // These pin which route each known input takes. A failure after a
 // gotreesitter upgrade means route behavior changed: re-measure the fallback
