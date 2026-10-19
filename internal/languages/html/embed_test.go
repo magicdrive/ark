@@ -530,21 +530,31 @@ func TestAudit9_HTML(t *testing.T) {
 		return []byte("<div>" + strings.Repeat("<p></p>", n) + "<template shadowrootmode=open>" +
 			strings.Repeat("<label for=a></label>", n) + "<i id=a></i></template></div>")
 	}
-	best := func(src []byte) time.Duration {
-		d := time.Duration(1 << 62)
-		for i := 0; i < 3; i++ {
-			t0 := time.Now()
-			if _, err := html.NewProvider().Extract(context.Background(), "s.html", src); err != nil {
-				t.Fatal(err)
-			}
-			if e := time.Since(t0); e < d {
-				d = e
-			}
+	// Measured as TestEmbedded_ManyRegions is: the sizes alternate, and a
+	// ratio above the bound is measured again, up to three times in all.
+	run := func(src []byte) time.Duration {
+		t0 := time.Now()
+		if _, err := html.NewProvider().Extract(context.Background(), "s.html", src); err != nil {
+			t.Fatal(err)
 		}
-		return d
+		return time.Since(t0)
 	}
-	if small, large := best(page(1500)), best(page(6000)); large > 8*small {
-		t.Errorf("shadow root references: 1500 %v, 6000 %v (more than linear)", small, large)
+	small, large := page(1500), page(6000)
+	var attempts []string
+	for attempt := 0; attempt < 3; attempt++ {
+		bestSmall, bestLarge := time.Duration(1<<62), time.Duration(1<<62)
+		for i := 0; i < 3; i++ {
+			bestSmall = min(bestSmall, run(small))
+			bestLarge = min(bestLarge, run(large))
+		}
+		if bestLarge <= 8*bestSmall {
+			attempts = nil
+			break
+		}
+		attempts = append(attempts, fmt.Sprintf("%v / %v", bestSmall, bestLarge))
+	}
+	if attempts != nil {
+		t.Errorf("shadow root references: 1500 / 6000 took %s (more than linear in every attempt)", strings.Join(attempts, ", "))
 	}
 }
 
