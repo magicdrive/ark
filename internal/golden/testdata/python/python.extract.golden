@@ -4,36 +4,65 @@ symbol broken kind=function qualified="broken" parent="" receiver="" exported=tr
 symbol good kind=function qualified="good" parent="" receiver="" exported=true @broken.py:5:1-6:9
 ## references
 ## imports
+## module_scoped
+## exports
+export kind=local exported="broken" local="broken" except=[] type_only=false @broken.py:0:0-0:0
+export kind=local exported="good" local="good" except=[] type_only=false @broken.py:0:0-0:0
 ## diagnostics
 diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.py:1:12-1:12
 
 # file: draft.py
 ## symbols
 symbol Draft kind=class qualified="Draft" parent="" receiver="" exported=true @draft.py:3:1-5:20
+symbol save kind=method qualified="Draft.save" parent="Draft" receiver="Draft" exported=true @draft.py:4:5-5:20
 ## references
 ## imports
+## module_scoped
+## exports
+export kind=local exported="Draft" local="Draft" except=[] type_only=false @draft.py:0:0-0:0
 ## diagnostics
 
 # file: repository.py
 ## symbols
 symbol Repository kind=class qualified="Repository" parent="" receiver="" exported=true @repository.py:4:1-8:17
+symbol find kind=method qualified="Repository.find" parent="Repository" receiver="Repository" exported=true @repository.py:5:5-8:17
 ## references
-ref User kind=call container="find" receiver="" call=true @repository.py:6:13-6:17
+ref User kind=call container="Repository.find" receiver="" call=true @repository.py:6:13-6:17
 ## imports
 import path="user" alias="" @repository.py:1:1-1:22
+## module_scoped
+## bindings
+binding User kind=named imported="User" type_only=false module="user" candidates=[src/user.py@0!src/__init__.py src/user/__init__.py@0!src/__init__.py user.py@0!__init__.py user/__init__.py@0!__init__.py] @repository.py:1:18-1:22
+binding User kind=namespace imported="" type_only=false fallback=true module="user.User" candidates=[src/user/User.py@0!src/__init__.py src/user/User/__init__.py@0!src/__init__.py user/User.py@0!__init__.py user/User/__init__.py@0!__init__.py] @repository.py:1:18-1:22
+## exports
+export kind=local exported="Repository" local="Repository" except=[] type_only=false @repository.py:0:0-0:0
+export kind=local exported="User" local="User" except=[] type_only=false @repository.py:0:0-0:0
 ## diagnostics
 
 # file: service.py
 ## symbols
 symbol UserService kind=class qualified="UserService" parent="" receiver="" exported=true @service.py:5:1-13:21
+symbol __init__ kind=method qualified="UserService.__init__" parent="UserService" receiver="UserService" exported=true @service.py:6:5-7:33
+symbol repo kind=field qualified="UserService.repo" parent="UserService" receiver="UserService" exported=true @service.py:7:9-7:33
+symbol create kind=method qualified="UserService.create" parent="UserService" receiver="UserService" exported=true @service.py:9:5-13:21
 ## references
-ref Repository kind=call container="__init__" receiver="" call=true @service.py:7:21-7:31
-ref User kind=call container="create" receiver="" call=true @service.py:10:13-10:17
-ref find kind=call container="create" receiver="" call=true @service.py:12:17-12:31
-ref save kind=call container="create" receiver="found" call=true @service.py:13:9-13:19
+ref Repository kind=call container="UserService.__init__" receiver="" call=true @service.py:7:21-7:31
+ref User kind=call container="UserService.create" receiver="" call=true @service.py:10:13-10:17
+ref find kind=call container="UserService.create" receiver="self.repo" call=true @service.py:12:27-12:31
+ref save kind=call container="UserService.create" receiver="found" call=true @service.py:13:15-13:19
 ## imports
 import path="repository" alias="" @service.py:1:1-1:34
 import path="user" alias="" @service.py:2:1-2:22
+## module_scoped
+## bindings
+binding Repository kind=named imported="Repository" type_only=false module="repository" candidates=[repository.py@0!__init__.py repository/__init__.py@0!__init__.py src/repository.py@0!src/__init__.py src/repository/__init__.py@0!src/__init__.py] @service.py:1:24-1:34
+binding Repository kind=namespace imported="" type_only=false fallback=true module="repository.Repository" candidates=[repository/Repository.py@0!__init__.py repository/Repository/__init__.py@0!__init__.py src/repository/Repository.py@0!src/__init__.py src/repository/Repository/__init__.py@0!src/__init__.py] @service.py:1:24-1:34
+binding User kind=named imported="User" type_only=false module="user" candidates=[src/user.py@0!src/__init__.py src/user/__init__.py@0!src/__init__.py user.py@0!__init__.py user/__init__.py@0!__init__.py] @service.py:2:18-2:22
+binding User kind=namespace imported="" type_only=false fallback=true module="user.User" candidates=[src/user/User.py@0!src/__init__.py src/user/User/__init__.py@0!src/__init__.py user/User.py@0!__init__.py user/User/__init__.py@0!__init__.py] @service.py:2:18-2:22
+## exports
+export kind=local exported="Repository" local="Repository" except=[] type_only=false @service.py:0:0-0:0
+export kind=local exported="User" local="User" except=[] type_only=false @service.py:0:0-0:0
+export kind=local exported="UserService" local="UserService" except=[] type_only=false @service.py:0:0-0:0
 ## diagnostics
 
 # file: test_service.py
@@ -41,15 +70,31 @@ import path="user" alias="" @service.py:2:1-2:22
 symbol test_create kind=function qualified="test_create" parent="" receiver="" exported=true @test_service.py:4:1-6:22
 ## references
 ref UserService kind=call container="test_create" receiver="" call=true @test_service.py:5:9-5:20
-ref create kind=call container="test_create" receiver="s" call=true @test_service.py:6:5-6:13
+ref create kind=call container="test_create" receiver="s" call=true @test_service.py:6:7-6:13
 ## imports
 import path="service" alias="" @test_service.py:1:1-1:32
+## module_scoped
+## bindings
+binding UserService kind=named imported="UserService" type_only=false module="service" candidates=[service.py@0!__init__.py service/__init__.py@0!__init__.py src/service.py@0!src/__init__.py src/service/__init__.py@0!src/__init__.py] @test_service.py:1:21-1:32
+binding UserService kind=namespace imported="" type_only=false fallback=true module="service.UserService" candidates=[service/UserService.py@0!__init__.py service/UserService/__init__.py@0!__init__.py src/service/UserService.py@0!src/__init__.py src/service/UserService/__init__.py@0!src/__init__.py] @test_service.py:1:21-1:32
+## exports
+export kind=local exported="UserService" local="UserService" except=[] type_only=false @test_service.py:0:0-0:0
+export kind=local exported="test_create" local="test_create" except=[] type_only=false @test_service.py:0:0-0:0
 ## diagnostics
 
 # file: user.py
 ## symbols
+symbol DEFAULT_ROLE kind=variable qualified="DEFAULT_ROLE" parent="" receiver="" exported=true @user.py:1:1-1:24
 symbol User kind=class qualified="User" parent="" receiver="" exported=true @user.py:4:1-10:20
+symbol __init__ kind=method qualified="User.__init__" parent="User" receiver="User" exported=true @user.py:5:5-7:23
+symbol id kind=field qualified="User.id" parent="User" receiver="User" exported=true @user.py:6:9-6:20
+symbol name kind=field qualified="User.name" parent="User" receiver="User" exported=true @user.py:7:9-7:23
+symbol save kind=method qualified="User.save" parent="User" receiver="User" exported=true @user.py:9:5-10:20
 ## references
 ## imports
+## module_scoped
+## exports
+export kind=local exported="DEFAULT_ROLE" local="DEFAULT_ROLE" except=[] type_only=false @user.py:0:0-0:0
+export kind=local exported="User" local="User" except=[] type_only=false @user.py:0:0-0:0
 ## diagnostics
 

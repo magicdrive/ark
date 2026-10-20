@@ -40,7 +40,10 @@ package cache
 // their extractors, and the JavaScript provider's joins the TypeScript
 // provider's ("js-12+ts-16"), whose extractor it shares. SymbolDraft.
 // Placement is optional the same way; the TypeScript and JavaScript
-// providers, which state it, are ts-10 and js-9.
+// providers, which state it, are ts-10 and js-9. SymbolDraft.ConfidenceCap,
+// BindingDraft.Scope, ModuleCandidate.Unless and Extraction.LexicalNesting
+// are optional the same way; the Python provider, which states them, is
+// python 5.
 //
 // Asset files (internal/asset: images, fonts, media) have no extraction and
 // no entry: the index records their paths from the walk and makes a node for

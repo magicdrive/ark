@@ -163,12 +163,13 @@ func TestRelations_NamesakeContainerIdentifiedByContainment(t *testing.T) {
 }
 
 // A relation from code that is no one symbol is listed by that code's name,
-// marked, never attributed to a symbol, and counted as unattributed. (The
-// Python provider does not extract methods: the container x names no symbol.)
+// marked, never attributed to a symbol, and counted as unattributed. (x is
+// defined twice, and the decorator applied to one of them lies outside the
+// source range of both: the container x names no one symbol.)
 func TestRelations_UnidentifiedSource(t *testing.T) {
 	root := t.TempDir()
 	writeTree(t, root, map[string]string{
-		"p.py": "def save():\n    pass\n\nclass A:\n    def x(self):\n        return save()\n",
+		"p.py": "def save():\n    pass\n\nif FLAG:\n    def x():\n        pass\nelse:\n    @save\n    def x():\n        pass\n",
 	})
 	h := NewToolsHandler(root, nil)
 	got := relationsFor(t, h, "save")

@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings, exports, `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -174,11 +174,69 @@ against the css-parsing-tests suite and other parsers in
 Danger: "the only `@keyframes spin` in the repository is the one" — a
 stylesheet's name resolves within that stylesheet.
 
+**Scopes and `sys.path`, not spellings** (Python). A Python name is decided
+by the scope that binds it — a function's local anywhere in its body, a
+class body that is no scope of its methods, `global` / `nonlocal`, a
+comprehension of its own — and a module by the file `sys.path` makes it, so
+the provider analyzes the file's scopes and states only what they prove;
+everything else is the module-binding machinery TypeScript uses
+(`ModuleScoped`, bindings, exports; `MembersShareNames`: an instance
+attribute hides a method). Four generic extensions carry what Python adds,
+and none names a language: `ModuleCandidate.Unless` (a candidate a file's
+presence voids — a directory with an `__init__.py` is a package, never a
+root of absolute imports, so a package's `json.py` is not `import json`;
+the roots are the importing file's ancestors that are no package, and
+`src/`, all at one priority: two files are ambiguity), `BindingDraft.Scope`
+(an import inside a function binds the name for that function's body and
+what is nested in it, shadowing the file's), `Extraction.LexicalNesting` (a
+nested declaration is a name only within its parent: the same-file stage
+never offers it elsewhere) and `SymbolDraft.ConfidenceCap` (a declaration
+under a decorator the provider does not know binds its name to the
+decorator's result, which may be another object: a reference resolved to it
+alone is at most a Candidate; a class's cap reaches its members, and a
+supertype relation through such a class is capped). `from pkg import n` is the attribute `n`
+before the submodule: the submodule binding is a `BindingDraft.Fallback`,
+left out when the module states `n` as an `ExportOpaque` (bound to a value
+nothing proves; `Exported` "" for any name a star import or `__getattr__`
+may supply). An instance attribute a supertype's method assigns (a field
+with `PlacementInstance`) hides a method of the name: where members share
+names, a member found beside one is a Candidate
+(`supertypeInstanceField`).
+The resolver reads a dotted receiver whose head is a binding through the
+namespace exports of the modules it reaches (`pkg.sub.f()`; a package's
+`__init__.py` that imports from a submodule exports it as an attribute) and
+stops, untyped, at anything but a module. Because the same-file stages run
+before bindings, the provider caps (Candidate) every reference whose name a
+local binding, a rebinding no declaration states (`for`, `with`, `del`, a
+`global` write), a mix of a declaration and an import, a later star import,
+or nothing at all (a builtin) may decide; `self` / `cls` is a receiver type
+only for a method's first parameter no unknown decorator wraps and nothing
+rebinds, and `super()` only for one plain base, capped at Strong (run-time
+MRO). A supertype reference the provider capped identifies no supertype, so
+member lookup stops there; several declaring supertypes stay a Candidate
+(MRO is not computed). Python never states `OutsideRepository`: nothing
+proves a module is absent from `sys.path`.
+Authority: `languages/python/provider.go` (header), `languages/python/refs.go`
+(`capFor`), `languages/python/modules.go`, `resolver/modules.go`
+(`bindingsOf`), `resolver/receivers.go` (`resolveViaNamespaceChain`).
+Tests: `TestPythonScopes`, `TestPythonImports`, `TestPythonMembers`,
+`TestPythonLocalImportsAndNamespaces`, `TestPythonAuditCounterexamples`,
+`TestPythonDecoratorConfidence`, `TestExportOpaque_BesideATargetIsCandidate`,
+`TestGraph_Soundness`,
+`TestModuleCandidate_UnlessVoidsTheCandidate`, `TestDeclarationCap_OnlyLowers`,
+`TestBindingScope`, `TestLexicalNesting`, `TestNamespaceChain`,
+`TestInheritance_CappedBaseIsUnidentified`, `FuzzExtractPython`, and the
+opt-in pyright comparison (`docs/scripts/oracle/python-pyright.py`).
+Danger: "it is the only `helper` in the repository" or "`self` is the
+class" — a parameter, a local, a builtin or another module on `sys.path`
+decides what a Python name is, and an instance attribute may hide a method.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
-score**. Never average, add, or promote it; caps (provider `ConfidenceCap`,
-untyped receiver, module scope, unknown participant) only lower it.
+score**. Never average, add, or promote it; caps (provider `ConfidenceCap` on
+a reference or on its one target declaration, untyped receiver, module
+scope, unknown participant) only lower it.
 
 | Class | Known | Unknown | Graph edge |
 |---|---|---|---|
@@ -889,8 +947,9 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
   PHP language support.
 - Compiler-equivalent module resolution: providers rank only a
   config-independent lexical subset (`language.ModuleCandidate`); `tsconfig`,
-  Composer/PSR-4, `package.json` and `Cargo.toml` are not interpreted, and
-  `cargo metadata` is never run.
+  Composer/PSR-4, `package.json`, `Cargo.toml` and Python's `sys.path`
+  configuration (`pyproject.toml`, `PYTHONPATH`, `.pth`) are not interpreted,
+  and `cargo metadata` is never run.
 - Expanding macros (Rust `macro_rules!`, procedural macros, derives): what
   an expansion declares or calls is not observed; a scope a macro may add
   names to is not trusted to be complete.

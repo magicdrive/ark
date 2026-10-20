@@ -163,7 +163,7 @@ func TestNameSpaces_NoRelationJoinsTwoNameSpaces(t *testing.T) {
 	}
 	edge("web/view.tsx", "View", "web/app.ts", "main", resolver.ConfidenceExact) // TSX imports TypeScript
 	edge("web/app.ts", "main", "web/util.ts", "util", resolver.ConfidenceExact)
-	edge("p/a.py", "run", "p/b.py", "helper", resolver.ConfidenceStrong) // same directory
+	edge("p/a.py", "run", "p/b.py", "helper", resolver.ConfidenceExact) // a relative import binding
 	edge("j/a.js", "run", "j/a.js", "jsLocal", resolver.ConfidenceExact)
 	edge("g/g.go", "Use", "g/g.go", "helperGo", resolver.ConfidenceExact)
 	edge("w/index.html", "w/index.html", "w/page.html", "w/page.html#run", resolver.ConfidenceStrong)      // a link to another document

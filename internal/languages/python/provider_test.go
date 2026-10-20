@@ -126,3 +126,15 @@ func TestPythonBrokenSyntax(t *testing.T) {
 	}
 	_ = ext
 }
+
+// A FileID that is no root-relative path (an absolute one, the empty one)
+// still terminates: the ancestors of the file's directory end at the file
+// system's root as they end at the repository's.
+func TestPythonNonRelativeFileIDsTerminate(t *testing.T) {
+	src := []byte("import a.b\nfrom ... import c\nfrom . import d\n")
+	for _, id := range []string{"/abs/dir/x.py", "", "x.py", "/x.py"} {
+		if _, err := NewProvider().Extract(context.Background(), source.FileID(id), src); err != nil {
+			t.Errorf("%q: %v", id, err)
+		}
+	}
+}

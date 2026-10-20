@@ -71,6 +71,35 @@ in all; the slowest file is a 2.6 MB generated table (3.2 s), and 7 files
 still run the forest route (those without a comment the probe can blank),
 none among the ten slowest.
 
+### Python
+
+Python's graph support (scopes, import bindings, members) is newer than the
+table above and was measured separately, before and after it: the commit
+`54be77b` and the `feat/python-graph` working tree based on it, on the same
+machine and script, with no other process running, alternating the two
+builds — three runs each (Django five), median with [min–max]. Each package
+is its PyPI sdist (a fresh copy per run, since the script writes the cache
+into it); files indexed include the documentation and test sources the
+archive ships.
+
+| Package (version) | Files indexed | Cold before → after | Warm before → after | Restore before → after | Peak RSS before → after |
+|---|---:|---:|---:|---:|---:|
+| [requests](https://pypi.org/project/requests/) 2.32.3 | 34 | 194 [193–209] → 217 [206–690] | 4 → 5 | 34 [31–113] → 48 [47–49] | 102 → 116 MB |
+| [attrs](https://pypi.org/project/attrs/) 24.2.0 | 53 | 134 [132–135] → 173 [172–179] | 5 → 5 | 41 [40–43] → 83 [80–92] | 92 → 120 MB |
+| [click](https://pypi.org/project/click/) 8.1.7 | 71 | 155 [154–165] → 172 [172–186] | 7 → 6 | 55 [53–56] → 81 [80–82] | 102 → 120 MB |
+| [flask](https://pypi.org/project/Flask/) 3.0.3 | 104 | 159 [149–162] → 186 [181–193] | 11 → 11 | 62 [60–63] → 96 [92–97] | 129 → 148 MB |
+| [Django](https://pypi.org/project/Django/) 4.2.16 | 3,207 | 6,179 [6,041–7,896] → 6,706 [6,640–7,135] | 469 → 474 | 4,388 [3,948–5,406] → 4,456 [4,440–4,525] | 507 → 1,111 MB |
+
+The index holds more since the change — Django's Python symbols went from
+8,569 to 56,307 (methods, nested functions, variables, attributes) and its
+graph edges from 1,434 to 36,593 — so the peak memory of a large repository
+rose most (Django ×2.2). A heap profile after the build attributes the
+retained growth (148 → 394 MB) to the references now attributed to a
+container symbol (methods are symbols: 60 MB), the symbol indexes by name,
+file, qualified name and kind (77 MB, in proportion to the symbols) and the
+resolutions kept by target (37 MB); the Python provider's own module
+candidates are a few percent of what is allocated.
+
 ### Reading the results
 
 - **File count is a poor predictor.** Cost depends on the amount of source

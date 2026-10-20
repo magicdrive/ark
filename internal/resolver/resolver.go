@@ -35,6 +35,9 @@ type FileIndex struct {
 	// MembersShareNames: methods and properties share one name space (see
 	// language.Extraction).
 	MembersShareNames bool
+	// LexicalNesting: nested declarations are visible only within their
+	// parent (see language.Extraction).
+	LexicalNesting bool
 	// Aliases are the identities the file declares to name others (see
 	// language.AliasDraft).
 	Aliases []language.AliasDraft
@@ -200,7 +203,30 @@ func (r *Resolver) Resolve() []Resolution {
 // R1 and R2 are authoritative: when they cannot resolve, the reference is
 // Unresolved — they never fall back to name heuristics.
 func (r *Resolver) ResolveReference(ref reference.Reference, fi FileIndex) Resolution {
-	return applyConfidenceCap(r.restrictPlacement(restrictTargetKinds(r.resolveReference(ref, fi), ref), ref), ref)
+	return r.applyTargetCap(applyConfidenceCap(r.restrictPlacement(restrictTargetKinds(r.resolveReference(ref, fi), ref), ref), ref))
+}
+
+// applyTargetCap lowers a resolution whose one candidate is a declaration
+// that states a ConfidenceCap (symbol.Symbol.ConfidenceCap: the language
+// binds its name to a value code computes from it, a Python decorator the
+// provider does not know) to that cap. Several candidates are a Candidate
+// already. Like applyConfidenceCap it only ever lowers.
+func (r *Resolver) applyTargetCap(res Resolution) Resolution {
+	if len(res.Candidates) != 1 {
+		return res
+	}
+	s, ok := r.byID[res.Candidates[0].SymbolID]
+	if !ok || s.ConfidenceCap == "" {
+		return res
+	}
+	limit := ConfidenceCandidate // unknown caps fail safe
+	if s.ConfidenceCap == ConfidenceStrong.String() {
+		limit = ConfidenceStrong
+	}
+	return capConfidence(res, limit, ResolutionEvidence{
+		Kind:   EvidenceConfidenceCap,
+		Detail: fmt.Sprintf("%s's name is bound to a value computed from it: at most %s", s.Qualified, limit),
+	})
 }
 
 // restrictTargetKinds removes the candidates of kinds the reference cannot
@@ -328,13 +354,16 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 		return r.resolveByName(res, ref, fi)
 	}
 	switch {
-	case hasBinding(&fi, ref.ReceiverExpr):
+	case hasBinding(&fi, ref.ReceiverExpr, ref.Container):
 		return r.resolveViaReceiverBinding(res, ref, fi)
 	case ref.ReceiverType != "":
 		return r.resolveViaReceiverType(res, ref, fi)
 	case r.isModuleReceiver(ref.ReceiverExpr, fi), r.isTypeReceiver(ref.ReceiverExpr, fi):
 		return r.resolveByName(res, ref, fi)
 	default:
+		if out, ok := r.resolveViaNamespaceChain(res, ref, fi); ok {
+			return out
+		}
 		return capUntypedReceiver(r.resolveByName(res, ref, fi), ref)
 	}
 }
@@ -349,6 +378,25 @@ func (r *Resolver) withoutModuleScoped(cands []symbol.Symbol, fi FileIndex) []sy
 	for _, s := range cands {
 		if s.Location.File != fi.FileID {
 			if other, ok := r.byFile[s.Location.File]; ok && other.ModuleScoped {
+				continue
+			}
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+// withoutHiddenNested drops the nested declarations a free name cannot
+// see: of a file whose provider states LexicalNesting, a declaration with a
+// Parent and no Receiver (a function or class declared in another one's body)
+// is visible by its name only to the references of its own file within that
+// body (language.Extraction.LexicalNesting).
+func (r *Resolver) withoutHiddenNested(cands []symbol.Symbol, ref reference.Reference, fi FileIndex) []symbol.Symbol {
+	out := cands[:0:0]
+	for _, s := range cands {
+		if s.ParentQualified != "" && s.Receiver == "" {
+			if other, ok := r.byFile[s.Location.File]; ok && other.LexicalNesting &&
+				(s.Location.File != fi.FileID || !scopeHolds(s.ParentQualified, ref.Container)) {
 				continue
 			}
 		}
@@ -373,7 +421,7 @@ func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi Fil
 	narrow := func(cands []symbol.Symbol) []symbol.Symbol {
 		cands = r.constrainReceiver(cands, ref, typeRecv)
 		if free {
-			cands = withoutMembers(cands)
+			cands = r.withoutHiddenNested(withoutMembers(cands), ref, fi)
 			if !fi.ModuleScoped {
 				cands = r.withoutModuleScoped(cands, fi)
 			}
@@ -394,7 +442,7 @@ func (r *Resolver) resolveByName(res Resolution, ref reference.Reference, fi Fil
 	}
 
 	// Stage 3a: explicit module binding (authoritative for the bound name).
-	if free && hasBinding(&fi, ref.Name) {
+	if free && hasBinding(&fi, ref.Name, ref.Container) {
 		return r.resolveViaBinding(res, ref, fi)
 	}
 

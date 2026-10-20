@@ -42,7 +42,8 @@ const (
 	moduleAmbiguous                      // several equally-ranked candidates exist
 )
 
-// resolveModule matches m's candidates against indexed files. Only the lowest
+// resolveModule matches m's candidates against indexed files. A candidate
+// one of whose Unless files is indexed does not exist. Only the lowest
 // Priority tier that has at least one existing file is considered; more than
 // one existing file in that tier is ambiguity, never a choice.
 func (r *Resolver) resolveModule(m language.ModuleSpec) ([]source.FileID, moduleStatus) {
@@ -52,7 +53,7 @@ func (r *Resolver) resolveModule(m language.ModuleSpec) ([]source.FileID, module
 	var tier []source.FileID
 	best := 0
 	for _, c := range m.Candidates {
-		if _, ok := r.byFile[c.File]; !ok {
+		if _, ok := r.byFile[c.File]; !ok || r.anyIndexed(c.Unless) {
 			continue
 		}
 		switch {
@@ -73,6 +74,17 @@ func (r *Resolver) resolveModule(m language.ModuleSpec) ([]source.FileID, module
 	default:
 		return tier, moduleAmbiguous
 	}
+}
+
+// anyIndexed reports whether one of files is an indexed file (a candidate's
+// Unless: its presence voids the candidate).
+func (r *Resolver) anyIndexed(files []source.FileID) bool {
+	for _, f := range files {
+		if _, ok := r.byFile[f]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // bindTarget is what a module binding or export denotes: either one symbol or
@@ -110,11 +122,18 @@ type bindResult struct {
 	// external and not dangling.
 	external bool
 	dangling bool
+	// opaque: some step reached a name the module binds to a value nothing
+	// proves (language.ExportOpaque): no target, and no fallback binding.
+	opaque bool
+	// truncated: the lookup was cut off by the depth or step bound, so it
+	// does not prove the name absent: no fallback binding either. (A cycle
+	// is no truncation: a lookup that returns to itself finds nothing new.)
+	truncated bool
 }
 
 // outside reports whether a lookup without a target proves its name lies
 // outside the repository.
-func (b bindResult) outside() bool { return b.external && !b.dangling }
+func (b bindResult) outside() bool { return b.external && !b.dangling && !b.opaque }
 
 // unresolvedModule records a module m that matched no indexed file: one the
 // provider gave no repository candidate (a package, an unsupported
@@ -134,6 +153,8 @@ func (b *bindResult) unresolvedModule(m language.ModuleSpec, st moduleStatus) {
 func (b *bindResult) merge(o bindResult) {
 	b.external = b.external || o.external
 	b.dangling = b.dangling || o.dangling
+	b.opaque = b.opaque || o.opaque
+	b.truncated = b.truncated || o.truncated
 	b.ambiguous = b.ambiguous || o.ambiguous
 	b.typeOnly = b.typeOnly || o.typeOnly
 	b.mutable = b.mutable || o.mutable
@@ -164,12 +185,27 @@ func (r *Resolver) newWalk() *exportWalk {
 	return &exportWalk{r: r, onPath: make(map[string]bool)}
 }
 
-// bindingTargets follows the import bindings of fi named local.
-func (w *exportWalk) bindingTargets(fi *FileIndex, local string, depth int) bindResult {
+// bindingTargets follows the import bindings of fi named local that a
+// reference in container sees (bindingsOf): the Fallback ones only when the
+// others reach no opaque name (language.BindingDraft.Fallback).
+func (w *exportWalk) bindingTargets(fi *FileIndex, local, container string, depth int) bindResult {
 	out := bindResult{complete: true}
-	for _, b := range fi.Bindings {
-		if b.Local != local {
-			continue
+	bs := bindingsOf(fi, local, container)
+	var ordered []language.BindingDraft
+	for _, b := range bs {
+		if !b.Fallback {
+			ordered = append(ordered, b)
+		}
+	}
+	nonFallback := len(ordered)
+	for _, b := range bs {
+		if b.Fallback {
+			ordered = append(ordered, b)
+		}
+	}
+	for i, b := range ordered {
+		if i >= nonFallback && (out.opaque || out.truncated) {
+			break
 		}
 		mods, st := w.r.resolveModule(b.Module)
 		if st == moduleAmbiguous {
@@ -202,14 +238,38 @@ func (w *exportWalk) bindingTargets(fi *FileIndex, local string, depth int) bind
 	return out
 }
 
-// hasBinding reports whether fi binds local through an import binding.
-func hasBinding(fi *FileIndex, local string) bool {
+// hasBinding reports whether fi binds local through an import binding a
+// reference in container sees.
+func hasBinding(fi *FileIndex, local, container string) bool {
+	return len(bindingsOf(fi, local, container)) > 0
+}
+
+// bindingsOf returns the import bindings of fi named local that a reference
+// in container sees: those of the whole file (Scope "") and those local to a
+// declaration whose body holds the container — the innermost such Scope
+// shadows the others (language.BindingDraft.Scope). Container "" (a module's
+// own export table) sees the whole file's only.
+func bindingsOf(fi *FileIndex, local, container string) []language.BindingDraft {
+	var out []language.BindingDraft
+	best := -1
 	for _, b := range fi.Bindings {
-		if b.Local == local {
-			return true
+		if b.Local != local || !scopeHolds(b.Scope, container) {
+			continue
+		}
+		switch l := len(b.Scope); {
+		case l > best:
+			out, best = []language.BindingDraft{b}, l
+		case l == best:
+			out = append(out, b)
 		}
 	}
-	return false
+	return out
+}
+
+// scopeHolds reports whether a declaration's body scope (its qualified name;
+// "" the whole file) holds a reference whose Container is container.
+func scopeHolds(scope, container string) bool {
+	return scope == "" || container == scope || strings.HasPrefix(container, scope+".")
 }
 
 // export resolves the export `name` of module file.
@@ -218,8 +278,11 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 	if memo, ok := w.r.exportMemoGet(key); ok {
 		return memo
 	}
-	if depth > maxExportDepth || w.steps >= maxExportSteps || w.onPath[key] {
+	if w.onPath[key] {
 		return bindResult{complete: false}
+	}
+	if depth > maxExportDepth || w.steps >= maxExportSteps {
+		return bindResult{complete: false, truncated: true}
 	}
 	w.steps++
 	w.onPath[key] = true
@@ -231,13 +294,17 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 		return out
 	}
 
-	// Explicit exports (local / from / namespace) shadow export-all.
+	// Explicit exports (local / from / namespace / opaque) shadow export-all.
 	explicit := false
 	for _, e := range fi.Exports {
 		if e.Kind == language.ExportAll || e.Exported != name {
 			continue
 		}
 		explicit = true
+		if e.Kind == language.ExportOpaque {
+			out.opaque = true
+			continue
+		}
 		if e.TypeOnly {
 			out.typeOnly = true
 		}
@@ -264,6 +331,9 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 	}
 	if !explicit {
 		for _, e := range fi.Exports {
+			if e.Kind == language.ExportOpaque && e.Exported == "" {
+				out.opaque = true // any name may be bound so
+			}
 			if e.Kind != language.ExportAll || containsString(e.Except, name) {
 				continue
 			}
@@ -282,6 +352,11 @@ func (w *exportWalk) export(file source.FileID, name string, depth int) bindResu
 	}
 	if len(out.targets) == 0 && !out.external && out.complete {
 		out.dangling = true // the file is the repository's; the name is not found in it
+	}
+	if out.opaque && len(out.targets) > 0 {
+		// The name may be bound to a value nothing proves, besides the
+		// declarations found: no pick.
+		out.ambiguous = true
 	}
 	if len(out.targets) > 0 {
 		out.chain = append([]string{fmt.Sprintf("%s exports %q", file, name)}, out.chain...)
@@ -304,11 +379,11 @@ func (w *exportWalk) local(fi *FileIndex, name string, depth int) bindResult {
 	if len(out.targets) > 0 {
 		return out
 	}
-	if !hasBinding(fi, name) {
+	if !hasBinding(fi, name, "") {
 		out.dangling = true // exported but declared by nothing Ark extracts
 		return out
 	}
-	return w.bindingTargets(fi, name, depth)
+	return w.bindingTargets(fi, name, "", depth)
 }
 
 func containsString(list []string, s string) bool {
@@ -334,6 +409,23 @@ func (r *Resolver) exportMemoPut(key string, v bindResult) {
 	r.memoMu.Lock()
 	defer r.memoMu.Unlock()
 	r.exportMemo[key] = v
+}
+
+// modules returns the modules a bind result reaches when it reaches modules
+// only (at least one, every one in the repository), sorted.
+func (b bindResult) modules() ([]source.FileID, bool) {
+	if len(b.targets) == 0 || b.external {
+		return nil, false
+	}
+	var out []source.FileID
+	for _, t := range b.targets {
+		if t.module == "" {
+			return nil, false
+		}
+		out = append(out, t.module)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out, true
 }
 
 // symbolTargets returns the symbol targets of a bind result, sorted.

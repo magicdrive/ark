@@ -91,8 +91,8 @@ Every resolution names the evidence it rests on. Graph answers show it in the
 |---|---|---|
 | `same_lexical_scope` | Declared in the same container | exact |
 | `same_file` | Declared in the same file | exact |
-| `module_binding` | Bound by an import statement or a require to a declaration of a repository file (TypeScript, TSX, JavaScript) | exact; candidate through a CommonJS export |
-| `explicit_import` | Declared in an imported package (Go), or in a file under an imported path (JavaScript, Python) | exact |
+| `module_binding` | Bound by an import statement or a require to a declaration of a repository file (TypeScript, TSX, JavaScript, Python) | exact; candidate through a CommonJS export |
+| `explicit_import` | Declared in an imported package (Go), or in a file under an imported path (JavaScript) | exact |
 | `qualified_identity` | The language fixed the fully qualified name (PHP namespaces, Terraform addresses) | exact |
 | `receiver_type` | Member of the receiver's declared type | exact or strong |
 | `receiver_chain` | Member of the type the receiver is built as, derived through declarations (Go: `x := NewServer(); x.Run()`) | strong |

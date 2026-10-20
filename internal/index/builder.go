@@ -270,6 +270,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			ParameterScope: sd.ParameterScope,
 			MembersOutside: sd.MembersOutside,
 			Placement:      sd.Placement,
+			ConfidenceCap:  sd.ConfidenceCap,
 		}
 		// ParentQualified is the provider's statement, kept as is for the
 		// resolver's name rules; Parent, the identity, is resolved below.
@@ -331,6 +332,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 		Package:           ex.Package,
 		PackageScoped:     ex.PackageScoped,
 		MembersShareNames: ex.MembersShareNames,
+		LexicalNesting:    ex.LexicalNesting,
 		NameSpace:         space,
 		Aliases:           ex.Aliases,
 		TypeFacts:         ex.TypeFacts,

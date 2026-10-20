@@ -75,7 +75,7 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 	// Other languages are unchanged by the TypeScript certification.
 	for lang, want := range map[language.Language]language.SupportLevel{
 		"javascript": language.SupportLevelReferences,
-		"python":     language.SupportLevelReferences,
+		"python":     language.SupportLevelGraph,
 		"go":         language.SupportLevelContextQualityCertified,
 		"php":        language.SupportLevelGraph,
 		"terraform":  language.SupportLevelGraph,

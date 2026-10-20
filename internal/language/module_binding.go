@@ -58,13 +58,17 @@ func ValidateModuleBindings(ex Extraction) []error {
 			if e.Exported == "" || e.Local != "" {
 				add("export[%d]: namespace export needs Exported and no Local", i)
 			}
+		case ExportOpaque:
+			if e.Local != "" || e.Module.Specifier != "" || e.Module.Candidates != nil {
+				add("export[%d] %q: opaque export must not set Local or a Module", i, e.Exported)
+			}
 		default:
 			add("export[%d]: unknown Kind %q", i, e.Kind)
 		}
 		if e.Kind != ExportAll && len(e.Except) > 0 {
 			add("export[%d] %q: Except is only valid for export-all", i, e.Exported)
 		}
-		if e.Kind != ExportLocal {
+		if e.Kind != ExportLocal && e.Kind != ExportOpaque {
 			if e.Module.Specifier == "" {
 				add("export[%d] %q: re-export has empty module specifier", i, e.Exported)
 			}
@@ -85,14 +89,13 @@ func validateModuleSpec(m ModuleSpec) []error {
 		errs = append(errs, fmt.Errorf("module specifier is empty"))
 	}
 	for i, c := range m.Candidates {
-		f := string(c.File)
-		switch {
-		case f == "":
-			errs = append(errs, fmt.Errorf("candidate[%d] is empty", i))
-		case strings.Contains(f, `\`):
-			errs = append(errs, fmt.Errorf("candidate[%d] %q is not slash-separated", i, f))
-		case path.IsAbs(f) || path.Clean(f) != f || f == ".." || strings.HasPrefix(f, "../"):
-			errs = append(errs, fmt.Errorf("candidate[%d] %q is not a clean root-relative path", i, f))
+		for _, e := range validateRepoPath(string(c.File)) {
+			errs = append(errs, fmt.Errorf("candidate[%d] %v", i, e))
+		}
+		for _, u := range c.Unless {
+			for _, e := range validateRepoPath(string(u)) {
+				errs = append(errs, fmt.Errorf("candidate[%d] unless %v", i, e))
+			}
 		}
 		if i > 0 {
 			p := m.Candidates[i-1]
@@ -102,6 +105,20 @@ func validateModuleSpec(m ModuleSpec) []error {
 		}
 	}
 	return errs
+}
+
+// validateRepoPath checks that f is a clean, slash-separated, root-relative
+// repository path.
+func validateRepoPath(f string) []error {
+	switch {
+	case f == "":
+		return []error{fmt.Errorf("is empty")}
+	case strings.Contains(f, `\`):
+		return []error{fmt.Errorf("%q is not slash-separated", f)}
+	case path.IsAbs(f) || path.Clean(f) != f || f == ".." || strings.HasPrefix(f, "../"):
+		return []error{fmt.Errorf("%q is not a clean root-relative path", f)}
+	}
+	return nil
 }
 
 // ModuleExportsName is the export name of a CommonJS module's whole export

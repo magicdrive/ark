@@ -293,6 +293,9 @@ func moduleSpec(m language.ModuleSpec) string {
 	parts := make([]string, len(m.Candidates))
 	for i, c := range m.Candidates {
 		parts[i] = fmt.Sprintf("%s@%d", c.File, c.Priority)
+		for _, u := range c.Unless {
+			parts[i] += "!" + string(u)
+		}
 	}
 	cands := "external"
 	if m.Candidates != nil {
@@ -358,8 +361,15 @@ func writeModuleBindings(b *strings.Builder, ext language.Extraction) {
 	if len(ext.Bindings) > 0 {
 		b.WriteString("## bindings\n")
 		for _, bd := range ext.Bindings {
-			fmt.Fprintf(b, "binding %s kind=%s imported=%q type_only=%t %s %s\n",
-				bd.Local, bd.Kind, bd.Imported, bd.TypeOnly, moduleSpec(bd.Module), loc(bd.Location))
+			extra := ""
+			if bd.Scope != "" {
+				extra += fmt.Sprintf(" scope=%q", bd.Scope)
+			}
+			if bd.Fallback {
+				extra += " fallback=true"
+			}
+			fmt.Fprintf(b, "binding %s kind=%s imported=%q type_only=%t%s %s %s\n",
+				bd.Local, bd.Kind, bd.Imported, bd.TypeOnly, extra, moduleSpec(bd.Module), loc(bd.Location))
 		}
 	}
 	if len(ext.Exports) > 0 {

@@ -154,6 +154,7 @@ func (x *extractor) extract(j *extractJob) {
 		Package:           ext.Package,
 		PackageScoped:     ext.PackageScoped,
 		MembersShareNames: ext.MembersShareNames,
+		LexicalNesting:    ext.LexicalNesting,
 		Aliases:           ext.Aliases,
 		TypeFacts:         ext.TypeFacts,
 	})
@@ -223,6 +224,7 @@ func (x *extractor) ingest(b *builder, j *extractJob) {
 			Package:           cached.Package,
 			PackageScoped:     cached.PackageScoped,
 			MembersShareNames: cached.MembersShareNames,
+			LexicalNesting:    cached.LexicalNesting,
 			Aliases:           cached.Aliases,
 			TypeFacts:         cached.TypeFacts,
 		})

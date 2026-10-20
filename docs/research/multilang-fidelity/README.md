@@ -75,12 +75,11 @@
 | W1 HTML、W2 CSS、W3 リソースリンク、W5 埋め込み領域、W4 の CSS Modules | 済。HTML のパーサーは x/net/html、CSS は CSS Syntax Level 3 の自前の実装を採った（D19・D24）。gotreesitter の html の無言の切り捨て（W0 の動機）は、HTML で使わないので前提が変わった |
 | W4 の「ありうる一致」の層（HTML の id ↔ JS の `getElementById`、class ↔ セレクタ） | 未実装（D28）。名前による関係は名前空間をまたがない |
 | M1 PHP の関数の名前空間解決と Tier 1 Oracle（nikic/PHP-Parser の NameResolver） | 未着手（`docs/language-support.md` の PHP の「Known false strong」） |
-| M2 Python の Soundness の回復と import の binding | 未着手（`docs/language-support.md` の Python の節） |
-| M4 Python のメンバーと receiver、M6 Python の継承 | 未着手。JS の継承（`extends`、`super`）は済 |
+| M2 Python の Soundness の回復と import の binding | 済（スコープ、ModuleScoped、相対・絶対 import の binding と export、関数内の import。4 コーパスで False Strong 0。`docs/language-support.md` の Python の節） |
+| M4 Python のメンバーと receiver、M6 Python の継承 | 済（メソッド・属性のシンボル、`self` / `cls` / `super()`、識別できる基底を辿るメンバー探索。MRO の衝突は Candidate）。ローカル変数の型推論は未実装 |
 
 未着手の段階の要点:
-- 誤りを止める変更（ModuleScoped、スコープ）と import の binding は、同じリリースで出す（上の発見 4）。
-- Python の Soundness の回復は、pyright の Oracle と、依存を固定した venv で測る（`evaluation.md` §8）。
+- 誤りを止める変更（ModuleScoped、スコープ）と import の binding は、同じリリースで出す（上の発見 4）。Python は M2・M4・M6 を一度に入れた。
 ## 独立レビュー
 
 3 人のレビュー（A: Python の意味論、B: JavaScript / TypeScript の意味論、C: アーキテクチャと

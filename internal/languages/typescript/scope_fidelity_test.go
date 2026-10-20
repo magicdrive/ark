@@ -366,3 +366,25 @@ func TestTypeScriptExportOnItsOwnLine(t *testing.T) {
 	// unresolved, never outside the repository.
 	check(t, resolveAll(t, files), []expect{{key: "main.ts:3:split", outside: false}})
 }
+
+// A namespace a module re-exports (export * as sub) is a namespace of its
+// importers too: ns.sub.f() reaches the declaration through both exports.
+func TestECMAScriptNamespaceReExportChain(t *testing.T) {
+	for _, ext := range []string{".ts", ".mjs"} {
+		spec := func(m string) string {
+			if ext == ".mjs" {
+				return "'./" + m + ".mjs'"
+			}
+			return "'./" + m + "'"
+		}
+		files := map[string]string{
+			"s" + ext:     "export function f() { return 1 }\n",
+			"index" + ext: "export * as sub from " + spec("s") + "\n",
+			"main" + ext:  "import * as ns from " + spec("index") + "\nexport function run() {\n  return ns.sub.f()\n}\nexport function shadow(ns) {\n  return ns.sub.f()\n}\n",
+		}
+		check(t, resolveAll(t, files), []expect{
+			{key: "main" + ext + ":3:f", target: "s" + ext + ":f"},
+			{key: "main" + ext + ":6:f"}, // a parameter hides the import
+		})
+	}
+}
