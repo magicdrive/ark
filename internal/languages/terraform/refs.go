@@ -335,7 +335,9 @@ func (s *scan) forExpr(n *ts.Node, kind reference.ReferenceKind, depth int) {
 			g := c.Child(j)
 			switch g.Type(lang) {
 			case "identifier":
-				names = append(names, g.Text(src))
+				if !g.IsMissing() {
+					names = append(names, g.Text(src))
+				}
 			case "expression":
 				s.expr(g, kind, depth+1)
 			}
@@ -360,7 +362,9 @@ func (s *scan) templateFor(n *ts.Node, kind reference.ReferenceKind, depth int) 
 			g := c.Child(j)
 			switch g.Type(lang) {
 			case "identifier":
-				names = append(names, g.Text(src))
+				if !g.IsMissing() {
+					names = append(names, g.Text(src))
+				}
 			case "expression":
 				s.expr(g, kind, depth+1)
 			}
@@ -383,11 +387,17 @@ func (s *scan) traversalAt(parent *ts.Node, i int, kind reference.ReferenceKind)
 		return
 	}
 	// The address segments are the leading get_attr siblings; the first
-	// index or splat ends them.
+	// index or splat ends them, and so does a line break inside an attribute
+	// access (splitGetAttr).
 	var attrs []*ts.Node
 	var rest []*ts.Node // the siblings after the leading get_attrs
+	prev := root
 	for j := i + 1; j < parent.ChildCount(); j++ {
 		c := parent.Child(j)
+		if c.Type(lang) == "get_attr" && splitGetAttr(prev, c, lang) {
+			break
+		}
+		prev = c
 		if len(rest) == 0 && c.Type(lang) == "get_attr" {
 			attrs = append(attrs, c)
 			continue
@@ -457,7 +467,14 @@ func (s *scan) traversalAt(parent *ts.Node, i int, kind reference.ReferenceKind)
 			}
 		case "splat":
 			if sp := firstNamedChild(rest[0]); sp != nil {
-				out = firstChildOfType(sp, lang, "get_attr")
+				for k := 1; k < sp.ChildCount(); k++ {
+					if c := sp.Child(k); c.Type(lang) == "get_attr" {
+						if !splitGetAttr(sp.Child(k-1), c, lang) {
+							out = c
+						}
+						break
+					}
+				}
 			}
 		}
 	}
@@ -514,7 +531,7 @@ func traversal(n *ts.Node, lang *ts.Language, src []byte) (first, last *ts.Node,
 	last = first
 	for i := 1; i < n.ChildCount(); i++ {
 		c := n.Child(i)
-		if c.Type(lang) != "get_attr" {
+		if c.Type(lang) != "get_attr" || splitGetAttr(last, c, lang) {
 			return nil, nil, nil, false
 		}
 		a := firstChildOfType(c, lang, "identifier")
@@ -525,6 +542,47 @@ func traversal(n *ts.Node, lang *ts.Language, src []byte) (first, last *ts.Node,
 		last = c
 	}
 	return first, last, parts, true
+}
+
+// splitGetAttr reports whether the attribute access attr (`.name`) is broken
+// by a line break — between prev, the part before it, and its dot, or between
+// the dot and the name — where HCL does not allow one. Outside brackets a
+// line break ends an HCL attribute (Terraform rejects `x = var.` followed by
+// `y = 1`), but the grammar reads a line break as space and joins the lines
+// (`var.y`): the name is not part of the address written, and no reference is
+// made through it. Inside brackets HCL allows the break (`(var.` then `a)`):
+// it is kept when the brackets parsed without an error, so a bracket left
+// open by broken code joins nothing.
+func splitGetAttr(prev, attr *ts.Node, lang *ts.Language) bool {
+	dot := attr.Child(0)
+	name := firstChildOfType(attr, lang, "identifier")
+	if dot == nil || name == nil {
+		return false
+	}
+	if prev.EndPoint().Row == dot.StartPoint().Row && dot.EndPoint().Row == name.StartPoint().Row {
+		return false
+	}
+	return !inCleanBrackets(attr, lang)
+}
+
+// inCleanBrackets reports whether n lies, within its attribute, inside
+// parentheses, a tuple, function arguments, a for expression in brackets or
+// a template interpolation — where HCL ignores line breaks — that parsed
+// without an error.
+func inCleanBrackets(n *ts.Node, lang *ts.Language) bool {
+	for p := n.Parent(); p != nil; p = p.Parent() {
+		switch p.Type(lang) {
+		case "tuple", "function_arguments", "template_interpolation", "for_tuple_expr":
+			return !p.HasError()
+		case "expression":
+			if c := p.Child(0); c != nil && c.Type(lang) == "(" {
+				return !p.HasError()
+			}
+		case "attribute", "block", "body", "config_file", "object", "ERROR":
+			return false
+		}
+	}
+	return false
 }
 
 // bareName reports whether n is an expression consisting of one bare
