@@ -852,11 +852,33 @@ through a link in the repository, may lead outside.
   the provider's `CacheVersion` whenever extraction semantics change, and
   `cache.CurrentSchemaVersion` when the cached shape changes; read errors are
   misses.
+- **A build reuses only entries its own extraction logic wrote.** The key
+  (content, schema, `CacheVersion`) cannot tell builds apart: a development
+  build changes extraction before anyone bumps a `CacheVersion`, and neither
+  the displayed version nor the VCS stamp distinguishes two edits of one
+  commit. So the persistent cache is opened per build scope
+  (`cache.OpenBuildStore`, the only way production code opens it): releases
+  share `release/` under the `CacheVersion` contract — GoReleaser marks a
+  release, never a snapshot — and every other build has `dev-<SHA-256 of
+  its executable>`, hashed once at start. An entry carries its scope and is
+  rejected in any other. An unidentifiable build has no persistent cache.
+  Danger: keying on `main.version`, `(devel)`, VCS revision or the modified
+  flag; hashing the executable lazily (a binary replaced under a running
+  server would name the new build's scope for the old code); treating a
+  development build as a release — setting the release flag (`release` in
+  `internal/cache/build.go`) anywhere but `.goreleaser.yml`, or publishing
+  with GoReleaser's validation skipped (`--skip=validate` builds an untagged
+  commit).
 
 Authority: `mcp/index_cache.go` (header comment), `index/sources.go`,
-`cache/key.go`. Tests: `mcp/index_cache_test.go`
+`cache/key.go`, `cache/build.go`. Tests: `mcp/index_cache_test.go`
 (`TestIndexCache_MidBuildChangeIsNeverPublished`,
-`TestIndexCache_CancelledWaiterDoesNotBreakTheBuild`, `TestIndexReuse_*`).
+`TestIndexCache_CancelledWaiterDoesNotBreakTheBuild`, `TestIndexReuse_*`),
+`cache/scope_test.go`, `cache/build_test.go`
+(`TestOnlyOpenBuildStoreOpensTheSharedCache`),
+`tests/integration/mcp_cache_build_integration_test.go`
+(`TestMCPCache_EachBuildReusesOnlyItsOwnEntries`: different real builds),
+`TestGoReleaser_OnlyReleasesShareTheReleaseCache`.
 
 ## 5. Context Engine (`get_context`)
 

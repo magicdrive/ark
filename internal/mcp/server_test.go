@@ -31,10 +31,13 @@ func createTestServerOption() *commandline.ServeOption {
 	}
 	opt.Normalize()
 
+	// No persistent cache: the root is this package's source directory,
+	// where the cache would leave .ark/index behind.
 	return &commandline.ServeOption{
 		RootDir:            ".",
 		HttpPort:           "8522",
 		McpServerTypeValue: "stdio",
+		NoCache:            true,
 		GeneralOption:      opt,
 	}
 }

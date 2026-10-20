@@ -78,13 +78,46 @@ measured repositories this is 5–13 times faster than a cold build.
   provider's version. An entry is used only if all match; a provider whose
   analysis changed in a new Ark release gets a new version, so its files are
   re-extracted once after an upgrade.
+- **Which build reuses an entry:** each build of Ark keeps its entries in a
+  directory of its own under `<root>/.ark/index`, and the server logs which
+  one at start (`ark: index cache … (release build)` or `(development
+  build: reused by this executable only)`).
+  - A published release (Homebrew, the release archives) uses `release/`.
+    Releases share it under the provider versions above, so upgrading keeps
+    the cache.
+  - Any other build — `go build`, `make build`, `go install`, `go run`, a
+    snapshot, a modified checkout — uses `dev-<hash>`, named by the SHA-256
+    of its own executable. Restarting the same binary reuses its entries;
+    any rebuild that changes the binary re-extracts. Two builds of different
+    sources never read each other's entries, even when their version strings,
+    commits and provider versions are the same.
+  - The displayed version (`ark --version`) plays no part.
+  - If the executable cannot be read, the server runs without the cache and
+    logs `ark: cache disabled …`.
+- **After each index build** the server logs `ark: indexed <root>: N files
+  from the cache, M extracted`.
 - **Failure handling:** an unreadable or corrupt entry is a cache miss (a
-  corrupt one is deleted). If the directory cannot be created, the server
-  logs `ark: cache disabled …` and runs without a cache.
+  corrupt one is deleted), as is an entry found in another build's directory.
+  If the directory cannot be created, the server logs `ark: cache disabled …`
+  and runs without a cache.
 - **Growth:** an edited file gets a new entry; old entries are not removed —
   including those of a file later excluded by `.arkignore`, which are never
-  read again.
-  Delete `<root>/.ark/index` whenever you like — it is always safe; the next
+  read again. At start the server keeps `release/`, its own directory and the
+  three development directories used most recently: older `dev-*`
+  directories are set aside at once and deleted in the background, together
+  with the temporary files of writes interrupted over an hour before. When
+  `.ark` or `.ark/index` is a symbolic link, nothing is deleted through it.
+- **Upgrading from Ark 6.5.2 or earlier:** entries written before build
+  directories existed (`<root>/.ark/index/*.json`) cannot be attributed to
+  a build, so the first start of a newer Ark removes them and indexes once
+  cold. Running an older Ark on the same root afterwards stays correct, but
+  each newer start removes what it wrote, so the older one indexes cold every
+  time.
+- **Several servers on one root** (two clients, or a release and a
+  development build) share `<root>/.ark/index` safely: each reads only its own
+  build's entries, and every write goes through a temporary file of its own.
+  Servers on different roots never share entries.
+- Delete `<root>/.ark/index` whenever you like — it is always safe; the next
   start rebuilds it.
 - **Disable:** `ark mcp-server --no-cache`.
 

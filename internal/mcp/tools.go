@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -421,7 +422,18 @@ func (h *ToolsHandler) buildIndex(ctx context.Context, fullPath string) (*index.
 				return nil, err
 			}
 			defer release()
-			return index.NewWithCacheExcluding(ctx, root, providers, store, s.accessPolicy().indexExclude)
+			if _, persistent := store.(*cache.FileStore); !persistent {
+				return index.NewWithCacheExcluding(ctx, root, providers, store, s.accessPolicy().indexExclude)
+			}
+			// What each build took from the cache, for the server's log:
+			// whether entries were reused is observed, never guessed from
+			// timings.
+			counted := &countingStore{Store: store}
+			idx, err := index.NewWithCacheExcluding(ctx, root, providers, counted, s.accessPolicy().indexExclude)
+			if err == nil {
+				log.Printf("ark: indexed %s: %d files from the cache, %d extracted", root, counted.reused.Load(), counted.missed.Load())
+			}
+			return idx, err
 		}
 		if h.newIndex != nil {
 			build = h.newIndex

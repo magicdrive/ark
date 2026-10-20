@@ -555,6 +555,37 @@ func TestGoReleaserVersionIsConsistent(t *testing.T) {
 	}
 }
 
+// Only a published release is a release build for the index cache
+// (internal/cache/build.go): GoReleaser sets internal/cache.release for a
+// release and leaves it empty for a snapshot or a modified tree (even with
+// validation skipped), and no other build sets it.
+func TestGoReleaser_OnlyReleasesShareTheReleaseCache(t *testing.T) {
+	cfg, err := os.ReadFile(".goreleaser.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const flag = `-X "github.com/magicdrive/ark/internal/cache.release={{ if and (not .IsSnapshot) (not .IsGitDirty) }}true{{ end }}"`
+	if !strings.Contains(string(cfg), "- "+flag+"\n") {
+		t.Errorf(".goreleaser.yml: the ark build's ldflags lack %s", flag)
+	}
+	src, err := os.ReadFile("internal/cache/build.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`(?m)^var release string$`).Match(src) {
+		t.Error("internal/cache/build.go: no `var release string` for the release flag to set")
+	}
+	for _, path := range []string{"Makefile", ".github/workflows/ci.yml", ".github/workflows/release.yml"} {
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), "internal/cache.release") {
+			t.Errorf("%s sets internal/cache.release: only a GoReleaser release may", path)
+		}
+	}
+}
+
 func keys(m map[string]string) []string {
 	var out []string
 	for k := range m {

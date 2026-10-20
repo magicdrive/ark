@@ -413,8 +413,18 @@ is not configurable. The cache parser is defensive:
 
 - corrupt JSON → graceful miss, file removed;
 - schema version mismatch → graceful miss;
+- an entry of another build (found in this build's directory but written by
+  another) → miss, file removed;
 - content hash mismatch → miss;
 - provider version mismatch → miss.
+
+Each build reads only its own directory under `<root>/.ark/index`:
+`release/` for published releases, `dev-<SHA-256 of the executable>` for
+any other build ([Operations](docs/operations.md#extraction-cache)). The
+directory separates builds; it is no secret, so it does not change the
+threat below. At start the server deletes, in `<root>/.ark/index`, retired
+`dev-*` directories and entries of the layout before build directories; it
+deletes nothing when `.ark` or `.ark/index` is a symbolic link.
 
 A maliciously crafted cache file cannot cause Ark to panic (verified by
 fuzz testing). It may, however, cause Ark to use wrong extraction results

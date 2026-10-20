@@ -15,6 +15,10 @@ type CacheKey struct {
 	ArkVersion      string
 	SchemaVersion   string
 	ProviderVersion string // invalidates entries when extraction semantics change
+	// Build is the scope (build.go) of the store that wrote the entry: set
+	// by FileStore.Put, checked by FileStore.Get, never part of the file
+	// name — the scope is the store's directory.
+	Build string `json:",omitempty"`
 }
 
 // NewCacheKey builds a CacheKey for the given file.

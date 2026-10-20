@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/magicdrive/ark/internal/cache"
 	"github.com/magicdrive/ark/internal/commandline"
@@ -40,6 +41,15 @@ func RunMCPServe(rootDir string, serverOpt *commandline.ServeOption) {
 	if err := transport.Start(handler); err != nil {
 		log.Fatalf("Transport error: %v", err)
 	}
+	// Let the cache's background tidying finish (it deletes what it already
+	// set aside, so stopping it early only defers the work to the next
+	// start).
+	if server.cache != nil {
+		select {
+		case <-server.cache.Tidied():
+		case <-time.After(2 * time.Second):
+		}
+	}
 }
 
 // rootMismatchWarning returns a warning when the client says which project it
@@ -65,6 +75,7 @@ func rootMismatchWarning(root, projectDir string) string {
 
 // MCPServer represents the main MCP server
 type MCPServer struct {
+	cache     *cache.FileStore // the persistent cache, nil without one
 	rootDir   string
 	serverOpt *commandline.ServeOption
 	tools     *ToolsHandler
@@ -75,18 +86,28 @@ type MCPServer struct {
 func NewMCPServer(rootDir string, serverOpt *commandline.ServeOption) *MCPServer {
 	warnIfServerMaskingOff(serverOpt.GeneralOption)
 	var store cache.Store
+	var persistent *cache.FileStore
 	if serverOpt.NoCache {
 		store = cache.NopStore{}
 	} else {
+		// The entries of this build's scope only (cache/build.go): a
+		// release shares them with other releases, any other build with
+		// its own executable alone.
 		cacheDir := filepath.Join(rootDir, ".ark", "index")
-		if fs, err := cache.NewFileStore(cacheDir); err == nil {
-			store = fs
+		if fs, b, err := cache.OpenBuildStore(cacheDir); err == nil {
+			store, persistent = fs, fs
+			if b.Release {
+				log.Printf("ark: index cache %s (release build)", filepath.Join(cacheDir, b.Scope))
+			} else {
+				log.Printf("ark: index cache %s (development build: reused by this executable only)", filepath.Join(cacheDir, b.Scope))
+			}
 		} else {
 			log.Printf("ark: cache disabled (could not create store: %v)", err)
 			store = cache.NopStore{}
 		}
 	}
 	s := &MCPServer{
+		cache:     persistent,
 		rootDir:   rootDir,
 		serverOpt: serverOpt,
 		tools:     NewToolsHandlerWithCache(rootDir, serverOpt.GeneralOption, store),

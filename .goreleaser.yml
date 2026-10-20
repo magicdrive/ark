@@ -18,6 +18,11 @@ builds:
         goarch: "386"
     ldflags:
       - -s -w -X "main.version=v{{.Version}}"
+      # A release's index cache entries are shared with other releases under
+      # the providers' CacheVersion contract; a snapshot or a build of a
+      # modified tree is no release and keeps the entries of its own
+      # executable (internal/cache/build.go).
+      - -X "github.com/magicdrive/ark/internal/cache.release={{ if and (not .IsSnapshot) (not .IsGitDirty) }}true{{ end }}"
     env:
       - CGO_ENABLED=0
     binary: ark
