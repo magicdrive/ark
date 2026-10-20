@@ -2,9 +2,7 @@ package core
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,22 +59,14 @@ func WriteAllFiles(treeStr string, root string, outputPath string, allowedFileLi
 		if err != nil {
 			return err
 		}
-		if IsBinary(data) || IsImage(fpath) {
+		if IsImage(fpath) {
 			return nil
 		}
-
-		decoded, err := ConvertToUTF8(bytes.NewReader(data))
-		if err != nil {
-			if opt.SkipNonUTF8Flag {
-				return nil
-			}
-			return fmt.Errorf("failed to convert %s: %w", fpath, err)
+		text, ok := dumpText(opt, fpath, data)
+		if !ok {
+			return nil
 		}
-
-		decodedBytes, err := io.ReadAll(decoded)
-		if err != nil {
-			return fmt.Errorf("failed to read %s: %w", fpath, err)
-		}
+		decodedBytes := []byte(text)
 
 		if opt.DeleteCommentsFlag {
 			decodedBytes = DeleteComments(decodedBytes, fpath)

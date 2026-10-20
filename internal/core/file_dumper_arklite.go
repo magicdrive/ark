@@ -7,7 +7,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"unicode/utf8"
 
 	"github.com/magicdrive/ark/internal/commandline"
 	"github.com/magicdrive/ark/internal/textbank"
@@ -54,9 +53,11 @@ func WriteAllFilesAsArklite(treeStr, root, outputPath string, allowedFileListMap
 			log.Println(err.Error())
 			return err
 		}
-		if !utf8.Valid(data) {
-			return nil // skip non-UTF-8 or binary
+		text, ok := dumpText(opt, path, data)
+		if !ok {
+			return nil // binary, or text that cannot be read (dumpText)
 		}
+		data = []byte(text)
 
 		// Strip block and line comments
 		lang := detectLanguageTag(path)

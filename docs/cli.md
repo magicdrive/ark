@@ -55,11 +55,92 @@ ark -f arklite -E vendor,dist .     # compact format, skip two directories
 | `--exclude-dir <names>` | `-E` | Exclude directories by name | – |
 | `--compless` | `-c` | Compress the result with arklite | – |
 | `--skip-non-utf8` | `-s` | Skip files that are not UTF-8 | – |
+| `--file-encoding <rules>` | – | The encoding of files it cannot detect: `PATTERN=ENCODING,…` ([Encodings](#encodings)) | – |
 | `--silent` | `-S` | No progress output | – |
 | `--delete-comment` | `-D` | Strip comments (language-aware) | – |
 
 Regular expressions use Go's [`regexp`](https://pkg.go.dev/regexp) syntax.
 Size strings accept `K` and `M` suffixes.
+
+### Encodings
+
+The dump is UTF-8. Each file is decoded from its own encoding, so a
+repository whose files are in different encodings dumps as one UTF-8 text in
+which every file reads as written:
+
+1. an encoding `--file-encoding` names for the file;
+2. a byte order mark: UTF-8 (the mark is not dumped), UTF-16 LE or BE;
+3. ISO-2022-JP, by its escape sequences to a JIS character set and the JIS
+   characters after them;
+4. valid UTF-8 — the whole file — as it is;
+5. otherwise the legacy encodings are tried: Shift_JIS (Code Page 932),
+   EUC-JP, GB18030 (GBK, GB2312), Big5, EUC-KR (Code Page 949) and
+   Windows-1252 (which also reads ISO-8859-1 text). Decoding is strict: a
+   byte sequence an encoding does not define rules it out, and nothing is
+   replaced. Of the encodings left, one is used only when it reads the file
+   as text of its language clearly better than every other — East Asian text
+   by its frequent characters, Western European text by its accented letters
+   and typography (`¿ ¡ º ª °` included) — and, when more than one reads the
+   bytes, only on enough text to tell: eight non-ASCII characters (three runs
+   of non-ASCII characters for Western text). In a large file the lines with
+   non-ASCII characters (up to 64 KB of them) are scored; the encoding chosen
+   then decodes the whole file.
+
+Files with a NUL byte (UTF-16 without a byte order mark among them) or mostly
+control characters are binary and are left out, as are images. A file that
+is not UTF-8 and whose encoding cannot be told — a few words, ambiguous
+between encodings, or an encoding not supported — is left out too, with a
+warning on stderr naming it:
+
+```text
+ark: src/App.java is left out of the dump: not UTF-8, and too short to tell euc-jp, gb18030 apart (name its encoding with --file-encoding)
+```
+
+`--file-encoding` names the encoding of such files by path, relative to the
+dumped directory: [`path.Match`](https://pkg.go.dev/path#Match) patterns
+(`*` matches within one directory), a pattern without `/` matching a file
+name in any directory, and a pattern ending in `/**` every file below its
+directory — `**` means nothing else. The first matching rule wins; a rule
+that matches no file of the dump is announced on stderr. Absolute paths and
+`..` are refused.
+
+```sh
+ark --file-encoding 'legacy/**=cp932,*.euc=euc-jp,docs/zh.txt=gb18030' .
+```
+
+Encoding names: `utf-8`, `utf-16le`, `utf-16be`, `shift_jis` (`sjis`,
+`cp932`, `windows-31j`), `euc-jp`, `iso-2022-jp`, `gb18030` (`gbk`, `gb2312`),
+`big5`, `euc-kr` (`cp949`), `windows-1252` (`cp1252`), `iso-8859-1`
+(`latin1`). A rule applies to every file it matches, a valid UTF-8 one too —
+keep patterns to the legacy files — but a file with a NUL byte stays binary
+(unless the rule names UTF-16). A file not valid in the encoding named
+for it is left out with a warning, never dumped with characters replaced.
+`--skip-non-utf8` leaves out every file that is not UTF-8 instead, silently.
+
+The MCP server (`get_file_content`, `get_files_arklite`) decodes files the
+same way and takes the same `--file-encoding`; a file not valid in the
+encoding named for it is an error, and one whose encoding cannot be told is
+returned as before — as its bytes, which the JSON response shows with U+FFFD
+for those that are not UTF-8.
+
+Detection reads the bytes, not the file name or the language, and cannot be
+certain. Known limits:
+
+- A few characters of a legacy encoding can also be valid UTF-8 (Shift_JIS
+  `閾値`); such a file is read as UTF-8. Name its encoding.
+- Telling simplified from traditional Chinese, Korean from Chinese, or
+  Japanese kanji from Chinese rests on which characters are frequent; short
+  or unusual text is declined.
+- Other single-byte encodings (Central European, Baltic, Turkish, Cyrillic,
+  Greek, …) are not supported. They are declined when their letters are
+  symbols or unusual letters in Windows-1252 — `ł`, `ż`, `ş` — and a text
+  that uses only letters the two share (Polish `się` as `siê`) can read as
+  Windows-1252.
+- Words of two accented letters alone (Estonian `öö`) or of three or more
+  (`ÅÄÖ`) do not read as Western text; such a file is declined unless it has
+  enough other Western text.
+- UTF-32 and UTF-16 without a byte order mark are not supported (binary); a
+  UTF-16 or GB18030 file that holds U+FFFD itself is declined.
 
 A `.arkignore` file uses `.gitignore` syntax. The ignore rules belong to the
 dumped directory: the dump reads every `.arkignore` and `.gitignore` at and
@@ -262,7 +343,7 @@ configuration `setup` wrote.
 | `--mask-secrets <on\|off>` | `-m` | Mask detected secrets in every MCP response; `off` disables masking and logs a warning ([SECURITY.md](../SECURITY.md#secret-masking)) | `on` |
 | `--allow-external-symlinks <on\|off>` | – | Read files through symlinks in the repository that lead outside it; `.arkignore` still applies, and paths outside the root stay refused ([Symlink policy](../SECURITY.md#symlink-policy)) | `off` |
 | `--secret-rule-overrides <on\|off>` | – | Apply the entries of the repository's [secret rules configuration](secret-rules.md) that disable built-in masking rules; without it they are left out and logged once | `off` |
-| `--scan-buffer`, `--allow-gitignore`, `--additionally-ignorerule`, `--ignore-dotfile`, `--pattern-regex`, `--include-ext`, `--exclude-dir-regex`, `--exclude-file-regex`, `--exclude-ext`, `--exclude-dir`, `--skip-non-utf8`, `--delete-comment` | | As in [repository dump](#repository-dump). They are the defaults of the file tools (`list_files`, `search_in_files`, `get_file_content`, …); a tool argument of the same name overrides them per request | |
+| `--scan-buffer`, `--allow-gitignore`, `--additionally-ignorerule`, `--ignore-dotfile`, `--pattern-regex`, `--include-ext`, `--exclude-dir-regex`, `--exclude-file-regex`, `--exclude-ext`, `--exclude-dir`, `--skip-non-utf8`, `--file-encoding`, `--delete-comment` | | As in [repository dump](#repository-dump). They are the defaults of the file tools (`list_files`, `search_in_files`, `get_file_content`, …); a tool argument of the same name overrides them per request | |
 
 The filter options do not narrow the code-intelligence index: graph tools
 index every file of a supported language under the requested `path`, skipping

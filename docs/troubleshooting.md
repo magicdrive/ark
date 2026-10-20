@@ -142,6 +142,15 @@ see its parents' ignore files; dump the parent or add the rules to the
 subdirectory ([Ignore rules](cli.md#ignore-rules)). `ignore rules: …` means an
 ignore file cannot be read; fix its permissions.
 
+**Garbled text in the dump, or a file left out with `is left out of the dump`**
+
+The dump decodes each file from its own encoding and writes UTF-8
+([Encodings](cli.md#encodings)). A file that is not UTF-8 and whose encoding
+cannot be told is left out with that warning on stderr; name its encoding with
+`--file-encoding 'PATH=ENCODING'`. Text that still looks wrong was read as an
+encoding it is not in: please report it with the file's encoding, and name
+the right one with `--file-encoding` meanwhile.
+
 **Answers seem stale**
 
 They should not: every request re-checks the source files' contents and

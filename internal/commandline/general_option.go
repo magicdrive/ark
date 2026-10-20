@@ -72,6 +72,9 @@ type Option struct {
 	OutputFormat            model.OutputFormat
 	ComplessFlag            bool
 	SkipNonUTF8Flag         bool
+	FileEncodingValue       string             // --file-encoding
+	FileEncodingRules       []FileEncodingRule // parsed by Normalize
+	FileEncodingRoot        string             // the directory the patterns are relative to ("": TargetDirname)
 	DeleteCommentsFlag      bool
 	SilentFlag              bool
 	HelpFlag                bool
@@ -149,6 +152,9 @@ func GeneralOptParse(args []string) (int, *Option, error) {
 	skipNonUTF8FlagOpt := fs.Bool("skip-non-utf8", false, "Specify ignore files that do not have utf8 charset.")
 	fs.BoolVar(skipNonUTF8FlagOpt, "s", false, "Specify ignore files that do not have utf8 charset.")
 
+	// --file-encoding
+	fileEncodingOpt := fs.String("file-encoding", "", "Specify the encoding of files whose encoding cannot be detected (PATTERN=ENCODING,...).")
+
 	// --silent
 	silentFlagOpt := fs.Bool("silent", false, "Specify flag process without displaying messages during processing.")
 	fs.BoolVar(silentFlagOpt, "S", false, "Specify flag process without displaying messages during processing.")
@@ -205,6 +211,7 @@ func GeneralOptParse(args []string) (int, *Option, error) {
 		OutputFormatValue:               *outputFormatOpt,
 		ComplessFlag:                    *complessFlagOpt,
 		SkipNonUTF8Flag:                 *skipNonUTF8FlagOpt,
+		FileEncodingValue:               *fileEncodingOpt,
 		SilentFlag:                      *silentFlagOpt,
 		DeleteCommentsFlag:              *deleteCommentsFlagOpt,
 		HelpFlag:                        *helpFlagOpt,
@@ -227,6 +234,13 @@ func (cr *Option) Normalize() error {
 	// File selection: extension/directory lists, the ignore-dotfile switch and
 	// the include/exclude regexps.
 	errorMessages = append(errorMessages, cr.normalizeFileFilters()...)
+
+	// --file-encoding
+	if rules, err := parseFileEncodings(cr.FileEncodingValue); err != nil {
+		errorMessages = append(errorMessages, err.Error())
+	} else {
+		cr.FileEncodingRules = rules
+	}
 
 	// scan-buffer
 	if err := cr.ScanBuffer.Set(cr.ScanBufferValue); err != nil {

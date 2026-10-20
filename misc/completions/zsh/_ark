@@ -26,6 +26,7 @@ general_opts=(
   '--exclude-file-regex[-g]:regexp:' '--exclude-dir-regex[-G]:regexp:'
   '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
   '--exclude-dir[-E]:dirname:_files -/'
+  '--file-encoding[Encoding of files it cannot detect]:PATTERN=ENCODING:'
 )
 
 mcp_opts=(
@@ -43,6 +44,7 @@ mcp_opts=(
   '--exclude-ext[-e]:extensions:(go js ts py java c cpp h txt md html css xml yml yaml json)'
   '--exclude-dir[-E]:dirname:_files -/'
   '--skip-non-utf8[-s]' '--delete-comment[-D]'
+  '--file-encoding[Encoding of files it cannot detect]:PATTERN=ENCODING:'
   '--allow-external-symlinks[Read through symlinks leading outside the repository]:on/off:(on off)'
   '--secret-rule-overrides[Apply rule overrides of the repository configuration]:on/off:(on off)'
   '--no-cache[Disable persistent index cache]'

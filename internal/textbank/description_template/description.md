@@ -2,7 +2,7 @@
 
 **Root Directory:** %s
 **Format:** Tree-like directory listing with file content below each file path.
-**Note:** Binary and non-UTF-8 files are excluded.
+**Note:** Text files are included as UTF-8, each decoded from its own encoding. Binary files and files whose encoding cannot be determined are excluded.
 
 This document contains the complete project structure and source code, intended for AI systems to assist with tasks such as:
 
