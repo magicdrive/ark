@@ -121,7 +121,13 @@ The MCP server (`get_file_content`, `get_files_arklite`) decodes files the
 same way and takes the same `--file-encoding`; a file not valid in the
 encoding named for it is an error, and one whose encoding cannot be told is
 returned as before — as its bytes, which the JSON response shows with U+FFFD
-for those that are not UTF-8.
+for those that are not UTF-8. `search_in_files` searches the same decoded
+text, so a line it reports is the line `get_file_content` shows, under the
+file's own line number; it does not search a file not valid in the encoding
+named for it or one whose encoding cannot be told (its bytes would match text
+the file does not hold), and under `--skip-non-utf8` only the files it
+searched before, those whose bytes are valid UTF-8 (7-bit ISO-2022-JP among
+them, searched decoded as `get_file_content` shows it).
 
 Detection reads the bytes, not the file name or the language, and cannot be
 certain. Known limits:

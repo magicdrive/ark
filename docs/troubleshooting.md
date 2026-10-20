@@ -151,6 +151,15 @@ cannot be told is left out with that warning on stderr; name its encoding with
 encoding it is not in: please report it with the file's encoding, and name
 the right one with `--file-encoding` meanwhile.
 
+**`search_in_files` finds nothing in a file `get_file_content` shows**
+
+The search reads each file as `get_file_content` shows it, decoded from its
+own encoding, and skips a file whose encoding cannot be told —
+`get_file_content` shows that one as its bytes, with U+FFFD where they are not
+UTF-8. Start the server with `--file-encoding 'PATH=ENCODING'` to name it. A
+server started with `--skip-non-utf8` searches only files whose bytes are
+valid UTF-8.
+
 **Answers seem stale**
 
 They should not: every request re-checks the source files' contents and

@@ -126,12 +126,15 @@ func Decode(data []byte, explicit string) Result {
 		if !ok {
 			return Result{Kind: Invalid, Encoding: explicit, Reason: "not valid " + explicit}
 		}
+		if explicit == "utf-8" && len(body) < len(data) {
+			return textAfterBOM(t, data)
+		}
 		return text(t, explicit)
 	}
 	switch {
 	case bytes.HasPrefix(data, bomUTF8):
 		if t, ok := decodeAs("utf-8", data[len(bomUTF8):]); ok {
-			return text(t, "utf-8")
+			return textAfterBOM(t, data)
 		}
 		return Result{Kind: Undetermined, Reason: "a UTF-8 byte order mark, but not valid UTF-8"}
 	case bytes.HasPrefix(data, bomUTF16LE):
@@ -189,6 +192,16 @@ func utf16(body []byte, name string) Result {
 // binary rather than text (the dump's existing rule, core.IsBinary).
 const maxControlRatio = 0.1
 
+// textAfterBOM is text for t, the UTF-8 text of data after its byte order
+// mark. The share of control characters counts the mark, as core.IsBinary
+// does: the same files are text as before.
+func textAfterBOM(t string, data []byte) Result {
+	if strings.IndexByte(t, 0) < 0 && controlRatio(data) <= maxControlRatio {
+		return Result{Kind: Text, Text: t, Encoding: "utf-8"}
+	}
+	return text(t, "utf-8")
+}
+
 func text(t, name string) Result {
 	if strings.IndexByte(t, 0) >= 0 {
 		return Result{Kind: Binary, Encoding: name, Reason: "contains a NUL character"}
@@ -229,6 +242,9 @@ func decodeAs(name string, body []byte) (string, bool) {
 	if !ok || enc == nil {
 		return "", false
 	}
+	if name == "iso-2022-jp" && !wellFormedJIS(body) {
+		return "", false
+	}
 	out, err := enc.NewDecoder().Bytes(body)
 	if err != nil || bytes.ContainsRune(out, utf8.RuneError) {
 		return "", false
@@ -243,6 +259,34 @@ func hasNonASCII(s string) bool {
 		}
 	}
 	return false
+}
+
+// wellFormedJIS reports whether every two-byte character of ISO-2022-JP
+// text b is two bytes of 0x21–0x7E. The decoder does not check the second
+// byte: one like a line feed, a space or DEL becomes part of a character the
+// text does not hold (ESC $ B "0\n" reads as 歌, without its line feed).
+func wellFormedJIS(b []byte) bool {
+	double := false // in a JIS X 0208 or 0212 run
+	for i := 0; i < len(b); i++ {
+		switch c := b[i]; {
+		case c == 0x1B && i+2 < len(b):
+			// ESC $ @, ESC $ B, ESC $ ( D switch to two bytes; ESC ( B,
+			// ESC ( J, ESC ( I to one. Any other escape fails decoding.
+			double = b[i+1] == '$'
+			i += 2
+			if double && b[i] == '(' {
+				i++
+			}
+		case !double:
+		case c == '\n':
+			double = false // the decoder ends a run at a line feed
+		case c < 0x21 || c > 0x7E || i+1 == len(b) || b[i+1] < 0x21 || b[i+1] > 0x7E:
+			return false
+		default:
+			i++
+		}
+	}
+	return true
 }
 
 // hasJISEscape reports whether b contains an ISO-2022-JP escape sequence

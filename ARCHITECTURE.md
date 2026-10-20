@@ -797,22 +797,27 @@ target (`core.aliasIgnored`). Tests: `TestIgnoreSemantics_*`,
 a `.gitignore` `!` would re-include what `.arkignore` excludes.
 
 **Shown text is decoded per file; analysed bytes never are.** The dump
-(`core.dumpText`) and the MCP file-content tools (`processFileContentIn`)
-decode each file from its own encoding (`internal/textenc`: an explicit
+(`core.dumpText`), the MCP file-content tools (`processFileContentIn`) and
+`search_in_files` (`searchableText`) decode each file from its own encoding (`internal/textenc`: an explicit
 `--file-encoding` rule, a byte order mark, ISO-2022-JP escapes, valid UTF-8 as
 it is, else a strict legacy reading that is plausible, clearly the best and
 on enough text) and show UTF-8, never with characters replaced: the dump
 leaves a file it cannot read out with a warning; the MCP tools refuse a file
 not in the encoding named for it and return one whose encoding cannot be
 told as its bytes, as before (U+FFFD in the JSON response where they are not
-UTF-8: the one place replacement is left, for compatibility). Providers, the index and every byte offset see the
+UTF-8: the one place replacement is left, for compatibility). The search
+searches the text it shows, by line — every encoding read keeps the file's
+line feeds, so a line number is the file's own — and skips a file it cannot
+read as text rather than match its bytes. Providers, the index and every byte offset see the
 file's bytes as stored. Tests: `textenc` (`TestDecode_NeverMisreads`,
 `TestDecode_WordsInCodeAreNotMisread`, `FuzzDecode`),
-`TestDump_MixedEncodingRepository*`. Danger: deciding UTF-8
+`TestDump_MixedEncodingRepository*`, `TestSearch_*`, `FuzzSearchableText`. Danger: deciding UTF-8
 from a sample of the file (a cut character reads as another encoding),
 deciding binary before decoding (every non-UTF-8 file is dropped), or
 deciding on a few characters or on the best score alone (short words are
-words in several encodings); or decoding the bytes a provider parses.
+words in several encodings); trusting a decoder to reject what it does not
+define (x/text's ISO-2022-JP makes a character of a pair whose second byte
+is a line feed: `wellFormedJIS`); or decoding the bytes a provider parses.
 
 **Symlinks leading outside the root are not followed unless the operator
 allows it.** By default the gate refuses a path that resolves outside the
