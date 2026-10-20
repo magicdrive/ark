@@ -3,6 +3,10 @@ package cache
 // CurrentSchemaVersion is the cache schema version.
 // Increment this to invalidate all existing cache entries on the next run.
 //
+// Which build may read an entry is not the schema's business: entries live
+// in build scopes (build.go), and CacheKey.Build — added without a bump —
+// is the scope that wrote one (empty for no scope).
+//
 //	"1": symbols / references / imports / diagnostics.
 //	"2": + module bindings, exports, ModuleScoped, ReferenceDraft.ReceiverType.
 //

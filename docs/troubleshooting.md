@@ -39,7 +39,8 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
 | `--secret-rule-overrides "…": must be 'on' or 'off'` | The server option takes `on` or `off`. |
 | `indexing …: sources kept changing during 3 builds; retry when they settle` | Files changed during three index builds in a row (a build or code generator is writing). Retry when it is done. |
 | `index: … SymbolID collision(s) between distinct declarations …` | Two declarations produced the same 64-bit ID. Index tools are unavailable until one of them changes; file tools keep working. Please report it. |
-| `ark: cache disabled (could not create store: …)` | `<root>/.ark/index` cannot be created. The server works without the cache; fix the directory's permissions to restore it. |
+| `ark: cache disabled (could not create store: …)` | `<root>/.ark/index` cannot be created, or the server cannot read its own executable to tell its build apart (a development build). The server works without the cache; fix the directory's permissions (or the executable's) to restore it. |
+| `ark: index cache …/dev-… (development build: reused by this executable only)` | Not an error: a build other than a published release keeps cache entries of its own, so a rebuilt binary indexes cold once ([Extraction cache](operations.md#extraction-cache)). |
 | `Forbidden: invalid Host` / `Forbidden: invalid Origin` (HTTP transport) | The HTTP endpoint accepts only loopback hosts and origins. Connect to `localhost` from a local client. |
 
 ## Unexpected answers
@@ -145,8 +146,10 @@ ignore file cannot be read; fix its permissions.
 
 They should not: every request re-checks the source files' contents and
 rebuilds the index if anything changed, and cached extractions are keyed by
-file content. If you suspect the cache, delete `<root>/.ark/index` or run the
-server with `--no-cache`, and please report the case.
+file content, and each build of Ark reads only its own entries (the server's
+log names the directory and how many files came from it). If you suspect the
+cache, delete `<root>/.ark/index` or run the server with `--no-cache`, and
+please report the case.
 
 ## Reporting a problem
 

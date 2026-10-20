@@ -13,8 +13,9 @@ import (
 // version: upgrading Ark keeps the cache, which is sound because an entry is
 // an extraction of one file's content and is invalidated by
 // cache.CurrentSchemaVersion and each provider's CacheVersion whenever what an
-// extraction contains changes (cache/version.go). Change it only to discard
-// every entry at once.
+// extraction contains changes (cache/version.go). That contract holds
+// between releases; any other build reads only the entries of its own
+// executable (cache/build.go). Change it only to discard every entry at once.
 var ArkVersion = "0.1.0"
 
 // NewWithCache builds a RepositoryIndex using store to skip re-extraction for

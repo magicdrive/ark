@@ -29,7 +29,7 @@
 [3]
 ./internal/languages/golang           # 103 / 255
 ./internal/languages/typescript       #  50 /  47
-./tests/integration                   #  47 /  39
+./tests/integration                   #  66 /  72 (with the cache build tests: scaled from a re-measure, this machine 40/41 → 59/74)
 [4]
 ./internal/completion                 #  63 /  14 (mostly waiting)
 ./internal/golden                     #  61 /  60
