@@ -91,6 +91,9 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 	skipNonUTF8FlagOpt := fs.Bool("skip-non-utf8", false, "Specify ignore files that do not have utf8 charset.")
 	fs.BoolVar(skipNonUTF8FlagOpt, "s", false, "Specify ignore files that do not have utf8 charset.")
 
+	// --file-encoding
+	fileEncodingOpt := fs.String("file-encoding", "", "Specify the encoding of files whose encoding cannot be detected (PATTERN=ENCODING,...).")
+
 	// --delete-comments
 	deleteCommentsFlagOpt := fs.Bool("delete-comment", false, "Specify flag delete code comments.")
 	fs.BoolVar(deleteCommentsFlagOpt, "D", false, "Specify flag delete code comments.")
@@ -146,6 +149,8 @@ func ServerOptParse(version string, args []string) (int, *ServeOption, error) {
 		ExcludeExt:                      *excludeExtOpt,
 		ExcludeDir:                      *excludeDirOpt,
 		SkipNonUTF8Flag:                 *skipNonUTF8FlagOpt,
+		FileEncodingValue:               *fileEncodingOpt,
+		FileEncodingRoot:                rootDir,
 		DeleteCommentsFlag:              *deleteCommentsFlagOpt,
 		WithLineNumberFlagValue:         "off",
 		OutputFormatValue:               "auto",

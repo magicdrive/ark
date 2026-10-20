@@ -66,6 +66,7 @@ func createDumpFile(opt *commandline.Option) error {
 		if treeStr, allowdFileList, err := GenerateTreeJSONString(opt.TargetDirname, firstAllowdFileListMap, opt); err != nil {
 			return err
 		} else {
+			warnUnusedFileEncodings(opt, allowdFileList)
 			if err := WriteAllFilesAsArklite(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
 				return err
 			}
@@ -77,6 +78,7 @@ func createDumpFile(opt *commandline.Option) error {
 	if treeStr, allowdFileList, err := GenerateTreeString(opt.TargetDirname, firstIndent, firstAllowdFileListMap, opt); err != nil {
 		return err
 	} else {
+		warnUnusedFileEncodings(opt, allowdFileList)
 		if opt.OutputFormat.String() == model.XML {
 			if err := WriteAllFilesAsXML(treeStr, opt.TargetDirname, opt.OutputFilename, allowdFileList, opt); err != nil {
 				return err

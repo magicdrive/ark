@@ -97,6 +97,7 @@ fuzz:
 	@$(GO) test -run '^$$' -fuzz=FuzzExtractTerraform -fuzztime=10s $(CURDIR)/internal/languages/terraform/
 	@$(GO) test -run '^$$' -fuzz='^FuzzExtractRust$$' -fuzztime=10s $(CURDIR)/internal/languages/rust/
 	@$(GO) test -run '^$$' -fuzz='^FuzzExtractPython$$' -fuzztime=10s $(CURDIR)/internal/languages/python/
+	@$(GO) test -run '^$$' -fuzz='^FuzzDecode$$' -fuzztime=10s $(CURDIR)/internal/textenc/
 	@$(GO) test -run '^$$' -fuzz='^FuzzTypeArgParser$$' -fuzztime=10s $(CURDIR)/internal/languages/typescript/
 	@$(GO) test -run '^$$' -fuzz='^FuzzMatchSymbols$$' -fuzztime=10s $(CURDIR)/internal/search/
 	@$(GO) test -run '^$$' -fuzz='^FuzzDeclarationIdentity$$' -fuzztime=10s $(CURDIR)/internal/index/

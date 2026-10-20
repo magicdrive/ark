@@ -17,11 +17,11 @@ _ark_gen_flags="--help -h --version -v --compless -c --silent -S --skip-non-utf8
 _ark_gen_opts="--output-filename -o --scan-buffer -b --output-format -f --mask-secrets -m \
     --allow-gitignore -a --additionally-ignorerule -A --with-line-number -n --ignore-dotfile -d \
     --pattern-regex -x --include-ext -i --exclude-file-regex -g --exclude-dir-regex -G \
-    --exclude-ext -e --exclude-dir -E"
+    --exclude-ext -e --exclude-dir -E --file-encoding"
 _ark_mcp_flags="--skip-non-utf8 -s --delete-comment -D --no-cache --help -h --version -v"
 _ark_mcp_opts="--root -r --type -t --http-port -p --scan-buffer -b --mask-secrets -m --allow-gitignore -a \
     --additionally-ignorerule -A --ignore-dotfile -d --pattern-regex -x --include-ext -i \
-    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E --allow-external-symlinks --secret-rule-overrides"
+    --exclude-file-regex -g --exclude-dir-regex -G --exclude-ext -e --exclude-dir -E --file-encoding --allow-external-symlinks --secret-rule-overrides"
 _ark_setup_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 _ark_mcp_init_opts="--name -n --ark-path -p --root -r --global -g --force -f -h --help"
 _ark_syntax_opts="--lang --format -h --help"
@@ -96,7 +96,7 @@ _ark() {
         --include-ext|-i|--exclude-ext|-e) _ark_offer "${_ark_exts}"; return 0 ;;
         --output-filename|-o|--additionally-ignorerule|-A) _filedir; return 0 ;;
         --exclude-dir|-E) _filedir -d; return 0 ;;
-        --pattern-regex|-x|--exclude-file-regex|-g|--exclude-dir-regex|-G) return 0 ;;
+        --pattern-regex|-x|--exclude-file-regex|-g|--exclude-dir-regex|-G|--file-encoding) return 0 ;;
       esac ;;
     mcp-server)
       case $prev in
@@ -108,7 +108,7 @@ _ark() {
         --root|-r) _filedir -d; return 0 ;;
         --additionally-ignorerule|-A) _filedir; return 0 ;;
         --exclude-dir|-E) _filedir -d; return 0 ;;
-        --pattern-regex|-x|--exclude-file-regex|-g|--exclude-dir-regex|-G) return 0 ;;
+        --pattern-regex|-x|--exclude-file-regex|-g|--exclude-dir-regex|-G|--file-encoding) return 0 ;;
       esac ;;
     mcp-init|setup)
       case $prev in

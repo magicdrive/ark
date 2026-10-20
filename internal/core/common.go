@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bufio"
 	"bytes"
 	"io"
 	"mime"
@@ -11,10 +10,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"golang.org/x/text/encoding/japanese"
-	"golang.org/x/text/transform"
-
-	"github.com/magicdrive/ark/internal/chardetect"
+	"github.com/magicdrive/ark/internal/textenc"
 )
 
 func IsHiddenFile(name string) bool {
@@ -56,44 +52,19 @@ func IsImage(filename string) bool {
 	return strings.HasPrefix(mimeType, "image/")
 }
 
+// ConvertToUTF8 returns r's content as UTF-8 text, decoded from its encoding
+// (textenc.Decode: a byte order mark, UTF-8, ISO-2022-JP, or a legacy
+// encoding told from the bytes). Content that is not text in an encoding it
+// can tell is returned as it is.
 func ConvertToUTF8(r io.Reader) (io.Reader, error) {
-	buf := bufio.NewReader(r)
-
-	// Peek at the first 8KB to detect encoding
-	peek, err := buf.Peek(8192)
-	if err != nil && err != io.EOF {
-		// If we can't peek 8KB, try smaller size
-		peek, err = buf.Peek(1024)
-		if err != nil && err != io.EOF {
-			return nil, err
-		}
+	data, err := io.ReadAll(r)
+	if err != nil {
+		return nil, err
 	}
-
-	// Detect character encoding using our chardetect package
-	result := chardetect.Detect(peek)
-
-	// If already UTF-8 or ASCII, return as-is
-	if result.Encoding == chardetect.UTF8 || result.Encoding == chardetect.ASCII {
-		return buf, nil
+	if res := textenc.Decode(data, ""); res.Kind == textenc.Text {
+		return strings.NewReader(res.Text), nil
 	}
-
-	// Select appropriate decoder based on detected encoding
-	var decoder transform.Transformer
-
-	switch result.Encoding {
-	case chardetect.ShiftJIS, chardetect.CP932:
-		decoder = japanese.ShiftJIS.NewDecoder()
-	case chardetect.EUCJP:
-		decoder = japanese.EUCJP.NewDecoder()
-	case chardetect.ISO2022JP:
-		decoder = japanese.ISO2022JP.NewDecoder()
-	default:
-		// Unknown or unhandled encoding - return as-is
-		// This is safer than failing, as the caller can decide how to handle it
-		return buf, nil
-	}
-
-	return transform.NewReader(buf, decoder), nil
+	return bytes.NewReader(data), nil
 }
 
 func DeleteComments(data []byte, fpath string) []byte {

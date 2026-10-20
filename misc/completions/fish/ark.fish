@@ -71,6 +71,7 @@ complete -c ark -n '__fish_ark_no_subcommand' -l exclude-file-regex -s g -d 'Exc
 complete -c ark -n '__fish_ark_no_subcommand' -l exclude-dir-regex  -s G -d 'Exclude dir regex'  -r
 complete -c ark -n '__fish_ark_no_subcommand' -l exclude-ext      -s e -d 'Exclude ext'     -r
 complete -c ark -n '__fish_ark_no_subcommand' -l exclude-dir      -s E -d 'Exclude dir'     -r
+complete -c ark -n '__fish_ark_no_subcommand' -l file-encoding    -d 'Encoding of files it cannot detect (PATTERN=ENCODING,...)' -r
 
 # ----- mcp-server flags ------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' -l no-cache -d 'Disable persistent index cache'
@@ -110,6 +111,8 @@ complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
         -l exclude-ext -s e -d 'Exclude ext' -r
 complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
         -l exclude-dir -s E -d 'Exclude dir' -r
+complete -c ark -n '__fish_seen_subcommand_from mcp-server' \
+        -l file-encoding -d 'Encoding of files it cannot detect (PATTERN=ENCODING,...)' -r
 
 # ----- syntax options --------------------------------------------------------
 complete -c ark -n '__fish_seen_subcommand_from syntax' \

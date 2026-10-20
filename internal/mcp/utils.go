@@ -14,6 +14,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages"
 	"github.com/magicdrive/ark/internal/libgitignore"
 	"github.com/magicdrive/ark/internal/secrets"
+	"github.com/magicdrive/ark/internal/textenc"
 )
 
 // skipMetadata reports whether a walk entry below root is repository metadata
@@ -195,6 +196,17 @@ func processFileContentIn(data []byte, readErr error, path string, opt *commandl
 	// Skip non-UTF8 if requested
 	if opt.SkipNonUTF8Flag && core.IsBinary(data) {
 		return "", fmt.Errorf("file is binary or non-UTF8")
+	}
+
+	// Text in another encoding (or with a byte order mark) is shown decoded,
+	// as the repository dump shows it (textenc). A file not in the encoding
+	// --file-encoding names for it is refused, not shown with characters
+	// replaced; bytes whose encoding cannot be told are passed on as before.
+	switch r := textenc.Decode(data, opt.FileEncodingFor(path)); {
+	case r.Kind == textenc.Invalid:
+		return "", fmt.Errorf("%s (--file-encoding)", r.Reason)
+	case r.Kind == textenc.Text && (r.Encoding != "utf-8" || len(r.Text) != len(data)):
+		data = []byte(r.Text)
 	}
 
 	// Delete comments if requested

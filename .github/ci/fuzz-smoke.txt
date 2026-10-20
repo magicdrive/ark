@@ -24,4 +24,5 @@
 3 ./internal/languages/terraform FuzzExtractTerraform
 3 ./internal/languages/css FuzzExtractCSS
 3 ./internal/secretpolicy FuzzBuild
+3 ./internal/textenc FuzzDecode
 - ./internal/mcp FuzzRouteNotificationInvariant

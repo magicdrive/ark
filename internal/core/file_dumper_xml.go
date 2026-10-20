@@ -2,10 +2,8 @@ package core
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/xml"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -90,24 +88,16 @@ func writeXMLDirectory(writer *bufio.Writer, dir string, allowedFileListMap map[
 			if err != nil {
 				return err
 			}
-			if IsBinary(data) || IsImage(fpath) {
+			if IsImage(fpath) {
 				continue
 			}
-			decoded, err := ConvertToUTF8(bytes.NewReader(data))
-			if err != nil {
-				if opt.SkipNonUTF8Flag {
-					continue
-				}
-				return fmt.Errorf("failed to convert %s: %w", fpath, err)
+			text, ok := dumpText(opt, fpath, data)
+			if !ok {
+				continue
 			}
-
-			decodedBytes, err := io.ReadAll(decoded)
+			decodedBytes := []byte(text)
 			if opt.DeleteCommentsFlag {
 				decodedBytes = DeleteComments(decodedBytes, fpath)
-			}
-
-			if err != nil {
-				return fmt.Errorf("failed to read %s: %w", fpath, err)
 			}
 			content := string(decodedBytes)
 			content = maskContent(opt, fpath, entry, content)
