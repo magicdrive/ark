@@ -48,7 +48,14 @@ func specList() []spec {
 		{typescript.NewProvider(), grammars.TypescriptLanguage, language.SupportLevelContextQualityCertified},
 		{typescript.NewTSXProvider(), grammars.TsxLanguage, language.SupportLevelContextQualityCertified},
 		{javascript.NewProvider(), grammars.JavascriptLanguage, language.SupportLevelReferences},
-		{python.NewProvider(), grammars.PythonLanguage, language.SupportLevelReferences},
+		// Python (.py / .pyw): definitions at any depth, members and class
+		// attributes, LEGB scopes, import bindings and exports
+		// (ModuleScoped), self / cls / super() receivers, inheritance, type
+		// uses, typed graph. Graph, not ContextQualityCertified: no
+		// context-quality benchmark covers it, and dynamic attributes,
+		// star imports and local variables' types are not resolved; see
+		// docs/language-support.md.
+		{python.NewProvider(), grammars.PythonLanguage, language.SupportLevelGraph},
 		// PHP (PHP-1..8): symbols + members + imports + references + typed
 		// relations + resolution + typed graph, certified for agent-oriented
 		// context quality. Held at Graph (not ContextQualityCertified) because

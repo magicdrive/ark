@@ -12,18 +12,24 @@ import (
 // The oracle scoring of TestFidelityBaseline (docs/research/multilang-fidelity/
 // evaluation.md): each case scores Ark's references of a small corpus
 // against hand-written oracle sites and checks the counts it must give.
+//
+// The oracle lines are verdicts written for the scorer, not Python's: where
+// a case needs a false Strong, Ark resolves the site Exact to a declaration
+// (helper() of pkg/main.py line 5 to the function of line 2, result() of
+// pkg/util.py line 5 to the function result itself) and the oracle line
+// names another one (the parameter x of line 4, the local of line 4).
 func TestFidelityScore(t *testing.T) {
 	py := writeFiles(t, map[string]string{
 		"pkg/__init__.py": "",
 		"pkg/util.py": "def helper():\n" + // 1
 			"    return 1\n" + // 2
 			"def result(x):\n" + // 3
-			"    result = helper\n" + // 4
+			"    x = helper\n" + // 4
 			"    return result()\n", // 5
 		"pkg/main.py": "import copy\n" + // 1
 			"def helper():\n" + // 2
 			"    return 0\n" + // 3
-			"def run(helper):\n" + // 4
+			"def run(x):\n" + // 4
 			"    helper()\n" + // 5
 			"    copy.copy([1])\n", // 6
 	})
@@ -46,18 +52,18 @@ func TestFidelityScore(t *testing.T) {
 		scored []string // lines report.scored must hold
 	}{
 		{
-			// helper() in run denotes its parameter: Ark's same-file Exact
-			// to the function helper is false.
-			name:   "parameter shadowing is a local false Strong",
+			// The oracle names run's parameter as what helper() denotes:
+			// Ark's same-file Exact to the function helper is false.
+			name:   "a site the oracle gives a local is a local false Strong",
 			root:   py,
 			oracle: []string{site("pkg/main.py", "helper", 5, 5, `"class":"declaration","decl":{"file":"pkg/main.py","line":4,"col":9}`)},
 			want:   map[string]int{"local_fp": 1, "representable": 0, "exact_tp": 0},
 			scored: []string{"pkg/main.py:5:5:helper\tdeclaration\t-\tlocal_fp"},
 		},
 		{
-			// result() denotes the local of line 4, inside the function
+			// The oracle names a declaration of line 4, inside the function
 			// result: it is not the function.
-			name:   "a local inside a function of its name is not the function",
+			name:   "a declaration inside a function of the site's name is not the function",
 			root:   py,
 			oracle: []string{site("pkg/util.py", "result", 5, 12, `"class":"declaration","decl":{"file":"pkg/util.py","line":4,"col":5}`)},
 			want:   map[string]int{"exact_tp": 0, "local_fp": 1},

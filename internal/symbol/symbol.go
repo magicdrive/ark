@@ -145,6 +145,10 @@ type Symbol struct {
 	// Placement is a member's PlacementStatic or PlacementInstance, "" when
 	// its language does not state it (language.SymbolDraft.Placement).
 	Placement string `json:",omitempty"`
+
+	// ConfidenceCap bounds the resolution of a reference to this
+	// declaration alone (language.SymbolDraft.ConfidenceCap).
+	ConfidenceCap string `json:",omitempty"`
 }
 
 // NewSymbolID returns a deterministic ID derived from (lang, repoRelPath, kind, qualified).

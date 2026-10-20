@@ -3,6 +3,7 @@ package resolver
 import (
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/source"
@@ -181,6 +182,19 @@ func (r *Resolver) packageOf(file source.FileID) string {
 // memberResolution builds the resolution for members found under resolved
 // type evidence. typeConf is the confidence of the type evidence itself.
 func (r *Resolver) memberResolution(res Resolution, ref reference.Reference, types []symbol.Symbol, typeConf Confidence, ek EvidenceKind, detail string) Resolution {
+	// A type whose declaration states a cap (its name may denote another
+	// type: a class under an unknown decorator) bounds what is found as its
+	// member, its own or inherited.
+	for _, t := range types {
+		limit := ConfidenceCandidate // unknown caps fail safe
+		if t.ConfidenceCap == ConfidenceStrong.String() {
+			limit = ConfidenceStrong
+		}
+		if t.ConfidenceCap != "" && typeConf > limit {
+			typeConf = limit
+			detail += fmt.Sprintf("; %s's name is bound to a value computed from it", t.Qualified)
+		}
+	}
 	if ref.Speculative {
 		// A selector that may name a field resolves only to members known
 		// to be the type's own: not those attached by receiver name to a
@@ -241,7 +255,62 @@ func (r *Resolver) memberResolution(res Resolution, ref reference.Reference, typ
 	if len(types) > 1 && conf > ConfidenceCandidate {
 		conf = ConfidenceCandidate
 	}
+	for _, t := range types {
+		if fi, ok := r.byFile[t.Location.File]; ok && fi.MembersShareNames && conf > ConfidenceCandidate && !allInstanceFields(members) && r.supertypeInstanceField(t, ref.Name) {
+			conf = ConfidenceCandidate
+			detail += fmt.Sprintf("; a supertype of %s gives its instances an attribute %q", t.Name, ref.Name)
+		}
+	}
 	return r.pickBest(res, members, conf, ek, detail)
+}
+
+// allInstanceFields reports whether every member found is itself an
+// instance's own attribute (a field placed on instances): what hides a
+// method is then what was found.
+func allInstanceFields(members []symbol.Symbol) bool {
+	for _, m := range members {
+		if m.Kind != symbol.KindField || m.Placement != symbol.PlacementInstance {
+			return false
+		}
+	}
+	return len(members) > 0
+}
+
+// supertypeInstanceField reports whether a supertype of t Ark identifies
+// declares a field of the instances named name (symbol.PlacementInstance: a
+// Python `self.x = …` in a base's method). Where methods and attributes share
+// one name space, an instance's own attribute hides a method of the name its
+// class declares, so a member t declares itself is not proven the target.
+func (r *Resolver) supertypeInstanceField(t symbol.Symbol, name string) bool {
+	seen := map[symbol.SymbolID]bool{t.ID: true}
+	queue := []symbol.Symbol{t}
+	for len(queue) > 0 && len(seen) <= maxStructuralDepth*4 {
+		cur := queue[0]
+		queue = queue[1:]
+		st := r.structureOf(cur)
+		if st == nil {
+			continue
+		}
+		for _, rel := range st.relations {
+			if rel.kind != relParent {
+				continue
+			}
+			for _, base := range rel.targets {
+				if seen[base.ID] {
+					continue
+				}
+				seen[base.ID] = true
+				for _, s := range r.byName[nameKey{r.spaceOf[base.Location.File], name}] {
+					if s.ParentQualified == base.Qualified && s.Location.File == base.Location.File &&
+						s.Kind == symbol.KindField && s.Placement == symbol.PlacementInstance {
+						return true
+					}
+				}
+				queue = append(queue, base)
+			}
+		}
+	}
+	return false
 }
 
 // resolveTypeName resolves a type name in fi's scope (as a type_use reference
@@ -275,7 +344,7 @@ func (r *Resolver) resolveTypeName(name string, ref reference.Reference, fi File
 		}
 	}
 	if len(types) == 0 {
-		bound := !fi.PackageScoped && hasBinding(&fi, name)
+		bound := !fi.PackageScoped && hasBinding(&fi, name, ref.Container)
 		return nil, ConfidenceUnresolved, len(sub.Candidates) > 0 || (bound && !sub.OutsideRepository)
 	}
 	conf = sub.Confidence
@@ -309,7 +378,7 @@ const mutableDetail = "; through a CommonJS export: the value is not proven to b
 // resolveViaReceiverBinding implements R1: the receiver is an import binding
 // (a namespace binding, or a named binding of a type).
 func (r *Resolver) resolveViaReceiverBinding(res Resolution, ref reference.Reference, fi FileIndex) Resolution {
-	br := r.newWalk().bindingTargets(&fi, ref.ReceiverExpr, 0)
+	br := r.newWalk().bindingTargets(&fi, ref.ReceiverExpr, ref.Container, 0)
 	detail := fmt.Sprintf("receiver %q is a module binding (%s)", ref.ReceiverExpr, br.chainDetail())
 	if br.typeOnly && valueOnlyKind(ref.Kind) {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceModuleBinding, Detail: detail + "; type-only binding used as a value"}}
@@ -377,12 +446,78 @@ func (r *Resolver) resolveViaReceiverBinding(res Resolution, ref reference.Refer
 	return r.pickBest(res, members, conf, EvidenceModuleBinding, detail+"; "+nsHits.chainDetail())
 }
 
+// resolveViaNamespaceChain resolves a member of a dotted receiver a.b.c that
+// is no binding itself but whose leading part is one (R1 through
+// namespaces): each further name is looked up in the export tables of the
+// modules reached so far, as a namespace binding's member is — a package
+// attribute naming its submodule, a re-exported namespace. It applies only
+// while every step reaches modules: a step reaching a declaration (a value,
+// a type), nothing, or a module outside the repository gives the reference
+// no such evidence (ok false), and it resolves as an untyped receiver.
+func (r *Resolver) resolveViaNamespaceChain(res Resolution, ref reference.Reference, fi FileIndex) (Resolution, bool) {
+	parts := strings.Split(ref.ReceiverExpr, ".")
+	n := 0
+	for i := len(parts) - 1; i >= 1; i-- {
+		if hasBinding(&fi, strings.Join(parts[:i], "."), ref.Container) {
+			n = i
+			break
+		}
+	}
+	if n == 0 {
+		return res, false
+	}
+	step := r.newWalk().bindingTargets(&fi, strings.Join(parts[:n], "."), ref.Container, 0)
+	detail := fmt.Sprintf("receiver %q is a namespace of a module binding (%s", ref.ReceiverExpr, step.chainDetail())
+	conf := ConfidenceExact
+	for _, p := range parts[n:] {
+		mods, ok := step.modules()
+		if !ok || step.typeOnly {
+			return res, false
+		}
+		if step.ambiguous || len(step.targets) > 1 || step.mutable {
+			conf = ConfidenceCandidate
+		}
+		next := bindResult{complete: true}
+		for _, m := range mods {
+			next.merge(r.newWalk().export(m, p, 1))
+		}
+		step = next
+		detail += "; " + step.chainDetail()
+	}
+	mods, ok := step.modules()
+	if !ok || step.typeOnly {
+		return res, false
+	}
+	if step.ambiguous || len(step.targets) > 1 || step.mutable {
+		conf = ConfidenceCandidate
+	}
+	hits := bindResult{complete: true}
+	for _, m := range mods {
+		hits.merge(r.newWalk().export(m, ref.Name, 1))
+	}
+	detail += ")"
+	members := hits.symbolTargets()
+	if hits.typeOnly && valueOnlyKind(ref.Kind) {
+		members = nil
+	}
+	if len(members) == 0 {
+		// The modules are the repository's: the name is not one Ark sees
+		// there (never outside the repository).
+		res.Evidence = []ResolutionEvidence{{Kind: EvidenceModuleBinding, Detail: detail + fmt.Sprintf("; %q not resolved", ref.Name)}}
+		return res, true
+	}
+	if hits.ambiguous || len(hits.targets) > 1 || hits.mutable {
+		conf = ConfidenceCandidate
+	}
+	return r.pickBest(res, members, conf, EvidenceModuleBinding, detail+"; "+hits.chainDetail()), true
+}
+
 // resolveViaBinding resolves a receiverless name bound by an import binding.
 // It is authoritative for that name: an external/unresolved module or a
 // type-only binding used as a value yields Unresolved, never a same-name
 // repository symbol found by other stages.
 func (r *Resolver) resolveViaBinding(res Resolution, ref reference.Reference, fi FileIndex) Resolution {
-	br := r.newWalk().bindingTargets(&fi, ref.Name, 0)
+	br := r.newWalk().bindingTargets(&fi, ref.Name, ref.Container, 0)
 	detail := fmt.Sprintf("%q bound by import (%s)", ref.Name, br.chainDetail())
 	if br.typeOnly && valueOnlyKind(ref.Kind) {
 		res.Evidence = []ResolutionEvidence{{Kind: EvidenceModuleBinding, Detail: detail + "; type-only binding used as a value"}}

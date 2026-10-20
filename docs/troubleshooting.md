@@ -49,8 +49,8 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
 - The name may be in a file Ark does not index: an unsupported language or
   format (`get_language_support`), or a directory named `vendor`,
   `node_modules` or starting with `.`.
-- The declaration may not be extracted: JavaScript and Python class methods,
-  Go type aliases and function-local declarations are not symbols
+- The declaration may not be extracted: JavaScript class methods, Go type
+  aliases and function-local declarations are not symbols
   ([Language support](language-support.md)); nor is anything a macro
   expands to (Rust `macro_rules!`, derives, procedural macros).
 - A Rust name is its path in its crate: `crate::storage::Repository::new`,
@@ -80,8 +80,10 @@ An empty edge list is not proof of absence. Check, in the same response:
   differently, and the edition is in `Cargo.toml`, which Ark does not read) —
   writing `use crate::...` makes it exact;
 - `indexDiagnostics`: some files were not fully analyzed;
-- the language's support level: JavaScript and Python graph results are not
-  certified.
+- the language's support level: JavaScript graph results are not certified;
+- a Python call on a value whose type no declaration proves (`user.save()` on
+  a local, a parameter's methods) is a candidate, and a name a star import
+  brings is unresolved.
 
 **`parse_error` diagnostics on valid code**
 

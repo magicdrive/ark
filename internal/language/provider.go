@@ -102,8 +102,22 @@ type SymbolDraft struct {
 	// it is static (symbol.PlacementStatic: on the type itself, reached
 	// through its name) or an instance member (symbol.PlacementInstance:
 	// reached through a value of the type). The resolver then looks a member
-	// up only where the receiver can reach it. "" states nothing.
+	// up only where the receiver can reach it. "" states nothing. In a file
+	// whose members share names (Extraction.MembersShareNames), a KindField
+	// member a supertype places on instances (a Python `self.x = …`) is an
+	// instance's own attribute: it hides a subtype's member of the name, which
+	// a member lookup then finds as a Candidate only.
 	Placement string `json:",omitempty"`
+
+	// ConfidenceCap bounds how strongly a reference may be resolved to this
+	// declaration: "" (no bound), "strong" or "candidate". A provider sets it
+	// when the language binds the declaration's name to a value code computes
+	// from it, by code the provider does not model — a Python function or
+	// class under a decorator it does not know: the name denotes the
+	// decorator's result, not proven to be the declaration. The resolver
+	// applies it, only downwards, to a resolution whose one candidate this
+	// declaration is (ReferenceDraft.ConfidenceCap's values and rules).
+	ConfidenceCap string `json:",omitempty"`
 }
 
 // ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.
@@ -259,6 +273,13 @@ type ImportDraft struct {
 type ModuleCandidate struct {
 	File     source.FileID
 	Priority int `json:",omitempty"`
+
+	// Unless lists repository files whose presence voids the candidate: the
+	// specifier denotes File only where none of them exists (Python: a
+	// directory is a root of absolute imports only when it is no package,
+	// i.e. has no __init__.py). Paths are clean and root-relative like File;
+	// the resolver checks them against the indexed files.
+	Unless []source.FileID `json:",omitempty"`
 }
 
 // ModuleSpec is a module specifier exactly as written plus the
@@ -297,6 +318,22 @@ type BindingDraft struct {
 	Imported string // BindingNamed: export name in Module (required); BindingNamespace: ""
 	TypeOnly bool   `json:",omitempty"` // usable only in type positions
 	Location source.Location
+
+	// Scope is the qualified name of the declaration whose body the binding
+	// is local to (a Python import inside a function): it binds Local only
+	// for the references whose Container is Scope or a declaration nested in
+	// it (Scope + "." + …), and there it shadows the bindings of Local with
+	// a shorter Scope. "" binds Local in the whole file. It never makes a
+	// module export: an export names a binding of the whole file.
+	Scope string `json:",omitempty"`
+
+	// Fallback marks a binding the language applies only where the other
+	// bindings of Local reach no name the module holds: Python's
+	// `from pkg import n` is the submodule pkg.n unless pkg binds n itself.
+	// A lookup through the other bindings that reaches an ExportOpaque name
+	// leaves it out; otherwise it is merged with them like any binding (a
+	// module that also declares n is ambiguity).
+	Fallback bool `json:",omitempty"`
 }
 
 // ExportKind classifies an export binding.
@@ -313,6 +350,13 @@ const (
 	ExportAll ExportKind = "all"
 	// ExportNamespace re-exports Module's whole export table as one name.
 	ExportNamespace ExportKind = "namespace"
+	// ExportOpaque states that the module binds Exported to a value no
+	// declaration or binding of it proves (a Python name a loop, a del or a
+	// mix of a declaration and an import rebinds); Exported "" states that
+	// any name may be bound so (a star import, a module __getattr__). A
+	// lookup of such a name reaches nothing — the repository's,
+	// unrepresented — and the Fallback bindings of the importer do not apply.
+	ExportOpaque ExportKind = "opaque"
 )
 
 // ExportDraft declares one name a module offers to importers. When a provider
@@ -384,6 +428,13 @@ type Extraction struct {
 	// path ends the import path, under the repository's import-path prefix.
 	// A receiver naming an import denotes that package's declarations only.
 	PackageScoped bool
+
+	// LexicalNesting declares that a declaration of the file nested in
+	// another one's body (a symbol with a Parent and no Receiver: a Python
+	// function or class defined in a function) is visible by its name only
+	// to the references within that body (Container Parent or nested in
+	// it). A name-based stage never offers it to a reference elsewhere.
+	LexicalNesting bool
 
 	// MembersShareNames declares that the language gives a type's methods
 	// and properties one name space (ECMAScript): a call of a member name

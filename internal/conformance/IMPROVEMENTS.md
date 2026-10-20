@@ -57,18 +57,18 @@ types in interface bodies and overload signatures, references inside
 string-named methods (`"~validate"() {}`) and `export` declarations nested in
 a `namespace` are not observed.
 
-## Q3 — Member symbols (JavaScript, Python)
+## Q3 — Member symbols (JavaScript)
 
-JavaScript and Python do not extract class/object members as symbols, so
-member-level references have nothing to resolve to (TypeScript/TSX, PHP and
-Go do). Target: members as symbols with `Qualified = Class.member`,
-`Parent = Class`, `Receiver = Class`, as TypeScript and PHP do.
+The JavaScript probe's class members are not all symbols, so member-level
+references have nothing to resolve to (TypeScript/TSX, PHP, Python and Go
+extract them). Target: members as symbols with `Qualified = Class.member`,
+`Parent = Class`, `Receiver = Class`, as TypeScript, PHP and Python do.
 
-## Q4 — `SymbolDraft.Parent` (JavaScript, Python; Go by design)
+## Q4 — `SymbolDraft.Parent` (JavaScript; Go by design)
 
 `Parent` (the enclosing symbol's qualified name) is what the resolver uses as
-lexical containment proof. JavaScript and Python leave it empty (follows from
-Q3). Go has no lexical member containment: its methods attach by
+lexical containment proof. JavaScript leaves it empty where it states no
+member (follows from Q3). Go has no lexical member containment: its methods attach by
 `Receiver` within the declaring type's directory, which the resolver treats as
 weaker evidence (capped at Strong, `resolver.membersOf`). That is the intended
 Go model, not a gap.

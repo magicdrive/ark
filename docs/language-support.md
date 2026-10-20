@@ -30,12 +30,12 @@ Levels build on each other:
 | Rust | `.rs` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | HTML | `.html`, `.htm` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
-| Python | `.py`, `.pyw` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
-answer for JavaScript and Python, and `get_context` still works for PHP,
-Terraform, Rust, HTML and CSS, but those results are not covered by the tests the level names.
+answer for JavaScript, and `get_context` still works for PHP, Terraform,
+Rust, HTML, CSS and Python, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -578,19 +578,90 @@ other CommonJS shapes (a require inside a function or branch).
 
 ## Python
 
-Level `references`.
+**Extracted:** functions and classes at any depth — inside `if`, `try`,
+`with`, `for` and `while` blocks too (a block is no scope in Python) —
+methods (kind `method`; `@property` methods kind `property`), nested
+functions and classes (`outer.inner`), module variables (kind `variable`)
+and class attributes (kind `field`). Every plain or annotated assignment
+statement of a name is a declaration of its own, and an attribute a method
+assigns through its proven `self` (`self.x = …`) is a field of the class. A
+`@typing.overload` signature and a property's `@x.setter` / `.getter` /
+`.deleter` are no declarations of their own. References: calls (of a name,
+of `a.b.f`, of a member of another expression), decorators (a call of the
+decorator, whose container is the decorated declaration), base classes
+(`extends` edges), type uses in annotations (string annotations are not
+read), imports, and computed calls (`getattr(o, n)()`, `o[k]()`: dynamic).
 
-**Extracted:** top-level function and class definitions (including decorated
-ones); calls and imports (`import`, `from … import`, aliases).
+**Scopes.** A name is looked up as Python looks it up (LEGB): a name bound
+anywhere in a function is local to all of it, before its assignment too; a
+class body is no scope of its methods; `global` and `nonlocal` declarations
+redirect a binding; an assignment expression binds in the enclosing
+function, not in its comprehension; a comprehension's first iterable belongs
+to the enclosing scope; decorators, defaults, annotations and base classes
+are read in the scope that defines the function or class, annotations of a
+generic one (PEP 695) in its annotation scope, which sees the names of the
+class body it is in. A module or class body runs top to bottom: a name it
+reads before its first binding there is another binding (a builtin, the
+module's). Every binding form counts: parameters, assignments, `for`, `with … as`, `except … as`,
+`import`, `def`, `class`, `del`, comprehension targets, assignment
+expressions, `match` captures and PEP 695 type parameters.
 
-**Not extracted:** methods and other class members, nested functions.
+**Modules.** Imports are bindings (`import a.b`, `import a.b as m`,
+`from m import f as g`, relative imports `from . import x`,
+`from ..m import f`), resolved to the file the module name denotes: a module
+`a.b` is `a/b.py` or the package `a/b/__init__.py`. A relative import is
+read from the importing file's package directory. An absolute one is read
+from the roots of `sys.path` as Ark models them: every ancestor directory of
+the importing file that is **no package** (has no `__init__.py`) — the
+repository root included — and `src/`. So a package's own `json.py` is never
+what `import json` in that package means, while a script's sibling module is
+what the script imports. A module's attributes are its declarations and the
+names it imports (re-exports: `from .app import Flask` in `__init__.py`),
+and a package's `__init__.py` that imports from a submodule
+(`from .sub import x`) gives the package the attribute `sub`.
+`from pkg import n` is the attribute `n` of `pkg` when `pkg` binds one —
+even to a value Ark cannot prove (a loop variable, a fallback assignment, a
+name a star import or `__getattr__` may supply: then it is unresolved) — and
+otherwise the submodule `pkg.n`. An import in a function binds the name in
+that function and the functions nested in it.
+Ark reads no configuration (`pyproject.toml`, `setup.cfg`, `PYTHONPATH`,
+`.pth` files): a module the repository does not have (the standard library,
+a dependency) is unresolved — never `outside` either, since nothing proves
+the repository has no such module.
 
-**Resolution (not certified):** imports are matched by path; there are no
-import bindings, so `from .util import helper` resolves `helper` by the name
-rules (for example `strong` when it is the only `helper` in the directory).
-Names are not scoped: a parameter or local that shadows a repository name,
-and a standard-library or package name that matches one (`json.loads`,
-`open`), can resolve `strong` or `exact` to that declaration.
+**Resolution:**
+
+| | |
+|---|---|
+| **Supported** (`exact`) | Functions, classes and variables of the module; a nested function called in its enclosing function or a function nested there; imports, aliases, relative imports, package re-exports, submodules (`pkg.sub.f()` after `import pkg` when `pkg/__init__.py` imports from `sub`), imports inside a function; `self.m()` and `cls.m()` in a method — the class's own member, else one a base declares, through the bases Ark identifies; `ClassName.m()`; a call of a class (construction); base classes; type uses |
+| **Supported** (`strong`) | `super().m()` in a class with one plain base (under cooperative multiple inheritance, the class `super()` reaches is decided at run time) |
+| **Decorators** | A decorated declaration is a symbol and keeps the edges of its body's calls, whatever the decorator. A reference to its name resolves to it (`exact`) only under decorators Ark knows, by their documented semantics — the same object (`abc.abstractmethod`, `typing.override` / `final` / `runtime_checkable` / `no_type_check`, `functools.wraps`, `functools.total_ordering`, `dataclasses.dataclass`, `enum.unique`) or a descriptor or wrapper that runs the body (`staticmethod`, `classmethod`, `property`, `functools.cache` / `lru_cache` / `cached_property`); `typing.overload` signatures are no declarations. They are known only in their documented forms — `functools.wraps(f)` called, `lru_cache` and `dataclass` applied or called with configuring arguments only (`lru_cache(maxsize=1)`, not `lru_cache(f)`), the others applied (`@abstractmethod(f)` decorates with `f`'s result), the descriptors (`property`, `classmethod`, `staticmethod`, `cached_property`) in a class body — recognized through the file's import of the module (a builtin only where nothing in the file rebinds it), and only where no star import and no assignment of the file (`functools.cache = …`) may rebind them; an accessor (`@x.setter`) only of a property `x` the class body declared before. Under any other decorator — one may return another function, class or object — a reference to the name, to a member of such a class, or found through such a class as a base is a `candidate`, never an edge; so is a stack with one unknown decorator in it |
+| **Candidate** | A name defined or assigned more than once (`if` / `else` branches, a `try` / `except ImportError` fallback, a class rebound by `X = wrap(X)`); a module name bound both by a declaration and an import; a module and a package of one name, or one module under two roots; a member two bases declare (MRO conflicts are not resolved); a member that is both a method and an attribute (`self.handler = h` beside `def handler`, or set by a base's method: an instance's own attribute hides the method); a member the class body rebinds (an import, a loop, `del`, `global`) or the file assigns through the class (`C.helper = other`); a name a nested declaration of an enclosing function and another declaration share; a class defined twice; a member called on a value whose type no declaration proves (`user.save()` on a local, `self.repo.find()`, a parameter's methods: every member of the name is a candidate) |
+| **Unresolved by design** | Names a local binding may denote (parameters, assignments, loops, `with`, `except`, comprehensions, `match` captures, rebinding through `global` / `nonlocal`, `del`); builtins (`open`, `print`); names a star import brings, and a module-level name a later star import may rebind; `self` in a method under an unknown decorator, in a method whose name the class body rebinds (`f = staticmethod(f)`), or in a class nested in a class body; `getattr` / `setattr`, `importlib` / `__import__`, attributes a metaclass or `__getattr__` creates |
+| **Not implemented** | Re-exports through a star import (`from .core import *` in `__init__.py`); the types of local variables (`x = C(); x.m()`); value references (a function passed as a value) and attribute reads; string annotations; `.pyi` stubs (not indexed); Python 2 implicit relative imports; the configuration of `sys.path`; monkey patching from another file (`util.helper = other` elsewhere: an assignment is seen only in the file of the class it changes), `exec`, and writes through `globals()` / `vars()` / `setattr` — the name still resolves to the declaration it was bound to, Exact, though the program replaced it |
+
+**Measured against pyright.** On requests 2.32.3, flask 3.0.3, click 8.1.7
+and attrs 24.2.0 (pyright 1.1.414 with each package's dependencies installed;
+`docs/scripts/fidelity-baseline.sh` and `docs/scripts/oracle/python-pyright.py`),
+no reference Ark resolved to one declaration (Strong or Exact) contradicts
+pyright, and none is reported outside the repository. The references pyright
+names no declaration for — code it reads as unreachable on the measuring
+machine (`if sys.platform == "win32":`), a stub-only package (attrs) — were
+classified by hand: none of Ark's targets there is wrong. This holds for
+those corpora and that configuration, not as a proof.
+
+A directory is a package when its `__init__.py` is indexed: one `.arkignore`
+excludes makes the directory a root of absolute imports to Ark. The
+`sys.path` model is a model: a module run with `python -m pkg.mod` does
+not have its own directory on `sys.path`, so in a directory without
+`__init__.py` (a namespace package) a module named like a standard-library
+one (`app/logging.py`) is what Ark resolves `import logging` there to. Known
+decorators are recognized through the file's own imports (`functools`,
+`typing`, …): a repository module of the same name at a root is taken for
+the standard library's.
+
+Ark never runs Python, a build backend or `setup.py`, and reads no
+configuration file.
 
 ## Known gaps
 

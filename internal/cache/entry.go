@@ -35,6 +35,10 @@ type CachedExtraction struct {
 	// their CacheVersion with it.
 	MembersShareNames bool `json:"membersShareNames,omitempty"`
 
+	// LexicalNesting (language.Extraction) is optional the same way: the
+	// provider that emits it (python 5) changed its CacheVersion with it.
+	LexicalNesting bool `json:"lexicalNesting,omitempty"`
+
 	// Aliases (language.Extraction.Aliases) are optional the same way: only
 	// the provider that emits them (rust) reads entries with them.
 	Aliases []language.AliasDraft `json:"aliases,omitempty"`

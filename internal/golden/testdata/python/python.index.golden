@@ -1,27 +1,40 @@
 ## stats
-files=6 symbols=7 references=11 relations=1 skipped=0
+files=6 symbols=17 references=11 relations=4 skipped=0
 lang python=6
 ## symbols
 symbol broken kind=function lang=python qualified="broken" receiver="" exported=true @broken.py:1:1-2:9
 symbol good kind=function lang=python qualified="good" receiver="" exported=true @broken.py:5:1-6:9
 symbol Draft kind=class lang=python qualified="Draft" receiver="" exported=true @draft.py:3:1-5:20
+symbol save kind=method lang=python qualified="Draft.save" receiver="Draft" exported=true @draft.py:4:5-5:20
 symbol Repository kind=class lang=python qualified="Repository" receiver="" exported=true @repository.py:4:1-8:17
+symbol find kind=method lang=python qualified="Repository.find" receiver="Repository" exported=true @repository.py:5:5-8:17
 symbol UserService kind=class lang=python qualified="UserService" receiver="" exported=true @service.py:5:1-13:21
+symbol __init__ kind=method lang=python qualified="UserService.__init__" receiver="UserService" exported=true @service.py:6:5-7:33
+symbol repo kind=field lang=python qualified="UserService.repo" receiver="UserService" exported=true @service.py:7:9-7:33
+symbol create kind=method lang=python qualified="UserService.create" receiver="UserService" exported=true @service.py:9:5-13:21
 symbol test_create kind=function lang=python qualified="test_create" receiver="" exported=true @test_service.py:4:1-6:22
+symbol DEFAULT_ROLE kind=variable lang=python qualified="DEFAULT_ROLE" receiver="" exported=true @user.py:1:1-1:24
 symbol User kind=class lang=python qualified="User" receiver="" exported=true @user.py:4:1-10:20
+symbol __init__ kind=method lang=python qualified="User.__init__" receiver="User" exported=true @user.py:5:5-7:23
+symbol id kind=field lang=python qualified="User.id" receiver="User" exported=true @user.py:6:9-6:20
+symbol name kind=field lang=python qualified="User.name" receiver="User" exported=true @user.py:7:9-7:23
+symbol save kind=method lang=python qualified="User.save" receiver="User" exported=true @user.py:9:5-10:20
 ## references
 ref user kind=import container="" receiver="" call=false @repository.py:1:1-1:22
-ref User kind=call container="find" receiver="" call=true @repository.py:6:13-6:17
+ref User kind=call container="Repository.find" receiver="" call=true @repository.py:6:13-6:17
 ref repository kind=import container="" receiver="" call=false @service.py:1:1-1:34
 ref user kind=import container="" receiver="" call=false @service.py:2:1-2:22
-ref Repository kind=call container="__init__" receiver="" call=true @service.py:7:21-7:31
-ref User kind=call container="create" receiver="" call=true @service.py:10:13-10:17
-ref find kind=call container="create" receiver="" call=true @service.py:12:17-12:31
-ref save kind=call container="create" receiver="found" call=true @service.py:13:9-13:19
+ref Repository kind=call container="UserService.__init__" receiver="" call=true @service.py:7:21-7:31
+ref User kind=call container="UserService.create" receiver="" call=true @service.py:10:13-10:17
+ref find kind=call container="UserService.create" receiver="self.repo" call=true @service.py:12:27-12:31
+ref save kind=call container="UserService.create" receiver="found" call=true @service.py:13:15-13:19
 ref service kind=import container="" receiver="" call=false @test_service.py:1:1-1:32
 ref UserService kind=call container="test_create" receiver="" call=true @test_service.py:5:9-5:20
-ref create kind=call container="test_create" receiver="s" call=true @test_service.py:6:5-6:13
+ref create kind=call container="test_create" receiver="s" call=true @test_service.py:6:7-6:13
 ## edges
-edge test_create -calls-> UserService confidence=strong evidence=[same_package:symbol "UserService" found in same package as test_service.py]
+edge Repository.find -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (repository.py ← "user" → user.py exports "User" → repository.py ← "user.User")]
+edge UserService.__init__ -calls-> Repository confidence=exact evidence=[module_binding:"Repository" bound by import (service.py ← "repository" → repository.py exports "Repository" → service.py ← "repository.Repository")]
+edge UserService.create -calls-> User confidence=exact evidence=[module_binding:"User" bound by import (service.py ← "user" → user.py exports "User" → service.py ← "user.User")]
+edge test_create -calls-> UserService confidence=exact evidence=[module_binding:"UserService" bound by import (test_service.py ← "service" → service.py exports "UserService" → test_service.py ← "service.UserService")]
 ## diagnostics
 diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @broken.py:1:12-1:12

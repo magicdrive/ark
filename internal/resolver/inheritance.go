@@ -64,8 +64,9 @@ type typeRelation struct {
 	name    string
 	targets []symbol.Symbol
 	// capped: the target was identified through a CommonJS export (a
-	// Mutable export): its value is not proven, so a member found through
-	// the relation is at most Candidate.
+	// Mutable export), or its declaration states a ConfidenceCap: its value
+	// is not proven, so a member found through the relation is at most
+	// Candidate.
 	capped bool
 }
 
@@ -122,12 +123,15 @@ func (r *Resolver) buildStructuralIndex() {
 				switch {
 				case name != "":
 					targets = r.typeDecls(ref.Language, name)
-				case fi.ModuleScoped && ref.ReceiverExpr == "":
-					// No qualified identity (JavaScript, TypeScript): the
-					// name's own resolution — an import binding or a
-					// declaration of the file — identifies the supertype
-					// when it is Exact and one type; anything else leaves
-					// the relation unidentified, and the lookup stops there.
+				case fi.ModuleScoped && ref.ReceiverExpr == "" && ref.ConfidenceCap == "":
+					// No qualified identity (JavaScript, TypeScript,
+					// Python): the name's own resolution — an import
+					// binding or a declaration of the file — identifies
+					// the supertype when it is Exact and one type;
+					// anything else leaves the relation unidentified, and
+					// the lookup stops there. So does a reference the
+					// provider capped: its evidence does not prove what
+					// the name denotes (a base a local binding shadows).
 					name = ref.Name
 					res := r.resolveByName(Resolution{Confidence: ConfidenceUnresolved}, ref, *fi)
 					// A supertype imported through a CommonJS export is a
@@ -140,6 +144,13 @@ func (r *Resolver) buildStructuralIndex() {
 							targets = []symbol.Symbol{s}
 						}
 					}
+				}
+				// A supertype whose declaration states a cap (a class under a
+				// decorator its provider does not know: the name may denote
+				// another class) is identified, capped: what is found through
+				// it is at most a Candidate.
+				for _, t := range targets {
+					capped = capped || t.ConfidenceCap != ""
 				}
 				st.relations = append(st.relations, typeRelation{kind: kind, name: name, targets: targets, capped: capped})
 			}
@@ -357,6 +368,13 @@ func (r *Resolver) inheritedResolution(res Resolution, ref reference.Reference, 
 	conf := typeConf
 	if found.ambiguous && conf > ConfidenceCandidate {
 		conf = ConfidenceCandidate
+	}
+	if anyKind && !allInstanceFields(found.members) {
+		for _, t := range types {
+			if conf > ConfidenceCandidate && r.supertypeInstanceField(t, ref.Name) {
+				conf = ConfidenceCandidate
+			}
+		}
 	}
 	sortSymbols(found.members)
 	// pickBest lowers several members (a collision) to Candidate.
