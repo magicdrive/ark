@@ -18,6 +18,7 @@
 2 ./internal/languages/golang FuzzExtract
 2 ./internal/languages/php FuzzExtractPHP
 2 ./internal/languages/html FuzzExtractHTML
+2 ./internal/mcp FuzzSearchableText
 3 ./internal/languages/typescript FuzzExtractTypeScript
 3 ./internal/languages/typescript FuzzModuleSpec
 3 ./internal/languages/typescript FuzzTypeArgParser

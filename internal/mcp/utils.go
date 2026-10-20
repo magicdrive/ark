@@ -284,6 +284,23 @@ func ListFilteredFiles(path string, opt *commandline.Option) ([]string, error) {
 	return files, err
 }
 
+// searchableText returns the text search_in_files searches in a file: its
+// content decoded as get_file_content shows it (textenc.Decode, or the
+// encoding --file-encoding names for it), so that a line found is a line the
+// file says. It returns false for a file the search skips: binary; not UTF-8
+// under --skip-non-utf8 (core.IsBinary, as get_file_content); not in the
+// encoding named for it; or not UTF-8 and in no encoding Decode can tell —
+// its bytes taken as text would match what the file does not say. A line
+// number is the file's own: every encoding Decode reads keeps the file's
+// line feeds, and only a byte order mark is dropped (from line 1).
+func searchableText(data []byte, path string, opt *commandline.Option) (string, bool) {
+	if opt.SkipNonUTF8Flag && core.IsBinary(data) {
+		return "", false
+	}
+	r := textenc.Decode(data, opt.FileEncodingFor(path))
+	return r.Text, r.Kind == textenc.Text
+}
+
 // SearchInFiles searches for text within files
 func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *commandline.Option) (string, error) {
 	var results []string
@@ -334,12 +351,12 @@ func SearchInFiles(path, query string, isRegex bool, maxResults int, opt *comman
 			return nil
 		}
 
-		// Skip binary files
-		if core.IsBinary(data) {
+		// Search the file's text, as get_file_content shows it; skip
+		// binary files and those whose text cannot be read.
+		content, ok := searchableText(data, currentPath, opt)
+		if !ok {
 			return nil
 		}
-
-		content := string(data)
 		lines := strings.Split(content, "\n")
 
 		// Search in each line

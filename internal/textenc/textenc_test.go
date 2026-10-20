@@ -298,6 +298,24 @@ func TestDecode_ISO2022JPOfAnyJISText(t *testing.T) {
 	}
 }
 
+// A JIS character of a byte out of 0x21–0x7E is no character: the bytes are
+// not ISO-2022-JP (the decoder would make one of the second byte, a line
+// feed among others), whether guessed or named. A run of JIS characters
+// ending at a line feed still is.
+func TestDecode_ISO2022JPMalformedPairsAreNotJIS(t *testing.T) {
+	for _, s := range []string{"\x1b$B0\n", "\x1b$B0\nabc\n", "\x1b$B$3$s0 \x1b(B\n", "\x1b$B$3\x7f$s\x1b(B\n", "\x1b$B$3\t\x1b(B\n", "\x1b$B$3$\r\n\x1b(B\n"} {
+		if r := Decode([]byte(s), ""); r.Kind == Text && r.Encoding != "utf-8" {
+			t.Errorf("%q read as %s: %q", s, r.Encoding, r.Text)
+		}
+		if r := Decode([]byte(s), "iso-2022-jp"); r.Kind != Invalid {
+			t.Errorf("%q named ISO-2022-JP: %v %q", s, r.Kind, r.Text)
+		}
+	}
+	if r := Decode([]byte("\x1b$B$3$s\n$K$A$O\x1b(B\n"), "iso-2022-jp"); r.Kind != Text || r.Text != "こん\n$K$A$O\n" {
+		t.Errorf("a run ending at a line feed: %v %q", r.Kind, r.Text)
+	}
+}
+
 // A NUL makes a file binary whatever encoding a rule names for it (but
 // UTF-16, which holds NUL bytes as text).
 func TestDecode_ExplicitEncodingDoesNotMakeBinaryText(t *testing.T) {

@@ -631,6 +631,17 @@ Searches file contents for text or a regular expression.
 | `isRegex` | boolean |  | `false` | Treat query as regex |
 | `maxResults` | integer |  | `100` | Maximum number of results |
 
+Each result is `path:line:text`, one per matching line however often it
+matches (`maxResults` counts lines): the line number counts from 1, the line
+is whole (a CRLF line keeps its `\r`), and a query never spans lines. A file
+is searched in its text as [`get_file_content`](#get_file_content) shows it —
+decoded from its own encoding, its byte order mark dropped
+([Encodings](cli.md#encodings)) — so text in Shift_JIS or UTF-16 is found as
+the text it is. Binary files are not searched, nor are files whose encoding
+cannot be told or that are not in the encoding the server's `--file-encoding`
+names for them; under `--skip-non-utf8`, only files whose bytes are valid
+UTF-8 are (7-bit ISO-2022-JP among them, searched decoded).
+
 Example:
 
 ```text
