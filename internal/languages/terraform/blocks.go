@@ -251,7 +251,17 @@ func (x *extractor) checkData(body *ts.Node, check string, override bool) map[st
 			continue
 		}
 		typ, labels, _, ok := x.blockHeader(b)
-		if !ok || typ != "data" || len(labels) != 2 {
+		if !ok || typ != "data" {
+			continue
+		}
+		if len(labels) != 2 || !validName(labels[0]) || !validName(labels[1]) {
+			// As at the top level: a header that names no data source.
+			x.diags = append(x.diags, language.Diagnostic{
+				Severity: language.SeverityWarning,
+				Code:     diagInvalidBlockHeader,
+				Message:  "terraform: a data block needs 2 label(s), each a valid name",
+				Location: nodeLocation(b, x.file),
+			})
 			continue
 		}
 		address := "data." + labels[0] + "." + labels[1]
@@ -296,6 +306,9 @@ func (x *extractor) blockHeader(b *ts.Node) (typ string, labels []string, body *
 		c := b.Child(i)
 		switch c.Type(x.lang) {
 		case "identifier":
+			if c.IsMissing() {
+				return "", nil, nil, false // a label the parser made up
+			}
 			if typ == "" {
 				typ = c.Text(x.src)
 			} else {
@@ -490,9 +503,13 @@ func isIDContinue(r rune) bool {
 
 func quote(s string) string { return `"` + s + `"` }
 
+// firstChildOfType returns n's first child of type typ. A MISSING node — the
+// zero-width placeholder the parser inserts to recover from an error, as the
+// identifier after the trailing dot of `module.m.` — is never returned: it is
+// not in the source, so a name read from it would be a fabricated (empty) one.
 func firstChildOfType(n *ts.Node, lang *ts.Language, typ string) *ts.Node {
 	for i := 0; i < n.ChildCount(); i++ {
-		if c := n.Child(i); c.Type(lang) == typ {
+		if c := n.Child(i); c.Type(lang) == typ && !c.IsMissing() {
 			return c
 		}
 	}

@@ -2,6 +2,8 @@ package terraform
 
 import (
 	"context"
+	"slices"
+	"strings"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/source"
@@ -53,6 +55,11 @@ func FuzzExtractTerraform(f *testing.F) {
 			for _, r := range ext.References {
 				if r.Name == "" {
 					t.Fatalf("empty reference name")
+				}
+				// No part of a name is empty: a made-up name (the
+				// parser's MISSING placeholder) makes ".m" or "aws.".
+				if slices.Contains(strings.Split(r.Name, "."), "") {
+					t.Fatalf("reference name with an empty part: %q", r.Name)
 				}
 				if r.Kind != "write" && r.NameQualified == "" && r.ReceiverTypeQualified == "" {
 					t.Fatalf("reference without identity: %+v", r)
