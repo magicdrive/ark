@@ -9,6 +9,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/css"
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/languages/html"
+	"github.com/magicdrive/ark/internal/languages/java"
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
@@ -120,6 +121,20 @@ func fixtures() []providerFixture {
 			},
 			broken:  conformance.Case{Name: "broken", File: "src/broken.rs", Source: []byte("pub fn broken( {\n}\npub fn good() {}\n")},
 			dynamic: conformance.Case{Name: "dynamic", File: "src/dyn.rs", Source: []byte("pub fn run(m: &[fn()], k: usize) { m[k](); }\n")},
+		},
+		{
+			name:     "java",
+			provider: java.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "src/main/java/p/A.java", Source: []byte("package p;\n\nimport java.util.List;\n\npublic class A {\n    private final List<String> names;\n    public A(List<String> names) { this.names = names; }\n    public int size() { return names.size(); }\n}\n")},
+				{Name: "types", File: "src/main/java/p/T.java", Source: []byte("package p;\ninterface I { default String n() { return \"\"; } }\nenum E implements I { A, B { public String n() { return \"b\"; } } }\nrecord R(int x) implements I { R { } }\n@interface Ann { String value() default \"\"; }\n")},
+				{Name: "calls", File: "src/main/java/p/C.java", Source: []byte("package p;\nimport static java.lang.Math.max;\nclass C extends A {\n    C() { super(null); }\n    int m(Object o) {\n        Runnable r = () -> size();\n        if (o instanceof R rec) { return rec.x(); }\n        new Object() { void x() { m(null); } };\n        return max(size(), E.A.ordinal());\n    }\n}\n")},
+			},
+			broken: conformance.Case{Name: "broken", File: "src/main/java/p/B.java", Source: []byte("package p;\nclass B { void broken( { } }\nclass Good { void ok() {} }\n")},
+			// Java has no call syntax whose callee is computed at run time
+			// (reflection is an ordinary call of Method.invoke); the honest
+			// count is 0.
+			dynamic: conformance.Case{Name: "dynamic", File: "src/main/java/p/D.java", Source: []byte("package p;\nclass D { Object run(java.lang.reflect.Method m) throws Exception { return m.invoke(null); } }\n")},
 		},
 		{
 			name:     "html",

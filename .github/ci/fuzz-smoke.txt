@@ -12,6 +12,7 @@
 1 ./internal/secrets FuzzRecommended_MatchesV61
 1 ./internal/languages/rust FuzzExtractRust
 1 ./internal/languages/python FuzzExtractPython
+1 ./internal/languages/java FuzzExtractJava
 2 ./internal/index FuzzDeclarationIdentity
 2 ./internal/index FuzzParentIdentity
 2 ./internal/index FuzzIdentityCollision

@@ -477,7 +477,7 @@ func TestCIWorkflow_SourceBuildingTestsAlwaysRun(t *testing.T) {
 	}
 }
 
-// The fuzz smoke runs 21 targets, each once and for 10 seconds without the
+// The fuzz smoke runs 22 targets, each once and for 10 seconds without the
 // unit tests, and every Fuzz function of the repository is either in it or
 // listed as deliberately left out.
 func TestCIWorkflow_FuzzSmokeIsComplete(t *testing.T) {
@@ -508,8 +508,8 @@ func TestCIWorkflow_FuzzSmokeIsComplete(t *testing.T) {
 			t.Errorf("fuzz-smoke.txt: no %s in %s", e.target, e.pkg)
 		}
 	}
-	if smoke != 21 {
-		t.Errorf("fuzz smoke: %d targets, want 21", smoke)
+	if smoke != 22 {
+		t.Errorf("fuzz smoke: %d targets, want 22", smoke)
 	}
 	fuzzFunc := regexp.MustCompile(`(?m)^func (Fuzz\w+)\(f \*testing\.F\)`)
 	filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {

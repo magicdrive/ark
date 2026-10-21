@@ -21,6 +21,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/css"
 	"github.com/magicdrive/ark/internal/languages/golang"
 	"github.com/magicdrive/ark/internal/languages/html"
+	"github.com/magicdrive/ark/internal/languages/java"
 	"github.com/magicdrive/ark/internal/languages/javascript"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
@@ -73,6 +74,15 @@ func specList() []spec {
 		// covers it, and method calls on values (type inference) and
 		// cross-crate paths are not resolved; see docs/language-support.md.
 		{rust.NewProvider(), grammars.RustLanguage, language.SupportLevelGraph},
+		// Java (.java): types, members and constructors by canonical name,
+		// the language's own name lookup (scopes, imports, the package,
+		// inherited members, overloads by argument count) answered against
+		// the repository, typed graph. Graph, not ContextQualityCertified: no
+		// context-quality benchmark covers it, and receivers typed by a
+		// method's result, overloads told apart by argument types and
+		// inferred lambda parameters are not resolved; see
+		// docs/language-support.md.
+		{java.NewProvider(), grammars.JavaLanguage, language.SupportLevelGraph},
 		// HTML (.html / .htm): the document, id elements, same-document
 		// id references and links between documents, resolved by identity
 		// (golang.org/x/net/html; no Tree-sitter grammar). Graph, not

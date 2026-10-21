@@ -1,6 +1,6 @@
 # Language support
 
-Ark analyzes ten languages. They are not supported equally: each language
+Ark analyzes eleven languages. They are not supported equally: each language
 has a **support level**, the highest stage its tests certify, and every
 language has constructs Ark deliberately leaves unresolved.
 
@@ -28,6 +28,7 @@ Levels build on each other:
 | PHP | `.php` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Terraform | `.tf`, `.tfvars` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Rust | `.rs` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Java | `.java` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | HTML | `.html`, `.htm` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -35,7 +36,7 @@ Levels build on each other:
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript, and `get_context` still works for PHP, Terraform,
-Rust, HTML, CSS and Python, but those results are not covered by the tests the level names.
+Rust, Java, HTML, CSS and Python, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -662,6 +663,74 @@ the standard library's.
 
 Ark never runs Python, a build backend or `setup.py`, and reads no
 configuration file.
+
+## Java
+
+**Extracted:** classes, interfaces, enums, records (kind `class`) and
+annotation types (kind `interface`) at any depth — member types, local
+classes, anonymous classes (an enum constant's body is one) —, methods,
+constructors (named `<init>`), fields, enum constants (kind `constant`),
+record components (fields) and annotation elements (methods). A method's
+and a constructor's symbol state its parameter types. References: calls,
+constructor calls (`new`, `this(…)`, `super(…)`, an enum constant's
+arguments), class instance creations, method references (`X::m`,
+`X::new`), type uses (declarations, type arguments and bounds, casts,
+`instanceof` and patterns, `throws`, `catch`, annotations, class literals,
+`permits`, the outer names of a qualified name), `extends` / `implements`,
+and field reads and writes.
+
+**Identity.** A type is named by its canonical name, `com.acme.Outer.Inner`
+(a type of the unnamed package by its simple name); a member by its type's
+and its own, `com.acme.User.befriend`, a constructor `com.acme.User.<init>`.
+A local class is `ENCLOSING.method.Local`, an anonymous class
+`ENCLOSING.<anonymous>` (`#2`, `#3` for the next ones of the file): names no
+other file can write. Overloads share their name — `get_callers` on one
+lists them with a `symbolId` each, never picks one.
+
+**Resolution.** Ark looks a name up as Java does (JLS 6.4, 6.5, 15.12) and
+asks the repository what the file cannot see: the members a supertype
+declares, the package's other files, the types an on-demand import brings.
+A local variable, parameter or pattern binding is the file's own and no
+reference; a type parameter is no type of the repository.
+
+| | |
+|---|---|
+| **Supported** (`exact`) | A type of the file, a single-type import, a member type of an enclosing type or one it inherits, a type of the package in the reference's source root; members of a type and those it inherits — through `this`, `super`, a type name, a local variable, parameter or field with a declared type, a cast, `new T()`, `var x = new T()`, a type variable's one bound —; unqualified calls searched in the innermost enclosing type that has a method of the name (JLS 15.12.1); static imports of methods, fields and member types; overloads by argument count and by the argument types the file proves (literals, typed variables, casts, `new`, `null`, lambdas), phase by phase (strict, loose, variadic), the most specific of primitive ones; only the methods and constructors the call may access (a private one within its top-level class, a package-private one within its package); an override of a method of no parameters; inherited overloads beside a subclass's own; private members are not inherited, package-private ones only within their package, an interface's static methods not at all, and a field hides a supertype's of the name |
+| **Supported** (`strong`) | What is found past a scope the repository may not hold: another file of the package in another source root, an on-demand import (`import a.*`, `java.lang`), a type whose supertype is outside the repository (an own method of a class extending a library class: the library may declare the overload the call means), an anonymous class of a library interface; a declaration only another source root holds (`src/test` → `src/main`, another module); an override presumed from equal parameter type names |
+| **Candidate** | Overloads the arguments do not tell apart, or that only a protected overload of another package (which the call may not access) would tell apart or would leave the later phases untried; a class declared in two source roots, neither of them the reference's (two flavors of a library seen from a third module); a method an outside supertype may implement beside an interface's declaration; an own method marked `@Override` whose overridden one is outside the repository; members of a type the parser could not fully read, and what is found past one |
+| **Unresolved by design** | Receivers that are a method's result or another type's field (`a.b().c()`, `x.f.g()`); lambda parameters of inferred type; a `var` initialized otherwise; a switch label's enum constant (the selector's type decides it); annotation element names; anything in a region the parser rejected; the members `java.lang.Object`, `Enum` and `Record` give, an enum's `values()` / `valueOf`, a record's implicit accessors and canonical constructor, a class's default constructor (found, no declaration) |
+| **Not implemented** | Return and field types (a call on a call's result); generic inference; argument types the file does not prove (another method's result); Maven, Gradle and module descriptors (`module-info.java`): dependencies, modules, generated sources; dynamic dispatch — a call names its static declaration, not the override that runs |
+
+**Source roots.** A file's source root is where its package's path starts
+(`src/main/java/` of `src/main/java/com/acme/User.java` in package
+`com.acme`). A class two roots declare — the JRE and Android flavors of one
+library, a test copy — is the reference's own root's when that root has it;
+one only another root has is `strong`: the build may not compile them
+together. Build files are not read.
+
+**Measured against javac.** On spring-petclinic, Apache Commons Lang,
+google-java-format, Gson, Guava and JUnit 5 (javac 21 with the projects'
+main dependencies; `docs/scripts/oracle/java-javac.java`, the opt-in
+`TestOracle_Javac`), 179,553 references resolved `exact` and 184,187
+`strong` agree with javac but two `strong` ones (a call of a class
+extending `junit.framework.TestCase` that javac binds to an overload
+`TestCase` declares); references Ark puts outside the repository agree too.
+Names javac could not attribute (a dependency it did not have, a file
+javac 21 fails on) are not counted. This holds for those corpora and that
+configuration, not as a proof.
+
+The parser rejects a few valid constructs — a type annotation before a
+variadic parameter's `...` (`Class<?> @Nullable... types`), Java 25 compact
+source files —: such a region is reported by `get_diagnostics`. Rejected
+outside a method body, it may hide an import, an `extends` clause or a
+declaration: the file states no references, and every type it declares is
+capped at `candidate` — a member found in it, or past it in a subtype's
+lookup, is a candidate, and a member it does not show is not reported
+outside the repository; inside a body, that body states no references.
+
+Files named `Test*.java`, `*Test.java`, `*Tests.java`, `*TestCase.java` and
+those under a `test/` or `tests/` directory are test files. Ark never runs
+`javac`, Maven or Gradle and reads no build file.
 
 ## Known gaps
 

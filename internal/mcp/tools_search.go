@@ -45,7 +45,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"language": map[string]interface{}{
 						"type":        "string",
-						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, html, css (get_language_support lists them)",
+						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css (get_language_support lists them)",
 					},
 					"filePattern": map[string]interface{}{
 						"type":        "string",

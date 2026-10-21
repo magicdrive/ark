@@ -37,7 +37,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## symbols\n")
 	for _, s := range syms {
 		fmt.Fprintf(&b, "symbol %s kind=%s qualified=%q parent=%q receiver=%q exported=%t%s %s\n",
-			s.Name, s.Kind, s.Qualified, s.Parent, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside)+parameterScope(s.ParameterScope), loc(s.Location))
+			s.Name, s.Kind, s.Qualified, s.Parent, s.Receiver, s.Exported, memberScope(s.MemberScope, s.MembersOutside)+parameterScope(s.ParameterScope)+callableFacts(s.Parameters, s.ImplicitMembers, s.Overrides), loc(s.Location))
 	}
 
 	refs := slices.Clone(ext.References)
@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -114,7 +114,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -252,6 +252,42 @@ func dynamicName(d bool) string {
 		return " dynamic=true"
 	}
 	return ""
+}
+
+// languageLookup renders a reference's language lookup and arguments;
+// nothing when absent, so snapshots of providers that never state them are
+// unchanged.
+func languageLookup(lookup, receiver string, counts bool, n int, types string) string {
+	out := ""
+	if lookup != "" {
+		out += fmt.Sprintf(" lookup=%q", lookup)
+	}
+	if receiver != "" {
+		out += fmt.Sprintf(" receiver_lookup=%q", receiver)
+	}
+	if counts {
+		out += fmt.Sprintf(" args=%d", n)
+	}
+	if types != "" {
+		out += fmt.Sprintf(" arg_types=%q", types)
+	}
+	return out
+}
+
+// callableFacts renders a declaration's parameters, implicit members and
+// override statement; nothing when absent.
+func callableFacts(params, implicit string, overrides bool) string {
+	out := ""
+	if params != "" {
+		out += fmt.Sprintf(" params=%q", params)
+	}
+	if implicit != "" {
+		out += fmt.Sprintf(" implicit=%q", implicit)
+	}
+	if overrides {
+		out += " overrides=true"
+	}
+	return out
 }
 
 // receiverChain renders a receiver chain and the Speculative marker;

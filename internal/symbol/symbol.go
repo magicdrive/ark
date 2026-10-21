@@ -149,6 +149,15 @@ type Symbol struct {
 	// ConfidenceCap bounds the resolution of a reference to this
 	// declaration alone (language.SymbolDraft.ConfidenceCap).
 	ConfidenceCap string `json:",omitempty"`
+
+	// Parameters / ImplicitMembers: a callable's parameters and a type's
+	// members no declaration states (language.SymbolDraft.Parameters,
+	// ImplicitMembers).
+	Parameters      string `json:",omitempty"`
+	ImplicitMembers string `json:",omitempty"`
+	// Overrides: the language states that a supertype has a member of the
+	// name (language.SymbolDraft.Overrides).
+	Overrides bool `json:",omitempty"`
 }
 
 // NewSymbolID returns a deterministic ID derived from (lang, repoRelPath, kind, qualified).
