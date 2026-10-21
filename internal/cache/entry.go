@@ -46,4 +46,8 @@ type CachedExtraction struct {
 	// TypeFacts (language.Extraction.TypeFacts) are optional the same way:
 	// the provider that emits them (go) bumped its CacheVersion (go-9).
 	TypeFacts []language.TypeFact `json:"typeFacts,omitempty"`
+
+	// SourceRoot (language.Extraction.SourceRoot) is optional the same way:
+	// the provider that states it (java) has no entries without it.
+	SourceRoot string `json:"sourceRoot,omitempty"`
 }

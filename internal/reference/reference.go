@@ -92,6 +92,18 @@ type Reference struct {
 	// Speculative: recorded only in case Name denotes an extracted
 	// declaration (see language.ReferenceDraft.Speculative).
 	Speculative bool
+	// Lookup / ReceiverLookup: the language's search for the declaration
+	// Name, or the receiver's type, denotes (see language.ReferenceDraft.
+	// Lookup); "" when there is none.
+	Lookup         string
+	ReceiverLookup string
+	// CountsArguments: ArgumentCount is the number of arguments the call
+	// passes (see language.ReferenceDraft.CountsArguments).
+	CountsArguments bool
+	ArgumentCount   int
+	// ArgumentTypes: what the provider proves of the arguments' types (see
+	// language.ReferenceDraft.ArgumentTypes).
+	ArgumentTypes string
 }
 
 // NewReferenceID returns a deterministic ID derived from

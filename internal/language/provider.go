@@ -118,6 +118,40 @@ type SymbolDraft struct {
 	// applies it, only downwards, to a resolution whose one candidate this
 	// declaration is (ReferenceDraft.ConfidenceCap's values and rules).
 	ConfidenceCap string `json:",omitempty"`
+
+	// Parameters states a callable declaration's parameters where the
+	// language selects among callables of one name by them (Java
+	// overloads): "(T1,T2)", "()" for none, each type as the provider writes
+	// it after erasure, the last ending in "..." when the callable is
+	// variadic. A type the provider cannot prove to be one type wherever it
+	// is written (a simple name the file's imports and package decide)
+	// starts with "?". "" states nothing. A call stating its argument count
+	// (ReferenceDraft.CountsArguments) is resolved only among declarations
+	// that accept that many arguments, and a member lookup (ReferenceDraft.
+	// Lookup) leaves out a supertype's callable that a subtype's callable of
+	// equal Parameters overrides.
+	Parameters string `json:",omitempty"`
+
+	// ImplicitMembers lists the members the language gives this type
+	// declaration that no declaration of the repository states, as name and
+	// Parameters, comma-separated ("toString(),equals(?Object)"): those of an
+	// implicit supertype outside the repository (Java: java.lang.Object of a
+	// class without extends, java.lang.Enum of an enum), and, marked with a
+	// leading "+", those it declares itself implicitly (an enum's values(), a
+	// record's accessors, a default constructor "<init>()"). A member lookup
+	// (ReferenceDraft.Lookup) that reaches one has found the member there: it
+	// looks no further, and the member, being no symbol, is no target — one
+	// of an outside supertype is outside the repository. "" states nothing.
+	ImplicitMembers string `json:",omitempty"`
+
+	// Overrides states, by the language's own annotation of the declaration
+	// (Java @Override), that a supertype has a member of its name, which it
+	// overrides or implements. A member lookup (ReferenceDraft.Lookup) that
+	// finds the declaration, and no supertype declaration of the name, while
+	// a supertype is outside the repository, knows a member of the name it
+	// cannot see there — one that may be an overload the call denotes: a
+	// Candidate beside it.
+	Overrides bool `json:",omitempty"`
 }
 
 // ReferenceDraft is a raw syntactic reference before ReferenceIDs are assigned.
@@ -239,6 +273,100 @@ type ReferenceDraft struct {
 	// never counted as unresolved or outside. Its resolution never falls
 	// back to name matching.
 	Speculative bool `json:",omitempty"`
+
+	// Lookup states how the language finds the declaration Name denotes
+	// where the file alone cannot fix it — the scopes it searches in order,
+	// some of them other files' (the members a supertype declares, the
+	// types of the file's package): steps separated by ";", each a set of
+	// alternatives separated by "|":
+	//
+	//	=K:Q    the declarations of kind class K whose Qualified is Q
+	//	@K:T.N  the members named N of kind class K of the type declaration
+	//	        whose Qualified is T (T is the text before the last "."):
+	//	        its own and those it inherits (below)
+	//	?       a scope where the language may find the name, which Ark
+	//	        cannot see
+	//	!       the name is found here and denotes nothing Ark represents
+	//	        (a local variable): the search ends without a target
+	//
+	// An "=" or "@" alternative may be followed by a member path —
+	// "/N" a member type N, "~N" a field or constant N, else a member type N
+	// — that the declaration it finds, a type, is followed through: the
+	// alternative is found once its own declaration is (the language took
+	// the head for a type), and the path's end is what it finds; a value on
+	// the way, or a member missing, ends it without a target.
+	//
+	// K is "T" (a type-like declaration), "V" (a field or constant), "M" (a
+	// method) or "C" (a constructor). The resolver takes every declaration
+	// the first step that finds any finds; for a call that states its
+	// argument count, those that accept it. One is the target; several are
+	// Candidates; none is Unresolved. A step passed without finding anything
+	// whose scope may hold the name outside what the repository declares —
+	// an identity no declaration carries, a member lookup reaching a
+	// supertype the repository does not declare, "?" — bounds the result at
+	// Strong, and, when no step finds anything, puts the referent outside
+	// the repository (unless IdentityInRepository).
+	//
+	// A member lookup finds, for M, the methods of the name the type
+	// declares and those its supertypes have that none of these overrides
+	// (equal Parameters; an override proven only by types starting with "?"
+	// bounds the result at Strong); for T and V, those the type declares,
+	// or else those its supertypes have, each searched the same way (several
+	// distinct: ambiguity); for C, the type's own. A supertype's private
+	// member is not inherited, nor a member without Visibility from a file
+	// of another Extraction.Package. A type's supertypes are its file's
+	// inheritance and implements references whose Container is the type's
+	// Qualified, identified by NameQualified or by their own Lookup; one the
+	// repository does not declare leaves what it may contribute unknown
+	// (Strong), several declarations of it leave it ambiguous (Candidate).
+	// A static method of a type of kind interface is not inherited. The
+	// type's SymbolDraft.ImplicitMembers count as found. Of the callables
+	// found, those the reference may not access are no candidates: a
+	// private one outside its outermost enclosing declaration, one without
+	// Visibility outside its Extraction.Package; a protected one of another
+	// Package, and a private one whose or whose reference's enclosing
+	// declarations cannot be followed, is kept, but neither ends the phases argument types are tried
+	// in nor is the one they narrow the others to. A type whose declaration states a ConfidenceCap (its members
+	// cannot all be listed) bounds what is found in it, and what a later
+	// step finds past it, at Candidate, and what it does not show is not
+	// outside the repository. Lookup is evaluated before, and instead of,
+	// every other rule; "" states nothing.
+	Lookup string `json:",omitempty"`
+
+	// ReceiverLookup states, in Lookup's notation, how the language finds
+	// the type of the receiver: the declaration found must be one type —
+	// the receiver itself, when ReceiverType is "" (static access, a
+	// qualified type name), or the declared type of the receiver value
+	// otherwise. Name is then looked up as its member (kind class M for a
+	// call, C for the name "<init>", T for a type use, V otherwise). A field
+	// or constant found instead is a value whose type Ark does not know:
+	// the reference is Unresolved.
+	ReceiverLookup string `json:",omitempty"`
+
+	// CountsArguments states that ArgumentCount is the number of arguments
+	// the call passes: it is resolved only among the callables whose
+	// SymbolDraft.Parameters accept that many (or that state none).
+	CountsArguments bool `json:",omitempty"`
+	ArgumentCount   int  `json:",omitempty"`
+
+	// ArgumentTypes states, with CountsArguments, what the provider proves
+	// of each argument's type, comma-separated: a primitive (byte, short,
+	// char, int, long, float, double, boolean) or an array of one ("int[]"),
+	// "null", "S" (a string: never a primitive), "F" (a lambda or a method
+	// reference: a functional interface, never a primitive or an array), "N"
+	// (a reference type that is no array and no type unboxing converts:
+	// never a primitive), "R" (a reference type that is no array) or "R[]"
+	// (an array of references), "" nothing. The resolver leaves out the callables an argument can
+	// certainly not be passed to — by the conversions method invocation
+	// allows (a primitive widens byte < short < int < long < float < double,
+	// char < int; boxing and unboxing between a primitive and a reference;
+	// an array is a reference) in the phases that try them in turn: strict
+	// (no boxing), loose, variadic —; a callable whose parameters are the
+	// arguments' known primitive types themselves, applying strictly, is the
+	// most specific, and so is, among callables whose parameters are all
+	// primitives, of primitive arguments, the one whose parameters widen to
+	// every other's (JLS 15.12.2). Several left are Candidates.
+	ArgumentTypes string `json:",omitempty"`
 }
 
 // AliasDraft states that the qualified identity Qualified names, by the
@@ -442,6 +570,18 @@ type Extraction struct {
 	// property hides a supertype's method. Without it, a call names a
 	// callable member only (PHP keeps methods and properties apart).
 	MembersShareNames bool
+
+	// SourceRoot names the directory the file's qualified identities are laid
+	// out under (Java: where the path of its package starts; "src/main/java"
+	// of src/main/java/a/b/C.java in package a.b). A qualified identity one
+	// of the file's references names (ReferenceDraft.Lookup) denotes first
+	// the declarations of the files of the same SourceRoot — the sources a
+	// build compiles together hide a namesake elsewhere on its path —; a
+	// declaration only another root holds is at most Strong (that root may
+	// be no part of the build), and several only other roots hold are
+	// ambiguous. "" states nothing: every declaration of the identity is
+	// alike.
+	SourceRoot string
 
 	// TypeFacts are the declared-type facts of the file's declarations
 	// (typefacts.go), the evidence ReceiverChain and promoted-member lookup

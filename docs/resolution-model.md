@@ -48,7 +48,7 @@ never averaged or promoted; caps only lower it.
 | Confidence | What Ark knows | What it does not know | Edge |
 |---|---|---|---|
 | `exact` | The one target, by the language's scoping as Ark models it: same container or file, an import or module binding (not one through a CommonJS export: see below), a qualified identity, a member of a type proven by declaration. | Nothing within the model. It is static evidence, not compiler proof. | yes, if unique |
-| `strong` | The one target, by weaker evidence: the only declaration of the name in the same directory or package, or in the repository (for languages without package scoping); a receiver-name match. | Whether something outside the repository shadows it. | yes, if unique |
+| `strong` | The one target, by weaker evidence: the only declaration of the name in the same directory or package, or in the repository (for languages without package scoping); a receiver-name match; a declaration a language's search finds past a scope that may hold the name outside the repository (Java). | Whether something outside the repository shadows it. | yes, if unique |
 | `candidate` | One or more plausible targets. | Which one, or whether an unseen target exists. | **never** |
 | unresolved | No candidate. | The target. For a builtin, an external package or a computed name this is the correct answer. | never |
 | `outsideRepository` | A flag on unresolved: authoritative evidence (an import, a qualified name, a declared type) places the target outside the repository. Evidence that reaches the repository and finds nothing Ark represents (an import of a repository file without the export, a member of an exported object literal) is unresolved without this flag. | — | never |
@@ -98,6 +98,7 @@ Every resolution names the evidence it rests on. Graph answers show it in the
 | `receiver_chain` | Member of the type the receiver is built as, derived through declarations (Go: `x := NewServer(); x.Run()`) | strong |
 | `promoted_member` | Member promoted through an embedded type (Go embedding) | strong (candidate beside an embedded type of unknown members) |
 | `member_scope` | Member of a scope the declaration states (Terraform module outputs and inputs) | exact |
+| `language_lookup` | Found by the language's own search as the provider states it — enclosing scopes, imports, the package, supertypes' members, overloads by argument count and proven argument types (Java) | exact; strong past a scope the repository may not hold (another file of the package outside the reference's source root, an on-demand import, a supertype outside the repository) or in another source root; candidate for overloads the arguments do not tell apart |
 | `same_package` | Only declaration of the name in the file's package or directory | strong |
 | `unique_repo_match` | Only declaration of the name in the repository, within the file's language | strong (candidate when capped) |
 | `qualified_receiver` | Receiver name matches the declaring type's name | strong (candidate when capped) |

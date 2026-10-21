@@ -35,6 +35,10 @@ import (
 //	            or a module file named tests.rs (the `#[cfg(test)] mod
 //	            tests;` convention). Unit tests written inline
 //	            (`#[cfg(test)] mod tests { ... }`) are in production files.
+//	Java        Test*.java, *Test.java, *Tests.java, *TestCase.java (the
+//	            Maven Surefire defaults), or any file under a test/ or tests/
+//	            directory (src/test/java, which also holds the tests'
+//	            support classes)
 func IsTestFile(path string) bool {
 	slashed := filepath.ToSlash(path)
 	base := slashed[strings.LastIndex(slashed, "/")+1:]
@@ -57,6 +61,22 @@ func IsTestFile(path string) bool {
 		for _, d := range dirs[:len(dirs)-1] {
 			switch d {
 			case "tests", "Tests", "test":
+				return true
+			}
+		}
+	case ".java":
+		name := strings.TrimSuffix(base, ".java")
+		for _, suf := range []string{"Test", "Tests", "TestCase"} {
+			if strings.HasSuffix(name, suf) && len(name) > len(suf) {
+				return true // a class named Test itself is no test
+			}
+		}
+		if strings.HasPrefix(name, "Test") && len(name) > len("Test") {
+			return true
+		}
+		dirs := strings.Split(slashed, "/")
+		for _, d := range dirs[:len(dirs)-1] {
+			if d == "test" || d == "tests" {
 				return true
 			}
 		}

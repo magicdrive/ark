@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; the language's own search (`ReferenceDraft.Lookup` / `ReceiverLookup`, `ArgumentCount` / `ArgumentTypes`; `SymbolDraft.Parameters` / `ImplicitMembers` / `Overrides`; `Extraction.SourceRoot`); `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -231,6 +231,56 @@ Danger: "it is the only `helper` in the repository" or "`self` is the
 class" — a parameter, a local, a builtin or another module on `sys.path`
 decides what a Python name is, and an instance attribute may hide a method.
 
+**The language's own search, stated, not run** (Java). Which declaration a
+Java name denotes depends on other files — the members a supertype
+declares, the other files of the package, the types an on-demand import
+brings — and on overloads chosen by argument types, so neither one file's
+identity (R0) nor a name match decides it. The provider states the search
+JLS 6.4, 6.5 and 15.12 make, scope by scope (`ReferenceDraft.Lookup`:
+identities `=K:Q`, members of a type and of its supertypes `@K:T.N`, a
+member path, `?` for a scope Ark cannot see, `!` for a local), and the
+resolver evaluates it against the repository in `resolver/language_lookup.go`
+— language-neutral: it knows steps, kind classes, supertypes as the file
+states them, `Parameters` and argument types in a stated notation, not Java.
+The first step that finds anything decides; one found past a step that may
+hold the name outside the repository (an identity no declaration carries, a
+supertype outside the repository, `?`) is at most Strong, and nothing found
+then is `OutsideRepository`. A member lookup accumulates callables along
+supertypes (an overload does not hide another) minus those an own one
+overrides (equal `Parameters`; unproven type names cap at Strong), and
+stops at the nearest field or type, inherited or not (a private field
+hides); an interface's static method is not inherited. Only the callables a
+reference may access are candidates — a private one within its outermost
+declaration, one without `Visibility` within its `Package`; one the resolver
+cannot prove accessible (a protected one of another package, a private one
+whose enclosing declarations cannot be followed) is kept but
+neither ends the phases of overload resolution nor is the one the others
+are narrowed to. A type that states a cap (its
+members cannot be listed: every type of a Java file rejected outside a
+body) bounds what is found in it, and past it, at Candidate. A member an outside supertype may have — one beside an interface's,
+or what an `@Override` method overrides — is a Candidate beside the seen
+one, never hidden behind it; members a type's `ImplicitMembers` list are
+found, and are no target. Overloads are told apart only by what the call
+proves: its argument count, and argument types in the stated notation,
+phase by phase (strict, loose, variadic); a candidate is dropped only when
+an argument certainly cannot be passed to it. A declaration of the
+reference's `SourceRoot` hides one of another root (two flavors of a
+library); one only another root has is Strong. Every Java file is
+`IdentityOnly`, so a reference without a lookup is Unresolved. Authority:
+`languages/java/provider.go` (header), `languages/java/scope.go`,
+`resolver/language_lookup.go`, `resolver/argument_types.go`. Tests:
+`TestLookup_*`, `TestArgumentTypes`, `TestOverloads`, `TestShadowing`,
+`TestTypeShadowing`, `TestStaticImportShadowedByMember`,
+`TestOverloadsByArgumentTypes`, `TestSourceRoots`, `TestGraph_Fixture`,
+`TestGraph_Soundness`, `TestMCPJava_Graph`, `FuzzExtractJava`, and the
+opt-in javac comparison `TestOracle_Javac`
+(`docs/scripts/oracle/java-javac.java`).
+Danger: "the only `log` the class declares", "the only `Node` in the
+repository", "the subclass's `m(int)` hides the base's `m(String)`" — an
+inherited overload, a same-package class of another file, an on-demand
+import, an inherited member type or a library supertype decides what a Java
+name is.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -240,8 +290,8 @@ scope, unknown participant) only lower it.
 
 | Class | Known | Unknown | Graph edge |
 |---|---|---|---|
-| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding (not through a CommonJS export, whose value code may replace at run time: `ExportDraft.Mutable` caps it at Candidate, `TestMutableExport_*`), qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type. | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
-| Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap, a member of a value (an object literal, a constructor function's prototype: code may reassign it) — except in package-scoped files, where only the file's own package (directory and `Package`) is Strong evidence. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
+| Exact | The one target, by the language's own scoping as modelled: same container/file, import or module binding (not through a CommonJS export, whose value code may replace at run time: `ExportDraft.Mutable` caps it at Candidate, `TestMutableExport_*`), qualified identity (incl. a module-directory scope), a member scope the receiver declaration states, member lexically contained in an Exact-identified type, the language's own search as the provider states it when no step before the one that finds may hold the name elsewhere (Java). | Nothing within the model — but it is static evidence, not compiler proof. | yes (if the only candidate) |
+| Strong | The one target, by weaker evidence: unique name in the repository, same directory, receiver-name match, receiver-name attachment, provider cap, a member of a value (an object literal, a constructor function's prototype: code may reassign it), a declaration the language's search finds past a scope the repository may not hold or only in another source root — except in package-scoped files, where only the file's own package (directory and `Package`) is Strong evidence. | Whether something outside the repository/model shadows it. | yes (if the only candidate) |
 | Candidate | Plausible targets (one or several), kept as evidence. | Which one, or whether another unseen target exists. | **never** |
 | Unresolved | No candidate. | The target. This is a correct, sound answer — not a gap to fill. | never |
 | `OutsideRepository` (flag on Unresolved) | Authoritative evidence (qualified identity, declared receiver type, import binding, a receiver whose members are declared outside) places the referent outside the repository's declarations. An identity that names a repository scope (`IdentityInRepository`) never does, nor does evidence that reaches the repository and finds nothing Ark represents: an import binding whose module is a repository file (a relative specifier, also of a file no provider indexes) without the export, a binding or receiver type that names a repository value (an object literal: its members are no symbols). | — | never; and it is *known*, so it is not counted as unattributed (it is reported as `outsideRepository`) |
@@ -992,9 +1042,10 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
   PHP language support.
 - Compiler-equivalent module resolution: providers rank only a
   config-independent lexical subset (`language.ModuleCandidate`); `tsconfig`,
-  Composer/PSR-4, `package.json`, `Cargo.toml` and Python's `sys.path`
-  configuration (`pyproject.toml`, `PYTHONPATH`, `.pth`) are not interpreted,
-  and `cargo metadata` is never run.
+  Composer/PSR-4, `package.json`, `Cargo.toml`, Python's `sys.path`
+  configuration (`pyproject.toml`, `PYTHONPATH`, `.pth`) and Maven, Gradle
+  and Java module descriptors are not interpreted, and `cargo metadata` is
+  never run.
 - Expanding macros (Rust `macro_rules!`, procedural macros, derives): what
   an expansion declares or calls is not observed; a scope a macro may add
   names to is not trusted to be complete.
@@ -1015,8 +1066,9 @@ Tests: `TestDeterminism`, `TestIndex_DeterministicRepeated`,
 
 **Not implemented yet** (may be added if the invariants above still hold):
 general type inference (a receiver's type is derived only through
-declarations' written types — Go receiver chains — never inferred from
-uses, assignments or generic instantiation); control/data-flow analysis;
+declarations' written types — Go receiver chains, Java declared variables
+— never inferred from uses, assignments or generic instantiation; Java
+follows no return or field type); control/data-flow analysis;
 cross-language references other than path evidence (§2: an HTML page's
 stylesheets and scripts, a CSS Modules class a JavaScript or TypeScript import
 uses) — JavaScript importing a TypeScript file resolves nothing (a JavaScript

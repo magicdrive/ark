@@ -47,7 +47,10 @@ package cache
 // providers, which state it, are ts-10 and js-9. SymbolDraft.ConfidenceCap,
 // BindingDraft.Scope, ModuleCandidate.Unless and Extraction.LexicalNesting
 // are optional the same way; the Python provider, which states them, is
-// python 5.
+// python 5. ReferenceDraft.Lookup / ReceiverLookup / CountsArguments /
+// ArgumentCount / ArgumentTypes, SymbolDraft.Parameters / ImplicitMembers /
+// Overrides and Extraction.SourceRoot are optional the same way; only the
+// Java provider (java-1, its first version) states them.
 //
 // Asset files (internal/asset: images, fonts, media) have no extraction and
 // no entry: the index records their paths from the walk and makes a node for

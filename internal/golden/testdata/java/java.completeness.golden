@@ -1,0 +1,57 @@
+symbol com.acme.model.Entity.Key.text unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/Entity.java:16:16-16:22
+symbol com.acme.model.Named.name unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/Named.java:4:5-4:11
+symbol com.acme.model.Named.label unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/Named.java:6:13-6:19
+symbol com.acme.model.Point.shift unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+symbol com.acme.model.Role.<anonymous>.canWrite unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate Override kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/Role.java:6:10-6:18
+symbol com.acme.model.Role.<init> unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/Role.java:14:10-14:16
+symbol com.acme.model.Role.code unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/Role.java:22:12-22:18
+symbol com.acme.model.User.friends unattributed_in=0 unattributed_out=0 unresolved=0 outside=2
+  no_candidate List kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:8:19-8:23
+  no_candidate ArrayList kind=construction receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:8:44-8:53
+symbol com.acme.model.User.<init> unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:11:17-11:23
+symbol com.acme.model.User.name unattributed_in=0 unattributed_out=0 unresolved=0 outside=2
+  no_candidate Override kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:19:6-19:14
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:20:12-20:18
+symbol com.acme.model.User.befriend unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate add kind=call receiver="friends" reason=outside_repository @src/main/java/com/acme/model/User.java:25:17-25:20
+symbol com.acme.model.User.grant unattributed_in=3 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller com.acme.model.User.grant kind=call confidence=candidate refs=1
+  candidate_caller com.acme.service.UserService.register kind=call confidence=candidate refs=2
+symbol com.acme.model.User.grant unattributed_in=3 unattributed_out=1 unresolved=1 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:34:23-34:29
+  no_candidate valueOf kind=call receiver="Role" reason=unresolved @src/main/java/com/acme/model/User.java:35:20-35:27
+  candidate_callee com.acme.model.User.grant kind=call confidence=candidate refs=1
+  candidate_callee com.acme.model.User.grant kind=call confidence=candidate refs=1
+  candidate_caller com.acme.model.User.grant kind=call confidence=candidate refs=1
+  candidate_caller com.acme.service.UserService.register kind=call confidence=candidate refs=2
+symbol com.acme.model.User.Badge.show unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/model/User.java:39:9-39:15
+symbol com.acme.service.Strings.upper unattributed_in=0 unattributed_out=0 unresolved=0 outside=3
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/Strings.java:6:12-6:18
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/Strings.java:6:25-6:31
+  no_candidate toUpperCase kind=call receiver="s" reason=outside_repository @src/main/java/com/acme/service/Strings.java:7:18-7:29
+symbol com.acme.service.UserService.register unattributed_in=0 unattributed_out=2 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:15:26-15:32
+  candidate_callee com.acme.model.User.grant kind=call confidence=candidate refs=2
+  candidate_callee com.acme.model.User.grant kind=call confidence=candidate refs=2
+symbol com.acme.service.UserService.log unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:27:14-27:20
+symbol com.acme.service.UserService.factory unattributed_in=0 unattributed_out=0 unresolved=0 outside=2
+  no_candidate Function kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:33:5-33:13
+  no_candidate String kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:33:14-33:20
+symbol com.acme.service.UserService.later unattributed_in=0 unattributed_out=0 unresolved=0 outside=2
+  no_candidate Runnable kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:37:5-37:13
+  no_candidate Runnable kind=construction receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:38:20-38:28
+symbol com.acme.service.UserService.<anonymous> unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate Runnable kind=inheritance receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:38:20-38:28
+symbol com.acme.service.UserService.<anonymous>.run unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate Override kind=type_use receiver="" reason=outside_repository @src/main/java/com/acme/service/UserService.java:39:14-39:22
+symbol com.acme.service.UserService.corner.Grid.at unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  no_candidate shift kind=call receiver="Point.origin()" reason=unattributed @src/main/java/com/acme/service/UserService.java:50:39-50:44

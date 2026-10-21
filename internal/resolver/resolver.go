@@ -48,6 +48,9 @@ type FileIndex struct {
 	// TypeFacts are the declared-type facts of the file's declarations (see
 	// language.Extraction.TypeFacts and typefacts.go).
 	TypeFacts []language.TypeFact
+	// SourceRoot: the directory the file's identities are laid out under
+	// (see language.Extraction.SourceRoot).
+	SourceRoot string
 }
 
 // nameSpace returns fi's name space.
@@ -121,6 +124,10 @@ type Resolver struct {
 	// facts indexes the declared-type facts by declaration (typefacts.go),
 	// built on first use.
 	facts factIndex
+
+	// lookups memoizes the supertypes language lookups identify
+	// (language_lookup.go).
+	lookups lookupMemo
 }
 
 // New builds a Resolver from a set of file indexes.
@@ -333,6 +340,11 @@ func (r *Resolver) resolveReference(ref reference.Reference, fi FileIndex) Resol
 	// language (explicit path evidence: language.ReferenceDraft.FileIdentity).
 	if ref.FileIdentity && ref.NameQualified != "" {
 		return r.resolveFileIdentity(res, ref)
+	}
+	// The language's own search, as the provider states it, is authoritative
+	// and resolved instead of every rule below (language_lookup.go).
+	if ref.Lookup != "" || ref.ReceiverLookup != "" {
+		return r.resolveLanguageLookup(res, ref)
 	}
 	// R0: a provider-determined qualified identity is authoritative and is
 	// resolved before — and instead of — every other rule below.

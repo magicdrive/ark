@@ -1,0 +1,238 @@
+# file: src/main/java/com/acme/model/Broken.java
+## symbols
+symbol Broken kind=class qualified="com.acme.broken.Broken" parent="" receiver="" exported=false implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Broken.java:5:1-10:2
+symbol ok kind=method qualified="com.acme.broken.Broken.ok" parent="com.acme.broken.Broken" receiver="Broken" exported=false params="()" @src/main/java/com/acme/model/Broken.java:6:5-6:17
+symbol bad kind=method qualified="com.acme.broken.Broken.bad" parent="com.acme.broken.Broken" receiver="Broken" exported=false params="()" @src/main/java/com/acme/model/Broken.java:7:5-8:6
+symbol u kind=field qualified="com.acme.broken.Broken.u" parent="com.acme.broken.Broken" receiver="Broken" exported=false @src/main/java/com/acme/model/Broken.java:9:10-9:11
+## references
+## imports
+## identity_only
+## diagnostics
+diag error code=parse_error "parse error: the parser expected ) here; the surrounding code is not analyzed as written (the source itself may be valid)" @src/main/java/com/acme/model/Broken.java:7:14-7:14
+
+# file: src/main/java/com/acme/model/Entity.java
+## symbols
+symbol Entity kind=class qualified="com.acme.model.Entity" parent="" receiver="" exported=true implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Entity.java:4:1-20:2
+symbol id kind=field qualified="com.acme.model.Entity.id" parent="com.acme.model.Entity" receiver="Entity" exported=false @src/main/java/com/acme/model/Entity.java:5:20-5:22
+symbol id kind=method qualified="com.acme.model.Entity.id" parent="com.acme.model.Entity" receiver="Entity" exported=true params="()" @src/main/java/com/acme/model/Entity.java:7:5-9:6
+symbol touch kind=method qualified="com.acme.model.Entity.touch" parent="com.acme.model.Entity" receiver="Entity" exported=true params="()" @src/main/java/com/acme/model/Entity.java:11:5-13:6
+symbol Key kind=class qualified="com.acme.model.Entity.Key" parent="com.acme.model.Entity" receiver="Entity" exported=true implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Entity.java:15:5-19:6
+symbol text kind=method qualified="com.acme.model.Entity.Key.text" parent="com.acme.model.Entity.Key" receiver="Key" exported=true params="()" @src/main/java/com/acme/model/Entity.java:16:9-18:10
+## references
+ref Named kind=implementation container="com.acme.model.Entity" receiver="" lookup="=T:com.acme.model.Named;=T:java.lang.Named" call=false @src/main/java/com/acme/model/Entity.java:4:41-4:46
+ref id kind=value_reference container="com.acme.model.Entity.id" receiver="" lookup="@V:com.acme.model.Entity.id" call=false @src/main/java/com/acme/model/Entity.java:8:16-8:18
+ref id kind=value_reference container="com.acme.model.Entity.touch" receiver="" lookup="@V:com.acme.model.Entity.id" call=false @src/main/java/com/acme/model/Entity.java:12:9-12:11
+ref String kind=type_use container="com.acme.model.Entity.Key.text" receiver="" lookup="@T:com.acme.model.Entity.String;=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/Entity.java:16:16-16:22
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/model/Named.java
+## symbols
+symbol Named kind=interface qualified="com.acme.model.Named" parent="" receiver="" exported=true implicit="getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Named.java:3:1-9:2
+symbol name kind=method qualified="com.acme.model.Named.name" parent="com.acme.model.Named" receiver="Named" exported=true params="()" @src/main/java/com/acme/model/Named.java:4:5-4:19
+symbol label kind=method qualified="com.acme.model.Named.label" parent="com.acme.model.Named" receiver="Named" exported=true params="()" @src/main/java/com/acme/model/Named.java:6:5-8:6
+## references
+ref String kind=type_use container="com.acme.model.Named.name" receiver="" lookup="=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/Named.java:4:5-4:11
+ref String kind=type_use container="com.acme.model.Named.label" receiver="" lookup="=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/Named.java:6:13-6:19
+ref name kind=call container="com.acme.model.Named.label" receiver="" lookup="@M:com.acme.model.Named.name" args=0 call=true @src/main/java/com/acme/model/Named.java:7:22-7:26
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/model/Point.java
+## symbols
+symbol Point kind=class qualified="com.acme.model.Point" parent="" receiver="" exported=true implicit="+x(),+y(),+<init>(int,int),+equals(?Object),+hashCode(),+toString(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Point.java:3:1-11:2
+symbol x kind=field qualified="com.acme.model.Point.x" parent="com.acme.model.Point" receiver="Point" exported=false @src/main/java/com/acme/model/Point.java:3:21-3:26
+symbol y kind=field qualified="com.acme.model.Point.y" parent="com.acme.model.Point" receiver="Point" exported=false @src/main/java/com/acme/model/Point.java:3:28-3:33
+symbol origin kind=method qualified="com.acme.model.Point.origin" parent="com.acme.model.Point" receiver="Point" exported=true params="()" @src/main/java/com/acme/model/Point.java:4:5-6:6
+symbol shift kind=method qualified="com.acme.model.Point.shift" parent="com.acme.model.Point" receiver="Point" exported=true params="(int)" @src/main/java/com/acme/model/Point.java:8:5-10:6
+## references
+ref Point kind=type_use container="com.acme.model.Point.origin" receiver="" lookup="=T:com.acme.model.Point" call=false @src/main/java/com/acme/model/Point.java:4:19-4:24
+ref <init> kind=call container="com.acme.model.Point.origin" receiver="Point" speculative=true receiver_lookup="=T:com.acme.model.Point" args=2 arg_types="int,int" call=true @src/main/java/com/acme/model/Point.java:5:20-5:25
+ref Point kind=construction container="com.acme.model.Point.origin" receiver="" lookup="=T:com.acme.model.Point" call=false @src/main/java/com/acme/model/Point.java:5:20-5:25
+ref Point kind=type_use container="com.acme.model.Point.shift" receiver="" lookup="=T:com.acme.model.Point" call=false @src/main/java/com/acme/model/Point.java:8:12-8:17
+ref <init> kind=call container="com.acme.model.Point.shift" receiver="Point" speculative=true receiver_lookup="=T:com.acme.model.Point" args=2 arg_types="int,int" call=true @src/main/java/com/acme/model/Point.java:9:20-9:25
+ref Point kind=construction container="com.acme.model.Point.shift" receiver="" lookup="=T:com.acme.model.Point" call=false @src/main/java/com/acme/model/Point.java:9:20-9:25
+ref x kind=value_reference container="com.acme.model.Point.shift" receiver="" lookup="@V:com.acme.model.Point.x" call=false @src/main/java/com/acme/model/Point.java:9:26-9:27
+ref y kind=value_reference container="com.acme.model.Point.shift" receiver="" lookup="@V:com.acme.model.Point.y" call=false @src/main/java/com/acme/model/Point.java:9:34-9:35
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/model/Role.java
+## symbols
+symbol Role kind=enum qualified="com.acme.model.Role" parent="" receiver="" exported=true implicit="+values(),+valueOf(?String),name(),ordinal(),compareTo(?E),getDeclaringClass(),describeConstable(),valueOf(?Class,?String),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Role.java:3:1-25:2
+symbol ADMIN kind=constant qualified="com.acme.model.Role.ADMIN" parent="com.acme.model.Role" receiver="Role" exported=true @src/main/java/com/acme/model/Role.java:4:5-4:15
+symbol MEMBER kind=constant qualified="com.acme.model.Role.MEMBER" parent="com.acme.model.Role" receiver="Role" exported=true @src/main/java/com/acme/model/Role.java:5:5-10:6
+symbol <anonymous> kind=class qualified="com.acme.model.Role.<anonymous>" parent="com.acme.model.Role.MEMBER" receiver="" exported=false implicit="getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/model/Role.java:5:17-10:6
+symbol canWrite kind=method qualified="com.acme.model.Role.<anonymous>.canWrite" parent="com.acme.model.Role.<anonymous>" receiver="<anonymous>" exported=false params="()" overrides=true @src/main/java/com/acme/model/Role.java:6:9-9:10
+symbol code kind=field qualified="com.acme.model.Role.code" parent="com.acme.model.Role" receiver="Role" exported=false @src/main/java/com/acme/model/Role.java:12:26-12:30
+symbol <init> kind=constructor qualified="com.acme.model.Role.<init>" parent="com.acme.model.Role" receiver="Role" exported=false params="(?String)" @src/main/java/com/acme/model/Role.java:14:5-16:6
+symbol canWrite kind=method qualified="com.acme.model.Role.canWrite" parent="com.acme.model.Role" receiver="Role" exported=false params="()" @src/main/java/com/acme/model/Role.java:18:5-20:6
+symbol code kind=method qualified="com.acme.model.Role.code" parent="com.acme.model.Role" receiver="Role" exported=true params="()" @src/main/java/com/acme/model/Role.java:22:5-24:6
+## references
+ref <init> kind=call container="com.acme.model.Role.ADMIN" receiver="" speculative=true lookup="@C:com.acme.model.Role.<init>" args=1 arg_types="S" call=true @src/main/java/com/acme/model/Role.java:4:5-4:10
+ref Role kind=inheritance container="com.acme.model.Role.<anonymous>" receiver="" lookup="=T:com.acme.model.Role" call=false @src/main/java/com/acme/model/Role.java:5:5-5:11
+ref Override kind=type_use container="com.acme.model.Role.<anonymous>.canWrite" receiver="" lookup="@T:com.acme.model.Role.<anonymous>.Override;=T:com.acme.model.Override;=T:java.lang.Override" call=false @src/main/java/com/acme/model/Role.java:6:10-6:18
+ref String kind=type_use container="com.acme.model.Role.code" receiver="" lookup="=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/Role.java:12:19-12:25
+ref String kind=type_use container="com.acme.model.Role.<init>" receiver="" lookup="=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/Role.java:14:10-14:16
+ref code kind=write container="com.acme.model.Role.<init>" receiver="this" lookup="@V:com.acme.model.Role.code" call=false @src/main/java/com/acme/model/Role.java:15:14-15:18
+ref String kind=type_use container="com.acme.model.Role.code" receiver="" lookup="=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/Role.java:22:12-22:18
+ref code kind=value_reference container="com.acme.model.Role.code" receiver="" lookup="@V:com.acme.model.Role.code" call=false @src/main/java/com/acme/model/Role.java:23:16-23:20
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/model/User.java
+## symbols
+symbol User kind=class qualified="com.acme.model.User" parent="" receiver="" exported=true @src/main/java/com/acme/model/User.java:6:1-43:2
+symbol name kind=field qualified="com.acme.model.User.name" parent="com.acme.model.User" receiver="User" exported=false @src/main/java/com/acme/model/User.java:7:26-7:30
+symbol friends kind=field qualified="com.acme.model.User.friends" parent="com.acme.model.User" receiver="User" exported=false @src/main/java/com/acme/model/User.java:8:30-8:57
+symbol role kind=field qualified="com.acme.model.User.role" parent="com.acme.model.User" receiver="User" exported=false @src/main/java/com/acme/model/User.java:9:18-9:36
+symbol <init> kind=constructor qualified="com.acme.model.User.<init>" parent="com.acme.model.User" receiver="User" exported=true params="(?String)" @src/main/java/com/acme/model/User.java:11:5-13:6
+symbol <init> kind=constructor qualified="com.acme.model.User.<init>" parent="com.acme.model.User" receiver="User" exported=true params="()" @src/main/java/com/acme/model/User.java:15:5-17:6
+symbol name kind=method qualified="com.acme.model.User.name" parent="com.acme.model.User" receiver="User" exported=true params="()" overrides=true @src/main/java/com/acme/model/User.java:19:5-22:6
+symbol befriend kind=method qualified="com.acme.model.User.befriend" parent="com.acme.model.User" receiver="User" exported=true params="(?User)" @src/main/java/com/acme/model/User.java:24:5-28:6
+symbol grant kind=method qualified="com.acme.model.User.grant" parent="com.acme.model.User" receiver="User" exported=true params="(?Role)" @src/main/java/com/acme/model/User.java:30:5-32:6
+symbol grant kind=method qualified="com.acme.model.User.grant" parent="com.acme.model.User" receiver="User" exported=true params="(?String)" @src/main/java/com/acme/model/User.java:34:5-36:6
+symbol Badge kind=class qualified="com.acme.model.User.Badge" parent="com.acme.model.User" receiver="User" exported=false implicit="+<init>()" @src/main/java/com/acme/model/User.java:38:5-42:6
+symbol show kind=method qualified="com.acme.model.User.Badge.show" parent="com.acme.model.User.Badge" receiver="Badge" exported=false params="()" @src/main/java/com/acme/model/User.java:39:9-41:10
+## references
+ref Entity kind=inheritance container="com.acme.model.User" receiver="" lookup="=T:com.acme.model.Entity;=T:java.lang.Entity" call=false @src/main/java/com/acme/model/User.java:6:27-6:33
+ref String kind=type_use container="com.acme.model.User.name" receiver="" lookup="@T:com.acme.model.User.String;=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/User.java:7:19-7:25
+ref List kind=type_use container="com.acme.model.User.friends" receiver="" lookup="@T:com.acme.model.User.List;=T:java.util.List" call=false @src/main/java/com/acme/model/User.java:8:19-8:23
+ref User kind=type_use container="com.acme.model.User.friends" receiver="" lookup="@T:com.acme.model.User.User;=T:com.acme.model.User" call=false @src/main/java/com/acme/model/User.java:8:24-8:28
+ref <init> kind=call container="com.acme.model.User.friends" receiver="ArrayList" speculative=true receiver_lookup="@T:com.acme.model.User.ArrayList;=T:java.util.ArrayList" args=0 call=true @src/main/java/com/acme/model/User.java:8:44-8:53
+ref ArrayList kind=construction container="com.acme.model.User.friends" receiver="" lookup="@T:com.acme.model.User.ArrayList;=T:java.util.ArrayList" call=false @src/main/java/com/acme/model/User.java:8:44-8:53
+ref Role kind=type_use container="com.acme.model.User.role" receiver="" lookup="@T:com.acme.model.User.Role;=T:com.acme.model.Role;=T:java.lang.Role" call=false @src/main/java/com/acme/model/User.java:9:13-9:17
+ref Role kind=type_use container="com.acme.model.User.role" receiver="" speculative=true lookup="@V:com.acme.model.User.Role;@T:com.acme.model.User.Role;=T:com.acme.model.Role;=T:java.lang.Role" call=false @src/main/java/com/acme/model/User.java:9:25-9:29
+ref Role kind=value_reference container="com.acme.model.User.role" receiver="" speculative=true lookup="@V:com.acme.model.User.Role" call=false @src/main/java/com/acme/model/User.java:9:25-9:29
+ref MEMBER kind=value_reference container="com.acme.model.User.role" receiver="Role" receiver_lookup="@V:com.acme.model.User.Role;@T:com.acme.model.User.Role;=T:com.acme.model.Role;=T:java.lang.Role" call=false @src/main/java/com/acme/model/User.java:9:30-9:36
+ref String kind=type_use container="com.acme.model.User.<init>" receiver="" lookup="@T:com.acme.model.User.String;=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/User.java:11:17-11:23
+ref name kind=write container="com.acme.model.User.<init>" receiver="this" lookup="@V:com.acme.model.User.name" call=false @src/main/java/com/acme/model/User.java:12:14-12:18
+ref <init> kind=call container="com.acme.model.User.<init>" receiver="" speculative=true lookup="@C:com.acme.model.User.<init>" args=1 arg_types="S" call=true @src/main/java/com/acme/model/User.java:16:9-16:13
+ref Override kind=type_use container="com.acme.model.User.name" receiver="" lookup="@T:com.acme.model.User.Override;=T:com.acme.model.Override;=T:java.lang.Override" call=false @src/main/java/com/acme/model/User.java:19:6-19:14
+ref String kind=type_use container="com.acme.model.User.name" receiver="" lookup="@T:com.acme.model.User.String;=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/User.java:20:12-20:18
+ref name kind=value_reference container="com.acme.model.User.name" receiver="" lookup="@V:com.acme.model.User.name" call=false @src/main/java/com/acme/model/User.java:21:16-21:20
+ref User kind=type_use container="com.acme.model.User.befriend" receiver="" lookup="@T:com.acme.model.User.User;=T:com.acme.model.User" call=false @src/main/java/com/acme/model/User.java:24:26-24:30
+ref friends kind=value_reference container="com.acme.model.User.befriend" receiver="" lookup="@V:com.acme.model.User.friends" call=false @src/main/java/com/acme/model/User.java:25:9-25:16
+ref add kind=call container="com.acme.model.User.befriend" receiver="friends" receiver_type="List" receiver_lookup="@T:com.acme.model.User.List;=T:java.util.List" args=1 arg_types="N" call=true @src/main/java/com/acme/model/User.java:25:17-25:20
+ref touch kind=call container="com.acme.model.User.befriend" receiver="other" receiver_type="User" receiver_lookup="@T:com.acme.model.User.User;=T:com.acme.model.User" args=0 call=true @src/main/java/com/acme/model/User.java:26:15-26:20
+ref touch kind=call container="com.acme.model.User.befriend" receiver="" lookup="@M:com.acme.model.User.touch" args=0 call=true @src/main/java/com/acme/model/User.java:27:9-27:14
+ref Role kind=type_use container="com.acme.model.User.grant" receiver="" lookup="@T:com.acme.model.User.Role;=T:com.acme.model.Role;=T:java.lang.Role" call=false @src/main/java/com/acme/model/User.java:30:23-30:27
+ref role kind=write container="com.acme.model.User.grant" receiver="" lookup="@V:com.acme.model.User.role" call=false @src/main/java/com/acme/model/User.java:31:9-31:13
+ref String kind=type_use container="com.acme.model.User.grant" receiver="" lookup="@T:com.acme.model.User.String;=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/User.java:34:23-34:29
+ref grant kind=call container="com.acme.model.User.grant" receiver="" lookup="@M:com.acme.model.User.grant" args=1 call=true @src/main/java/com/acme/model/User.java:35:9-35:14
+ref Role kind=type_use container="com.acme.model.User.grant" receiver="" speculative=true lookup="@V:com.acme.model.User.Role;@T:com.acme.model.User.Role;=T:com.acme.model.Role;=T:java.lang.Role" call=false @src/main/java/com/acme/model/User.java:35:15-35:19
+ref Role kind=value_reference container="com.acme.model.User.grant" receiver="" speculative=true lookup="@V:com.acme.model.User.Role" call=false @src/main/java/com/acme/model/User.java:35:15-35:19
+ref valueOf kind=call container="com.acme.model.User.grant" receiver="Role" receiver_lookup="@V:com.acme.model.User.Role;@T:com.acme.model.User.Role;=T:com.acme.model.Role;=T:java.lang.Role" args=1 arg_types="N" call=true @src/main/java/com/acme/model/User.java:35:20-35:27
+ref Key kind=inheritance container="com.acme.model.User.Badge" receiver="" lookup="@T:com.acme.model.User.Key;=T:com.acme.model.Key;=T:java.lang.Key" call=false @src/main/java/com/acme/model/User.java:38:25-38:28
+ref String kind=type_use container="com.acme.model.User.Badge.show" receiver="" lookup="@T:com.acme.model.User.Badge.String;@T:com.acme.model.User.String;=T:com.acme.model.String;=T:java.lang.String" call=false @src/main/java/com/acme/model/User.java:39:9-39:15
+ref text kind=call container="com.acme.model.User.Badge.show" receiver="" lookup="@M:com.acme.model.User.Badge.text;@M:com.acme.model.User.text" args=0 call=true @src/main/java/com/acme/model/User.java:40:20-40:24
+ref name kind=call container="com.acme.model.User.Badge.show" receiver="" lookup="@M:com.acme.model.User.Badge.name;@M:com.acme.model.User.name" args=0 call=true @src/main/java/com/acme/model/User.java:40:29-40:33
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/service/Repository.java
+## symbols
+symbol Repository kind=interface qualified="com.acme.service.Repository" parent="" receiver="" exported=true implicit="getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/service/Repository.java:5:1-9:2
+symbol save kind=method qualified="com.acme.service.Repository.save" parent="com.acme.service.Repository" receiver="Repository" exported=true params="(?T)" @src/main/java/com/acme/service/Repository.java:6:5-6:23
+symbol find kind=method qualified="com.acme.service.Repository.find" parent="com.acme.service.Repository" receiver="Repository" exported=true params="(long)" @src/main/java/com/acme/service/Repository.java:8:5-8:21
+## references
+ref Entity kind=type_use container="com.acme.service.Repository" receiver="" lookup="=T:com.acme.model.Entity" call=false @src/main/java/com/acme/service/Repository.java:5:39-5:45
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/service/Strings.java
+## symbols
+symbol Strings kind=class qualified="com.acme.service.Strings" parent="" receiver="" exported=false implicit="getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/service/Strings.java:3:1-9:2
+symbol <init> kind=constructor qualified="com.acme.service.Strings.<init>" parent="com.acme.service.Strings" receiver="Strings" exported=false params="()" @src/main/java/com/acme/service/Strings.java:4:5-4:25
+symbol upper kind=method qualified="com.acme.service.Strings.upper" parent="com.acme.service.Strings" receiver="Strings" exported=false params="(?String)" @src/main/java/com/acme/service/Strings.java:6:5-8:6
+## references
+ref String kind=type_use container="com.acme.service.Strings.upper" receiver="" lookup="=T:com.acme.service.String;=T:java.lang.String" call=false @src/main/java/com/acme/service/Strings.java:6:12-6:18
+ref String kind=type_use container="com.acme.service.Strings.upper" receiver="" lookup="=T:com.acme.service.String;=T:java.lang.String" call=false @src/main/java/com/acme/service/Strings.java:6:25-6:31
+ref toUpperCase kind=call container="com.acme.service.Strings.upper" receiver="s" receiver_type="String" receiver_lookup="=T:com.acme.service.String;=T:java.lang.String" args=0 call=true @src/main/java/com/acme/service/Strings.java:7:18-7:29
+## imports
+## identity_only
+## diagnostics
+
+# file: src/main/java/com/acme/service/UserService.java
+## symbols
+symbol UserService kind=class qualified="com.acme.service.UserService" parent="" receiver="" exported=true implicit="getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/service/UserService.java:8:1-55:2
+symbol users kind=field qualified="com.acme.service.UserService.users" parent="com.acme.service.UserService" receiver="UserService" exported=false @src/main/java/com/acme/service/UserService.java:9:36-9:41
+symbol <init> kind=constructor qualified="com.acme.service.UserService.<init>" parent="com.acme.service.UserService" receiver="UserService" exported=true params="(?Repository)" @src/main/java/com/acme/service/UserService.java:11:5-13:6
+symbol register kind=method qualified="com.acme.service.UserService.register" parent="com.acme.service.UserService" receiver="UserService" exported=true params="(?String)" @src/main/java/com/acme/service/UserService.java:15:5-23:6
+symbol log kind=method qualified="com.acme.service.UserService.log" parent="com.acme.service.UserService" receiver="UserService" exported=false params="(int)" @src/main/java/com/acme/service/UserService.java:25:5-25:27
+symbol log kind=method qualified="com.acme.service.UserService.log" parent="com.acme.service.UserService" receiver="UserService" exported=false params="(?String)" @src/main/java/com/acme/service/UserService.java:27:5-27:32
+symbol touchAll kind=method qualified="com.acme.service.UserService.touchAll" parent="com.acme.service.UserService" receiver="UserService" exported=true params="(?E)" @src/main/java/com/acme/service/UserService.java:29:5-31:6
+symbol factory kind=method qualified="com.acme.service.UserService.factory" parent="com.acme.service.UserService" receiver="UserService" exported=false params="()" @src/main/java/com/acme/service/UserService.java:33:5-35:6
+symbol later kind=method qualified="com.acme.service.UserService.later" parent="com.acme.service.UserService" receiver="UserService" exported=false params="(?User)" @src/main/java/com/acme/service/UserService.java:37:5-45:6
+symbol <anonymous> kind=class qualified="com.acme.service.UserService.<anonymous>" parent="com.acme.service.UserService.later" receiver="" exported=false implicit="getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/service/UserService.java:38:31-44:10
+symbol run kind=method qualified="com.acme.service.UserService.<anonymous>.run" parent="com.acme.service.UserService.<anonymous>" receiver="<anonymous>" exported=true params="()" overrides=true @src/main/java/com/acme/service/UserService.java:39:13-43:14
+symbol corner kind=method qualified="com.acme.service.UserService.corner" parent="com.acme.service.UserService" receiver="UserService" exported=false params="()" @src/main/java/com/acme/service/UserService.java:47:5-54:6
+symbol Grid kind=class qualified="com.acme.service.UserService.corner.Grid" parent="com.acme.service.UserService.corner" receiver="" exported=false implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/main/java/com/acme/service/UserService.java:48:9-52:10
+symbol at kind=method qualified="com.acme.service.UserService.corner.Grid.at" parent="com.acme.service.UserService.corner.Grid" receiver="Grid" exported=false params="(int)" @src/main/java/com/acme/service/UserService.java:49:13-51:14
+## references
+ref Repository kind=type_use container="com.acme.service.UserService.users" receiver="" lookup="=T:com.acme.service.Repository;=T:com.acme.model.Repository|=T:java.lang.Repository" call=false @src/main/java/com/acme/service/UserService.java:9:19-9:29
+ref User kind=type_use container="com.acme.service.UserService.users" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:9:30-9:34
+ref Repository kind=type_use container="com.acme.service.UserService.<init>" receiver="" lookup="=T:com.acme.service.Repository;=T:com.acme.model.Repository|=T:java.lang.Repository" call=false @src/main/java/com/acme/service/UserService.java:11:24-11:34
+ref User kind=type_use container="com.acme.service.UserService.<init>" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:11:35-11:39
+ref users kind=write container="com.acme.service.UserService.<init>" receiver="this" lookup="@V:com.acme.service.UserService.users" call=false @src/main/java/com/acme/service/UserService.java:12:14-12:19
+ref User kind=type_use container="com.acme.service.UserService.register" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:15:12-15:16
+ref String kind=type_use container="com.acme.service.UserService.register" receiver="" lookup="=T:com.acme.service.String;=T:com.acme.model.String|=T:java.lang.String" call=false @src/main/java/com/acme/service/UserService.java:15:26-15:32
+ref User kind=type_use container="com.acme.service.UserService.register" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:16:9-16:13
+ref <init> kind=call container="com.acme.service.UserService.register" receiver="User" speculative=true receiver_lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" args=1 call=true @src/main/java/com/acme/service/UserService.java:16:22-16:26
+ref User kind=construction container="com.acme.service.UserService.register" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:16:22-16:26
+ref upper kind=call container="com.acme.service.UserService.register" receiver="" lookup="@M:com.acme.service.Strings.upper" args=1 arg_types="N" call=true @src/main/java/com/acme/service/UserService.java:16:27-16:32
+ref users kind=value_reference container="com.acme.service.UserService.register" receiver="" lookup="@V:com.acme.service.UserService.users" call=false @src/main/java/com/acme/service/UserService.java:17:9-17:14
+ref save kind=call container="com.acme.service.UserService.register" receiver="users" receiver_type="Repository" receiver_lookup="=T:com.acme.service.Repository;=T:com.acme.model.Repository|=T:java.lang.Repository" args=1 arg_types="N" call=true @src/main/java/com/acme/service/UserService.java:17:15-17:19
+ref grant kind=call container="com.acme.service.UserService.register" receiver="u" receiver_type="User" receiver_lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" args=1 call=true @src/main/java/com/acme/service/UserService.java:18:11-18:16
+ref Role kind=type_use container="com.acme.service.UserService.register" receiver="" speculative=true lookup="=T:com.acme.service.Role;=T:com.acme.model.Role|=T:java.lang.Role" call=false @src/main/java/com/acme/service/UserService.java:18:17-18:21
+ref ADMIN kind=value_reference container="com.acme.service.UserService.register" receiver="Role" receiver_lookup="=T:com.acme.service.Role;=T:com.acme.model.Role|=T:java.lang.Role" call=false @src/main/java/com/acme/service/UserService.java:18:22-18:27
+ref grant kind=call container="com.acme.service.UserService.register" receiver="u" receiver_type="User" receiver_lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" args=1 arg_types="S" call=true @src/main/java/com/acme/service/UserService.java:19:11-19:16
+ref log kind=call container="com.acme.service.UserService.register" receiver="" lookup="@M:com.acme.service.UserService.log" args=1 arg_types="int" call=true @src/main/java/com/acme/service/UserService.java:20:9-20:12
+ref log kind=call container="com.acme.service.UserService.register" receiver="" lookup="@M:com.acme.service.UserService.log" args=1 arg_types="S" call=true @src/main/java/com/acme/service/UserService.java:21:9-21:12
+ref String kind=type_use container="com.acme.service.UserService.log" receiver="" lookup="=T:com.acme.service.String;=T:com.acme.model.String|=T:java.lang.String" call=false @src/main/java/com/acme/service/UserService.java:27:14-27:20
+ref Entity kind=type_use container="com.acme.service.UserService.touchAll" receiver="" lookup="=T:com.acme.service.Entity;=T:com.acme.model.Entity|=T:java.lang.Entity" call=false @src/main/java/com/acme/service/UserService.java:29:23-29:29
+ref touch kind=call container="com.acme.service.UserService.touchAll" receiver="entity" receiver_type="E" receiver_lookup="=T:com.acme.service.Entity;=T:com.acme.model.Entity|=T:java.lang.Entity" args=0 call=true @src/main/java/com/acme/service/UserService.java:30:16-30:21
+ref Function kind=type_use container="com.acme.service.UserService.factory" receiver="" lookup="=T:java.util.function.Function" call=false @src/main/java/com/acme/service/UserService.java:33:5-33:13
+ref String kind=type_use container="com.acme.service.UserService.factory" receiver="" lookup="=T:com.acme.service.String;=T:com.acme.model.String|=T:java.lang.String" call=false @src/main/java/com/acme/service/UserService.java:33:14-33:20
+ref User kind=type_use container="com.acme.service.UserService.factory" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:33:22-33:26
+ref  kind=construction container="com.acme.service.UserService.factory" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:34:16-34:20
+ref Runnable kind=type_use container="com.acme.service.UserService.later" receiver="" lookup="=T:com.acme.service.Runnable;=T:com.acme.model.Runnable|=T:java.lang.Runnable" call=false @src/main/java/com/acme/service/UserService.java:37:5-37:13
+ref User kind=type_use container="com.acme.service.UserService.later" receiver="" lookup="=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" call=false @src/main/java/com/acme/service/UserService.java:37:20-37:24
+ref Runnable kind=construction container="com.acme.service.UserService.later" receiver="" lookup="=T:com.acme.service.Runnable;=T:com.acme.model.Runnable|=T:java.lang.Runnable" call=false @src/main/java/com/acme/service/UserService.java:38:20-38:28
+ref Runnable kind=inheritance container="com.acme.service.UserService.<anonymous>" receiver="" lookup="=T:com.acme.service.Runnable;=T:com.acme.model.Runnable|=T:java.lang.Runnable" call=false @src/main/java/com/acme/service/UserService.java:38:20-38:28
+ref Override kind=type_use container="com.acme.service.UserService.<anonymous>.run" receiver="" lookup="@T:com.acme.service.UserService.<anonymous>.Override;=T:com.acme.service.Override;=T:com.acme.model.Override|=T:java.lang.Override" call=false @src/main/java/com/acme/service/UserService.java:39:14-39:22
+ref touch kind=call container="com.acme.service.UserService.<anonymous>.run" receiver="u" receiver_type="User" receiver_lookup="@V:com.acme.service.UserService.<anonymous>.u;=T:com.acme.service.User;=T:com.acme.model.User|=T:java.lang.User" args=0 call=true @src/main/java/com/acme/service/UserService.java:41:19-41:24
+ref log kind=call container="com.acme.service.UserService.<anonymous>.run" receiver="" lookup="@M:com.acme.service.UserService.<anonymous>.log;@M:com.acme.service.UserService.log" args=1 arg_types="int" call=true @src/main/java/com/acme/service/UserService.java:42:17-42:20
+ref Point kind=type_use container="com.acme.service.UserService.corner" receiver="" lookup="=T:com.acme.service.Point;=T:com.acme.model.Point|=T:java.lang.Point" call=false @src/main/java/com/acme/service/UserService.java:47:5-47:10
+ref Point kind=type_use container="com.acme.service.UserService.corner.Grid.at" receiver="" lookup="=T:com.acme.service.Point;=T:com.acme.model.Point|=T:java.lang.Point" call=false @src/main/java/com/acme/service/UserService.java:49:13-49:18
+ref Point kind=type_use container="com.acme.service.UserService.corner.Grid.at" receiver="" speculative=true lookup="=T:com.acme.service.Point;=T:com.acme.model.Point|=T:java.lang.Point" call=false @src/main/java/com/acme/service/UserService.java:50:24-50:29
+ref origin kind=call container="com.acme.service.UserService.corner.Grid.at" receiver="Point" receiver_lookup="=T:com.acme.service.Point;=T:com.acme.model.Point|=T:java.lang.Point" args=0 call=true @src/main/java/com/acme/service/UserService.java:50:30-50:36
+ref shift kind=call container="com.acme.service.UserService.corner.Grid.at" receiver="Point.origin()" args=1 arg_types="int" call=true @src/main/java/com/acme/service/UserService.java:50:39-50:44
+ref <init> kind=call container="com.acme.service.UserService.corner" receiver="Grid" speculative=true receiver_lookup="=T:com.acme.service.UserService.corner.Grid" args=0 call=true @src/main/java/com/acme/service/UserService.java:53:20-53:24
+ref Grid kind=construction container="com.acme.service.UserService.corner" receiver="" lookup="=T:com.acme.service.UserService.corner.Grid" call=false @src/main/java/com/acme/service/UserService.java:53:20-53:24
+ref at kind=call container="com.acme.service.UserService.corner" receiver="newGrid()" receiver_type="Grid" receiver_lookup="=T:com.acme.service.UserService.corner.Grid" args=1 arg_types="int" call=true @src/main/java/com/acme/service/UserService.java:53:27-53:29
+## imports
+## identity_only
+## diagnostics
+
+# file: src/test/java/com/acme/service/UserServiceTest.java
+## symbols
+symbol UserServiceTest kind=class qualified="com.acme.service.UserServiceTest" parent="" receiver="" exported=false implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @src/test/java/com/acme/service/UserServiceTest.java:5:1-11:2
+symbol registers kind=method qualified="com.acme.service.UserServiceTest.registers" parent="com.acme.service.UserServiceTest" receiver="UserServiceTest" exported=false params="()" @src/test/java/com/acme/service/UserServiceTest.java:6:5-10:6
+## references
+ref UserService kind=type_use container="com.acme.service.UserServiceTest.registers" receiver="" lookup="=T:com.acme.service.UserService;=T:java.lang.UserService" call=false @src/test/java/com/acme/service/UserServiceTest.java:7:9-7:20
+ref <init> kind=call container="com.acme.service.UserServiceTest.registers" receiver="UserService" speculative=true receiver_lookup="=T:com.acme.service.UserService;=T:java.lang.UserService" args=1 arg_types="null" call=true @src/test/java/com/acme/service/UserServiceTest.java:7:35-7:46
+ref UserService kind=construction container="com.acme.service.UserServiceTest.registers" receiver="" lookup="=T:com.acme.service.UserService;=T:java.lang.UserService" call=false @src/test/java/com/acme/service/UserServiceTest.java:7:35-7:46
+ref User kind=type_use container="com.acme.service.UserServiceTest.registers" receiver="" lookup="=T:com.acme.model.User" call=false @src/test/java/com/acme/service/UserServiceTest.java:8:9-8:13
+ref register kind=call container="com.acme.service.UserServiceTest.registers" receiver="service" receiver_type="UserService" receiver_lookup="=T:com.acme.service.UserService;=T:java.lang.UserService" args=1 arg_types="S" call=true @src/test/java/com/acme/service/UserServiceTest.java:8:26-8:34
+ref label kind=call container="com.acme.service.UserServiceTest.registers" receiver="u" receiver_type="User" receiver_lookup="=T:com.acme.model.User" args=0 call=true @src/test/java/com/acme/service/UserServiceTest.java:9:11-9:16
+## imports
+## identity_only
+## diagnostics
+

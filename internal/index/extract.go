@@ -157,6 +157,7 @@ func (x *extractor) extract(j *extractJob) {
 		LexicalNesting:    ext.LexicalNesting,
 		Aliases:           ext.Aliases,
 		TypeFacts:         ext.TypeFacts,
+		SourceRoot:        ext.SourceRoot,
 	})
 }
 
@@ -227,6 +228,7 @@ func (x *extractor) ingest(b *builder, j *extractJob) {
 			LexicalNesting:    cached.LexicalNesting,
 			Aliases:           cached.Aliases,
 			TypeFacts:         cached.TypeFacts,
+			SourceRoot:        cached.SourceRoot,
 		})
 		return
 	}

@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "html", "css"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -80,6 +80,7 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"php":        language.SupportLevelGraph,
 		"terraform":  language.SupportLevelGraph,
 		"rust":       language.SupportLevelGraph,
+		"java":       language.SupportLevelGraph,
 		"html":       language.SupportLevelGraph,
 		"css":        language.SupportLevelGraph,
 	} {

@@ -271,6 +271,10 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			MembersOutside: sd.MembersOutside,
 			Placement:      sd.Placement,
 			ConfidenceCap:  sd.ConfidenceCap,
+
+			Parameters:      sd.Parameters,
+			ImplicitMembers: sd.ImplicitMembers,
+			Overrides:       sd.Overrides,
 		}
 		// ParentQualified is the provider's statement, kept as is for the
 		// resolver's name rules; Parent, the identity, is resolved below.
@@ -304,6 +308,11 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			IsCall:                rd.IsCall,
 			ReceiverChain:         rd.ReceiverChain,
 			Speculative:           rd.Speculative,
+			Lookup:                rd.Lookup,
+			ReceiverLookup:        rd.ReceiverLookup,
+			CountsArguments:       rd.CountsArguments,
+			ArgumentCount:         rd.ArgumentCount,
+			ArgumentTypes:         rd.ArgumentTypes,
 		})
 	}
 	// Also index imports as KindImport references so package-dependency queries
@@ -336,6 +345,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 		NameSpace:         space,
 		Aliases:           ex.Aliases,
 		TypeFacts:         ex.TypeFacts,
+		SourceRoot:        ex.SourceRoot,
 	}
 }
 
