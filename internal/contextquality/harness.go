@@ -31,14 +31,18 @@ type Scenario struct {
 	// TargetFile pins the target to one file when its qualified name is
 	// declared in several files. The harness never picks among several
 	// same-named targets: an unpinned ambiguous target is an error.
-	TargetFile   string
+	TargetFile string
+	// TargetLine pins the target to the declaration starting on that line,
+	// for overloads, which share their qualified name and their file.
+	TargetLine   uint32
 	Depth        int
 	MaxTokens    int
 	IncludeTests bool
 
 	// Required / Irrelevant entries are qualified names, optionally pinned to a
 	// file as "path/to/file.ext#Qualified" when the qualified name alone is not
-	// unique in the fixture repository.
+	// unique in the fixture repository, and to the declaration's first line as
+	// "Qualified@line" or "path/to/file.ext#Qualified@line" for overloads.
 	Required   []string // qualified names that SHOULD appear in context
 	Optional   []string // useful-but-not-required (not scored for/against)
 	Irrelevant []string // qualified names that should NOT crowd out required
@@ -46,9 +50,10 @@ type Scenario struct {
 
 // Selected is one item in the produced context, in selection order.
 type Selected struct {
-	Qualified string
-	Reason    string
-	Tokens    int
+	Qualified  string
+	Reason     string
+	Confidence string
+	Tokens     int
 }
 
 // Result is the measured quality of a scenario.
@@ -63,6 +68,10 @@ type Result struct {
 	MissingRequired    []string
 	IrrelevantIncluded []string
 	IrrelevantRatio    float64
+	// UnknownEntries are the scenario's Required / Optional / Irrelevant
+	// entries that denote no symbol of the repository: a check against them
+	// can never fail, so a scenario should have none.
+	UnknownEntries []string
 
 	EstimatedTokens int
 	BudgetTokens    int
@@ -85,7 +94,8 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 	}
 	var targets []symbol.Symbol
 	for _, t := range idx.FindSymbolsByQualified(s.TargetQualified) {
-		if s.TargetFile == "" || string(t.Location.File) == s.TargetFile {
+		if (s.TargetFile == "" || string(t.Location.File) == s.TargetFile) &&
+			(s.TargetLine == 0 || t.Location.Range.Start.Line == s.TargetLine) {
 			targets = append(targets, t)
 		}
 	}
@@ -95,10 +105,10 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 	if len(targets) > 1 {
 		files := make([]string, len(targets))
 		for i, t := range targets {
-			files[i] = string(t.Location.File)
+			files[i] = fmt.Sprintf("%s:%d", t.Location.File, t.Location.Range.Start.Line)
 		}
 		sort.Strings(files)
-		return Result{}, fmt.Errorf("contextquality: target %q is ambiguous (%s); set Scenario.TargetFile",
+		return Result{}, fmt.Errorf("contextquality: target %q is ambiguous (%s); set Scenario.TargetFile or TargetLine",
 			s.TargetQualified, strings.Join(files, ", "))
 	}
 
@@ -129,12 +139,17 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 	selectedSet := make(map[string]bool, len(res.Items))
 	for _, it := range res.Items {
 		out.Selected = append(out.Selected, Selected{
-			Qualified: it.Symbol.Qualified,
-			Reason:    it.Reason,
-			Tokens:    it.Tokens,
+			Qualified:  it.Symbol.Qualified,
+			Reason:     it.Reason,
+			Confidence: it.Confidence.String(),
+			Tokens:     it.Tokens,
 		})
+		pinned := string(it.Symbol.Location.File) + "#" + it.Symbol.Qualified
+		line := fmt.Sprintf("@%d", it.Symbol.Location.Range.Start.Line)
 		selectedSet[it.Symbol.Qualified] = true
-		selectedSet[string(it.Symbol.Location.File)+"#"+it.Symbol.Qualified] = true
+		selectedSet[pinned] = true
+		selectedSet[it.Symbol.Qualified+line] = true
+		selectedSet[pinned+line] = true
 		if it.Symbol.ID == targets[0].ID {
 			out.TargetIncluded = true
 		}
@@ -165,7 +180,36 @@ func Evaluate(root string, providers []language.Provider, s Scenario) (Result, e
 		out.IrrelevantRatio = float64(len(out.IrrelevantIncluded)) / float64(out.SelectedCount)
 	}
 
+	for _, lists := range [][]string{s.Required, s.Optional, s.Irrelevant} {
+		for _, e := range lists {
+			if !denotesSymbol(idx, e) {
+				out.UnknownEntries = append(out.UnknownEntries, e)
+			}
+		}
+	}
+
 	sort.Strings(out.MissingRequired)
 	sort.Strings(out.IrrelevantIncluded)
+	sort.Strings(out.UnknownEntries)
 	return out, nil
+}
+
+// denotesSymbol reports whether a scenario entry — "Qualified", optionally
+// pinned as "file#Qualified" and suffixed "@line" — names an indexed symbol.
+func denotesSymbol(idx *index.RepositoryIndex, entry string) bool {
+	file, q := "", entry
+	if i := strings.Index(q, "#"); i >= 0 {
+		file, q = q[:i], q[i+1:]
+	}
+	line := ""
+	if i := strings.LastIndex(q, "@"); i >= 0 {
+		q, line = q[:i], q[i+1:]
+	}
+	for _, sym := range idx.FindSymbolsByQualified(q) {
+		if (file == "" || string(sym.Location.File) == file) &&
+			(line == "" || fmt.Sprint(sym.Location.Range.Start.Line) == line) {
+			return true
+		}
+	}
+	return false
 }

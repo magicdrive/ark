@@ -60,8 +60,9 @@ func (DefaultRanker) Rank(c candidate, sourceLen int) Score {
 		bd["distance_penalty"] = float64(-10 * c.hopDepth)
 	}
 
-	// Penalise large symbols (over ~500 tokens = ~2000 bytes).
-	if sourceLen > 2000 {
+	// Penalise large symbols (over ~500 tokens = ~2000 bytes) — never the
+	// target, which is included whatever its size and must outscore the rest.
+	if sourceLen > 2000 && c.reason != "target" {
 		excess := float64(sourceLen-2000) / 100.0
 		bd["large_source_penalty"] = -0.5 * excess
 	}

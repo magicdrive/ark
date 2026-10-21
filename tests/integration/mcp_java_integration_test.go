@@ -13,7 +13,14 @@ import (
 // project directory and returns it.
 func copyJavaFixture(t *testing.T) string {
 	t.Helper()
-	src := filepath.Join("..", "..", "internal", "languages", "java", "testdata", "repo")
+	return copyJavaTestdata(t, "repo")
+}
+
+// copyJavaTestdata copies the Java provider's fixture repository name
+// (internal/languages/java/testdata/<name>) into a new project directory.
+func copyJavaTestdata(t *testing.T, name string) string {
+	t.Helper()
+	src := filepath.Join("..", "..", "internal", "languages", "java", "testdata", name)
 	proj := t.TempDir()
 	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
@@ -171,5 +178,63 @@ func TestMCPJava_CacheDoesNotChangeTheGraph(t *testing.T) {
 	none := query("--no-cache")
 	if cold != warm || cold != none {
 		t.Errorf("the graph depends on the cache:\ncold:\n%s\nwarm:\n%s\nno cache:\n%s", cold, warm, none)
+	}
+}
+
+// Java context through the real binary: an overload selected by the
+// listing's name and symbolId, and context that the persistent cache does not
+// change — a cold build, a warm one from the entries it wrote, and one
+// without a cache answer alike.
+func TestMCPJava_Context(t *testing.T) {
+	bin := buildArk(t)
+	proj := copyJavaTestdata(t, "cq_java")
+	home := t.TempDir()
+
+	c := startServer(t, proj, home, bin, "mcp-server", "--root", "./", "--no-cache")
+	c.handshake()
+	listing, isErr := c.tool("get_context", map[string]any{"path": ".", "symbol": "User.<init>"})
+	if !isErr || strings.Count(listing, "symbolId=") != 2 {
+		t.Fatalf("User.<init> must list both constructors:\n%s", listing)
+	}
+	i := strings.Index(listing, "src/main/java/com/shop/model/User.java:11  symbolId=")
+	if i < 0 {
+		t.Fatalf("no symbolId for the no-argument constructor:\n%s", listing)
+	}
+	id := strings.Fields(listing[i:])[1][len("symbolId="):]
+	text, isErr := c.tool("get_context", map[string]any{"path": ".", "symbol": "User.<init>", "symbolId": id})
+	if isErr || !strings.HasPrefix(text, "### src/main/java/com/shop/model/User.java:11-13\nSymbol: com.shop.model.User.<init>\nReason: target") ||
+		!strings.Contains(text, "### src/main/java/com/shop/model/User.java:7-9\n") {
+		t.Errorf("the no-argument constructor's context:\n%s", text)
+	}
+
+	query := func(args ...string) string {
+		c := startServer(t, proj, home, bin, append([]string{"mcp-server", "--root", "./"}, args...)...)
+		c.handshake()
+		var b strings.Builder
+		for _, call := range []map[string]any{
+			{"symbol": "UserService.create"},
+			{"symbol": "UserService.create", "includeTests": true, "format": "json"},
+			{"symbol": "UserService.create", "maxTokens": 120},
+			{"symbol": "User", "maxDepth": 1},
+			{"symbol": "Reports.title", "format": "json"},
+			{"symbol": "UserService.setting"},
+			{"symbol": "Gateway.fetch"},
+		} {
+			call["path"] = "."
+			text, _ := c.tool("get_context", call)
+			b.WriteString(text)
+		}
+		text, _ := c.tool("search_context", map[string]any{"path": ".", "query": "normalize", "contextLimit": 2})
+		b.WriteString(text)
+		return b.String()
+	}
+	cold := query()
+	warm := query()
+	none := query("--no-cache")
+	if cold != warm || cold != none {
+		t.Errorf("context depends on the cache:\ncold:\n%s\nwarm:\n%s\nno cache:\n%s", cold, warm, none)
+	}
+	if !strings.Contains(cold, "Confidence: strong") || strings.Contains(cold, "OrderRepository") {
+		t.Errorf("unexpected context:\n%s", cold)
 	}
 }

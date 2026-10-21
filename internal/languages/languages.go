@@ -76,13 +76,16 @@ func specList() []spec {
 		{rust.NewProvider(), grammars.RustLanguage, language.SupportLevelGraph},
 		// Java (.java): types, members and constructors by canonical name,
 		// the language's own name lookup (scopes, imports, the package,
-		// inherited members, overloads by argument count) answered against
-		// the repository, typed graph. Graph, not ContextQualityCertified: no
-		// context-quality benchmark covers it, and receivers typed by a
-		// method's result, overloads told apart by argument types and
-		// inferred lambda parameters are not resolved; see
-		// docs/language-support.md.
-		{java.NewProvider(), grammars.JavaLanguage, language.SupportLevelGraph},
+		// inherited members, overloads by argument count and by primitive
+		// versus reference argument types) answered against the repository,
+		// typed graph, certified for context quality by its own scenarios
+		// (internal/languages/java: context-quality scenarios over
+		// testdata/cq_java, budget pressure, determinism, FuzzJavaContext;
+		// MCP end-to-end and cache tests; the context golden). Receivers
+		// typed by a method's result, overloads that differ only in
+		// reference parameter types and inferred lambda parameters are not
+		// resolved; see docs/language-support.md.
+		{java.NewProvider(), grammars.JavaLanguage, language.SupportLevelContextQualityCertified},
 		// HTML (.html / .htm): the document, id elements, same-document
 		// id references and links between documents, resolved by identity
 		// (golang.org/x/net/html; no Tree-sitter grammar). Graph, not

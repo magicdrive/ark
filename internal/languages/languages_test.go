@@ -80,13 +80,25 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"php":        language.SupportLevelGraph,
 		"terraform":  language.SupportLevelGraph,
 		"rust":       language.SupportLevelGraph,
-		"java":       language.SupportLevelGraph,
+		"java":       language.SupportLevelContextQualityCertified,
 		"html":       language.SupportLevelGraph,
 		"css":        language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)
 		}
+	}
+}
+
+// TestRegistry_JavaIsContextQualityCertified pins the promotion evidence
+// boundary of Java: its own scenarios certify it (internal/languages/java:
+// context-quality scenarios over testdata/cq_java, budget pressure,
+// determinism, FuzzJavaContext; internal/mcp TestMCP_Java_*; the context
+// golden; tests/integration TestMCPJava_Context). A regression of any of those
+// suites must come with an explicit demotion here.
+func TestRegistry_JavaIsContextQualityCertified(t *testing.T) {
+	if lvl := languages.Registry().SupportLevelFor("java"); lvl != language.SupportLevelContextQualityCertified {
+		t.Errorf("java SupportLevel = %v, want context_quality_certified", lvl)
 	}
 }
 

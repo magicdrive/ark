@@ -508,8 +508,8 @@ func TestCIWorkflow_FuzzSmokeIsComplete(t *testing.T) {
 			t.Errorf("fuzz-smoke.txt: no %s in %s", e.target, e.pkg)
 		}
 	}
-	if smoke != 22 {
-		t.Errorf("fuzz smoke: %d targets, want 22", smoke)
+	if smoke != 23 {
+		t.Errorf("fuzz smoke: %d targets, want 23", smoke)
 	}
 	fuzzFunc := regexp.MustCompile(`(?m)^func (Fuzz\w+)\(f \*testing\.F\)`)
 	filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {

@@ -3,6 +3,7 @@ package golden_test
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -23,6 +24,9 @@ import (
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/symbol"
+
+	ctxengine "github.com/magicdrive/ark/internal/context"
 )
 
 // update regenerates the committed .golden files instead of comparing against
@@ -215,4 +219,83 @@ func compareGolden(t *testing.T, path, got string) {
 	if string(want) != got {
 		t.Errorf("golden mismatch for %s\n--- want ---\n%s\n--- got ---\n%s", path, string(want), got)
 	}
+}
+
+// contextTarget is one get_context request of the context golden: a
+// declaration (pinned by its first line when it is an overload) and the
+// request's options.
+type contextTarget struct {
+	qualified    string
+	line         uint32
+	maxTokens    int
+	includeTests bool
+}
+
+// javaContextTargets cover the declarations Java context is certified on:
+// methods, overloads of methods and constructors, a class, a record, an enum,
+// an interface default method, a nested class, a duplicated name, an external
+// namesake, tests on request, and budget pressure.
+var javaContextTargets = []contextTarget{
+	{qualified: "com.shop.service.UserService.create", maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.create", maxTokens: 120},
+	{qualified: "com.shop.service.UserService.create", maxTokens: 8000, includeTests: true},
+	{qualified: "com.shop.service.UserService.audit", line: 30, maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.audit", line: 34, maxTokens: 8000},
+	{qualified: "com.shop.model.User.<init>", line: 7, maxTokens: 8000},
+	{qualified: "com.shop.model.User.<init>", line: 11, maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.lookup", maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.lookupByName", maxTokens: 8000},
+	{qualified: "com.shop.service.Coder.ofLong", maxTokens: 8000},
+	{qualified: "com.shop.service.Coder.ofInt", maxTokens: 8000},
+	{qualified: "com.shop.service.Coder.ofFlag", maxTokens: 8000},
+	{qualified: "com.shop.repo.UserRepository.find", line: 10, maxTokens: 8000},
+	{qualified: "com.shop.repo.UserRepository.find", line: 14, maxTokens: 8000},
+	{qualified: "com.shop.model.User", maxTokens: 8000},
+	{qualified: "com.shop.model.User", maxTokens: 5},
+	{qualified: "com.shop.model.Money", maxTokens: 8000},
+	{qualified: "com.shop.model.Status", maxTokens: 8000},
+	{qualified: "com.shop.model.Named.label", maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.untyped", maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.setting", maxTokens: 8000},
+	{qualified: "com.shop.service.UserService.Cache.get", maxTokens: 8000},
+	{qualified: "com.shop.gateway.Gateway.fetch", maxTokens: 8000},
+	{qualified: "com.shop.report.Ledger", maxTokens: 100},
+	{qualified: "com.shop.report.LedgerReport.total", maxTokens: 300},
+}
+
+// TestContextGolden freezes get_context for Java: the selected items, their
+// order, reasons, confidences, locations and source text, the budget and the
+// completeness counts (go test ./internal/golden -update rewrites it).
+func TestContextGolden(t *testing.T) {
+	dir := filepath.Join(testdataDir(), "..", "..", "languages", "java", "testdata", "cq_java")
+	idx, err := index.New(context.Background(), dir, allProviders())
+	if err != nil {
+		t.Fatalf("index.New: %v", err)
+	}
+	eng := ctxengine.New(idx, dir)
+	var b strings.Builder
+	for i, c := range javaContextTargets {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		var target symbol.Symbol
+		n := 0
+		for _, s := range idx.FindSymbolsByQualified(c.qualified) {
+			if c.line == 0 || s.Location.Range.Start.Line == c.line {
+				target, n = s, n+1
+			}
+		}
+		if n != 1 {
+			t.Fatalf("%s@%d denotes %d declarations, want 1", c.qualified, c.line, n)
+		}
+		res, err := eng.Build(context.Background(), ctxengine.Request{
+			Target: target.ID, MaxTokens: c.maxTokens, MaxDepth: 2, IncludeTests: c.includeTests,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&b, "# %s@%d maxTokens=%d includeTests=%t\n", c.qualified, target.Location.Range.Start.Line, c.maxTokens, c.includeTests)
+		b.WriteString(golden.ContextSnapshot(res))
+	}
+	compareGolden(t, filepath.Join(testdataDir(), "java", "java.context.golden"), b.String())
 }

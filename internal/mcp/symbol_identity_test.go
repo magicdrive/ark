@@ -1,6 +1,8 @@
 package mcp
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -131,3 +133,83 @@ func TestSymbolIdentity_SearchContextHandOff(t *testing.T) {
 }
 
 func itoaU(n uint32) string { return strconv.FormatUint(uint64(n), 10) }
+
+// An ambiguity listing's own advice works where qualified names carry a
+// namespace: Java overloads share the qualified name p.A.f, which the name
+// A.f finds without its package, and only a symbolId tells them apart. The
+// listed name with a listed ID selects that declaration in every target
+// tool; an ID of a declaration the name does not denote is still refused.
+func TestSymbolIdentity_ListedNameSelectsWithItsIDs(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "src", "p"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFile(filepath.Join(dir, "src", "p", "A.java"),
+		"package p;\n\nclass A {\n    void f(int x) { g(); }\n    void f(String s) { h(); }\n    void g() {}\n    void h() {}\n}\n"); err != nil {
+		t.Fatal(err)
+	}
+	h := NewToolsHandler(dir, createTestOption())
+	listing, isErr := idToolText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": "A.f"})
+	if !isErr || !strings.Contains(listing, "Ambiguous") {
+		t.Fatalf("A.f must be ambiguous:\n%s", listing)
+	}
+	ids := map[string]string{}
+	for _, m := range regexp.MustCompile(`p\.A\.f  \(method\)  src/p/A\.java:(\d+)  symbolId=([0-9a-f]+)`).FindAllStringSubmatch(listing, -1) {
+		ids[m[1]] = m[2]
+	}
+	if len(ids) != 2 {
+		t.Fatalf("listing must give both overloads' IDs:\n%s", listing)
+	}
+	for line, callee := range map[string]string{"4": "p.A.g", "5": "p.A.h"} {
+		for _, name := range []string{"A.f", "f", "p.A.f"} {
+			for _, tool := range []string{"get_context", "get_callers", "get_callees", "get_relations", "analyze_change_impact"} {
+				text, isErr := idToolText(t, h, tool, map[string]interface{}{"path": ".", "symbol": name, "symbolId": ids[line]})
+				if isErr {
+					t.Errorf("%s(%s, symbolId of line %s): %s", tool, name, line, text)
+				}
+			}
+			text, _ := idToolText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": name, "symbolId": ids[line]})
+			if !strings.Contains(text, "### src/p/A.java:"+line+"-"+line+"\nSymbol: p.A.f\nReason: target") || !strings.Contains(text, "Symbol: "+callee+"\n") {
+				t.Errorf("get_context(%s, line %s) is not that overload's context:\n%s", name, line, text)
+			}
+		}
+	}
+	if text, isErr := idToolText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": "A.g", "symbolId": ids["4"]}); !isErr || !strings.Contains(text, `names p.A.f (src/p/A.java:4), not "A.g"`) {
+		t.Errorf("an ID of another name must be refused: %s", text)
+	}
+	if text, isErr := idToolText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": "A.f", "symbolId": ids["4"], "filePattern": "q/"}); !isErr || !strings.Contains(text, "does not match filePattern") {
+		t.Errorf("filePattern must still apply: %s", text)
+	}
+}
+
+// A name another language declares exactly (a Go method A.f) ends the
+// repository-wide lookup before the Java overloads; narrowed to the Java
+// files, the lookup lists them, and the listed name, filePattern and symbolId
+// select one.
+func TestSymbolIdentity_ListedIDsUnderFilePattern(t *testing.T) {
+	dir := t.TempDir()
+	for path, src := range map[string]string{
+		"src/p/A.java": "package p;\n\nclass A {\n    void f(int x) { g(); }\n    void f(String s) { h(); }\n    void g() {}\n    void h() {}\n}\n",
+		"g/a.go":       "package g\n\ntype A struct{}\n\nfunc (A) f() {}\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(filepath.Join(dir, path)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := writeFile(filepath.Join(dir, path), src); err != nil {
+			t.Fatal(err)
+		}
+	}
+	h := NewToolsHandler(dir, createTestOption())
+	listing, isErr := idToolText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": "A.f", "filePattern": ".java"})
+	if !isErr || strings.Count(listing, "symbolId=") != 2 {
+		t.Fatalf("A.f in the Java files must list both overloads:\n%s", listing)
+	}
+	m := regexp.MustCompile(`src/p/A\.java:5  symbolId=([0-9a-f]+)`).FindStringSubmatch(listing)
+	if m == nil {
+		t.Fatalf("no symbolId for line 5:\n%s", listing)
+	}
+	text, isErr := idToolText(t, h, "get_context", map[string]interface{}{"path": ".", "symbol": "A.f", "filePattern": ".java", "symbolId": m[1]})
+	if isErr || !strings.Contains(text, "### src/p/A.java:5-5\nSymbol: p.A.f\nReason: target") {
+		t.Errorf("the listed name, filePattern and symbolId must select the overload:\n%s", text)
+	}
+}

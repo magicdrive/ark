@@ -19,6 +19,10 @@ var Paths = []string{
 	// Rust
 	"tests/integration.rs", "crates/a/tests/common/mod.rs", "src/tests.rs", "src/a/tests/mod.rs",
 	"src/lib.rs", "src/latest.rs", "src/test.rs", "src/bin/tests_runner.rs",
+	// Java
+	"src/test/java/com/acme/UserServiceTest.java", "src/test/java/com/acme/support/Fixtures.java",
+	"src/main/java/com/acme/UserTests.java", "src/main/java/com/acme/TestUser.java",
+	"src/main/java/com/acme/Test.java", "src/main/java/com/acme/Contest.java", "src/main/java/com/acme/Latest.java",
 	// Test fixture data
 	"internal/x/testdata/a.go", "testdata/b.php", "mytestdata/c.go", "pkg/testdatafile.go",
 }

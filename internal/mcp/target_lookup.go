@@ -260,8 +260,9 @@ var symbolIDProperty = map[string]interface{}{
 // lookupToolTarget resolves a tool's target: by its symbolId when the call
 // gives one, else by name (resolveTarget). The result is one symbol or an
 // error result — never a pick among several. A symbolId must name a symbol
-// of this index whose Name or Qualified is the given symbol: an ID is a
-// selector among the name's declarations, never a way around the name.
+// of this index whose Name or Qualified is the given symbol, or one the name
+// finds (a Java overload's listing names it A.f, its Qualified is p.A.f): an
+// ID is a selector among the name's declarations, never a way around the name.
 func lookupToolTarget(idx *index.RepositoryIndex, args map[string]interface{}, name, filePattern, path string) (targetLookup, *CallToolResult) {
 	if raw, ok := args["symbolId"]; ok && raw != nil {
 		id, isStr := raw.(string)
@@ -273,11 +274,11 @@ func lookupToolTarget(idx *index.RepositoryIndex, args map[string]interface{}, n
 			if !found {
 				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q is not a symbol of the index of %s (IDs depend on the indexed path; search_context's IDs are for path \".\")", id, path))
 			}
-			if s.Name != name && s.Qualified != name {
-				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q names %s (%s:%d), not %q", id, s.Qualified, s.Location.File, s.Location.Range.Start.Line, name))
-			}
 			if filePattern != "" && !strings.Contains(string(s.Location.File), filePattern) {
 				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q is in %s, which does not match filePattern %q", id, s.Location.File, filePattern))
+			}
+			if s.Name != name && s.Qualified != name && !denotedBy(idx, name, filePattern, s) {
+				return targetLookup{}, toolError(fmt.Sprintf("symbolId %q names %s (%s:%d), not %q", id, s.Qualified, s.Location.File, s.Location.Range.Start.Line, name))
 			}
 			return targetLookup{Symbol: s, Found: true}, nil
 		}
@@ -295,6 +296,18 @@ func lookupToolTarget(idx *index.RepositoryIndex, args map[string]interface{}, n
 		return tl, ambiguousTargetResult(name, tl.Candidates)
 	}
 	return tl, nil
+}
+
+// denotedBy reports whether looking name up among the files filePattern
+// matches (targetCandidatesFromIndex, as the call's own lookup and its
+// ambiguity listing do) finds s among its declarations.
+func denotedBy(idx *index.RepositoryIndex, name, filePattern string, s symbol.Symbol) bool {
+	for _, c := range targetCandidatesFromIndex(idx, name, filePattern) {
+		if c.ID == s.ID {
+			return true
+		}
+	}
+	return false
 }
 
 func toolError(msg string) *CallToolResult {
