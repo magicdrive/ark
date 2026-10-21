@@ -62,6 +62,12 @@ func TestParallelExtraction_PanicAndOrder(t *testing.T) {
 		index.NewWithCacheExcluding(context.Background(), dir, []language.Provider{panicProvider{}}, cache.NopStore{}, nil)
 		t.Error("the build returned instead of panicking")
 	}()
+	// The workers have ended when the panic leaves the build; the
+	// goroutine that reports their end may still be returning.
+	deadline := time.Now().Add(2 * time.Second)
+	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
+		runtime.Gosched()
+	}
 	if after := runtime.NumGoroutine(); after > before {
 		t.Errorf("goroutines: %d before the build, %d after its panic", before, after)
 	}
