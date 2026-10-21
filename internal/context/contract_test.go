@@ -2,6 +2,8 @@ package context_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -219,4 +221,57 @@ func isTestFile(path string) bool {
 		}
 	}
 	return false
+}
+
+// TestTargetFirstWhateverItsSize: a target far larger than any other item —
+// a class of thousands of lines — is still the first item and the highest
+// score, and the budget is spent on it first: under a budget it alone
+// exceeds, nothing else is added; under a budget it fits, the others fill
+// what it leaves. (Found on Java corpora: the large-source penalty had made a
+// large class's own score negative, so its callers and callees came first and
+// spent the budget the target was then added over.)
+func TestTargetFirstWhateverItsSize(t *testing.T) {
+	dir := t.TempDir()
+	var b strings.Builder
+	b.WriteString("package big\n\nfunc Big() {\n\thelper()\n\tx := 0\n")
+	for range 3000 {
+		b.WriteString("\tx = x + 1 // a long line of the large function body\n")
+	}
+	b.WriteString("\t_ = x\n}\n\nfunc helper() {}\n\nfunc Caller() { Big() }\n")
+	if err := os.WriteFile(filepath.Join(dir, "big.go"), []byte(b.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	idx, err := index.New(context.Background(), dir, []language.Provider{golang.NewProvider()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	syms := idx.FindSymbolsByQualified("Big")
+	if len(syms) != 1 {
+		t.Fatalf("Big: %d symbols", len(syms))
+	}
+	eng := arkctx.New(idx, dir)
+	for _, budget := range []int{100, 1 << 20} {
+		res, err := eng.Build(context.Background(), arkctx.Request{Target: syms[0].ID, MaxTokens: budget, MaxDepth: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(res.Items) == 0 || res.Items[0].Reason != "target" {
+			t.Fatalf("budget %d: first item is not the target: %+v", budget, res.Items)
+		}
+		for _, it := range res.Items[1:] {
+			if it.Score >= res.Items[0].Score {
+				t.Errorf("budget %d: %s (%.2f) outscores the target (%.2f)", budget, it.Symbol.Qualified, it.Score, res.Items[0].Score)
+			}
+		}
+		fits := res.Items[0].Tokens <= budget
+		if res.Stats.TargetTruncated == fits {
+			t.Errorf("budget %d: targetTruncated=%v for a %d-token target", budget, res.Stats.TargetTruncated, res.Items[0].Tokens)
+		}
+		if !fits && len(res.Items) != 1 {
+			t.Errorf("budget %d: %d items beside a target over the budget", budget, len(res.Items)-1)
+		}
+		if fits && len(res.Items) != 3 {
+			t.Errorf("budget %d: %d items, want the target, its callee and its caller", budget, len(res.Items))
+		}
+	}
 }

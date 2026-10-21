@@ -243,10 +243,10 @@ highest stage Ark's tests cover:
 |---|---|---|
 | Go | context-quality certified | Package scoping; method calls need a locally written receiver type |
 | TypeScript, TSX | context-quality certified | Relative imports, barrels, typed receivers; no `tsconfig` paths or type inference |
+| Java | context-quality certified | Java's own name lookup — imports, the package, nested and inherited member types, inherited members and overloads by argument count and by primitive versus reference argument types (not between two reference types), typed variables, `this` / `super`; no return or field types followed, no build files |
 | PHP | graph | Namespaces, `use`, inheritance and traits; no framework or autoload semantics |
 | Terraform | graph | Module-scoped addresses, local module outputs; `.tf.json` not read |
 | Rust | graph | Paths within a crate (`crate`/`self`/`super`, `use`, inherent vs trait impls); no method calls on values, other crates of the workspace or macro expansion |
-| Java | graph | Java's own name lookup — imports, the package, nested and inherited member types, inherited members and overloads by argument count and proven argument types, typed variables, `this` / `super`; no return or field types followed, no build files |
 | HTML | graph | Ids and their references (IDREF attributes, fragments) within a document as the browser builds it, links to documents, stylesheets and scripts by relative path, the declarations of inline styles and scripts, and links to images, fonts and media; no absolute URLs |
 | CSS | graph | `@keyframes`, `@font-face`, `@property`, custom properties and CSS Modules classes with their references within a stylesheet, `@import` by relative path, CSS Modules classes JavaScript and TypeScript imports use, `url()` of images and fonts; no selector matching |
 | Python | graph | Scopes (LEGB), imports and relative imports, package re-exports, `self` / `cls` / `super()`, inheritance; no type inference for locals, star imports or dynamic attributes |

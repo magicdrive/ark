@@ -560,7 +560,9 @@ Confidence: exact
 
 Items come only from graph edges; candidates appear only in the
 `unattributed` counts. The target is always included, even beyond
-`maxTokens` (`TargetTruncated`). Test symbols are left out unless
+`maxTokens` (`TargetTruncated`), and always first, whatever its size: the
+budget is spent on it before any other item, and its score has no
+`large_source_penalty`. Test symbols are left out unless
 `includeTests`. `format: "json"` adds each item's score breakdown.
 
 ## Files

@@ -8,6 +8,7 @@ import (
 	"github.com/magicdrive/ark/internal/contextquality"
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/golang"
+	"github.com/magicdrive/ark/internal/languages/java"
 )
 
 func ambigRoot() string { return filepath.Join("testdata", "ambig") }
@@ -42,5 +43,54 @@ func TestEvaluate_TargetFilePinsAndFileScopedRequired(t *testing.T) {
 	}
 	if len(res.IrrelevantIncluded) != 0 {
 		t.Errorf("irrelevant included: %v", res.IrrelevantIncluded)
+	}
+}
+
+// TestEvaluate_OverloadsArePinnedByLine: overloads share their qualified name
+// and their file. An unpinned target among them is an error; TargetLine
+// selects one, and "Qualified@line" / "file#Qualified@line" entries score
+// against the declaration starting on that line only.
+func TestEvaluate_OverloadsArePinnedByLine(t *testing.T) {
+	root := filepath.Join("testdata", "overload")
+	providers := []language.Provider{java.NewProvider()}
+	_, err := contextquality.Evaluate(root, providers,
+		contextquality.Scenario{TargetQualified: "p.A.f", TargetFile: "A.java", Depth: 1, MaxTokens: 4000})
+	if err == nil || !strings.Contains(err.Error(), "ambiguous") {
+		t.Fatalf("want ambiguity error for unpinned overloads, got %v", err)
+	}
+	res, err := contextquality.Evaluate(root, providers, contextquality.Scenario{
+		TargetQualified: "p.A.f", TargetLine: 5, Depth: 1, MaxTokens: 4000,
+		Required:   []string{"p.A.f@5", "A.java#p.A.f@5", "p.A.h"},
+		Irrelevant: []string{"p.A.f@4", "A.java#p.A.f@4", "p.A.g"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !res.TargetIncluded || res.RequiredRecall != 1 || len(res.IrrelevantIncluded) != 0 {
+		t.Errorf("pinned overload: included=%v missing=%v irrelevant=%v selected=%+v",
+			res.TargetIncluded, res.MissingRequired, res.IrrelevantIncluded, res.Selected)
+	}
+	if res, err := contextquality.Evaluate(root, providers,
+		contextquality.Scenario{TargetQualified: "p.A.f", TargetLine: 6, Depth: 1, MaxTokens: 4000}); err != nil || res.TargetFound {
+		t.Errorf("a line no overload starts on: found=%v err=%v, want target not found", res.TargetFound, err)
+	}
+}
+
+// TestEvaluate_UnknownEntriesAreReported: an entry that names no symbol (a
+// typo, a wrong line, a wrong file) would make its check vacuous.
+func TestEvaluate_UnknownEntriesAreReported(t *testing.T) {
+	res, err := contextquality.Evaluate(filepath.Join("testdata", "overload"), []language.Provider{java.NewProvider()},
+		contextquality.Scenario{
+			TargetQualified: "p.A.g", Depth: 1, MaxTokens: 4000,
+			Required:   []string{"p.A.g", "A.java#p.A.f@4"},
+			Optional:   []string{"p.A.f@6"},
+			Irrelevant: []string{"p.A.missing", "B.java#p.A.h", "p.A.h"},
+		})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"B.java#p.A.h", "p.A.f@6", "p.A.missing"}
+	if strings.Join(res.UnknownEntries, ",") != strings.Join(want, ",") {
+		t.Errorf("unknown entries %v, want %v", res.UnknownEntries, want)
 	}
 }

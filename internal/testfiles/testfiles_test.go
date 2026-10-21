@@ -21,6 +21,9 @@ func TestIsTestFile(t *testing.T) {
 		"internal/x/testdata/a.go": false, "testdata/b.php": false, "mytestdata/c.go": false, "pkg/testdatafile.go": false,
 		"tests/integration.rs": true, "crates/a/tests/common/mod.rs": true, "src/tests.rs": true, "src/a/tests/mod.rs": true,
 		"src/lib.rs": false, "src/latest.rs": false, "src/test.rs": false, "src/bin/tests_runner.rs": false,
+		"src/test/java/com/acme/UserServiceTest.java": true, "src/test/java/com/acme/support/Fixtures.java": true,
+		"src/main/java/com/acme/UserTests.java": true, "src/main/java/com/acme/TestUser.java": true,
+		"src/main/java/com/acme/Test.java": false, "src/main/java/com/acme/Contest.java": false, "src/main/java/com/acme/Latest.java": false,
 		// Earlier cases.
 		"pkg/a_test.go": true, "src/a.spec.js": true, "src/test.ts": false,
 		"app/Http/Controllers/Test.php": false, "app/Testing/Fake.php": false, "app/LatestTest.php": true, "app/attest/X.php": false,

@@ -965,12 +965,14 @@ Authority: `mcp/index_cache.go` (header comment), `index/sources.go`,
   names itself (`context/engine.go`, `collectCandidates`).
 - Test files are excluded unless `IncludeTests`, via `internal/testfiles`;
   a test caller stays a caller in the graph and in completeness.
-- Ranking is deterministic (score desc, then `SymbolID`). Ranker weights are
+- Ranking is deterministic (the target first, then score desc, then
+  `SymbolID`); the budget is spent on the target first, whatever its size
+  (no large-source penalty applies to it). Ranker weights are
   tunable; the explainable, additive structure is the contract
   (`context/ranker.go`). The budget is an estimate (`EstimateTokens`).
 - `depth` is not general BFS depth (see `Request.MaxDepth`).
 
-Tests: `context/contract_test.go`, `TestContext_CandidateCallerIsCompletenessOnly`,
+Tests: `context/contract_test.go` (`TestTargetFirstWhateverItsSize`), `TestContext_CandidateCallerIsCompletenessOnly`,
 `TestContext_AmbiguousNoFabrication` (PHP), `internal/contextquality` scenarios.
 Danger: filling spare budget with candidates or name matches.
 

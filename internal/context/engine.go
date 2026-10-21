@@ -86,8 +86,13 @@ func (e *Engine) Build(ctx context.Context, req Request) (*Result, error) {
 		scored = append(scored, scoredCandidate{c: c, score: sc.Total, bdMap: sc.Breakdown, srcLen: approxBytes})
 	}
 
-	// Sort: score desc, then SymbolID asc as tiebreak for determinism.
+	// Sort: the target first — the budget is spent on it before anything
+	// else, whatever a ranker scores it —, then score desc, then SymbolID asc
+	// as tiebreak for determinism.
 	sort.Slice(scored, func(i, j int) bool {
+		if ti, tj := scored[i].c.reason == "target", scored[j].c.reason == "target"; ti != tj {
+			return ti
+		}
 		if scored[i].score != scored[j].score {
 			return scored[i].score > scored[j].score
 		}

@@ -25,10 +25,10 @@ Levels build on each other:
 | Go | `.go` | `context_quality_certified` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | TypeScript | `.ts` | `context_quality_certified` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | TSX | `.tsx` | `context_quality_certified` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Java | `.java` | `context_quality_certified` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | PHP | `.php` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Terraform | `.tf`, `.tfvars` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Rust | `.rs` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
-| Java | `.java` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | HTML | `.html`, `.htm` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
@@ -36,7 +36,7 @@ Levels build on each other:
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript, and `get_context` still works for PHP, Terraform,
-Rust, Java, HTML, CSS and Python, but those results are not covered by the tests the level names.
+Rust, HTML, CSS and Python, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -695,11 +695,23 @@ reference; a type parameter is no type of the repository.
 
 | | |
 |---|---|
-| **Supported** (`exact`) | A type of the file, a single-type import, a member type of an enclosing type or one it inherits, a type of the package in the reference's source root; members of a type and those it inherits — through `this`, `super`, a type name, a local variable, parameter or field with a declared type, a cast, `new T()`, `var x = new T()`, a type variable's one bound —; unqualified calls searched in the innermost enclosing type that has a method of the name (JLS 15.12.1); static imports of methods, fields and member types; overloads by argument count and by the argument types the file proves (literals, typed variables, casts, `new`, `null`, lambdas), phase by phase (strict, loose, variadic), the most specific of primitive ones; only the methods and constructors the call may access (a private one within its top-level class, a package-private one within its package); an override of a method of no parameters; inherited overloads beside a subclass's own; private members are not inherited, package-private ones only within their package, an interface's static methods not at all, and a field hides a supertype's of the name |
+| **Supported** (`exact`) | A type of the file, a single-type import, a member type of an enclosing type or one it inherits, a type of the package in the reference's source root; members of a type and those it inherits — through `this`, `super`, a type name, a local variable, parameter or field with a declared type, a cast, `new T()`, `var x = new T()`, a type variable's one bound —; unqualified calls searched in the innermost enclosing type that has a method of the name (JLS 15.12.1); static imports of methods, fields and member types; overloads by argument count and by the argument types the file proves (literals, typed variables, casts, `new`, `null`, lambdas), phase by phase (strict, loose, variadic), the most specific of primitive ones — a reference-typed argument rules out primitive parameters only (`h(long)` / `h(String)`), never one reference type for another; only the methods and constructors the call may access (a private one within its top-level class, a package-private one within its package); an override of a method of no parameters; inherited overloads beside a subclass's own; private members are not inherited, package-private ones only within their package, an interface's static methods not at all, and a field hides a supertype's of the name |
 | **Supported** (`strong`) | What is found past a scope the repository may not hold: another file of the package in another source root, an on-demand import (`import a.*`, `java.lang`), a type whose supertype is outside the repository (an own method of a class extending a library class: the library may declare the overload the call means), an anonymous class of a library interface; a declaration only another source root holds (`src/test` → `src/main`, another module); an override presumed from equal parameter type names |
-| **Candidate** | Overloads the arguments do not tell apart, or that only a protected overload of another package (which the call may not access) would tell apart or would leave the later phases untried; a class declared in two source roots, neither of them the reference's (two flavors of a library seen from a third module); a method an outside supertype may implement beside an interface's declaration; an own method marked `@Override` whose overridden one is outside the repository; members of a type the parser could not fully read, and what is found past one |
+| **Candidate** | Overloads the arguments do not tell apart — those that differ only in reference parameter types (`f(B)` / `f(C)`, `g(B)` / `g(String)`) whatever the arguments —, or that only a protected overload of another package (which the call may not access) would tell apart or would leave the later phases untried; a class declared in two source roots, neither of them the reference's (two flavors of a library seen from a third module); a method an outside supertype may implement beside an interface's declaration; an own method marked `@Override` whose overridden one is outside the repository; members of a type the parser could not fully read, and what is found past one |
 | **Unresolved by design** | Receivers that are a method's result or another type's field (`a.b().c()`, `x.f.g()`); lambda parameters of inferred type; a `var` initialized otherwise; a switch label's enum constant (the selector's type decides it); annotation element names; anything in a region the parser rejected; the members `java.lang.Object`, `Enum` and `Record` give, an enum's `values()` / `valueOf`, a record's implicit accessors and canonical constructor, a class's default constructor (found, no declaration) |
 | **Not implemented** | Return and field types (a call on a call's result); generic inference; argument types the file does not prove (another method's result); Maven, Gradle and module descriptors (`module-info.java`): dependencies, modules, generated sources; dynamic dispatch — a call names its static declaration, not the override that runs |
+
+**Context.** `get_context` items are the graph's edges only, each with its
+edge's confidence: the overload and the constructor a call names, the
+supertypes a type extends and implements, a declared receiver's member (a
+call through an interface is that interface's method, never an
+implementation), and the callers of a declaration. What the graph leaves a
+candidate — overloads its arguments do not tell apart, a receiver typed by a
+method's result, a class two source roots declare — is no item, only an
+unattributed count. Overloads share their qualified name: the ambiguity
+listing gives each a `symbolId`, which selects it with the listed name. A
+field and a method may share a name too (`User.name` and `User.name()`):
+they are two items, told apart by their lines and kinds.
 
 **Source roots.** A file's source root is where its package's path starts
 (`src/main/java/` of `src/main/java/com/acme/User.java` in package

@@ -1,0 +1,1591 @@
+# com.shop.service.UserService.create@22 maxTokens=8000 includeTests=false
+## stats
+candidates=12 selected=12 tokens=393 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=1 unresolved callees=0 outside=1
+## items
+0 com.shop.service.UserService.create kind=method reason="target" confidence=exact tokens=42 @src/main/java/com/shop/service/UserService.java:22:5-28:6
+  |     @Audited("create")
+  |     public User create(String name) {
+  |         User u = new User(normalize(name));
+  |         repo.save(u);
+  |         audit(u);
+  |         return u;
+  |     }
+1 com.shop.model.User.<init> kind=constructor reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/model/User.java:7:5-9:6
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+2 com.shop.util.Texts.normalize kind=method reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/util/Texts.java:6:5-8:6
+  |     public static String normalize(String s) {
+  |         return normalize(s, true);
+  |     }
+3 com.shop.repo.UserRepository.save kind=method reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/repo/UserRepository.java:6:5-8:6
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+4 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+5 com.shop.model.Audited kind=interface reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/model/Audited.java:6:1-9:2
+  | @Retention(RetentionPolicy.RUNTIME)
+  | public @interface Audited {
+  |     String value();
+  | }
+6 com.shop.service.UserService.repo kind=field reason="references" confidence=exact tokens=9 @src/main/java/com/shop/service/UserService.java:16:34-16:38
+  |     private final UserRepository repo;
+7 com.shop.util.Texts.normalize kind=method reason="transitive callee" confidence=exact tokens=35 @src/main/java/com/shop/util/Texts.java:10:5-13:6
+  |     public static String normalize(String s, boolean lower) {
+  |         String t = s.trim();
+  |         return lower ? t.toLowerCase() : t;
+  |     }
+8 com.shop.model.Entity.touch kind=method reason="transitive callee" confidence=exact tokens=11 @src/main/java/com/shop/model/Entity.java:6:5-8:6
+  |     public void touch() {
+  |         id++;
+  |     }
+9 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+10 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+11 com.shop.repo.UserRepository kind=class reason="transitive callee" confidence=exact tokens=56 @src/main/java/com/shop/repo/UserRepository.java:5:1-17:2
+  | public class UserRepository {
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+  |
+  |     public User find(long id) {
+  |         return null;
+  |     }
+  |
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+  | }
+
+# com.shop.service.UserService.create@22 maxTokens=120 includeTests=false
+## stats
+candidates=12 selected=5 tokens=114 budget=120 truncated=7 targetTruncated=false
+unattributed callers=0 callees=1 unresolved callees=0 outside=1
+## items
+0 com.shop.service.UserService.create kind=method reason="target" confidence=exact tokens=42 @src/main/java/com/shop/service/UserService.java:22:5-28:6
+  |     @Audited("create")
+  |     public User create(String name) {
+  |         User u = new User(normalize(name));
+  |         repo.save(u);
+  |         audit(u);
+  |         return u;
+  |     }
+1 com.shop.model.User.<init> kind=constructor reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/model/User.java:7:5-9:6
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+2 com.shop.util.Texts.normalize kind=method reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/util/Texts.java:6:5-8:6
+  |     public static String normalize(String s) {
+  |         return normalize(s, true);
+  |     }
+3 com.shop.repo.UserRepository.save kind=method reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/repo/UserRepository.java:6:5-8:6
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+4 com.shop.model.Audited kind=interface reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/model/Audited.java:6:1-9:2
+  | @Retention(RetentionPolicy.RUNTIME)
+  | public @interface Audited {
+  |     String value();
+  | }
+
+# com.shop.service.UserService.create@22 maxTokens=8000 includeTests=true
+## stats
+candidates=13 selected=13 tokens=414 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=1 unresolved callees=0 outside=1
+## items
+0 com.shop.service.UserService.create kind=method reason="target" confidence=exact tokens=42 @src/main/java/com/shop/service/UserService.java:22:5-28:6
+  |     @Audited("create")
+  |     public User create(String name) {
+  |         User u = new User(normalize(name));
+  |         repo.save(u);
+  |         audit(u);
+  |         return u;
+  |     }
+1 com.shop.model.User.<init> kind=constructor reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/model/User.java:7:5-9:6
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+2 com.shop.util.Texts.normalize kind=method reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/util/Texts.java:6:5-8:6
+  |     public static String normalize(String s) {
+  |         return normalize(s, true);
+  |     }
+3 com.shop.repo.UserRepository.save kind=method reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/repo/UserRepository.java:6:5-8:6
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+4 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+5 com.shop.model.Audited kind=interface reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/model/Audited.java:6:1-9:2
+  | @Retention(RetentionPolicy.RUNTIME)
+  | public @interface Audited {
+  |     String value();
+  | }
+6 com.shop.service.UserService.repo kind=field reason="references" confidence=exact tokens=9 @src/main/java/com/shop/service/UserService.java:16:34-16:38
+  |     private final UserRepository repo;
+7 com.shop.service.UserServiceTest.creates kind=method reason="caller" confidence=strong tokens=21 @src/test/java/com/shop/service/UserServiceTest.java:6:5-8:6
+  |     void creates() {
+  |         new UserService(new UserRepository()).create("Ann");
+  |     }
+8 com.shop.util.Texts.normalize kind=method reason="transitive callee" confidence=exact tokens=35 @src/main/java/com/shop/util/Texts.java:10:5-13:6
+  |     public static String normalize(String s, boolean lower) {
+  |         String t = s.trim();
+  |         return lower ? t.toLowerCase() : t;
+  |     }
+9 com.shop.model.Entity.touch kind=method reason="transitive callee" confidence=exact tokens=11 @src/main/java/com/shop/model/Entity.java:6:5-8:6
+  |     public void touch() {
+  |         id++;
+  |     }
+10 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+11 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+12 com.shop.repo.UserRepository kind=class reason="transitive callee" confidence=exact tokens=56 @src/main/java/com/shop/repo/UserRepository.java:5:1-17:2
+  | public class UserRepository {
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+  |
+  |     public User find(long id) {
+  |         return null;
+  |     }
+  |
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+  | }
+
+# com.shop.service.UserService.audit@30 maxTokens=8000 includeTests=false
+## stats
+candidates=6 selected=6 tokens=196 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=1 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.service.UserService.audit kind=method reason="target" confidence=exact tokens=12 @src/main/java/com/shop/service/UserService.java:30:5-32:6
+  |     void audit(User u) {
+  |         u.touch();
+  |     }
+1 com.shop.model.Entity.touch kind=method reason="direct callee" confidence=exact tokens=11 @src/main/java/com/shop/model/Entity.java:6:5-8:6
+  |     public void touch() {
+  |         id++;
+  |     }
+2 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+3 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+4 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+5 com.shop.model.Entity.id kind=field reason="transitive callee" confidence=exact tokens=5 @src/main/java/com/shop/model/Entity.java:4:20-4:22
+  |     protected long id;
+
+# com.shop.service.UserService.audit@34 maxTokens=8000 includeTests=false
+## stats
+candidates=3 selected=3 tokens=57 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=1 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.service.UserService.audit kind=method reason="target" confidence=exact tokens=7 @src/main/java/com/shop/service/UserService.java:34:5-35:6
+  |     void audit(Order o) {
+  |     }
+1 com.shop.model.Order kind=class reason="direct callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Order.java:3:1-7:2
+  | public class Order extends Entity {
+  |     public String name() {
+  |         return "order-" + id;
+  |     }
+  | }
+2 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+
+# com.shop.model.User.<init>@7 maxTokens=8000 includeTests=false
+## stats
+candidates=4 selected=4 tokens=89 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.model.User.<init> kind=constructor reason="target" confidence=exact tokens=15 @src/main/java/com/shop/model/User.java:7:5-9:6
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+1 com.shop.service.UserService.create kind=method reason="caller" confidence=exact tokens=42 @src/main/java/com/shop/service/UserService.java:22:5-28:6
+  |     @Audited("create")
+  |     public User create(String name) {
+  |         User u = new User(normalize(name));
+  |         repo.save(u);
+  |         audit(u);
+  |         return u;
+  |     }
+2 com.shop.model.User.<init> kind=constructor reason="caller" confidence=exact tokens=13 @src/main/java/com/shop/model/User.java:11:5-13:6
+  |     public User() {
+  |         this("anonymous");
+  |     }
+3 com.shop.model.User.of kind=method reason="caller" confidence=exact tokens=19 @src/main/java/com/shop/model/User.java:15:5-17:6
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+
+# com.shop.model.User.<init>@11 maxTokens=8000 includeTests=false
+## stats
+candidates=2 selected=2 tokens=28 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.model.User.<init> kind=constructor reason="target" confidence=exact tokens=13 @src/main/java/com/shop/model/User.java:11:5-13:6
+  |     public User() {
+  |         this("anonymous");
+  |     }
+1 com.shop.model.User.<init> kind=constructor reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/model/User.java:7:5-9:6
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+
+# com.shop.service.UserService.lookup@45 maxTokens=8000 includeTests=false
+## stats
+candidates=8 selected=8 tokens=279 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.service.UserService.lookup kind=method reason="target" confidence=exact tokens=15 @src/main/java/com/shop/service/UserService.java:45:5-47:6
+  |     User lookup(long id) {
+  |         return repo.find(id);
+  |     }
+1 com.shop.repo.UserRepository.find kind=method reason="direct callee" confidence=exact tokens=14 @src/main/java/com/shop/repo/UserRepository.java:10:5-12:6
+  |     public User find(long id) {
+  |         return null;
+  |     }
+2 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+3 com.shop.service.UserService.repo kind=field reason="references" confidence=exact tokens=9 @src/main/java/com/shop/service/UserService.java:16:34-16:38
+  |     private final UserRepository repo;
+4 com.shop.service.UserService.Cache.get kind=method reason="caller" confidence=exact tokens=17 @src/main/java/com/shop/service/UserService.java:79:9-81:10
+  |         User get(long id) {
+  |             return lookup(id);
+  |         }
+5 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+6 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+7 com.shop.repo.UserRepository kind=class reason="transitive callee" confidence=exact tokens=56 @src/main/java/com/shop/repo/UserRepository.java:5:1-17:2
+  | public class UserRepository {
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+  |
+  |     public User find(long id) {
+  |         return null;
+  |     }
+  |
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+  | }
+
+# com.shop.service.UserService.lookupByName@49 maxTokens=8000 includeTests=false
+## stats
+candidates=8 selected=8 tokens=287 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.service.UserService.lookupByName kind=method reason="target" confidence=exact tokens=18 @src/main/java/com/shop/service/UserService.java:49:5-51:6
+  |     User lookupByName(String name) {
+  |         return repo.find(name);
+  |     }
+1 com.shop.repo.UserRepository.find kind=method reason="direct callee" confidence=exact tokens=17 @src/main/java/com/shop/repo/UserRepository.java:14:5-16:6
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+2 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+3 com.shop.service.UserService.repo kind=field reason="references" confidence=exact tokens=9 @src/main/java/com/shop/service/UserService.java:16:34-16:38
+  |     private final UserRepository repo;
+4 com.shop.model.User.of kind=method reason="transitive callee" confidence=exact tokens=19 @src/main/java/com/shop/model/User.java:15:5-17:6
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+5 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+6 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+7 com.shop.repo.UserRepository kind=class reason="transitive callee" confidence=exact tokens=56 @src/main/java/com/shop/repo/UserRepository.java:5:1-17:2
+  | public class UserRepository {
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+  |
+  |     public User find(long id) {
+  |         return null;
+  |     }
+  |
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+  | }
+
+# com.shop.service.Coder.ofLong@6 maxTokens=8000 includeTests=false
+## stats
+candidates=3 selected=3 tokens=109 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.service.Coder.ofLong kind=method reason="target" confidence=exact tokens=16 @src/main/java/com/shop/service/Coder.java:6:5-8:6
+  |     String ofLong(long id) {
+  |         return Codes.code(id);
+  |     }
+1 com.shop.util.Codes.code kind=method reason="direct callee" confidence=exact tokens=19 @src/main/java/com/shop/util/Codes.java:6:5-8:6
+  |     public static String code(long value) {
+  |         return "L" + value;
+  |     }
+2 com.shop.util.Codes kind=class reason="direct callee" confidence=exact tokens=74 @src/main/java/com/shop/util/Codes.java:3:1-17:2
+  | public final class Codes {
+  |     private Codes() {}
+  |
+  |     public static String code(long value) {
+  |         return "L" + value;
+  |     }
+  |
+  |     public static String code(int value) {
+  |         return "I" + value;
+  |     }
+  |
+  |     public static String code(boolean value) {
+  |         return value ? "T" : "F";
+  |     }
+  | }
+
+# com.shop.service.Coder.ofInt@10 maxTokens=8000 includeTests=false
+## stats
+candidates=3 selected=3 tokens=110 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.service.Coder.ofInt kind=method reason="target" confidence=exact tokens=17 @src/main/java/com/shop/service/Coder.java:10:5-12:6
+  |     String ofInt(int count) {
+  |         return Codes.code(count);
+  |     }
+1 com.shop.util.Codes.code kind=method reason="direct callee" confidence=exact tokens=19 @src/main/java/com/shop/util/Codes.java:10:5-12:6
+  |     public static String code(int value) {
+  |         return "I" + value;
+  |     }
+2 com.shop.util.Codes kind=class reason="direct callee" confidence=exact tokens=74 @src/main/java/com/shop/util/Codes.java:3:1-17:2
+  | public final class Codes {
+  |     private Codes() {}
+  |
+  |     public static String code(long value) {
+  |         return "L" + value;
+  |     }
+  |
+  |     public static String code(int value) {
+  |         return "I" + value;
+  |     }
+  |
+  |     public static String code(boolean value) {
+  |         return value ? "T" : "F";
+  |     }
+  | }
+
+# com.shop.service.Coder.ofFlag@14 maxTokens=8000 includeTests=false
+## stats
+candidates=3 selected=3 tokens=113 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.service.Coder.ofFlag kind=method reason="target" confidence=exact tokens=18 @src/main/java/com/shop/service/Coder.java:14:5-16:6
+  |     String ofFlag(boolean flag) {
+  |         return Codes.code(flag);
+  |     }
+1 com.shop.util.Codes.code kind=method reason="direct callee" confidence=exact tokens=21 @src/main/java/com/shop/util/Codes.java:14:5-16:6
+  |     public static String code(boolean value) {
+  |         return value ? "T" : "F";
+  |     }
+2 com.shop.util.Codes kind=class reason="direct callee" confidence=exact tokens=74 @src/main/java/com/shop/util/Codes.java:3:1-17:2
+  | public final class Codes {
+  |     private Codes() {}
+  |
+  |     public static String code(long value) {
+  |         return "L" + value;
+  |     }
+  |
+  |     public static String code(int value) {
+  |         return "I" + value;
+  |     }
+  |
+  |     public static String code(boolean value) {
+  |         return value ? "T" : "F";
+  |     }
+  | }
+
+# com.shop.repo.UserRepository.find@10 maxTokens=8000 includeTests=false
+## stats
+candidates=5 selected=5 tokens=197 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.repo.UserRepository.find kind=method reason="target" confidence=exact tokens=14 @src/main/java/com/shop/repo/UserRepository.java:10:5-12:6
+  |     public User find(long id) {
+  |         return null;
+  |     }
+1 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+2 com.shop.service.UserService.lookup kind=method reason="caller" confidence=exact tokens=15 @src/main/java/com/shop/service/UserService.java:45:5-47:6
+  |     User lookup(long id) {
+  |         return repo.find(id);
+  |     }
+3 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+4 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+
+# com.shop.repo.UserRepository.find@14 maxTokens=8000 includeTests=false
+## stats
+candidates=7 selected=7 tokens=237 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.repo.UserRepository.find kind=method reason="target" confidence=exact tokens=17 @src/main/java/com/shop/repo/UserRepository.java:14:5-16:6
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+1 com.shop.model.User.of kind=method reason="direct callee" confidence=exact tokens=19 @src/main/java/com/shop/model/User.java:15:5-17:6
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+2 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+3 com.shop.service.UserService.lookupByName kind=method reason="caller" confidence=exact tokens=18 @src/main/java/com/shop/service/UserService.java:49:5-51:6
+  |     User lookupByName(String name) {
+  |         return repo.find(name);
+  |     }
+4 com.shop.model.User.<init> kind=constructor reason="transitive callee" confidence=exact tokens=15 @src/main/java/com/shop/model/User.java:7:5-9:6
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+5 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+6 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+
+# com.shop.model.User@3 maxTokens=8000 includeTests=false
+## stats
+candidates=14 selected=14 tokens=368 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.model.User kind=class reason="target" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+1 com.shop.model.Named kind=interface reason="implements" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+2 com.shop.model.Entity kind=class reason="extends" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+3 com.shop.service.UserService.create kind=method reason="caller" confidence=exact tokens=42 @src/main/java/com/shop/service/UserService.java:22:5-28:6
+  |     @Audited("create")
+  |     public User create(String name) {
+  |         User u = new User(normalize(name));
+  |         repo.save(u);
+  |         audit(u);
+  |         return u;
+  |     }
+4 com.shop.repo.UserRepository.find kind=method reason="caller" confidence=exact tokens=17 @src/main/java/com/shop/repo/UserRepository.java:14:5-16:6
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+5 com.shop.repo.UserRepository.find kind=method reason="caller" confidence=exact tokens=14 @src/main/java/com/shop/repo/UserRepository.java:10:5-12:6
+  |     public User find(long id) {
+  |         return null;
+  |     }
+6 com.shop.repo.UserRepository.save kind=method reason="caller" confidence=exact tokens=15 @src/main/java/com/shop/repo/UserRepository.java:6:5-8:6
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+7 com.shop.model.User.of kind=method reason="caller" confidence=exact tokens=19 @src/main/java/com/shop/model/User.java:15:5-17:6
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+8 com.shop.service.UserService.factory kind=method reason="caller" confidence=exact tokens=17 @src/main/java/com/shop/service/UserService.java:70:5-72:6
+  |     Function<String, User> factory() {
+  |         return User::of;
+  |     }
+9 com.shop.service.UserService.lookup kind=method reason="caller" confidence=exact tokens=15 @src/main/java/com/shop/service/UserService.java:45:5-47:6
+  |     User lookup(long id) {
+  |         return repo.find(id);
+  |     }
+10 com.shop.service.Reports.title kind=method reason="caller" confidence=strong tokens=14 @src/main/java/com/shop/service/Reports.java:6:5-8:6
+  |     String title(User u) {
+  |         return u.name();
+  |     }
+11 com.shop.service.UserService.lookupByName kind=method reason="caller" confidence=exact tokens=18 @src/main/java/com/shop/service/UserService.java:49:5-51:6
+  |     User lookupByName(String name) {
+  |         return repo.find(name);
+  |     }
+12 com.shop.service.UserService.audit kind=method reason="caller" confidence=exact tokens=12 @src/main/java/com/shop/service/UserService.java:30:5-32:6
+  |     void audit(User u) {
+  |         u.touch();
+  |     }
+13 com.shop.service.UserService.Cache.get kind=method reason="caller" confidence=exact tokens=17 @src/main/java/com/shop/service/UserService.java:79:9-81:10
+  |         User get(long id) {
+  |             return lookup(id);
+  |         }
+
+# com.shop.model.User@3 maxTokens=5 includeTests=false
+## stats
+candidates=14 selected=1 tokens=114 budget=5 truncated=13 targetTruncated=true
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.model.User kind=class reason="target" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+
+# com.shop.model.Money@3 maxTokens=8000 includeTests=false
+## stats
+candidates=3 selected=3 tokens=108 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.model.Money kind=class reason="target" confidence=exact tokens=68 @src/main/java/com/shop/model/Money.java:3:1-13:2
+  | public record Money(long cents, String currency) {
+  |     public Money {
+  |         if (cents < 0) {
+  |             throw new IllegalArgumentException("negative");
+  |         }
+  |     }
+  |
+  |     public Money plus(Money other) {
+  |         return new Money(cents + other.cents, currency);
+  |     }
+  | }
+1 com.shop.model.Money.plus kind=method reason="caller" confidence=exact tokens=24 @src/main/java/com/shop/model/Money.java:10:5-12:6
+  |     public Money plus(Money other) {
+  |         return new Money(cents + other.cents, currency);
+  |     }
+2 com.shop.service.UserService.total kind=method reason="caller" confidence=exact tokens=16 @src/main/java/com/shop/service/UserService.java:62:5-64:6
+  |     Money total(Money a, Money b) {
+  |         return a.plus(b);
+  |     }
+
+# com.shop.model.Status@3 maxTokens=8000 includeTests=false
+## stats
+candidates=5 selected=5 tokens=119 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.model.Status kind=enum reason="target" confidence=exact tokens=50 @src/main/java/com/shop/model/Status.java:3:1-15:2
+  | public enum Status {
+  |     ACTIVE,
+  |     BLOCKED {
+  |         @Override
+  |         public boolean allows() {
+  |             return false;
+  |         }
+  |     };
+  |
+  |     public boolean allows() {
+  |         return true;
+  |     }
+  | }
+1 com.shop.model.User.block kind=method reason="caller" confidence=exact tokens=16 @src/main/java/com/shop/model/User.java:24:5-26:6
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+2 com.shop.service.UserService.active kind=method reason="caller" confidence=exact tokens=16 @src/main/java/com/shop/service/UserService.java:66:5-68:6
+  |     boolean active() {
+  |         return Status.ACTIVE.allows();
+  |     }
+3 com.shop.model.Status.<anonymous> kind=class reason="caller" confidence=exact tokens=27 @src/main/java/com/shop/model/Status.java:5:13-10:6
+  |     BLOCKED {
+  |         @Override
+  |         public boolean allows() {
+  |             return false;
+  |         }
+  |     };
+4 com.shop.model.User.status kind=field reason="caller" confidence=exact tokens=10 @src/main/java/com/shop/model/User.java:5:20-5:42
+  |     private Status status = Status.ACTIVE;
+
+# com.shop.model.Named.label@6 maxTokens=8000 includeTests=false
+## stats
+candidates=3 selected=3 tokens=36 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=1
+## items
+0 com.shop.model.Named.label kind=method reason="target" confidence=exact tokens=17 @src/main/java/com/shop/model/Named.java:6:5-8:6
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+1 com.shop.model.Named.name kind=method reason="direct callee" confidence=exact tokens=4 @src/main/java/com/shop/model/Named.java:4:5-4:19
+  |     String name();
+2 com.shop.service.UserService.describe kind=method reason="caller" confidence=exact tokens=15 @src/main/java/com/shop/service/UserService.java:37:5-39:6
+  |     String describe(Named n) {
+  |         return n.label();
+  |     }
+
+# com.shop.service.UserService.untyped@53 maxTokens=8000 includeTests=false
+## stats
+candidates=4 selected=4 tokens=97 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=1 unresolved callees=0 outside=0
+## items
+0 com.shop.service.UserService.untyped kind=method reason="target" confidence=exact tokens=18 @src/main/java/com/shop/service/UserService.java:53:5-56:6
+  |     void untyped() {
+  |         var r = locate();
+  |         r.save(null);
+  |     }
+1 com.shop.service.UserService.locate kind=method reason="direct callee" confidence=exact tokens=14 @src/main/java/com/shop/service/UserService.java:58:5-60:6
+  |     UserRepository locate() {
+  |         return repo;
+  |     }
+2 com.shop.repo.UserRepository kind=class reason="transitive callee" confidence=exact tokens=56 @src/main/java/com/shop/repo/UserRepository.java:5:1-17:2
+  | public class UserRepository {
+  |     public void save(User user) {
+  |         user.touch();
+  |     }
+  |
+  |     public User find(long id) {
+  |         return null;
+  |     }
+  |
+  |     public User find(String name) {
+  |         return User.of(name);
+  |     }
+  | }
+3 com.shop.service.UserService.repo kind=field reason="transitive callee" confidence=exact tokens=9 @src/main/java/com/shop/service/UserService.java:16:34-16:38
+  |     private final UserRepository repo;
+
+# com.shop.service.UserService.setting@74 maxTokens=8000 includeTests=false
+## stats
+candidates=1 selected=1 tokens=14 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=2 unresolved callees=0 outside=1
+## items
+0 com.shop.service.UserService.setting kind=method reason="target" confidence=exact tokens=14 @src/main/java/com/shop/service/UserService.java:74:5-76:6
+  |     String setting() {
+  |         return Config.get();
+  |     }
+
+# com.shop.service.UserService.Cache.get@79 maxTokens=8000 includeTests=false
+## stats
+candidates=7 selected=7 tokens=223 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.service.UserService.Cache.get kind=method reason="target" confidence=exact tokens=17 @src/main/java/com/shop/service/UserService.java:79:9-81:10
+  |         User get(long id) {
+  |             return lookup(id);
+  |         }
+1 com.shop.model.User kind=class reason="direct callee" confidence=exact tokens=114 @src/main/java/com/shop/model/User.java:3:1-27:2
+  | public class User extends Entity implements Named {
+  |     private final String name;
+  |     private Status status = Status.ACTIVE;
+  |
+  |     public User(String name) {
+  |         this.name = name;
+  |     }
+  |
+  |     public User() {
+  |         this("anonymous");
+  |     }
+  |
+  |     public static User of(String name) {
+  |         return new User(name);
+  |     }
+  |
+  |     @Override
+  |     public String name() {
+  |         return name;
+  |     }
+  |
+  |     public void block() {
+  |         status = Status.BLOCKED;
+  |     }
+  | }
+2 com.shop.service.UserService.lookup kind=method reason="direct callee" confidence=exact tokens=15 @src/main/java/com/shop/service/UserService.java:45:5-47:6
+  |     User lookup(long id) {
+  |         return repo.find(id);
+  |     }
+3 com.shop.repo.UserRepository.find kind=method reason="transitive callee" confidence=exact tokens=14 @src/main/java/com/shop/repo/UserRepository.java:10:5-12:6
+  |     public User find(long id) {
+  |         return null;
+  |     }
+4 com.shop.model.Named kind=interface reason="transitive callee" confidence=exact tokens=29 @src/main/java/com/shop/model/Named.java:3:1-9:2
+  | public interface Named {
+  |     String name();
+  |
+  |     default String label() {
+  |         return "[" + name() + "]";
+  |     }
+  | }
+5 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+6 com.shop.service.UserService.repo kind=field reason="transitive callee" confidence=exact tokens=9 @src/main/java/com/shop/service/UserService.java:16:34-16:38
+  |     private final UserRepository repo;
+
+# com.shop.gateway.Gateway.fetch@6 maxTokens=8000 includeTests=false
+## stats
+candidates=1 selected=1 tokens=24 budget=8000 truncated=0 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=4
+## items
+0 com.shop.gateway.Gateway.fetch kind=method reason="target" confidence=exact tokens=24 @src/main/java/com/shop/gateway/Gateway.java:6:5-10:6
+  |     public User fetch() {
+  |         User u = new User();
+  |         u.touch();
+  |         return u;
+  |     }
+
+# com.shop.report.Ledger@6 maxTokens=100 includeTests=false
+## stats
+candidates=3 selected=1 tokens=2646 budget=100 truncated=2 targetTruncated=true
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.report.Ledger kind=class reason="target" confidence=exact tokens=2646 @src/main/java/com/shop/report/Ledger.java:6:1-526:2
+  | public class Ledger extends Entity {
+  |     public long entry000(long amount) {
+  |         return amount + 0L * id;
+  |     }
+  |
+  |     public long entry001(long amount) {
+  |         return amount + 1L * id;
+  |     }
+  |
+  |     public long entry002(long amount) {
+  |         return amount + 2L * id;
+  |     }
+  |
+  |     public long entry003(long amount) {
+  |         return amount + 3L * id;
+  |     }
+  |
+  |     public long entry004(long amount) {
+  |         return amount + 4L * id;
+  |     }
+  |
+  |     public long entry005(long amount) {
+  |         return amount + 5L * id;
+  |     }
+  |
+  |     public long entry006(long amount) {
+  |         return amount + 6L * id;
+  |     }
+  |
+  |     public long entry007(long amount) {
+  |         return amount + 7L * id;
+  |     }
+  |
+  |     public long entry008(long amount) {
+  |         return amount + 8L * id;
+  |     }
+  |
+  |     public long entry009(long amount) {
+  |         return amount + 9L * id;
+  |     }
+  |
+  |     public long entry010(long amount) {
+  |         return amount + 10L * id;
+  |     }
+  |
+  |     public long entry011(long amount) {
+  |         return amount + 11L * id;
+  |     }
+  |
+  |     public long entry012(long amount) {
+  |         return amount + 12L * id;
+  |     }
+  |
+  |     public long entry013(long amount) {
+  |         return amount + 13L * id;
+  |     }
+  |
+  |     public long entry014(long amount) {
+  |         return amount + 14L * id;
+  |     }
+  |
+  |     public long entry015(long amount) {
+  |         return amount + 15L * id;
+  |     }
+  |
+  |     public long entry016(long amount) {
+  |         return amount + 16L * id;
+  |     }
+  |
+  |     public long entry017(long amount) {
+  |         return amount + 17L * id;
+  |     }
+  |
+  |     public long entry018(long amount) {
+  |         return amount + 18L * id;
+  |     }
+  |
+  |     public long entry019(long amount) {
+  |         return amount + 19L * id;
+  |     }
+  |
+  |     public long entry020(long amount) {
+  |         return amount + 20L * id;
+  |     }
+  |
+  |     public long entry021(long amount) {
+  |         return amount + 21L * id;
+  |     }
+  |
+  |     public long entry022(long amount) {
+  |         return amount + 22L * id;
+  |     }
+  |
+  |     public long entry023(long amount) {
+  |         return amount + 23L * id;
+  |     }
+  |
+  |     public long entry024(long amount) {
+  |         return amount + 24L * id;
+  |     }
+  |
+  |     public long entry025(long amount) {
+  |         return amount + 25L * id;
+  |     }
+  |
+  |     public long entry026(long amount) {
+  |         return amount + 26L * id;
+  |     }
+  |
+  |     public long entry027(long amount) {
+  |         return amount + 27L * id;
+  |     }
+  |
+  |     public long entry028(long amount) {
+  |         return amount + 28L * id;
+  |     }
+  |
+  |     public long entry029(long amount) {
+  |         return amount + 29L * id;
+  |     }
+  |
+  |     public long entry030(long amount) {
+  |         return amount + 30L * id;
+  |     }
+  |
+  |     public long entry031(long amount) {
+  |         return amount + 31L * id;
+  |     }
+  |
+  |     public long entry032(long amount) {
+  |         return amount + 32L * id;
+  |     }
+  |
+  |     public long entry033(long amount) {
+  |         return amount + 33L * id;
+  |     }
+  |
+  |     public long entry034(long amount) {
+  |         return amount + 34L * id;
+  |     }
+  |
+  |     public long entry035(long amount) {
+  |         return amount + 35L * id;
+  |     }
+  |
+  |     public long entry036(long amount) {
+  |         return amount + 36L * id;
+  |     }
+  |
+  |     public long entry037(long amount) {
+  |         return amount + 37L * id;
+  |     }
+  |
+  |     public long entry038(long amount) {
+  |         return amount + 38L * id;
+  |     }
+  |
+  |     public long entry039(long amount) {
+  |         return amount + 39L * id;
+  |     }
+  |
+  |     public long entry040(long amount) {
+  |         return amount + 40L * id;
+  |     }
+  |
+  |     public long entry041(long amount) {
+  |         return amount + 41L * id;
+  |     }
+  |
+  |     public long entry042(long amount) {
+  |         return amount + 42L * id;
+  |     }
+  |
+  |     public long entry043(long amount) {
+  |         return amount + 43L * id;
+  |     }
+  |
+  |     public long entry044(long amount) {
+  |         return amount + 44L * id;
+  |     }
+  |
+  |     public long entry045(long amount) {
+  |         return amount + 45L * id;
+  |     }
+  |
+  |     public long entry046(long amount) {
+  |         return amount + 46L * id;
+  |     }
+  |
+  |     public long entry047(long amount) {
+  |         return amount + 47L * id;
+  |     }
+  |
+  |     public long entry048(long amount) {
+  |         return amount + 48L * id;
+  |     }
+  |
+  |     public long entry049(long amount) {
+  |         return amount + 49L * id;
+  |     }
+  |
+  |     public long entry050(long amount) {
+  |         return amount + 50L * id;
+  |     }
+  |
+  |     public long entry051(long amount) {
+  |         return amount + 51L * id;
+  |     }
+  |
+  |     public long entry052(long amount) {
+  |         return amount + 52L * id;
+  |     }
+  |
+  |     public long entry053(long amount) {
+  |         return amount + 53L * id;
+  |     }
+  |
+  |     public long entry054(long amount) {
+  |         return amount + 54L * id;
+  |     }
+  |
+  |     public long entry055(long amount) {
+  |         return amount + 55L * id;
+  |     }
+  |
+  |     public long entry056(long amount) {
+  |         return amount + 56L * id;
+  |     }
+  |
+  |     public long entry057(long amount) {
+  |         return amount + 57L * id;
+  |     }
+  |
+  |     public long entry058(long amount) {
+  |         return amount + 58L * id;
+  |     }
+  |
+  |     public long entry059(long amount) {
+  |         return amount + 59L * id;
+  |     }
+  |
+  |     public long entry060(long amount) {
+  |         return amount + 60L * id;
+  |     }
+  |
+  |     public long entry061(long amount) {
+  |         return amount + 61L * id;
+  |     }
+  |
+  |     public long entry062(long amount) {
+  |         return amount + 62L * id;
+  |     }
+  |
+  |     public long entry063(long amount) {
+  |         return amount + 63L * id;
+  |     }
+  |
+  |     public long entry064(long amount) {
+  |         return amount + 64L * id;
+  |     }
+  |
+  |     public long entry065(long amount) {
+  |         return amount + 65L * id;
+  |     }
+  |
+  |     public long entry066(long amount) {
+  |         return amount + 66L * id;
+  |     }
+  |
+  |     public long entry067(long amount) {
+  |         return amount + 67L * id;
+  |     }
+  |
+  |     public long entry068(long amount) {
+  |         return amount + 68L * id;
+  |     }
+  |
+  |     public long entry069(long amount) {
+  |         return amount + 69L * id;
+  |     }
+  |
+  |     public long entry070(long amount) {
+  |         return amount + 70L * id;
+  |     }
+  |
+  |     public long entry071(long amount) {
+  |         return amount + 71L * id;
+  |     }
+  |
+  |     public long entry072(long amount) {
+  |         return amount + 72L * id;
+  |     }
+  |
+  |     public long entry073(long amount) {
+  |         return amount + 73L * id;
+  |     }
+  |
+  |     public long entry074(long amount) {
+  |         return amount + 74L * id;
+  |     }
+  |
+  |     public long entry075(long amount) {
+  |         return amount + 75L * id;
+  |     }
+  |
+  |     public long entry076(long amount) {
+  |         return amount + 76L * id;
+  |     }
+  |
+  |     public long entry077(long amount) {
+  |         return amount + 77L * id;
+  |     }
+  |
+  |     public long entry078(long amount) {
+  |         return amount + 78L * id;
+  |     }
+  |
+  |     public long entry079(long amount) {
+  |         return amount + 79L * id;
+  |     }
+  |
+  |     public long entry080(long amount) {
+  |         return amount + 80L * id;
+  |     }
+  |
+  |     public long entry081(long amount) {
+  |         return amount + 81L * id;
+  |     }
+  |
+  |     public long entry082(long amount) {
+  |         return amount + 82L * id;
+  |     }
+  |
+  |     public long entry083(long amount) {
+  |         return amount + 83L * id;
+  |     }
+  |
+  |     public long entry084(long amount) {
+  |         return amount + 84L * id;
+  |     }
+  |
+  |     public long entry085(long amount) {
+  |         return amount + 85L * id;
+  |     }
+  |
+  |     public long entry086(long amount) {
+  |         return amount + 86L * id;
+  |     }
+  |
+  |     public long entry087(long amount) {
+  |         return amount + 87L * id;
+  |     }
+  |
+  |     public long entry088(long amount) {
+  |         return amount + 88L * id;
+  |     }
+  |
+  |     public long entry089(long amount) {
+  |         return amount + 89L * id;
+  |     }
+  |
+  |     public long entry090(long amount) {
+  |         return amount + 90L * id;
+  |     }
+  |
+  |     public long entry091(long amount) {
+  |         return amount + 91L * id;
+  |     }
+  |
+  |     public long entry092(long amount) {
+  |         return amount + 92L * id;
+  |     }
+  |
+  |     public long entry093(long amount) {
+  |         return amount + 93L * id;
+  |     }
+  |
+  |     public long entry094(long amount) {
+  |         return amount + 94L * id;
+  |     }
+  |
+  |     public long entry095(long amount) {
+  |         return amount + 95L * id;
+  |     }
+  |
+  |     public long entry096(long amount) {
+  |         return amount + 96L * id;
+  |     }
+  |
+  |     public long entry097(long amount) {
+  |         return amount + 97L * id;
+  |     }
+  |
+  |     public long entry098(long amount) {
+  |         return amount + 98L * id;
+  |     }
+  |
+  |     public long entry099(long amount) {
+  |         return amount + 99L * id;
+  |     }
+  |
+  |     public long entry100(long amount) {
+  |         return amount + 100L * id;
+  |     }
+  |
+  |     public long entry101(long amount) {
+  |         return amount + 101L * id;
+  |     }
+  |
+  |     public long entry102(long amount) {
+  |         return amount + 102L * id;
+  |     }
+  |
+  |     public long entry103(long amount) {
+  |         return amount + 103L * id;
+  |     }
+  |
+  |     public long entry104(long amount) {
+  |         return amount + 104L * id;
+  |     }
+  |
+  |     public long entry105(long amount) {
+  |         return amount + 105L * id;
+  |     }
+  |
+  |     public long entry106(long amount) {
+  |         return amount + 106L * id;
+  |     }
+  |
+  |     public long entry107(long amount) {
+  |         return amount + 107L * id;
+  |     }
+  |
+  |     public long entry108(long amount) {
+  |         return amount + 108L * id;
+  |     }
+  |
+  |     public long entry109(long amount) {
+  |         return amount + 109L * id;
+  |     }
+  |
+  |     public long entry110(long amount) {
+  |         return amount + 110L * id;
+  |     }
+  |
+  |     public long entry111(long amount) {
+  |         return amount + 111L * id;
+  |     }
+  |
+  |     public long entry112(long amount) {
+  |         return amount + 112L * id;
+  |     }
+  |
+  |     public long entry113(long amount) {
+  |         return amount + 113L * id;
+  |     }
+  |
+  |     public long entry114(long amount) {
+  |         return amount + 114L * id;
+  |     }
+  |
+  |     public long entry115(long amount) {
+  |         return amount + 115L * id;
+  |     }
+  |
+  |     public long entry116(long amount) {
+  |         return amount + 116L * id;
+  |     }
+  |
+  |     public long entry117(long amount) {
+  |         return amount + 117L * id;
+  |     }
+  |
+  |     public long entry118(long amount) {
+  |         return amount + 118L * id;
+  |     }
+  |
+  |     public long entry119(long amount) {
+  |         return amount + 119L * id;
+  |     }
+  |
+  |     public long entry120(long amount) {
+  |         return amount + 120L * id;
+  |     }
+  |
+  |     public long entry121(long amount) {
+  |         return amount + 121L * id;
+  |     }
+  |
+  |     public long entry122(long amount) {
+  |         return amount + 122L * id;
+  |     }
+  |
+  |     public long entry123(long amount) {
+  |         return amount + 123L * id;
+  |     }
+  |
+  |     public long entry124(long amount) {
+  |         return amount + 124L * id;
+  |     }
+  |
+  |     public long entry125(long amount) {
+  |         return amount + 125L * id;
+  |     }
+  |
+  |     public long entry126(long amount) {
+  |         return amount + 126L * id;
+  |     }
+  |
+  |     public long entry127(long amount) {
+  |         return amount + 127L * id;
+  |     }
+  |
+  |     public long entry128(long amount) {
+  |         return amount + 128L * id;
+  |     }
+  |
+  |     public long entry129(long amount) {
+  |         return amount + 129L * id;
+  |     }
+  | }
+
+# com.shop.report.LedgerReport.total@4 maxTokens=300 includeTests=false
+## stats
+candidates=6 selected=5 tokens=92 budget=300 truncated=1 targetTruncated=false
+unattributed callers=0 callees=0 unresolved callees=0 outside=0
+## items
+0 com.shop.report.LedgerReport.total kind=method reason="target" confidence=exact tokens=23 @src/main/java/com/shop/report/LedgerReport.java:4:5-6:6
+  |     long total(Ledger ledger) {
+  |         return ledger.entry000(1L) + ledger.entry129(2L);
+  |     }
+1 com.shop.report.Ledger.entry000 kind=method reason="direct callee" confidence=exact tokens=19 @src/main/java/com/shop/report/Ledger.java:7:5-9:6
+  |     public long entry000(long amount) {
+  |         return amount + 0L * id;
+  |     }
+2 com.shop.report.Ledger.entry129 kind=method reason="direct callee" confidence=exact tokens=20 @src/main/java/com/shop/report/Ledger.java:523:5-525:6
+  |     public long entry129(long amount) {
+  |         return amount + 129L * id;
+  |     }
+3 com.shop.model.Entity kind=class reason="transitive callee" confidence=exact tokens=25 @src/main/java/com/shop/model/Entity.java:3:1-9:2
+  | public abstract class Entity {
+  |     protected long id;
+  |
+  |     public void touch() {
+  |         id++;
+  |     }
+  | }
+4 com.shop.model.Entity.id kind=field reason="transitive callee" confidence=exact tokens=5 @src/main/java/com/shop/model/Entity.java:4:20-4:22
+  |     protected long id;

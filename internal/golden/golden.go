@@ -151,16 +151,23 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 
 // ContextSnapshot serializes the ranked context result for a scenario. Scores
 // are intentionally omitted (they are tuning-sensitive); the golden freezes the
-// selected symbols, their order, reason, and confidence.
+// selected symbols, their order, reason, confidence, location and source text,
+// and the completeness counts.
 func ContextSnapshot(res *context.Result) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## stats\ncandidates=%d selected=%d tokens=%d budget=%d truncated=%d targetTruncated=%t\n",
 		res.Stats.TotalCandidates, res.Stats.SelectedItems, res.Stats.EstimatedTokens,
 		res.Stats.BudgetTokens, res.Stats.TruncatedItems, res.Stats.TargetTruncated)
+	fmt.Fprintf(&b, "unattributed callers=%d callees=%d unresolved callees=%d outside=%d\n",
+		res.Stats.UnattributedCallers, res.Stats.UnattributedCallees,
+		res.Stats.UnresolvedCallees, res.Stats.OutsideCallees)
 	b.WriteString("## items\n")
 	for i, it := range res.Items {
-		fmt.Fprintf(&b, "%d %s kind=%s reason=%q confidence=%s\n",
-			i, it.Symbol.Qualified, it.Symbol.Kind, it.Reason, it.Confidence)
+		fmt.Fprintf(&b, "%d %s kind=%s reason=%q confidence=%s tokens=%d %s\n",
+			i, it.Symbol.Qualified, it.Symbol.Kind, it.Reason, it.Confidence, it.Tokens, loc(it.Symbol.Location))
+		for _, line := range strings.Split(it.Source, "\n") {
+			b.WriteString(strings.TrimRight("  | "+line, " ") + "\n")
+		}
 	}
 	return b.String()
 }
