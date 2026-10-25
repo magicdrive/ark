@@ -45,7 +45,7 @@ func workflowJobs(t *testing.T, path string) (top string, jobs map[string]string
 
 // hephaestusAction is the Hephaestus action every workflow step uses: the
 // commit of the v1.1.0 tag (HEPHAESTUS_VERSION of the Makefile).
-const hephaestusAction = "uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0"
+const hephaestusAction = "uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d"
 
 // hephaestusSteps returns the `with:` blocks of a job's Hephaestus steps.
 func hephaestusSteps(job string) []string {

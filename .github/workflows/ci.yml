@@ -404,13 +404,13 @@ jobs:
             .github/ci/cache-keys/release-snapshot
 
       - name: Check the Hephaestus configuration
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
         with:
           command: check
           github-token: ""
 
       - name: Build, archive and checksum a snapshot
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
         with:
           command: run
           stages: build,archive,checksum
