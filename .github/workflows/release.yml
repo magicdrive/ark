@@ -39,19 +39,22 @@ jobs:
           persist-credentials: false
 
       - name: Set up Go
+        # The Go of the build (.github/release/build.sh pins and asserts
+        # go.mod's toolchain): the Hephaestus action runs its release binary
+        # and provides no Go.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
           cache: false
 
       - name: Check the Hephaestus configuration
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
         with:
           command: check
           github-token: ""
 
       - name: Build, archive and checksum (nothing is published)
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
         with:
           command: run
           stages: build,archive,checksum
@@ -98,19 +101,34 @@ jobs:
       - name: Verify artifacts again before publishing anything
         run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"
 
+      - name: Plan the release
+        # prerelease and tap for this tag, from hephaestus.yaml only (no
+        # token, no project code): a prerelease (v1.2.3-rc.1) skips the tap
+        # (brews.skip_upload: auto), so the steps below that take the tap
+        # token do not run and never receive it. The action fails here, before
+        # anything is published, if a prerelease would update the tap.
+        id: plan
+        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        with:
+          command: plan
+
       - name: The tap token is set
         # Without it the rehearsal below could not read the tap and would
         # pass; the value never reaches this step.
+        if: steps.plan.outputs.tap == 'publish'
         env:
           HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}
         run: |
           [ "$HAS_TAP_TOKEN" = true ] || { echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is not set in the release environment"; exit 1; }
 
-      - name: Rehearse the formula and the tap pull request (read-only)
+      - name: Rehearse the formula and tap pull request (read-only)
         # The tap token, the tap's layout, a newer formula on the tap and the
         # pull request branch are checked before the release becomes public:
-        # a published release cannot be taken back.
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        # a published release cannot be taken back. (hephaestus publish verifies
+        # this step and the tap step by name: skipped for a prerelease,
+        # succeeded for a stable release.)
+        if: steps.plan.outputs.tap == 'publish'
+        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
         with:
           command: run
           stages: formula,tap
@@ -126,14 +144,15 @@ jobs:
             dist/ark_checksums.txt
 
       - name: Publish the GitHub release
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
         with:
           command: release
 
-      - name: Generate the formula and open the tap pull request
-        # A prerelease tag (v1.2.3-rc.1) does not update the tap
-        # (brews.skip_upload: auto); the owner merges the pull request.
-        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+      - name: Generate the formula and open a tap pull request
+        # Skipped for a prerelease tag (v1.2.3-rc.1), which does not update
+        # the tap (brews.skip_upload: auto); the owner merges the pull request.
+        if: steps.plan.outputs.tap == 'publish'
+        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
         with:
           command: run
           stages: formula,tap

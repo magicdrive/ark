@@ -427,8 +427,13 @@ gh api repos/actions/checkout/compare/<旧sha>...<新sha> \
 - action がダウンロードするバイナリの検証方法が弱まっていないこと（6.1 の差分で読む）。
   （PR #69 の goreleaser-action は、Hephaestus への移行で使われなくなった。）
 - `magicdrive/hephaestus` の更新は、Makefile の `HEPHAESTUS_VERSION` と同じ PR で上がること
-  （`TestHephaestusVersionIsConsistent`）。action は自分の source を pin された SHA からビルドして使う。
+  （`TestHephaestusVersionIsConsistent`）。action（v1.2.0 以降）は pin された commit の Release のバイナリを
+  取得し、checksum と provenance attestation（その commit と tag）を検証して実行する。Go を入れず、ビルドもしない
+  （Go は各ジョブの setup-go が `go.mod` の版を入れる）。CI のログの `Install hephaestus` で `verified:` を確かめる。
   token は action の input でだけ渡し、ビルドの step には渡さない（`release.yml` の `build` ジョブ）。
+- pin が prerelease（例 `v1.2.0-rc.1`）のとき、Renovate は正式版（例 `v1.2.0`）が出ると（`minimumReleaseAge` の後）
+  それを 1 つの PR（`renovate/hephaestus`）で提案する。安定版の pin からは prerelease を提案しない。
+  どちらの PR でも action の digest（8 箇所）と `HEPHAESTUS_VERSION` が一緒に動くことを確かめる。
 
 ### 6.3 ローカルで再現できる範囲
 

@@ -21,7 +21,9 @@
 #
 # The binary is built by the Go toolchain go.mod names (its toolchain line,
 # else its go line), the one CI tests with, whichever go is on PATH: the
-# Hephaestus action installs its own Go before it runs this.
+# job's setup-go provides it (the Hephaestus action, from v1.2.0, runs its
+# release binary and installs no Go), and GOTOOLCHAIN below keeps any other
+# go on PATH from building the release.
 set -euo pipefail
 
 fail() { echo "build.sh: $*" >&2; exit 1; }

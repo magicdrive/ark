@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +19,16 @@ import (
 
 var jobHeader = regexp.MustCompile(`(?m)^  ([A-Za-z0-9_-]+):\s*$`)
 
+// tb is what the workflow checks need of a test: *testing.T, or a recorder
+// that runs them against a mutated workflow (TestWorkflowChecks_CatchMutations).
+type tb interface {
+	Helper()
+	Error(args ...any)
+	Errorf(format string, args ...any)
+	Fatal(args ...any)
+	Fatalf(format string, args ...any)
+}
+
 // workflowJobs splits a workflow file into its jobs' text, by indentation.
 func workflowJobs(t *testing.T, path string) (top string, jobs map[string]string) {
 	t.Helper()
@@ -25,7 +36,12 @@ func workflowJobs(t *testing.T, path string) (top string, jobs map[string]string
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := string(b)
+	return splitJobs(t, path, string(b))
+}
+
+// splitJobs splits the text s of the workflow path into its jobs' text.
+func splitJobs(t tb, path, s string) (top string, jobs map[string]string) {
+	t.Helper()
 	i := strings.Index(s, "\njobs:\n")
 	if i < 0 {
 		t.Fatalf("%s: no jobs", path)
@@ -44,8 +60,39 @@ func workflowJobs(t *testing.T, path string) (top string, jobs map[string]string
 }
 
 // hephaestusAction is the Hephaestus action every workflow step uses: the
-// commit of the v1.1.0 tag (HEPHAESTUS_VERSION of the Makefile).
-const hephaestusAction = "uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0"
+// commit of the v1.2.0-rc.1 tag (HEPHAESTUS_VERSION of the Makefile). From
+// v1.2.0 the action runs that release's verified binary and installs no Go:
+// the jobs that build set up go.mod's Go themselves.
+const hephaestusAction = "uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1"
+
+// The release-job conventions of `hephaestus publish` (docs/publish.md of
+// Hephaestus): a plan step, and exactly these two steps — the only ones given
+// the tap token — run only when the plan publishes the tap. publish verifies
+// them by name: both skipped for a prerelease, both succeeded otherwise.
+const (
+	tapRehearsalStep = "Rehearse the formula and tap pull request (read-only)"
+	tapPublishStep   = "Generate the formula and open a tap pull request"
+	tapCondition     = "steps.plan.outputs.tap == 'publish'"
+)
+
+// jobSteps splits a job's text into its steps' text, each starting at its
+// first key (`name: ...`).
+func jobSteps(job string) []string {
+	parts := strings.Split(job, "\n      - ")
+	return parts[1:]
+}
+
+// stepField returns the value of a top-level key of a step ("" if absent).
+func stepField(step, key string) string {
+	if strings.HasPrefix(step, key+": ") {
+		return strings.TrimSpace(strings.SplitN(step[len(key)+2:], "\n", 2)[0])
+	}
+	m := regexp.MustCompile(`(?m)^        ` + regexp.QuoteMeta(key) + `: (.*)$`).FindStringSubmatch(step)
+	if m == nil {
+		return ""
+	}
+	return strings.TrimSpace(m[1])
+}
 
 // hephaestusSteps returns the `with:` blocks of a job's Hephaestus steps.
 func hephaestusSteps(job string) []string {
@@ -61,11 +108,16 @@ func hephaestusSteps(job string) []string {
 }
 
 func TestReleaseWorkflow_PublishesOnlyAfterEveryGate(t *testing.T) {
-	top, jobs := workflowJobs(t, ".github/workflows/release.yml")
-	all, err := os.ReadFile(".github/workflows/release.yml")
+	b, err := os.ReadFile(".github/workflows/release.yml")
 	if err != nil {
 		t.Fatal(err)
 	}
+	checkReleaseWorkflow(t, string(b))
+}
+
+func checkReleaseWorkflow(t tb, all string) {
+	t.Helper()
+	top, jobs := splitJobs(t, "release.yml", all)
 	if !strings.Contains(top, "on:\n  push:\n    tags:\n      - 'v*'\n\n") {
 		t.Error("release.yml: must run on v* tag pushes only")
 	}
@@ -81,20 +133,20 @@ func TestReleaseWorkflow_PublishesOnlyAfterEveryGate(t *testing.T) {
 	if !strings.Contains(jobs["ci"], "uses: ./.github/workflows/ci.yml") {
 		t.Error("release.yml: the ci job must run the repository's CI workflow")
 	}
-	if !strings.Contains(jobs["release"], "needs: [ci, build]") {
+	if !regexp.MustCompile(`(?m)^    needs: \[ci, build\]$`).MatchString(jobs["release"]) {
 		t.Error("release.yml: the release job must need ci and build")
 	}
 	for _, bad := range []string{"PERSONAL_GITHUB_TOKEN", "pull_request_target", "continue-on-error", "goreleaser"} {
-		if strings.Contains(strings.ToLower(string(all)), strings.ToLower(bad)) {
+		if strings.Contains(strings.ToLower(all), strings.ToLower(bad)) {
 			t.Errorf("release.yml: %s", bad)
 		}
 	}
 	// Tokens reach Hephaestus through the action's inputs only, never a job
 	// or workflow environment, which build code could read.
-	if regexp.MustCompile(`(?m)^(|    )env:`).MatchString(string(all)) {
+	if regexp.MustCompile(`(?m)^(|    )env:`).MatchString(all) {
 		t.Error("release.yml: no workflow or job env (tokens go through the action's inputs)")
 	}
-	for _, m := range regexp.MustCompile(`(?m)^\s+uses: (\S+)(.*)$`).FindAllStringSubmatch(string(all), -1) {
+	for _, m := range regexp.MustCompile(`(?m)^\s+uses: (\S+)(.*)$`).FindAllStringSubmatch(all, -1) {
 		if strings.HasPrefix(m[1], "./") {
 			continue
 		}
@@ -109,7 +161,7 @@ func TestReleaseWorkflow_PublishesOnlyAfterEveryGate(t *testing.T) {
 		if strings.Contains(job, "secrets.") != (name == "release") {
 			t.Errorf("release.yml: only the release job may use secrets (job %s)", name)
 		}
-		if strings.Contains(job, "environment: release") != (name == "release") {
+		if regexp.MustCompile(`(?m)^    environment: release$`).MatchString(job) != (name == "release") {
 			t.Errorf("release.yml: only the release job deploys to the release environment (job %s)", name)
 		}
 		if name != "ci" && !regexp.MustCompile(`(?m)^    timeout-minutes: \d+$`).MatchString(job) {
@@ -140,14 +192,24 @@ func TestReleaseWorkflow_PublishesOnlyAfterEveryGate(t *testing.T) {
 			t.Errorf("release.yml: a build step holds a token: %q", s)
 		}
 	}
+	// The action provides no Go (v1.2.0): the build sets up go.mod's, which
+	// build.sh pins and asserts, before Hephaestus runs it.
+	if regexp.MustCompile(`(?m)^\s+go-version:`).MatchString(all) {
+		t.Error("release.yml: Go is go.mod's (go-version-file), not another go-version")
+	}
 	inOrder(t, "release.yml build", build,
+		"uses: actions/setup-go@",
+		"go-version-file: 'go.mod'",
+		hephaestusAction+"\n        with:\n          command: check\n",
 		"stages: build,archive,checksum",
 		`run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"`,
 		"uses: actions/upload-artifact@")
 
-	// The release: the build's dist/, verified again; the tap rehearsed
-	// read-only and the provenance attested before anything is published;
-	// the tap token only where the tap is written.
+	// The release: the build's dist/, verified again; the release planned
+	// (a prerelease skips the tap); the tap rehearsed read-only and the
+	// provenance of every asset attested before anything is published; the
+	// tap token only where the tap is written, and only when the plan says
+	// it is.
 	release := jobs["release"]
 	for _, want := range []string{"contents: write", "id-token: write", "attestations: write", "persist-credentials: false"} {
 		if !strings.Contains(release, want) {
@@ -157,29 +219,71 @@ func TestReleaseWorkflow_PublishesOnlyAfterEveryGate(t *testing.T) {
 	if strings.Contains(release, "setup-go") || strings.Contains(release, "make ") || strings.Contains(release, "go build") {
 		t.Error("release.yml: the release job must not build anything")
 	}
+	ifTap := "\n        if: " + tapCondition + "\n"
 	inOrder(t, "release.yml release", release,
 		"uses: actions/download-artifact@",
 		`run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"`,
-		"HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}",
-		"stages: formula,tap\n          dry-run: \"true\"\n          github-token: \"\"\n          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}",
+		"id: plan\n        "+hephaestusAction+"\n        with:\n          command: plan\n",
+		ifTap+"        env:\n          HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}",
+		"- name: "+tapRehearsalStep+"\n",
+		ifTap+"        "+hephaestusAction+"\n        with:\n          command: run\n          stages: formula,tap\n          dry-run: \"true\"\n          github-token: \"\"\n          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}\n",
 		"uses: actions/attest-build-provenance@",
 		"dist/ark_*.tar.gz\n            dist/ark_checksums.txt",
 		"command: release\n",
-		"stages: formula,tap\n          github-token: \"\"\n          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}")
+		"- name: "+tapPublishStep+"\n",
+		ifTap+"        "+hephaestusAction+"\n        with:\n          command: run\n          stages: formula,tap\n          github-token: \"\"\n          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}")
 	rs := hephaestusSteps(release)
-	if len(rs) != 3 {
-		t.Fatalf("release.yml: the release job has %d Hephaestus steps, want 3 (rehearsal, release, tap)", len(rs))
+	if len(rs) != 4 {
+		t.Fatalf("release.yml: the release job has %d Hephaestus steps, want 4 (plan, rehearsal, release, tap)", len(rs))
 	}
-	if strings.Contains(rs[1], "token") {
-		t.Errorf("release.yml: the release step takes the default github.token only: %q", rs[1])
+	if strings.TrimSpace(rs[0]) != "with:\n          command: plan" {
+		t.Errorf("release.yml: the plan step takes nothing but command: plan: %q", rs[0])
+	}
+	if strings.Contains(rs[2], "token") {
+		t.Errorf("release.yml: the release step takes the default github.token only: %q", rs[2])
 	}
 	if strings.Count(release, "secrets.HOMEBREW_TAP_GITHUB_TOKEN }}") != 2 {
 		t.Error("release.yml: the tap token goes to the rehearsal and the tap steps only")
 	}
+	// Step by step: one plan step; every step that touches a secret comes
+	// after it and runs only when the tap is published; exactly the two
+	// steps publish verifies by name take the tap token; every other step
+	// runs unconditionally (a skipped attestation or release step would
+	// pass the job).
+	plan := -1
+	var tokenSteps []string
+	for i, step := range jobSteps(release) {
+		name, cond := stepField(step, "name"), stepField(step, "if")
+		if stepField(step, "id") == "plan" {
+			if plan >= 0 {
+				t.Errorf("release.yml: two plan steps")
+			}
+			plan = i
+		}
+		if strings.Contains(step, "tap-token:") {
+			tokenSteps = append(tokenSteps, name)
+		}
+		if strings.Contains(step, "secrets.") || strings.Contains(step, "tap-token:") {
+			if plan < 0 {
+				t.Errorf("release.yml: step %q uses the tap token before the plan step", name)
+			}
+			if cond != tapCondition {
+				t.Errorf("release.yml: step %q uses the tap token with if %q; want %s", name, cond, tapCondition)
+			}
+		} else if cond != "" {
+			t.Errorf("release.yml: step %q has a condition (%s): only the tap token's steps may be skipped", name, cond)
+		}
+	}
+	if plan < 0 {
+		t.Error("release.yml: the release job has no plan step (id: plan)")
+	}
+	if got, want := strings.Join(tokenSteps, " | "), tapRehearsalStep+" | "+tapPublishStep; got != want {
+		t.Errorf("release.yml: the steps given the tap token are %q, want exactly %q (hephaestus publish verifies them by name)", got, want)
+	}
 }
 
 // inOrder fails unless every want occurs in s, each after the previous one.
-func inOrder(t *testing.T, what, s string, wants ...string) {
+func inOrder(t tb, what, s string, wants ...string) {
 	t.Helper()
 	at := 0
 	for _, w := range wants {
@@ -198,14 +302,22 @@ func inOrder(t *testing.T, what, s string, wants ...string) {
 // any of them pass. The checks look at what the jobs run and how they depend
 // on each other, not at job names or step order.
 func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
-	top, jobs := workflowJobs(t, ".github/workflows/ci.yml")
+	b, err := os.ReadFile(".github/workflows/ci.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkCIWorkflow(t, string(b))
+}
+
+func checkCIWorkflow(t tb, all string) {
+	t.Helper()
+	top, jobs := splitJobs(t, "ci.yml", all)
 	for _, trigger := range []string{"  push:\n    branches:\n      - main", "  pull_request:", "  workflow_call:"} {
 		if !strings.Contains(top, trigger) {
 			t.Errorf("ci.yml: trigger %q missing (push to main, pull requests and the release must run the same gates)", strings.TrimSpace(strings.SplitN(trigger, "\n", 2)[0]))
 		}
 	}
-	all, _ := os.ReadFile(".github/workflows/ci.yml")
-	if strings.Contains(string(all), "continue-on-error") {
+	if strings.Contains(all, "continue-on-error") {
 		t.Error("ci.yml: continue-on-error would let a failed verification pass")
 	}
 
@@ -309,6 +421,14 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 	snapshot := require("the release snapshot", hephaestusAction, "command: check",
 		"command: run\n          stages: build,archive,checksum\n          snapshot: \"true\"\n          fresh: \"true\"\n          github-token: \"\"",
 		"run: .github/release/verify-dist.sh dist --snapshot", "name: release-snapshot")
+	// The action provides no Go (v1.2.0): the jobs that build ark or run
+	// Hephaestus with go run set up go.mod's Go first.
+	if regexp.MustCompile(`(?m)^\s+go-version:`).MatchString(all) {
+		t.Error("ci.yml: Go is go.mod's (go-version-file), not another go-version")
+	}
+	if snapshot != "" {
+		inOrder(t, "ci.yml "+snapshot, jobs[snapshot], "uses: actions/setup-go@", "go-version-file: 'go.mod'", hephaestusAction)
+	}
 	binaries := require("the release binaries on their systems", ".github/release/smoke.sh \"$exe\" v0.0.0-SNAPSHOT", "name: release-snapshot")
 	if binaries != "" {
 		var targets []string
@@ -320,7 +440,11 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 			t.Errorf("ci.yml: %s runs %s, want every release target natively: %s", binaries, got, want)
 		}
 	}
-	for _, job := range []string{binaries, require("the Homebrew end-to-end test", "os: [ubuntu-latest, macos-latest]", "run: make homebrew-e2e", "name: release-snapshot")} {
+	homebrew := require("the Homebrew end-to-end test", "os: [ubuntu-latest, macos-latest]", "run: make homebrew-e2e", "name: release-snapshot")
+	if homebrew != "" {
+		inOrder(t, "ci.yml "+homebrew, jobs[homebrew], "uses: actions/setup-go@", "go-version-file: 'go.mod'", "run: make homebrew-e2e")
+	}
+	for _, job := range []string{binaries, homebrew} {
 		if job != "" && snapshot != "" && !strings.Contains(jobs[job], "needs: ["+snapshot+"]") {
 			t.Errorf("ci.yml: %s must use the archives of %s", job, snapshot)
 		}
@@ -330,7 +454,7 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 			t.Errorf("ci.yml: job %s has no timeout-minutes", name)
 		}
 	}
-	if strings.Contains(string(all), "pull_request_target") {
+	if strings.Contains(all, "pull_request_target") {
 		t.Error("ci.yml: pull_request_target would run pull requests with the base repository's secrets")
 	}
 	if !strings.Contains(top, "concurrency:\n  group: ci-${{ github.workflow }}-${{ github.ref }}\n  cancel-in-progress: ${{ github.event_name == 'pull_request' }}") {
@@ -340,6 +464,11 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 	// The gate: needs every other job, runs whatever they did, and fails
 	// unless each succeeded and the race shards ran exactly the unit tests.
 	gate := require("the gate", "check-coverage.py reports windows macos")
+	// hephaestus publish requires the gate by this name: it is the check the
+	// main ruleset requires and the one publish looks for.
+	if gate != "" && gate != "ci-gate" {
+		t.Errorf("ci.yml: the gate is job %s; hephaestus publish requires it to be named ci-gate", gate)
+	}
 	if gate != "" {
 		job := jobs[gate]
 		if !regexp.MustCompile(`(?m)^    if: always\(\)$`).MatchString(job) {
@@ -376,7 +505,7 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 }
 
 // matrixValues returns the values of a matrix key of a job ("shard: [1, 2]").
-func matrixValues(t *testing.T, job, key string) []string {
+func matrixValues(t tb, job, key string) []string {
 	t.Helper()
 	m := regexp.MustCompile(`(?m)^\s+` + key + `:\s*\[([^\]]*)\]`).FindStringSubmatch(job)
 	if m == nil {
@@ -392,7 +521,7 @@ func matrixValues(t *testing.T, job, key string) []string {
 }
 
 // raceShards returns the shards race-shards.txt declares.
-func raceShards(t *testing.T) []string {
+func raceShards(t tb) []string {
 	t.Helper()
 	b, err := os.ReadFile(".github/ci/race-shards.txt")
 	if err != nil {
@@ -409,7 +538,7 @@ func raceShards(t *testing.T) []string {
 type fuzzEntry struct{ group, pkg, target string }
 
 // fuzzList returns the entries of fuzz-smoke.txt.
-func fuzzList(t *testing.T) []fuzzEntry {
+func fuzzList(t tb) []fuzzEntry {
 	t.Helper()
 	b, err := os.ReadFile(".github/ci/fuzz-smoke.txt")
 	if err != nil {
@@ -429,7 +558,7 @@ func fuzzList(t *testing.T) []fuzzEntry {
 	return out
 }
 
-func fuzzGroups(t *testing.T) []string {
+func fuzzGroups(t tb) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, e := range fuzzList(t) {
@@ -956,6 +1085,145 @@ exit 9
 		t.Errorf("snapshot of a later commit: %v\n%s", err, out)
 	} else {
 		wantBuild("snapshot of a later commit", out, "v0.0.0-SNAPSHOT", "")
+	}
+}
+
+// recorder runs a workflow check without failing the test: it records what
+// the check reports, and a Fatal stops the check (fatalStop) as it would stop
+// a test.
+type recorder struct{ errs []string }
+
+type fatalStop struct{}
+
+func (r *recorder) Helper()           {}
+func (r *recorder) Error(args ...any) { r.errs = append(r.errs, fmt.Sprint(args...)) }
+func (r *recorder) Errorf(format string, args ...any) {
+	r.errs = append(r.errs, fmt.Sprintf(format, args...))
+}
+func (r *recorder) Fatal(args ...any) { r.Error(args...); panic(fatalStop{}) }
+func (r *recorder) Fatalf(format string, args ...any) {
+	r.Errorf(format, args...)
+	panic(fatalStop{})
+}
+
+// reported runs check on a recorder and returns what it reported.
+func reported(check func(tb)) []string {
+	r := &recorder{}
+	func() {
+		defer func() {
+			if v := recover(); v != nil {
+				if _, ok := v.(fatalStop); !ok {
+					panic(v)
+				}
+			}
+		}()
+		check(r)
+	}()
+	return r.errs
+}
+
+// The release and CI workflow checks are mutation-tested: each mutation
+// below breaks one convention the release relies on — the gates, the
+// tokens, the plan and the tap steps hephaestus publish verifies by name,
+// the attestation of every asset, the Go the builds need now that the
+// action provides none — and the check must report it. A mutation whose
+// text is no longer in the workflow fails too, so the list follows the
+// workflows.
+func TestWorkflowChecks_CatchMutations(t *testing.T) {
+	const tapToken = "          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}\n"
+	ifTap := "        if: " + tapCondition + "\n"
+	// replace mutates the one occurrence of old.
+	replace := func(old, new string) func(string) (string, bool) {
+		return func(src string) (string, bool) {
+			return strings.Replace(src, old, new, 1), strings.Count(src, old) == 1
+		}
+	}
+	// move moves the one step block to just before the one occurrence of before.
+	move := func(block, before string) func(string) (string, bool) {
+		return func(src string) (string, bool) {
+			if strings.Count(src, block) != 1 {
+				return src, false
+			}
+			src = strings.Replace(src, block, "", 1)
+			return strings.Replace(src, before, block+before, 1), strings.Count(src, before) == 1
+		}
+	}
+	planStep := "      - name: Plan the release\n"
+	type mutation struct {
+		name   string
+		mutate func(string) (string, bool)
+	}
+	release, err := os.ReadFile(".github/workflows/release.yml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if i, j := strings.Index(string(release), planStep), strings.Index(string(release), "      - name: The tap token is set\n"); i >= 0 && j > i {
+		planStep = string(release)[i:j]
+	}
+	for _, wf := range []struct {
+		path      string
+		check     func(tb, string)
+		mutations []mutation
+	}{
+		{".github/workflows/release.yml", checkReleaseWorkflow, []mutation{
+			{"rehearsal without the plan condition", replace("succeeded for a stable release.)\n"+ifTap, "succeeded for a stable release.)\n")},
+			{"tap step without the plan condition", replace("the owner merges the pull request.\n"+ifTap, "the owner merges the pull request.\n")},
+			{"token check without the plan condition", replace("never reaches this step.\n"+ifTap, "never reaches this step.\n")},
+			{"tap step on another condition", replace("the owner merges the pull request.\n"+ifTap, "the owner merges the pull request.\n        if: steps.plan.outputs.prerelease == 'false'\n")},
+			{"rehearsal under its v1.1.0 name", replace("- name: "+tapRehearsalStep, "- name: Rehearse the formula and the tap pull request (read-only)")},
+			{"tap step under its v1.1.0 name", replace("- name: "+tapPublishStep, "- name: Generate the formula and open the tap pull request")},
+			{"no plan step id", replace("        id: plan\n", "")},
+			{"plan step runs another command", replace("          command: plan\n", "          command: check\n")},
+			{"plan step gets the tap token", replace("          command: plan\n", "          command: plan\n"+tapToken)},
+			{"plan after the tap rehearsal", move(planStep, "      - name: Attest build provenance\n")},
+			{"plan after the tap step", func(src string) (string, bool) {
+				if strings.Count(src, planStep) != 1 || !strings.HasSuffix(src, "\n") {
+					return src, false
+				}
+				return strings.Replace(src, planStep, "", 1) + "\n" + strings.TrimSuffix(planStep, "\n"), true
+			}},
+			{"release step made conditional", replace("      - name: Publish the GitHub release\n", "      - name: Publish the GitHub release\n"+ifTap)},
+			{"attestation made conditional", replace("      - name: Attest build provenance\n", "      - name: Attest build provenance\n"+ifTap)},
+			{"a third step gets the tap token", replace("          command: release\n", "          command: release\n"+tapToken)},
+			{"release step publishes with the tap token", replace("          command: release\n", "          command: release\n          github-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}\n")},
+			{"checksum file not attested", replace("            dist/ark_checksums.txt\n", "")},
+			{"no release environment", replace("    environment: release\n", "")},
+			{"release does not wait for the build", replace("    needs: [ci, build]\n", "    needs: [ci]\n")},
+			{"rehearsal publishes", replace("          dry-run: \"true\"\n", "")},
+			{"build without go.mod's Go", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version: stable\n          cache: false\n")},
+			{"build with another Go as well", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version-file: 'go.mod'\n          go-version: stable\n          cache: false\n")},
+			{"build without setup-go", replace("        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7\n        with:\n          go-version-file: 'go.mod'\n          cache: false\n", "        run: go version\n")},
+			{"plan pinned to a branch", replace("uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1\n        with:\n          command: plan", "uses: magicdrive/hephaestus@main # v1.2.0-rc.1\n        with:\n          command: plan")},
+			{"build verifies nothing", replace(`        run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"`+"\n\n      - name: Upload dist", "        run: true\n\n      - name: Upload dist")},
+		}},
+		{".github/workflows/ci.yml", checkCIWorkflow, []mutation{
+			{"gate under another name", replace("\n  ci-gate:\n", "\n  gate:\n")},
+			{"gate skipped when a job fails", replace("  ci-gate:\n    if: always()\n", "  ci-gate:\n")},
+			{"gate does not need the Homebrew test", replace(", release-binaries, homebrew-e2e]", ", release-binaries]")},
+			{"snapshot with another Go", replace("          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/release-snapshot\n", "          go-version: stable\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/release-snapshot\n")},
+			{"Homebrew test without Go", replace("      - name: Set up Go\n        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7\n        with:\n          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/homebrew-e2e\n\n", "")},
+		}},
+	} {
+		b, err := os.ReadFile(wf.path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		src := string(b)
+		if errs := reported(func(r tb) { wf.check(r, src) }); len(errs) != 0 {
+			t.Fatalf("%s: the check fails on the workflow itself: %q", wf.path, errs)
+		}
+		for _, m := range wf.mutations {
+			mutated, ok := m.mutate(src)
+			if !ok || mutated == src {
+				t.Errorf("%s: mutation %q no longer applies to the workflow", wf.path, m.name)
+				continue
+			}
+			if errs := reported(func(r tb) { wf.check(r, mutated) }); len(errs) == 0 {
+				t.Errorf("%s: mutation %q passes the check", wf.path, m.name)
+			} else {
+				t.Logf("%s: %s: %s", wf.path, m.name, errs[0])
+			}
+		}
 	}
 }
 
