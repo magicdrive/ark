@@ -11,6 +11,13 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request cancels its older run; runs of main, and the
+# release's run of these gates (workflow_call from release.yml, under the
+# caller's workflow name and the tag), are never cancelled.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # The verifications run as independent jobs, in parallel; ci-gate (last)
   # fails unless every one of them succeeded and the race shards together
@@ -22,6 +29,7 @@ jobs:
 
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -76,6 +84,7 @@ jobs:
 
   unit:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -121,6 +130,7 @@ jobs:
       matrix:
         shard: [1, 2, 3, 4]
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -177,6 +187,7 @@ jobs:
       matrix:
         group: [1, 2, 3]
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -225,6 +236,7 @@ jobs:
       matrix:
         os: [windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -274,6 +286,7 @@ jobs:
   # mismatch fails it.
   typescript-compiler-differential:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -294,6 +307,227 @@ jobs:
       - name: Run TypeScript compiler differential
         run: .github/ts-oracle/run.sh
 
+  # The whole test suite, with the race detector, on the two other systems
+  # the release ships binaries for: macOS (arm64, APFS) and Windows (NTFS).
+  # The Linux jobs above cannot see their file systems, path rules or line
+  # endings; filesystem-security runs the file access subset there with its
+  # stricter requirements.
+  native-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/native-tests
+
+      - name: Run tests with race detector
+        shell: bash
+        run: go test -race ./...
+
+  # Known vulnerabilities in the code Ark calls: its modules and the Go
+  # standard library of go.mod's version.
+  vulncheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/vulncheck
+
+      - name: Run govulncheck
+        run: make vulncheck
+
+  # The workflows (actionlint, with shellcheck over their run scripts), the
+  # repository's shell scripts and renovate.json.
+  workflow-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/workflow-lint
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22.17.0'
+
+      - name: Run actionlint
+        run: make actionlint
+
+      - name: Run shellcheck
+        run: shellcheck .github/release/*.sh .github/ci/*.sh .github/ts-oracle/run.sh
+
+      - name: Validate renovate.json
+        run: make renovate-check
+
+  # The release, as a snapshot: hephaestus.yaml checked, every target built,
+  # archived and checksummed by the Hephaestus action exactly as the release
+  # workflow builds a tag (version 0.0.0-SNAPSHOT, nothing is published), and
+  # verified as the release workflow verifies a release: the eight archives,
+  # their layout and checksums, and each binary's target and build flags.
+  release-snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/release-snapshot
+
+      - name: Check the Hephaestus configuration
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        with:
+          command: check
+          github-token: ""
+
+      - name: Build, archive and checksum a snapshot
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
+        with:
+          command: run
+          stages: build,archive,checksum
+          snapshot: "true"
+          fresh: "true"
+          github-token: ""
+
+      - name: Verify the snapshot as a release is verified
+        run: .github/release/verify-dist.sh dist --snapshot
+
+      - name: Upload the snapshot archives
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-snapshot
+          path: |
+            dist/*.tar.gz
+            dist/ark_checksums.txt
+          if-no-files-found: error
+          retention-days: 7
+          overwrite: true
+
+  # Every binary of the snapshot, run natively on its own system (the
+  # release cross-compiles them all on Linux): it starts, reports its
+  # version, prints its help, parses Go with tree-sitter and dumps a
+  # directory (.github/release/smoke.sh).
+  release-binaries:
+    needs: [release-snapshot]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            targets: linux_amd64 linux_386
+          - os: ubuntu-24.04-arm
+            targets: linux_arm64
+          - os: macos-latest
+            targets: darwin_arm64
+          - os: macos-15-intel
+            targets: darwin_amd64
+          - os: windows-latest
+            targets: windows_amd64 windows_386
+          - os: windows-11-arm
+            targets: windows_arm64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Download the snapshot archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-snapshot
+          path: dist
+
+      - name: Run this system's release binaries
+        env:
+          TARGETS: ${{ matrix.targets }}
+        run: |
+          for t in $TARGETS; do
+            # A relative directory: Git Bash's tar reads D:\... as a remote host.
+            mkdir -p "smoke/$t"
+            tar -xzf "dist/ark_0.0.0-SNAPSHOT_$t.tar.gz" -C "smoke/$t"
+            exe="smoke/$t/ark"
+            case "$t" in windows_*) exe="$exe.exe" ;; esac
+            .github/release/smoke.sh "$exe" v0.0.0-SNAPSHOT
+          done
+
+  # The release formula on the snapshot archives, with the real Homebrew of
+  # Linux and macOS: generated from hephaestus.yaml (file:// URLs), brew
+  # style, brew audit --strict, install, test, the completions where
+  # Homebrew loads them, uninstall (.github/release/homebrew-e2e.sh).
+  homebrew-e2e:
+    needs: [release-snapshot]
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: 'go.mod'
+          cache-dependency-path: |
+            go.sum
+            .github/ci/cache-keys/homebrew-e2e
+
+      - name: Put Homebrew on PATH (Linux)
+        if: runner.os == 'Linux'
+        run: echo "/home/linuxbrew/.linuxbrew/bin" >> "$GITHUB_PATH"
+
+      - name: Download the snapshot archives
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release-snapshot
+          path: dist
+
+      - name: Formula, brew style, audit --strict, install, test, uninstall
+        run: make homebrew-e2e
+
   # The gate: green only if every verification job above succeeded (a
   # failure, cancellation or skip of any job, or of any matrix leg, fails
   # it) and the race shards together ran exactly the packages and tests the
@@ -301,8 +535,9 @@ jobs:
   # the filesystem-security tests that skipped.
   ci-gate:
     if: always()
-    needs: [lint, unit, race, fuzz-smoke, filesystem-security, typescript-compiler-differential]
+    needs: [lint, unit, race, fuzz-smoke, filesystem-security, typescript-compiler-differential, native-tests, vulncheck, workflow-lint, release-snapshot, release-binaries, homebrew-e2e]
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Every verification job succeeded
         env:
@@ -311,7 +546,8 @@ jobs:
           python3 - <<'EOF'
           import json, os, sys
           needs = json.loads(os.environ["NEEDS"])
-          want = {"lint", "unit", "race", "fuzz-smoke", "filesystem-security", "typescript-compiler-differential"}
+          want = {"lint", "unit", "race", "fuzz-smoke", "filesystem-security", "typescript-compiler-differential",
+                  "native-tests", "vulncheck", "workflow-lint", "release-snapshot", "release-binaries", "homebrew-e2e"}
           results = {job: v["result"] for job, v in needs.items()}
           for job in sorted(want | set(results)):
               print(f"{job}: {results.get(job, 'missing')}")

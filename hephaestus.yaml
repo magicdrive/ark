@@ -1,0 +1,107 @@
+# Ark is released with Hephaestus (https://github.com/magicdrive/hephaestus).
+# .github/workflows/release.yml runs it on a v* tag after the full CI passes;
+# `make snapshot` builds the same archives locally, and
+# docs/development/releasing.md is the procedure.
+#
+# The archives, the checksum file and the formula keep the shape of the
+# GoReleaser releases up to v6.7.0: eight targets (Windows included) as
+# tar.gz, the binary and the completion scripts at the same paths, and the
+# same build flags (.github/release/build.sh).
+version: 1
+
+project:
+  name: ark
+  description: "Code intelligence engine for AI coding agents (MCP server), with a repository text dump"
+  homepage: "https://github.com/magicdrive/ark"
+  license: MIT
+
+builds:
+  - id: ark
+    # GoReleaser's default architectures for linux, darwin and windows,
+    # without darwin/386.
+    matrix:
+      os: [darwin, linux, windows]
+      arch: ["386", amd64, arm64]
+      exclude:
+        - os: darwin
+          arch: "386"
+    command: [bash, .github/release/build.sh]
+    env:
+      GOOS: "{{ .OS }}"
+      GOARCH: "{{ .Arch }}"
+      CGO_ENABLED: "0"
+      ARK_VERSION: "v{{ .Version }}"
+      ARK_TAG: "{{ .Tag }}"
+    output: "dist/bin/{{ .OS }}_{{ .Arch }}/ark{{ .Ext }}"
+    timeout: 15m
+
+archives:
+  - id: ark
+    name: "{{ .Project }}_{{ .Version }}_{{ .OS }}_{{ .Arch }}"
+    # Windows too: the releases have always shipped tar.gz only.
+    format: tar.gz
+    files:
+      - src: "dist/bin/{{ .OS }}_{{ .Arch }}/ark{{ .Ext }}"
+        dst: "ark{{ .Ext }}"
+        mode: "0755"
+      - src: misc/completions/ark-completion.sh
+        dst: completions/ark-completion.sh
+        mode: "0644"
+      - src: misc/completions/bash/ark-completion.bash
+        dst: completions/bash/ark-completion.bash
+        mode: "0644"
+      - src: misc/completions/fish/ark.fish
+        dst: completions/fish/ark.fish
+        mode: "0644"
+      - src: misc/completions/zsh/_ark
+        dst: completions/zsh/_ark
+        mode: "0644"
+
+checksum:
+  name: "{{ .Project }}_checksums.txt"
+
+release:
+  github:
+    owner: magicdrive
+    name: ark
+    draft: false
+    # A v1.2.3-rc.1 tag is a prerelease (and does not update the tap,
+    # skip_upload: auto below). Ark has never tagged one.
+    prerelease: auto
+    # The notes are edited by hand after the release; GitHub's generated
+    # notes are the starting point, as GoReleaser's changelog was.
+    generate_notes: true
+
+brews:
+  - name: ark
+    install: |
+      bin.install "ark"
+    # The scripts of the archive, installed as the GoReleaser formula did
+    # (bash: ark, zsh: _ark, fish: ark.fish).
+    completions:
+      executable: ark
+      files:
+        bash: completions/bash/ark-completion.bash
+        zsh: completions/zsh/_ark
+        fish: completions/fish/ark.fish
+    test: |
+      assert_match version.to_s, shell_output("#{bin}/ark --version")
+    # magicdrive/homebrew-tap keeps its formulae at the repository root
+    # (no directory); the release opens a pull request there, which the
+    # owner merges.
+    repository:
+      owner: magicdrive
+      name: homebrew-tap
+      pull_request:
+        enabled: true
+    commit_msg_template: "Brew formula update for {{ .ProjectName }} version {{ .Tag }}"
+    commit_author:
+      name: magicdrive bot
+      email: hiroshi.ikegami+githubbot@magicdrive.jp
+    skip_upload: auto
+
+# hephaestus preflight --tag vX.Y.Z (make preflight tag=vX.Y.Z): read-only
+# release checks before the tag is pushed.
+preflight:
+  workflow: release.yml
+  environment: release

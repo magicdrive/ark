@@ -21,7 +21,9 @@ AI ツールは前提にしない。ここに書いたコマンドは、状態�
 | golang.org/x のまとめ | `renovate/golang.orgx-packages` | x/net・x/text | `group: golang.org/x packages` |
 | その他の minor / patch のまとめ | `renovate/all-minor-patch` | gotreesitter | `group:allNonMajor`。**gotreesitter は [4 章](#4-gotreesitter-の更新)** |
 | Go の major | （グループ名 `Go major dependencies`） | — | 毎月 1 日 |
-| GitHub Actions | `renovate/github-actions` | goreleaser-action | digest に pin される |
+| GitHub Actions | `renovate/github-actions` | checkout・setup-go | digest に pin される |
+| Hephaestus | `renovate/hephaestus` | `magicdrive/hephaestus` action と Makefile の `HEPHAESTUS_VERSION` | 両者を 1 つの PR で上げる（`TestHephaestusVersionIsConsistent` が一致を確かめる） |
+| Makefile のツール | `renovate/development-tools` | govulncheck・actionlint・renovate（validator） | `customManagers` が `# renovate:` コメントの付いた版を追う。staticcheck は対象外（3.4） |
 | 脆弱性修正 | 例 `renovate/go-golang.org-x-net-vulnerability` | x/net（PR #65） | タイトル末尾が ` [SECURITY]`。スケジュールを待たない |
 
 - `minimumReleaseAge: 3 days`: 公開から 3 日経たない版は `renovate/stability-days` が **pending** のまま。
@@ -44,9 +46,17 @@ CI は ubuntu-latest、`GOTOOLCHAIN: local`、Go は `go.mod` の版。
 | fuzz-smoke (1)〜(3) | 18 個の fuzz を各 10 秒 | `.github/ci/fuzz-smoke.sh 1`（2、3 も） |
 | filesystem-security | Windows と macOS（case-insensitive の通常ボリュームに加え、case-sensitive のボリュームも作る）で race 付き | ci.yml の該当ジョブの `go test -race ...` 3 行を macOS でそのまま実行できる。case-sensitive ボリュームと Windows は再現しない |
 | typescript-compiler-differential | 固定版の TypeScript コンパイラとの差分 | `make ts-oracle` |
+| native-tests | macOS と Windows で `go test -race ./...`（全パッケージ） | macOS では `go test -race ./...` |
+| vulncheck | govulncheck | `make vulncheck` |
+| workflow-lint | actionlint・shellcheck・`renovate-config-validator --strict` | `make actionlint`、`make renovate-check` |
+| release-snapshot | Hephaestus action で全 8 ターゲットの snapshot を作り、`verify-dist.sh --snapshot` で検証 | `make snapshot` |
+| release-binaries | snapshot のバイナリを各 OS・arch の runner で実行（`smoke.sh`） | 手元の OS の分だけ `.github/release/smoke.sh` |
+| homebrew-e2e | snapshot から formula を作り、Linux と macOS の Homebrew で style・audit・install・test・uninstall | `make snapshot homebrew-e2e`（Homebrew の prefix に入れて消す） |
 | ci-gate | 上の全ジョブ成功と、各テストがちょうど 1 回走ったこと | 再現しない |
 
-`release.yml` は `v*` タグの push でだけ走る。**PR の CI は `release.yml` を実行しない**（[6 章](#6-github-actions-の更新)）。
+`release.yml` は `v*` タグの push でだけ走る。**PR の CI は `release.yml` を実行しない**が、`release-snapshot` ジョブが
+release と同じ Hephaestus action・同じビルドで snapshot を作って検証する（[6 章](#6-github-actions-の更新)）。
+リリース手順は [releasing.md](../development/releasing.md)。
 
 ## 1. 通常の Renovate PR 対応
 
@@ -400,10 +410,10 @@ gh pr view <N> --json body --jq .body | grep -E 'CVE-|GO-20'
 旧 sha からの早送りであることを確かめる:
 
 ```sh
-gh api repos/goreleaser/goreleaser-action/git/matching-refs/tags/v7 --jq '.[]|.ref+" "+.object.sha+" "+.object.type'
+gh api repos/actions/checkout/git/matching-refs/tags/v7 --jq '.[]|.ref+" "+.object.sha+" "+.object.type'
 # type が tag（注釈付きタグ）なら、sha はタグオブジェクトのもの。commit の sha は次で得る:
-# gh api repos/goreleaser/goreleaser-action/git/tags/<sha> --jq .object.sha
-gh api repos/goreleaser/goreleaser-action/compare/<旧sha>...<新sha> \
+# gh api repos/actions/checkout/git/tags/<sha> --jq .object.sha
+gh api repos/actions/checkout/compare/<旧sha>...<新sha> \
   --jq '{status,ahead_by,behind_by,commits:[.commits[]|.sha[0:8]+" verified="+(.commit.verification.verified|tostring)+" "+(.commit.message|split("\n")[0])]}'
 ```
 
@@ -415,30 +425,24 @@ gh api repos/goreleaser/goreleaser-action/compare/<旧sha>...<新sha> \
 
 - ワークフローの `permissions:` が変わっていないこと（`gh pr diff <N>`）。
 - action がダウンロードするバイナリの検証方法が弱まっていないこと（6.1 の差分で読む）。
-  PR #69（goreleaser-action v7.2.3→v7.3.0）は runner の tool cache からの再利用が加わった。
-  `version: '~> v1'` では cosign の bundle がなく、検証は従来どおり checksum だけである。
+  （PR #69 の goreleaser-action は、Hephaestus への移行で使われなくなった。）
+- `magicdrive/hephaestus` の更新は、Makefile の `HEPHAESTUS_VERSION` と同じ PR で上がること
+  （`TestHephaestusVersionIsConsistent`）。action は自分の source を pin された SHA からビルドして使う。
+  token は action の input でだけ渡し、ビルドの step には渡さない（`release.yml` の `build` ジョブ）。
 
 ### 6.3 ローカルで再現できる範囲
 
 - action そのものはローカルで動かせない。PR の CI も `release.yml` を動かさない。
-  goreleaser-action の更新が本当に試されるのは、次のタグの push の `release-smoke` ジョブである。
-- GoReleaser の設定と成果物は、CI の `release-smoke` と同じことをローカルで確かめられる。CI と同じ v1 を使う
-  （v2 は `brews` の非推奨で `check` が失敗する。v1 は go1.27 ではソースからビルドできず、`go run ...@v1.26.2` は失敗する）。
-  リリースのバイナリを checksum で確かめて使い、`dist/` を作業ツリーに残さないようクローンで実行する
-  （macOS Intel の例。Linux は `goreleaser_Linux_x86_64.tar.gz`）:
+  ただし `release-snapshot`・`release-binaries`・`homebrew-e2e` が、release と同じ Hephaestus action と
+  同じビルドで snapshot を作り、検証し、各 OS で実行し、Homebrew で入れる。
+  publish の部分（release・tap）が試されるのは次のタグの push である。
+- 設定と成果物は CLI でローカルに確かめられる（Makefile の `HEPHAESTUS_VERSION` を `go run` する）:
 
   ```sh
-  mkdir -p /tmp/goreleaser-v1 && cd /tmp/goreleaser-v1
-  gh release download v1.26.2 -R goreleaser/goreleaser -p 'goreleaser_Darwin_x86_64.tar.gz' -p checksums.txt
-  grep ' goreleaser_Darwin_x86_64.tar.gz$' checksums.txt | shasum -a 256 -c -    # OK であること
-  tar -xzf goreleaser_Darwin_x86_64.tar.gz goreleaser
-  git clone -q --local -b main /path/to/ark /tmp/ark-release-smoke && cd /tmp/ark-release-smoke
-  /tmp/goreleaser-v1/goreleaser check
-  /tmp/goreleaser-v1/goreleaser release --snapshot --clean --skip=publish
-  .github/release/verify-dist.sh dist                                          # ok: 8 archives, checksums verified
+  make hephaestus-check
+  make snapshot             # dist/ に 8 archives。verify-dist.sh --snapshot まで
+  make homebrew-e2e         # Homebrew が要る。prefix に入れて消す
   ```
-
-  これで分かるのは GoReleaser の設定と成果物までで、action の更新そのものは試されない。
 
 ## 7. 安全な復旧
 

@@ -19,8 +19,8 @@ func writeExecutable(t *testing.T, content string) func() (string, error) {
 	return func() (string, error) { return p, nil }
 }
 
-// Only the flag GoReleaser sets for a release makes a release build; the
-// executable is then not read at all.
+// Only the flag the release build sets (.github/release/build.sh) makes a
+// release build; the executable is then not read at all.
 func TestBuildFor_ReleaseFlag(t *testing.T) {
 	unreadable := func() (string, error) { return "", errors.New("no executable") }
 	b, err := buildFor("true", unreadable, nil)

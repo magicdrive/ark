@@ -23,13 +23,15 @@ import (
 // which logic wrote an entry. Nor does the displayed version ("(devel)",
 // or the same "v…+dirty" for two different edits of one commit), the VCS
 // stamp (the same commit and "modified"), or main.version (make build sets it
-// as GoReleaser does).
+// as the release build does).
 //
 // So the store keeps each build's entries in a scope of its own:
 //
 //   - "release": a release build, the only one with release set (by
-//     .goreleaser.yml for a published release, never a snapshot or a
-//     modified tree). Releases share it, under the CacheVersion contract.
+//     .github/release/build.sh, the build of hephaestus.yaml, for a tagged
+//     build of a clean tree at its tag; never a snapshot, a modified tree
+//     or another commit). Releases share it, under the CacheVersion
+//     contract.
 //   - "dev-<hash>": any other build — go build, make build, go run, go
 //     install, a snapshot, a dirty tree, a build without VCS information —
 //     named by the SHA-256 of its executable. The same binary finds its
@@ -47,8 +49,8 @@ import (
 // there is no scope and no persistent cache (OpenBuildStore fails; the
 // server runs without one).
 
-// release is "true" in a release build only: .goreleaser.yml sets it with
-// -X for a release, never for a snapshot or a modified tree.
+// release is "true" in a release build only: .github/release/build.sh sets
+// it with -X for a release, never for a snapshot or a modified tree.
 var release string
 
 // ReleaseScope is the scope of release builds.
