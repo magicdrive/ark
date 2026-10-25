@@ -60,10 +60,10 @@ func splitJobs(t tb, path, s string) (top string, jobs map[string]string) {
 }
 
 // hephaestusAction is the Hephaestus action every workflow step uses: the
-// commit of the v1.2.0-rc.1 tag (HEPHAESTUS_VERSION of the Makefile). From
+// commit of the v1.2.0 tag (HEPHAESTUS_VERSION of the Makefile). From
 // v1.2.0 the action runs that release's verified binary and installs no Go:
 // the jobs that build set up go.mod's Go themselves.
-const hephaestusAction = "uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1"
+const hephaestusAction = "uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0"
 
 // The release-job conventions of `hephaestus publish` (docs/publish.md of
 // Hephaestus): a plan step, and exactly these two steps — the only ones given
@@ -1193,7 +1193,7 @@ func TestWorkflowChecks_CatchMutations(t *testing.T) {
 			{"build without go.mod's Go", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version: stable\n          cache: false\n")},
 			{"build with another Go as well", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version-file: 'go.mod'\n          go-version: stable\n          cache: false\n")},
 			{"build without setup-go", replace("        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7\n        with:\n          go-version-file: 'go.mod'\n          cache: false\n", "        run: go version\n")},
-			{"plan pinned to a branch", replace("uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1\n        with:\n          command: plan", "uses: magicdrive/hephaestus@main # v1.2.0-rc.1\n        with:\n          command: plan")},
+			{"plan pinned to a branch", replace("uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0\n        with:\n          command: plan", "uses: magicdrive/hephaestus@main # v1.2.0\n        with:\n          command: plan")},
 			{"build verifies nothing", replace(`        run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"`+"\n\n      - name: Upload dist", "        run: true\n\n      - name: Upload dist")},
 		}},
 		{".github/workflows/ci.yml", checkCIWorkflow, []mutation{

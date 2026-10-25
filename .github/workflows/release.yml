@@ -48,13 +48,13 @@ jobs:
           cache: false
 
       - name: Check the Hephaestus configuration
-        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
           command: check
           github-token: ""
 
       - name: Build, archive and checksum (nothing is published)
-        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
           command: run
           stages: build,archive,checksum
@@ -108,7 +108,7 @@ jobs:
         # token do not run and never receive it. The action fails here, before
         # anything is published, if a prerelease would update the tap.
         id: plan
-        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
           command: plan
 
@@ -128,7 +128,7 @@ jobs:
         # this step and the tap step by name: skipped for a prerelease,
         # succeeded for a stable release.)
         if: steps.plan.outputs.tap == 'publish'
-        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
           command: run
           stages: formula,tap
@@ -144,7 +144,7 @@ jobs:
             dist/ark_checksums.txt
 
       - name: Publish the GitHub release
-        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
           command: release
 
@@ -152,7 +152,7 @@ jobs:
         # Skipped for a prerelease tag (v1.2.3-rc.1), which does not update
         # the tap (brews.skip_upload: auto); the owner merges the pull request.
         if: steps.plan.outputs.tap == 'publish'
-        uses: magicdrive/hephaestus@bae0e2b3cbf41ad27299e0cfc3517a6affc7e15e # v1.2.0-rc.1
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
           command: run
           stages: formula,tap
