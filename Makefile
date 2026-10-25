@@ -122,7 +122,7 @@ bench:
 # magicdrive/hephaestus action the workflows pin (release_workflow_test.go
 # keeps them equal); Renovate updates both together.
 # renovate: datasource=github-tags depName=magicdrive/hephaestus
-HEPHAESTUS_VERSION ?= v1.1.1-0.20261025105032-4414722a804d
+HEPHAESTUS_VERSION ?= v1.1.0
 HEPHAESTUS ?= go run github.com/magicdrive/hephaestus@$(HEPHAESTUS_VERSION)
 # renovate: datasource=go depName=golang.org/x/vuln
 GOVULNCHECK_VERSION = v1.9.0

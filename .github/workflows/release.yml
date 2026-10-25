@@ -45,13 +45,13 @@ jobs:
           cache: false
 
       - name: Check the Hephaestus configuration
-        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
         with:
           command: check
           github-token: ""
 
       - name: Build, archive and checksum (nothing is published)
-        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
         with:
           command: run
           stages: build,archive,checksum
@@ -110,7 +110,7 @@ jobs:
         # The tap token, the tap's layout, a newer formula on the tap and the
         # pull request branch are checked before the release becomes public:
         # a published release cannot be taken back.
-        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
         with:
           command: run
           stages: formula,tap
@@ -126,14 +126,14 @@ jobs:
             dist/ark_checksums.txt
 
       - name: Publish the GitHub release
-        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
         with:
           command: release
 
       - name: Generate the formula and open the tap pull request
         # A prerelease tag (v1.2.3-rc.1) does not update the tap
         # (brews.skip_upload: auto); the owner merges the pull request.
-        uses: magicdrive/hephaestus@4414722a804d958179fd547c26d7b2fe762e308e # v1.1.1-0.20261025105032-4414722a804d
+        uses: magicdrive/hephaestus@550d48f64917749742574b5c2ff1b292940ff71a # v1.1.0
         with:
           command: run
           stages: formula,tap
