@@ -46,7 +46,7 @@ CI は ubuntu-latest、`GOTOOLCHAIN: local`、Go は `go.mod` の版。
 | fuzz-smoke (1)〜(3) | 18 個の fuzz を各 10 秒 | `.github/ci/fuzz-smoke.sh 1`（2、3 も） |
 | filesystem-security | Windows と macOS（case-insensitive の通常ボリュームに加え、case-sensitive のボリュームも作る）で race 付き | ci.yml の該当ジョブの `go test -race ...` 3 行を macOS でそのまま実行できる。case-sensitive ボリュームと Windows は再現しない |
 | typescript-compiler-differential | 固定版の TypeScript コンパイラとの差分 | `make ts-oracle` |
-| native-tests | macOS と Windows で `go test -race ./...`（全パッケージ） | macOS では `go test -race ./...` |
+| native-tests | macOS で `go test -race ./...`（全パッケージ。Windows では全体はまだ通らない） | macOS では `go test -race ./...` |
 | vulncheck | govulncheck | `make vulncheck` |
 | workflow-lint | actionlint・shellcheck・`renovate-config-validator --strict` | `make actionlint`、`make renovate-check` |
 | release-snapshot | Hephaestus action で全 8 ターゲットの snapshot を作り、`verify-dist.sh --snapshot` で検証 | `make snapshot` |

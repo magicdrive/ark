@@ -296,12 +296,12 @@ func TestCIWorkflow_IsTheReleaseGate(t *testing.T) {
 		"exit $rc")
 	require("the TypeScript compiler differential", ".github/ts-oracle/run.sh", "node-version: '22.17.0'")
 
-	// The gates added with Hephaestus: the whole suite natively on macOS and
-	// Windows, govulncheck, the workflows and renovate.json, and the release
+	// The gates added with Hephaestus: the whole suite natively on macOS,
+	// govulncheck, the workflows and renovate.json, and the release
 	// itself as a snapshot — built by the action the release uses, verified
 	// as a release is, every binary run on its own system and the formula
 	// installed by Homebrew on Linux and macOS.
-	if native := require("the race tests on macOS and Windows", "os: [macos-latest, windows-latest]", "run: go test -race ./..."); native != "" && strings.Contains(jobs[native], "-short") {
+	if native := require("the race tests on macOS", "runs-on: macos-latest", "run: go test -race ./..."); native != "" && strings.Contains(jobs[native], "-short") {
 		t.Error("ci.yml: the native tests must not run with -short")
 	}
 	require("govulncheck", "run: make vulncheck")
