@@ -42,6 +42,18 @@
       "automerge": false
     },
     {
+      "description": "Tool versions pinned in the Makefile (customManagers): one PR for them",
+      "matchManagers": ["custom.regex"],
+      "groupName": "Development tools",
+      "automerge": false
+    },
+    {
+      "description": "Hephaestus: the action the workflows pin by digest and HEPHAESTUS_VERSION of the Makefile move together (release_workflow_test.go keeps them equal)",
+      "matchPackageNames": ["magicdrive/hephaestus"],
+      "groupName": "Hephaestus",
+      "automerge": false
+    },
+    {
       "description": "Security patches are provided immediately",
       "matchUpdateTypes": ["patch"],
       "matchDatasources": ["go"],
@@ -70,5 +82,15 @@
     "gomodTidy",
     "gomodUpdateImportPaths"
   ],
-  "osvVulnerabilityAlerts": true
+  "osvVulnerabilityAlerts": true,
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Tool versions pinned in the Makefile, each under a '# renovate: datasource=... depName=...' comment",
+      "managerFilePatterns": ["/(^|/)Makefile$/"],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+ \\??= (?<currentValue>\\S+)"
+      ]
+    }
+  ]
 }

@@ -8,66 +8,153 @@ on:
 permissions:
   contents: read
 
+# One release run per tag at a time; a running release is never cancelled.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   # QUALITY GATES: exactly the CI of every push to main — tests, race,
-  # staticcheck, fuzz smoke and the TypeScript compiler differential.
+  # staticcheck, fuzz smoke, the TypeScript compiler differential, the
+  # release snapshot, the native runs of every release binary and the
+  # Homebrew end-to-end test — at the tagged commit.
   ci:
     uses: ./.github/workflows/ci.yml
+    permissions:
+      contents: read
 
-  # RELEASE SMOKE: the GoReleaser configuration, and the artifacts it builds,
-  # before any of them is published.
-  release-smoke:
+  # BUILD: Hephaestus builds, archives and checksums the release from the
+  # tagged source (hephaestus.yaml, .github/release/build.sh), with a
+  # read-only token and no secret: build steps run code from the module
+  # graph. Only the verified dist/ moves on.
+  build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
       - name: Checkout code
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Go
+        # The Go of the build (.github/release/build.sh pins and asserts
+        # go.mod's toolchain): the Hephaestus action runs its release binary
+        # and provides no Go.
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
           go-version-file: 'go.mod'
+          cache: false
 
-      - name: Check GoReleaser configuration
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+      - name: Check the Hephaestus configuration
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
-          distribution: goreleaser
-          version: '~> v1'
-          args: check
+          command: check
+          github-token: ""
 
-      - name: Build snapshot artifacts (nothing is published)
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+      - name: Build, archive and checksum (nothing is published)
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
         with:
-          distribution: goreleaser
-          version: '~> v1'
-          args: release --snapshot --clean --skip=publish
+          command: run
+          stages: build,archive,checksum
+          fresh: "true"
+          github-token: ""
 
       - name: Verify artifacts
-        run: .github/release/verify-dist.sh dist
+        run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"
 
-  # RELEASE: only when every gate above passed.
+      - name: Upload dist
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: dist
+          path: dist/
+          if-no-files-found: error
+          retention-days: 7
+
+  # RELEASE: only when every gate above passed, and only from the build
+  # job's verified dist/ (no build code runs here). The tap token is an
+  # environment secret of `release`, which deploys only from v* tags.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ci, release-smoke]
+    needs: [ci, build]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
     permissions:
-      contents: write
-      pull-requests: write
+      contents: write      # create the release and upload its assets
+      id-token: write      # sign the provenance attestation
+      attestations: write
     steps:
       - name: Checkout code
+        # hephaestus.yaml and the verification script; nothing is built.
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: 'go.mod'
+          persist-credentials: false
 
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@f06c13b6b1a9625abc9e6e439d9c05a8f2190e94 # v7
+      - name: Download dist
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          distribution: goreleaser
-          version: '~> v1'
-          args: release --clean
+          name: dist
+          path: dist
+
+      - name: Verify artifacts again before publishing anything
+        run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"
+
+      - name: Plan the release
+        # prerelease and tap for this tag, from hephaestus.yaml only (no
+        # token, no project code): a prerelease (v1.2.3-rc.1) skips the tap
+        # (brews.skip_upload: auto), so the steps below that take the tap
+        # token do not run and never receive it. The action fails here, before
+        # anything is published, if a prerelease would update the tap.
+        id: plan
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
+        with:
+          command: plan
+
+      - name: The tap token is set
+        # Without it the rehearsal below could not read the tap and would
+        # pass; the value never reaches this step.
+        if: steps.plan.outputs.tap == 'publish'
         env:
-          GITHUB_TOKEN: ${{ secrets.PERSONAL_GITHUB_TOKEN }}
+          HAS_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN != '' }}
+        run: |
+          [ "$HAS_TAP_TOKEN" = true ] || { echo "::error::HOMEBREW_TAP_GITHUB_TOKEN is not set in the release environment"; exit 1; }
+
+      - name: Rehearse the formula and tap pull request (read-only)
+        # The tap token, the tap's layout, a newer formula on the tap and the
+        # pull request branch are checked before the release becomes public:
+        # a published release cannot be taken back. (hephaestus publish verifies
+        # this step and the tap step by name: skipped for a prerelease,
+        # succeeded for a stable release.)
+        if: steps.plan.outputs.tap == 'publish'
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
+        with:
+          command: run
+          stages: formula,tap
+          dry-run: "true"
+          github-token: ""
+          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/ark_*.tar.gz
+            dist/ark_checksums.txt
+
+      - name: Publish the GitHub release
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
+        with:
+          command: release
+
+      - name: Generate the formula and open a tap pull request
+        # Skipped for a prerelease tag (v1.2.3-rc.1), which does not update
+        # the tap (brews.skip_upload: auto); the owner merges the pull request.
+        if: steps.plan.outputs.tap == 'publish'
+        uses: magicdrive/hephaestus@160990d32bbc83af702bde8a63f49ffcac32972c # v1.2.0
+        with:
+          command: run
+          stages: formula,tap
+          github-token: ""
+          tap-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

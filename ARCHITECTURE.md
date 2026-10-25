@@ -931,17 +931,18 @@ through a link in the repository, may lead outside.
   the displayed version nor the VCS stamp distinguishes two edits of one
   commit. So the persistent cache is opened per build scope
   (`cache.OpenBuildStore`, the only way production code opens it): releases
-  share `release/` under the `CacheVersion` contract — GoReleaser marks a
-  release, never a snapshot — and every other build has `dev-<SHA-256 of
-  its executable>`, hashed once at start. An entry carries its scope and is
-  rejected in any other. An unidentifiable build has no persistent cache.
+  share `release/` under the `CacheVersion` contract — the release build
+  (`.github/release/build.sh`, run by Hephaestus) marks a release, never a
+  snapshot — and every other build has `dev-<SHA-256 of its executable>`,
+  hashed once at start. An entry carries its scope and is rejected in any
+  other. An unidentifiable build has no persistent cache.
   Danger: keying on `main.version`, `(devel)`, VCS revision or the modified
   flag; hashing the executable lazily (a binary replaced under a running
   server would name the new build's scope for the old code); treating a
   development build as a release — setting the release flag (`release` in
-  `internal/cache/build.go`) anywhere but `.goreleaser.yml`, or publishing
-  with GoReleaser's validation skipped (`--skip=validate` builds an untagged
-  commit).
+  `internal/cache/build.go`) anywhere but `.github/release/build.sh`, or
+  letting it set the flag for a build that is not exactly a tag (it refuses
+  a modified tree, an untracked file and a tag that names another commit).
 
 Authority: `mcp/index_cache.go` (header comment), `index/sources.go`,
 `cache/key.go`, `cache/build.go`. Tests: `mcp/index_cache_test.go`
@@ -951,7 +952,7 @@ Authority: `mcp/index_cache.go` (header comment), `index/sources.go`,
 (`TestOnlyOpenBuildStoreOpensTheSharedCache`),
 `tests/integration/mcp_cache_build_integration_test.go`
 (`TestMCPCache_EachBuildReusesOnlyItsOwnEntries`: different real builds),
-`TestGoReleaser_OnlyReleasesShareTheReleaseCache`.
+`TestReleaseBuild_OnlyReleasesShareTheReleaseCache`.
 
 ## 5. Context Engine (`get_context`)
 
