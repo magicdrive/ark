@@ -22,8 +22,11 @@ $symbols"
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 "$ark" -o "$work/dump.txt" misc/completions >/dev/null
+# Each file's header; the dump writes paths with the system's separator.
+headers=$(tr '\134' / <"$work/dump.txt" | tr -d '\r' | grep '^=== ')
 for f in ark-completion.sh bash/ark-completion.bash fish/ark.fish zsh/_ark; do
-	grep -q "$f" "$work/dump.txt" || fail "the dump of misc/completions lacks $f"
+	grep -qx "=== misc/completions/$f ===" <<<"$headers" || fail "the dump of misc/completions has no file $f:
+$headers"
 done
 
 echo "ok: $("$ark" --version | tr -d '\r') ($(uname -s)/$(uname -m)): --version, --help, symbol, dump"
