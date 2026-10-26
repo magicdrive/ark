@@ -85,7 +85,7 @@ formula="$proj/dist/homebrew/ark.rb"
 cat "$formula"
 
 step "The formula is the release formula (only the URLs differ)"
-grep -qx '  desc "Code intelligence engine for AI coding agents (MCP server), with a repository text dump"' "$formula"
+grep -qx '  desc "Code intelligence MCP server for AI coding agents, with a repository text dump"' "$formula"
 grep -qx '  homepage "https://github.com/magicdrive/ark"' "$formula"
 grep -qx '  license "MIT"' "$formula"
 [ "$(grep -c '^ *url "file://' "$formula")" = 4 ] || fail "want 4 url lines (darwin and linux, amd64 and arm64)"
@@ -96,16 +96,11 @@ brew tap-new --no-git "$tap" >/dev/null
 tapdir=$(brew --repository "$tap")
 cp "$formula" "$tapdir/Formula/ark.rb"
 
-# The one Homebrew rule the formula breaks, as the GoReleaser formula did:
-# desc is the project's description, 87 characters, over Homebrew's 80.
-# Shortening it would change the formula's desc; that is the owner's call.
-# brew audit cannot combine --strict with --except-cops: it runs every
-# other audit strictly and leaves the RuboCop rules to brew style.
-step "brew style (except FormulaAudit/Desc)"
-brew style --except-cops FormulaAudit/Desc "$tapdir/Formula/ark.rb"
+step "brew style"
+brew style "$tapdir/Formula/ark.rb"
 
-step "brew audit --strict (RuboCop rules: brew style above)"
-brew audit --strict --skip-style --formula "$tap/ark"
+step "brew audit --strict"
+brew audit --strict --formula "$tap/ark"
 
 step "brew install"
 brew install --formula "$tap/ark"

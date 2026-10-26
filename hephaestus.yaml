@@ -11,7 +11,7 @@ version: 1
 
 project:
   name: ark
-  description: "Code intelligence engine for AI coding agents (MCP server), with a repository text dump"
+  description: "Code intelligence MCP server for AI coding agents, with a repository text dump"
   homepage: "https://github.com/magicdrive/ark"
   license: MIT
 
