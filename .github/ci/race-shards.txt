@@ -1,5 +1,7 @@
-# Race-detector shards of the CI `race` job (`go test -race`), read by
-# race-shard.py. Under a "[N]" header, one entry per line:
+# Race-detector shards of the CI `race` job (`go test -race`, Linux) and of
+# the `native-tests` job (the same shards on macOS, where race-shard.py lists
+# the packages with macOS's `go list ./...`), read by race-shard.py. Under a
+# "[N]" header, one entry per line:
 #
 #   ./pkg                 the package's tests
 #   ./pkg -run <regexp>   the package's tests that <regexp> selects
@@ -21,7 +23,8 @@
 # cache: wall time / CPU time (user + sys), in seconds — measured for v6.5.0
 # on a developer machine (Xeon W-2140B, macOS), about 1.1 to 1.5 times the
 # 4-vCPU runner's time; what matters is their proportion. Changing the
-# shards changes what each shard compiles: bump its line in cache-keys/ too.
+# shards changes what each shard compiles: bump its lines in cache-keys/ too
+# (race-N and native-N).
 [1]
 ./internal/tsparse                    # 142 / 342
 [2]

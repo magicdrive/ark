@@ -46,13 +46,13 @@ CI は ubuntu-latest、`GOTOOLCHAIN: local`、Go は `go.mod` の版。
 | fuzz-smoke (1)〜(3) | 18 個の fuzz を各 10 秒 | `.github/ci/fuzz-smoke.sh 1`（2、3 も） |
 | filesystem-security | Windows と macOS（case-insensitive の通常ボリュームに加え、case-sensitive のボリュームも作る）で race 付き | ci.yml の該当ジョブの `go test -race ...` 3 行を macOS でそのまま実行できる。case-sensitive ボリュームと Windows は再現しない |
 | typescript-compiler-differential | 固定版の TypeScript コンパイラとの差分 | `make ts-oracle` |
-| native-tests | macOS で `go test -race ./...`（全パッケージ。Windows では全体はまだ通らない） | macOS では `go test -race ./...` |
+| native-tests (1)〜(4) | macOS で `go test -race ./...` を race と同じ 4 分割（分割は macOS の `go list ./...` から計算。Windows では全体はまだ通らない） | macOS では `go test -race ./...`、1 シャードなら `python3 .github/ci/race-shard.py run 1 out.json` |
 | vulncheck | govulncheck | `make vulncheck` |
 | workflow-lint | actionlint・shellcheck・`renovate-config-validator --strict` | `make actionlint`、`make renovate-check` |
 | release-snapshot | Hephaestus action で全 8 ターゲットの snapshot を作り、`verify-dist.sh --snapshot` で検証 | `make snapshot` |
 | release-binaries | snapshot のバイナリを各 OS・arch の runner で実行（`smoke.sh`） | 手元の OS の分だけ `.github/release/smoke.sh` |
 | homebrew-e2e | snapshot から formula を作り、Linux と macOS の Homebrew で style・audit・install・test・uninstall | `make snapshot homebrew-e2e`（Homebrew の prefix に入れて消す） |
-| ci-gate | 上の全ジョブ成功と、各テストがちょうど 1 回走ったこと | 再現しない |
+| ci-gate | 上の全ジョブ成功と、各テストがちょうど 1 回走ったこと（macOS は各パッケージがちょうど 1 回: `check-native.py`） | 再現しない |
 
 `release.yml` は `v*` タグの push でだけ走る。**PR の CI は `release.yml` を実行しない**が、`release-snapshot` ジョブが
 release と同じ Hephaestus action・同じビルドで snapshot を作って検証する（[6 章](#6-github-actions-の更新)）。

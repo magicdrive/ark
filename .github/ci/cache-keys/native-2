@@ -1,0 +1,1 @@
+native-2: bump this line to drop the job's Go build cache (4 macOS shards of race-shards.txt)
