@@ -23,7 +23,7 @@ and in the release workflow twice before publishing.
 ## Prerequisites (repository settings, once)
 
 `make publish` checks each of these and refuses to tag until they are met
-(Hephaestus [publish conventions](https://github.com/magicdrive/hephaestus/blob/v1.2.0/docs/publish.md#conventions)):
+(Hephaestus [publish conventions](https://github.com/magicdrive/hephaestus/blob/v1.3.0/docs/publish.md#conventions)):
 
 - Environment `release`, deployment policy: selected tags `v*` only (no
   branch policy).
@@ -103,8 +103,8 @@ make publish-watch vX.Y.Z    # find and follow the run again, then verify
   release; release the next version.
 
 Never move or delete a pushed tag. Hephaestus's own guides:
-[publish](https://github.com/magicdrive/hephaestus/blob/v1.2.0/docs/publish.md#recovery),
-[recovery](https://github.com/magicdrive/hephaestus/blob/v1.2.0/docs/recovery.md).
+[publish](https://github.com/magicdrive/hephaestus/blob/v1.3.0/docs/publish.md#recovery),
+[recovery](https://github.com/magicdrive/hephaestus/blob/v1.3.0/docs/recovery.md).
 
 ## Rolling back the migration
 
