@@ -129,7 +129,7 @@ GOVULNCHECK_VERSION = v1.9.0
 # renovate: datasource=go depName=github.com/rhysd/actionlint
 ACTIONLINT_VERSION = v1.7.12
 # renovate: datasource=npm depName=renovate
-RENOVATE_VERSION = 44.164.1
+RENOVATE_VERSION = 44.178.3
 
 # gofmt over the tracked Go files, as the lint job of ci.yml (testdata holds
 # deliberately malformed fixtures)
