@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -413,8 +414,29 @@ func checkCIWorkflow(t tb, all string) {
 	// itself as a snapshot — built by the action the release uses, verified
 	// as a release is, every binary run on its own system and the formula
 	// installed by Homebrew on Linux and macOS.
-	if native := require("the race tests on macOS", "runs-on: macos-latest", "run: go test -race ./..."); native != "" && strings.Contains(jobs[native], "-short") {
-		t.Error("ci.yml: the native tests must not run with -short")
+	// The whole suite natively on macOS, with the race detector: the shards of
+	// race-shards.txt, planned on macOS (race-shard.py all there), each shard
+	// keeping its plan with its report for the gate (check-native.py).
+	native := require("the race tests on macOS, by shard", "runs-on: macos-latest",
+		`python3 .github/ci/race-shard.py all > "$RUNNER_TEMP/reports/native-${{ matrix.shard }}-macos.plan.txt"`,
+		`race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/native.json"`, "rc=$?", "exit $rc",
+		`test-report.py "$RUNNER_TEMP/native.json" "native-${{ matrix.shard }}-macos" "$RUNNER_TEMP/reports"`)
+	if native != "" {
+		want := raceShards(t)
+		if got := matrixValues(t, jobs[native], "shard"); strings.Join(got, ",") != strings.Join(want, ",") {
+			t.Errorf("ci.yml: %s matrix shards %v, race-shards.txt declares %v", native, got, want)
+		}
+		for _, s := range want {
+			if _, err := os.Stat(".github/ci/cache-keys/native-" + s); err != nil {
+				t.Errorf("native shard %s has no .github/ci/cache-keys/native-%s: %v", s, s, err)
+			}
+		}
+		if !strings.Contains(jobs[native], "      fail-fast: false\n") {
+			t.Errorf("ci.yml: %s must run every shard whatever another does (fail-fast: false)", native)
+		}
+		if strings.Contains(jobs[native], "-short") {
+			t.Error("ci.yml: the native tests must not run with -short")
+		}
 	}
 	require("govulncheck", "run: make vulncheck")
 	require("actionlint, shellcheck and the Renovate validator", "run: make actionlint", "run: shellcheck .github/release/*.sh .github/ci/*.sh", "run: make renovate-check")
@@ -494,6 +516,9 @@ func checkCIWorkflow(t tb, all string) {
 		}
 		if !strings.Contains(job, `r != "success"`) || !strings.Contains(job, "toJSON(needs)") {
 			t.Errorf("ci.yml: %s must fail unless every job it needs succeeded", gate)
+		}
+		if !strings.Contains(job, "        if: always()\n        run: python3 .github/ci/check-native.py reports\n") {
+			t.Errorf("ci.yml: %s must check, whatever the jobs did, that the macOS native shards ran every package once (check-native.py)", gate)
 		}
 	}
 	// No verification job may be skipped by a condition.
@@ -1200,6 +1225,11 @@ func TestWorkflowChecks_CatchMutations(t *testing.T) {
 			{"gate under another name", replace("\n  ci-gate:\n", "\n  gate:\n")},
 			{"gate skipped when a job fails", replace("  ci-gate:\n    if: always()\n", "  ci-gate:\n")},
 			{"gate does not need the Homebrew test", replace(", release-binaries, homebrew-e2e]", ", release-binaries]")},
+			{"native shards fail fast", replace("      fail-fast: false\n      matrix:\n        shard: [1, 2, 3, 4]\n    runs-on: macos-latest\n", "      fail-fast: true\n      matrix:\n        shard: [1, 2, 3, 4]\n    runs-on: macos-latest\n")},
+			{"a native shard dropped", replace("        shard: [1, 2, 3, 4]\n    runs-on: macos-latest\n", "        shard: [1, 2, 3]\n    runs-on: macos-latest\n")},
+			{"native shards not planned on macOS", replace(`          python3 .github/ci/race-shard.py all > "$RUNNER_TEMP/reports/native-${{ matrix.shard }}-macos.plan.txt"`+"\n", "")},
+			{"native shard runs the whole suite without race-shard.py", replace(`python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/native.json"`, `go test -json ./... > "$RUNNER_TEMP/native.json"`)},
+			{"gate does not check the native shards", replace("\n      - name: macOS native shards ran every package exactly once\n        if: always()\n        run: python3 .github/ci/check-native.py reports\n", "\n")},
 			{"snapshot with another Go", replace("          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/release-snapshot\n", "          go-version: stable\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/release-snapshot\n")},
 			{"Homebrew test without Go", replace("      - name: Set up Go\n        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7\n        with:\n          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/homebrew-e2e\n\n", "")},
 		}},
@@ -1252,8 +1282,8 @@ func TestCIWorkflow_GateChecksEachJobsLatestAttempt(t *testing.T) {
 			}
 		}
 	}
-	if uploads != 3 {
-		t.Errorf("ci.yml: %d test report uploads, want 3 (unit, race, filesystem-security)", uploads)
+	if uploads != 4 {
+		t.Errorf("ci.yml: %d test report uploads, want 4 (unit, race, filesystem-security, native-tests)", uploads)
 	}
 	gate := jobs["ci-gate"]
 	steps := []string{
@@ -1262,6 +1292,7 @@ func TestCIWorkflow_GateChecksEachJobsLatestAttempt(t *testing.T) {
 		// check's own diagnosis behind a missing directory
 		"if: always()\n        run: python3 .github/ci/select-reports.py downloaded-reports reports",
 		"python3 .github/ci/check-coverage.py reports windows macos",
+		"if: always()\n        run: python3 .github/ci/check-native.py reports",
 	}
 	at := 0
 	for _, s := range steps {
@@ -1514,5 +1545,116 @@ func TestMakefile_StaticcheckMatchesCI(t *testing.T) {
 	recipe := regexp.MustCompile(`(?m)^staticcheck:\n((?:\t.*\n)+)`).FindSubmatch(mk)
 	if recipe == nil || !strings.Contains(string(recipe[1]), "go run honnef.co/go/tools/cmd/staticcheck@$(STATICCHECK_VERSION) $(STATICCHECK_PACKAGES)") {
 		t.Error("Makefile: make staticcheck must run STATICCHECK_VERSION over STATICCHECK_PACKAGES")
+	}
+}
+
+// check-native.py, the gate's check of the macOS native shards: each shard's
+// report against the plan the shards ran (race-shard.py all on macOS). It
+// passes only if every package of the plan ran exactly in its shard; a
+// missing, extra or failed package, a missing shard (a cancelled or skipped
+// leg uploads nothing) or plans that differ fail it. A package passed from go
+// test's cache counts as run, as it did for the job's `go test -race ./...`.
+func TestCheckNative_EveryPackageOnceInItsShard(t *testing.T) {
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 not found: the CI gate runs check-native.py")
+	}
+	const m = "github.com/magicdrive/ark"
+	plan := []string{
+		"1 " + m + "/internal/tsparse",
+		"2 " + m + "/internal/resolver",
+		"3 " + m + "/internal/languages/golang",
+		"3 " + m + "/tests/integration",
+		"4 " + m,
+		"4 " + m + "/internal/mcp",
+	}
+	ran := map[string][]string{ // shard -> packages.tsv lines
+		"1": {m + "/internal/tsparse\tpass\t30.00\t"},
+		"2": {m + "/internal/resolver\tpass\t40.00\t"},
+		"3": {m + "/internal/languages/golang\tpass\t35.00\t", m + "/tests/integration\tpass\t20.00\t"},
+		"4": {m + "\tpass\t5.00\t", m + "/internal/mcp\tpass\t9.00\t"},
+	}
+	type fixture struct {
+		plans map[string][]string
+		ran   map[string][]string
+	}
+	base := func() fixture {
+		f := fixture{map[string][]string{}, map[string][]string{}}
+		for s, lines := range ran {
+			f.plans[s] = slices.Clone(plan)
+			f.ran[s] = slices.Clone(lines)
+		}
+		return f
+	}
+	write := func(f fixture) string {
+		dir := t.TempDir()
+		for s := range f.plans {
+			d := filepath.Join(dir, "test-report-native-"+s)
+			if err := os.MkdirAll(d, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(d, "native-"+s+"-macos.plan.txt"), []byte(strings.Join(f.plans[s], "\n")+"\n"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if lines, ok := f.ran[s]; ok {
+				if err := os.WriteFile(filepath.Join(d, "native-"+s+"-macos.packages.tsv"), []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		return dir
+	}
+	check := func(f fixture) (string, error) {
+		out, err := exec.Command(py, ".github/ci/check-native.py", write(f)).CombinedOutput()
+		return string(out), err
+	}
+
+	if out, err := check(base()); err != nil {
+		t.Fatalf("every package once in its shard: %v\n%s", err, out)
+	}
+	cached := base() // a rerun with the same sources: results from the shard's cache
+	cached.ran["3"][1] = m + "/tests/integration\tpass\t0.00\tcached"
+	if out, err := check(cached); err != nil {
+		t.Fatalf("a package passed from the cache: %v\n%s", err, out)
+	}
+	split := base() // a package split in two (as race-shards.txt may): one half per shard
+	for s := range split.plans {
+		split.plans[s] = append(split.plans[s], "1 "+m+"/internal/golden -run ^TestA", "2 "+m+"/internal/golden -skip ^TestA")
+	}
+	split.ran["1"] = append(split.ran["1"], m+"/internal/golden\tpass\t3.00\t")
+	split.ran["2"] = append(split.ran["2"], m+"/internal/golden\tpass\t4.00\t")
+	if out, err := check(split); err != nil {
+		t.Fatalf("a split package, one half per shard: %v\n%s", err, out)
+	}
+
+	for name, tc := range map[string]struct {
+		mutate func(*fixture)
+		want   string
+	}{
+		"a package did not run": {func(f *fixture) { f.ran["3"] = f.ran["3"][:1] }, "tests/integration did not run"},
+		"a package ran in two shards": {func(f *fixture) {
+			f.ran["4"] = append(f.ran["4"], m+"/internal/resolver\tpass\t40.00\t")
+		}, "internal/resolver ran, but the plan does not give it to this shard"},
+		"a shard uploaded nothing (cancelled, skipped)": {func(f *fixture) { delete(f.plans, "2"); delete(f.ran, "2") }, "native-2-macos: 0 plan.txt files"},
+		"a shard has no report":                         {func(f *fixture) { delete(f.ran, "4") }, "native-4-macos: 0 packages.tsv files"},
+		"the shards' plans differ":                      {func(f *fixture) { f.plans["4"] = f.plans["4"][:5] }, "the shards' plans differ"},
+		"a package failed": {func(f *fixture) {
+			f.ran["2"] = []string{m + "/internal/resolver\tfail\t40.00\t"}
+		}, "internal/resolver failed"},
+		"a package in two shards of the plan": {func(f *fixture) {
+			for s := range f.plans {
+				f.plans[s] = append(f.plans[s], "1 "+m+"/internal/mcp")
+			}
+			f.ran["1"] = append(f.ran["1"], m+"/internal/mcp\tpass\t9.00\t")
+		}, "plan: " + m + "/internal/mcp in"},
+	} {
+		f := base()
+		tc.mutate(&f)
+		out, err := check(f)
+		if err == nil {
+			t.Errorf("%s: check-native.py passed:\n%s", name, out)
+		} else if !strings.Contains(out, tc.want) {
+			t.Errorf("%s: want %q in:\n%s", name, tc.want, out)
+		}
 	}
 }

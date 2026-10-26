@@ -311,7 +311,16 @@ jobs:
   # which the Linux jobs above cannot see. Windows runs the file access
   # subset (filesystem-security) and the release binaries (release-binaries):
   # the whole suite does not pass there yet (paths are compared with '/').
+  # `go test -race ./...` split into the shards of race-shards.txt, as the
+  # race job is, but planned on macOS: race-shard.py lists the packages with
+  # macOS's own `go list ./...`, and "*" takes every package no line names.
+  # Each shard keeps the plan it ran with its report; ci-gate checks that the
+  # shards ran every package of that plan exactly once (check-native.py).
   native-tests:
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4]
     runs-on: macos-latest
     timeout-minutes: 60
     steps:
@@ -324,11 +333,33 @@ jobs:
           go-version-file: 'go.mod'
           cache-dependency-path: |
             go.sum
-            .github/ci/cache-keys/native-tests
+            .github/ci/cache-keys/native-${{ matrix.shard }}
+
+      - name: List the shard's packages
+        run: |
+          mkdir -p "$RUNNER_TEMP/reports"
+          python3 .github/ci/race-shard.py all > "$RUNNER_TEMP/reports/native-${{ matrix.shard }}-macos.plan.txt"
+          python3 .github/ci/race-shard.py list "${{ matrix.shard }}" > "$RUNNER_TEMP/packages"
+          cat "$RUNNER_TEMP/packages"
+          [ -s "$RUNNER_TEMP/packages" ]
 
       - name: Run tests with race detector
         shell: bash
-        run: go test -race ./...
+        run: |
+          set +e
+          python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/native.json"
+          rc=$?
+          set -e
+          python3 .github/ci/test-report.py "$RUNNER_TEMP/native.json" "native-${{ matrix.shard }}-macos" "$RUNNER_TEMP/reports"
+          exit $rc
+
+      - name: Upload the test report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: test-report-native-${{ matrix.shard }}-attempt-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/reports
+          if-no-files-found: error
 
   # Known vulnerabilities in the code Ark calls: its modules and the Go
   # standard library of go.mod's version.
@@ -525,9 +556,10 @@ jobs:
 
   # The gate: green only if every verification job above succeeded (a
   # failure, cancellation or skip of any job, or of any matrix leg, fails
-  # it) and the race shards together ran exactly the packages and tests the
-  # unit job ran (.github/ci/check-coverage.py). It also lists, per system,
-  # the filesystem-security tests that skipped.
+  # it), the race shards together ran exactly the packages and tests the
+  # unit job ran (.github/ci/check-coverage.py) and the macOS native shards
+  # ran every package of macOS's plan exactly once (.github/ci/check-native.py).
+  # It also lists, per system, the filesystem-security tests that skipped.
   ci-gate:
     if: always()
     needs: [lint, unit, race, fuzz-smoke, filesystem-security, typescript-compiler-differential, native-tests, vulncheck, workflow-lint, release-snapshot, release-binaries, homebrew-e2e]
@@ -572,3 +604,7 @@ jobs:
       - name: Race shards ran exactly the unit tests; skips per system
         if: always()
         run: python3 .github/ci/check-coverage.py reports windows macos
+
+      - name: macOS native shards ran every package exactly once
+        if: always()
+        run: python3 .github/ci/check-native.py reports
