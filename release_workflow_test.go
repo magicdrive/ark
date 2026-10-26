@@ -1552,8 +1552,8 @@ func TestMakefile_StaticcheckMatchesCI(t *testing.T) {
 // report against the plan the shards ran (race-shard.py all on macOS). It
 // passes only if every package of the plan ran exactly in its shard; a
 // missing, extra or failed package, a missing shard (a cancelled or skipped
-// leg uploads nothing), plans that differ or a source-building package passed
-// from the cache fail it.
+// leg uploads nothing) or plans that differ fail it. A package passed from go
+// test's cache counts as run, as it did for the job's `go test -race ./...`.
 func TestCheckNative_EveryPackageOnceInItsShard(t *testing.T) {
 	py, err := exec.LookPath("python3")
 	if err != nil {
@@ -1612,6 +1612,11 @@ func TestCheckNative_EveryPackageOnceInItsShard(t *testing.T) {
 	if out, err := check(base()); err != nil {
 		t.Fatalf("every package once in its shard: %v\n%s", err, out)
 	}
+	cached := base() // a rerun with the same sources: results from the shard's cache
+	cached.ran["3"][1] = m + "/tests/integration\tpass\t0.00\tcached"
+	if out, err := check(cached); err != nil {
+		t.Fatalf("a package passed from the cache: %v\n%s", err, out)
+	}
 	split := base() // a package split in two (as race-shards.txt may): one half per shard
 	for s := range split.plans {
 		split.plans[s] = append(split.plans[s], "1 "+m+"/internal/golden -run ^TestA", "2 "+m+"/internal/golden -skip ^TestA")
@@ -1636,9 +1641,6 @@ func TestCheckNative_EveryPackageOnceInItsShard(t *testing.T) {
 		"a package failed": {func(f *fixture) {
 			f.ran["2"] = []string{m + "/internal/resolver\tfail\t40.00\t"}
 		}, "internal/resolver failed"},
-		"a source-building package from the cache": {func(f *fixture) {
-			f.ran["3"][1] = m + "/tests/integration\tpass\t0.00\tcached"
-		}, "passed from go test's cache"},
 		"a package in two shards of the plan": {func(f *fixture) {
 			for s := range f.plans {
 				f.plans[s] = append(f.plans[s], "1 "+m+"/internal/mcp")

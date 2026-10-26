@@ -11,8 +11,13 @@ macOS, so planned from macOS's own `go list ./...`).
   - each shard ran exactly the packages its plan gives it, none missing and
     none other: together the shards ran `go test -race ./...` on macOS, every
     package once (a split package once per half);
-  - no package failed, and none of check-coverage.py's MUST_RUN_PACKAGES
-    passed from go test's cache.
+  - no package failed.
+
+A package passed from go test's cache counts as run, as it always did for
+this job's `go test -race ./...`: the job's flags are unchanged (no -count).
+(check-coverage.py's MUST_RUN_PACKAGES rule is the Linux jobs'; here the
+cache a shard saves on its first run would make a rerun with the same
+sources fail it.)
 
 Usage: check-native.py <reports-dir>
 """
@@ -36,7 +41,6 @@ def load(name, file):
 def main():
     reports = sys.argv[1]
     order, _, _ = load("race_shard", "race-shard.py").parse()
-    must_run = load("check_coverage", "check-coverage.py").MUST_RUN_PACKAGES
     errors = []
 
     def one(label, suffix):
@@ -92,8 +96,6 @@ def main():
             for pkg, parts in sorted(ran[s].items()):
                 if parts[1] == "fail":
                     errors.append(f"shard {s}: {pkg} failed")
-                if pkg.endswith(must_run) and len(parts) > 3 and parts[3] == "cached":
-                    errors.append(f"shard {s}: {pkg} passed from go test's cache, not a run of the current sources")
         print(f"macOS native: {len(order)} shards, {len(halves)} packages planned on macOS; "
               + ", ".join(f"shard {s}: {len(assigned.get(s, ()))} planned, {len(ran.get(s, ()))} ran" for s in order))
 
