@@ -22,7 +22,9 @@ jobs:
   # establish (.github/release/verify-tag-provenance.sh). To release from a
   # maintenance branch, add its exact name after main.
   provenance:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
+    # the release path changes its image only through a reviewed pull request.
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -51,7 +53,9 @@ jobs:
   # graph. Only the verified dist/ moves on.
   build:
     needs: [provenance]
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
+    # the release path changes its image only through a reviewed pull request.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -101,7 +105,9 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [provenance, ci, build]
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
+    # the release path changes its image only through a reviewed pull request.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
     permissions:
