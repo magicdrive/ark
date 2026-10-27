@@ -24,6 +24,8 @@ func TestIsTestFile(t *testing.T) {
 		"src/test/java/com/acme/UserServiceTest.java": true, "src/test/java/com/acme/support/Fixtures.java": true,
 		"src/main/java/com/acme/UserTests.java": true, "src/main/java/com/acme/TestUser.java": true,
 		"src/main/java/com/acme/Test.java": false, "src/main/java/com/acme/Contest.java": false, "src/main/java/com/acme/Latest.java": false,
+		"src/io_test.zig": true, "src/test.zig": true, "tests.zig": true, "test/behavior/x.zig": true, "lib/tests/a.zig": true,
+		"src/main.zig": false, "src/testing.zig": false, "src/latest.zig": false, "build.zig": false,
 		// Earlier cases.
 		"pkg/a_test.go": true, "src/a.spec.js": true, "src/test.ts": false,
 		"app/Http/Controllers/Test.php": false, "app/Testing/Fake.php": false, "app/LatestTest.php": true, "app/attest/X.php": false,

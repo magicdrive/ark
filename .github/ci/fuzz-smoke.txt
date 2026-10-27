@@ -21,6 +21,7 @@
 2 ./internal/languages/html FuzzExtractHTML
 2 ./internal/mcp FuzzSearchableText
 2 ./internal/languages/java FuzzJavaContext
+2 ./internal/languages/zig FuzzExtractZig
 3 ./internal/languages/typescript FuzzExtractTypeScript
 3 ./internal/languages/typescript FuzzModuleSpec
 3 ./internal/languages/typescript FuzzTypeArgParser

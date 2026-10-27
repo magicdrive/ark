@@ -50,7 +50,9 @@ package cache
 // python 5. ReferenceDraft.Lookup / ReceiverLookup / CountsArguments /
 // ArgumentCount / ArgumentTypes, SymbolDraft.Parameters / ImplicitMembers /
 // Overrides and Extraction.SourceRoot are optional the same way; only the
-// Java provider (java-1, its first version) states them.
+// Java provider (java-1, its first version) states them. AliasDraft.Members
+// and AliasDraft.ConfidenceCap are optional the same way; only the Zig
+// provider (zig-1, its first version) states them.
 //
 // Asset files (internal/asset: images, fonts, media) have no extraction and
 // no entry: the index records their paths from the walk and makes a node for

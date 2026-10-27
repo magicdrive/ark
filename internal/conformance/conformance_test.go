@@ -16,6 +16,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages/zig"
 	"github.com/magicdrive/ark/internal/source"
 )
 
@@ -135,6 +136,17 @@ func fixtures() []providerFixture {
 			// (reflection is an ordinary call of Method.invoke); the honest
 			// count is 0.
 			dynamic: conformance.Case{Name: "dynamic", File: "src/main/java/p/D.java", Source: []byte("package p;\nclass D { Object run(java.lang.reflect.Method m) throws Exception { return m.invoke(null); } }\n")},
+		},
+		{
+			name:     "zig",
+			provider: zig.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "basic", File: "src/main.zig", Source: []byte("const std = @import(\"std\");\nconst math = @import(\"math.zig\");\npub fn main() void {\n    std.debug.print(\"{}\\n\", .{math.add(1, 2)});\n}\n")},
+				{Name: "containers", File: "src/model.zig", Source: []byte("pub const User = struct {\n    const Self = @This();\n    id: u64,\n    role: Role = .member,\n    pub fn init(id: u64) Self { return .{ .id = id }; }\n    pub fn name(self: *const Self) []const u8 { _ = self; return \"\"; }\n};\npub const Role = enum { admin, member };\npub const Shape = union(enum) { circle: f32, square: f32 };\nconst Err = error{ NotFound, Denied };\nconst Handle = opaque {};\n")},
+				{Name: "calls", File: "src/run.zig", Source: []byte("const model = @import(\"model.zig\");\nfn List(comptime T: type) type {\n    return struct { items: []T, pub fn len(self: @This()) usize { return self.items.len; } };\n}\npub fn run() !void {\n    var u = model.User.init(1);\n    _ = u.name();\n    const l: List(u8) = .{ .items = &.{} };\n    _ = l.len();\n    for (0..3) |i| { if (i > 1) break; }\n    const r = blk: { break :blk 1; };\n    _ = r;\n}\ntest \"run\" { try run(); }\n")},
+			},
+			broken:  conformance.Case{Name: "broken", File: "src/broken.zig", Source: []byte("pub fn broken( {\n}\npub fn good() void {}\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: "src/dyn.zig", Source: []byte("pub fn run(m: []const *const fn () void, k: usize) void { m[k](); }\n")},
 		},
 		{
 			name:     "html",

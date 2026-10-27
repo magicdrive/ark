@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css", "zig"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -83,6 +83,7 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"java":       language.SupportLevelContextQualityCertified,
 		"html":       language.SupportLevelGraph,
 		"css":        language.SupportLevelGraph,
+		"zig":        language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)
@@ -144,6 +145,22 @@ func TestRegistry_RustExtensions(t *testing.T) {
 	for _, name := range []string{"Cargo.toml", "Cargo.lock", "x.rs.bak", "x.rlib"} {
 		if d, ok := reg.DetectByFilename(name); ok && d.Language == "rust" {
 			t.Errorf("%s: must not be indexed as rust", name)
+		}
+	}
+}
+
+// TestRegistry_ZigExtensions pins the files Zig is indexed for: .zig only
+// (build.zig is Zig source, never run; ZON data is not Zig code).
+func TestRegistry_ZigExtensions(t *testing.T) {
+	reg := languages.Registry()
+	for _, name := range []string{"main.zig", "build.zig", "src/MAIN.ZIG"} {
+		if d, ok := reg.DetectByFilename(name); !ok || d.Language != "zig" {
+			t.Errorf("%s: not detected as zig", name)
+		}
+	}
+	for _, name := range []string{"build.zig.zon", "x.zon", "x.zig.bak", "zig"} {
+		if d, ok := reg.DetectByFilename(name); ok && d.Language == "zig" {
+			t.Errorf("%s: must not be indexed as zig", name)
 		}
 	}
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages/zig"
 )
 
 // spec couples a provider with its Tree-sitter grammar and tested support
@@ -96,6 +97,15 @@ func specList() []spec {
 		// them within a stylesheet, @import links (CSS Syntax Level 3; no
 		// Tree-sitter grammar). Graph, not ContextQualityCertified.
 		{css.NewProvider(), nil, language.SupportLevelGraph},
+		// Zig (.zig): declarations of files and containers (structs,
+		// unions, enums, opaque types, error sets), functions, fields and
+		// tests by their path; names by lexical scope, relative @import,
+		// @This(), constants naming namespaces, method calls on receivers
+		// whose declared type the file proves, typed graph. Graph, not
+		// ContextQualityCertified: no context-quality benchmark covers it,
+		// and named modules (std, build.zig modules) and inferred receiver
+		// types are not resolved; see docs/language-support.md.
+		{zig.NewProvider(), grammars.ZigLanguage, language.SupportLevelGraph},
 	}
 }
 

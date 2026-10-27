@@ -39,6 +39,10 @@ import (
 //	            Maven Surefire defaults), or any file under a test/ or tests/
 //	            directory (src/test/java, which also holds the tests'
 //	            support classes)
+//	Zig         *_test.zig, test.zig, tests.zig, or any file under a test/
+//	            or tests/ directory (a test step's root and the files it
+//	            imports). Tests written inline (`test "..." { ... }`) are
+//	            in production files.
 func IsTestFile(path string) bool {
 	slashed := filepath.ToSlash(path)
 	base := slashed[strings.LastIndex(slashed, "/")+1:]
@@ -72,6 +76,16 @@ func IsTestFile(path string) bool {
 			}
 		}
 		if strings.HasPrefix(name, "Test") && len(name) > len("Test") {
+			return true
+		}
+		dirs := strings.Split(slashed, "/")
+		for _, d := range dirs[:len(dirs)-1] {
+			if d == "test" || d == "tests" {
+				return true
+			}
+		}
+	case ".zig":
+		if strings.HasSuffix(base, "_test.zig") || base == "test.zig" || base == "tests.zig" {
 			return true
 		}
 		dirs := strings.Split(slashed, "/")

@@ -83,7 +83,9 @@ func lookupTargetCandidatesFromIndex(idx *index.RepositoryIndex, name, filePatte
 //  1. exact Qualified, then exact Name, of the input as written (the
 //     pre-existing behaviour, unchanged);
 //  2. exact Qualified, then exact Name, of the input's alternative spellings: "::" written for
-//     the "." member separator, and the input without leading separators
+//     the "." member separator, "." written for "::" (a language whose
+//     identities separate members by "::", Zig's `src/a.zig::Engine::run`,
+//     asked for as Engine.run), and the input without leading separators
 //     (e.g. a fully-qualified "\App\X");
 //  3. boundary suffix: symbols whose Qualified ends with one of those
 //     spellings at a segment boundary — "LoginScreenPolicy.showsSsoButton"
@@ -140,9 +142,12 @@ func targetSpellings(name string) []string {
 		out = append(out, s)
 	}
 	dotted := strings.ReplaceAll(name, "::", ".")
+	pathed := strings.ReplaceAll(name, ".", "::")
 	addUnique(dotted)
+	addUnique(pathed)
 	addUnique(strings.TrimLeftFunc(name, isSeparatorRune))
 	addUnique(strings.TrimLeftFunc(dotted, isSeparatorRune))
+	addUnique(strings.TrimLeftFunc(pathed, isSeparatorRune))
 	return out
 }
 
