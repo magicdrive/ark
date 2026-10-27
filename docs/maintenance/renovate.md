@@ -4,8 +4,8 @@ Renovate が作る依存関係更新の PR を、人が一人で確認・検証�
 AI ツールは前提にしない。ここに書いたコマンドは、状態を変える GitHub / git の操作（再実行、push、PR のクローズなど）を除き、
 実際に実行して確かめてある（[付録 A](#付録-a-この-runbook-の検証記録)）。
 
-- 対象: `renovate.json` が作る PR（Go modules、GitHub Actions）。`.github/dependabot.yml` は
-  `open-pull-requests-limit: 0` で PR を作らない。
+- 対象: `renovate.json` が作る PR（Go modules、GitHub Actions）。依存更新の PR は Renovate だけが作る。
+  Dependabot は Alerts（脆弱性の検知）にだけ使い、`.github/dependabot.yml` は置かない。
 - 前提: `git`、`gh`（`gh auth login` 済み）、Go（`go.mod` の `go` 行の版）、`python3`。
   TypeScript の差分テストだけ Node.js と npm が要る。
 - 書き方: `<N>` は PR 番号、`<RUN_ID>` は Actions の run ID、`<BRANCH>` は PR の head ブランチ。
