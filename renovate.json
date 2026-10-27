@@ -67,12 +67,24 @@
       "prPriority": 10
     },
     {
+      "description": "The Renovate of make renovate-check (.github/renovate-check): package.json, its lockfile and the Node.js its engines require move together",
+      "matchFileNames": [".github/renovate-check/**"],
+      "groupName": "Renovate validator",
+      "automerge": false
+    },
+    {
       "description": "The CI TypeScript compiler (.github/ts-oracle) is the soundness oracle: upgrade it deliberately, re-running the differential",
       "matchFileNames": [".github/ts-oracle/**"],
       "enabled": false
     }
   ],
   "minimumReleaseAge": "3 days",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": [
+      "before 10am on monday"
+    ]
+  },
   "prHourlyLimit": 2,
   "ignorePaths": [
     "**/testdata/**",
