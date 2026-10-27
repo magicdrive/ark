@@ -28,7 +28,9 @@ jobs:
   # read-only token and no secret: build steps run code from the module
   # graph. Only the verified dist/ moves on.
   build:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
+    # the release path changes its image only through a reviewed pull request.
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -78,7 +80,9 @@ jobs:
   release:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [ci, build]
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
+    # the release path changes its image only through a reviewed pull request.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     environment: release
     permissions:
