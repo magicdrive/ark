@@ -128,14 +128,39 @@ func checkReleaseWorkflow(t tb, all string) {
 	if !strings.Contains(top, "concurrency:\n  group: release-${{ github.ref }}\n  cancel-in-progress: false") {
 		t.Error("release.yml: one release per tag at a time, never cancelled")
 	}
-	if got := len(jobs); got != 3 || jobs["ci"] == "" || jobs["build"] == "" || jobs["release"] == "" {
-		t.Fatalf("release.yml jobs: want ci, build, release; got %d: %v", got, keys(jobs))
+	if got := len(jobs); got != 4 || jobs["provenance"] == "" || jobs["ci"] == "" || jobs["build"] == "" || jobs["release"] == "" {
+		t.Fatalf("release.yml jobs: want provenance, ci, build, release; got %d: %v", got, keys(jobs))
 	}
 	if !strings.Contains(jobs["ci"], "uses: ./.github/workflows/ci.yml") {
 		t.Error("release.yml: the ci job must run the repository's CI workflow")
 	}
-	if !regexp.MustCompile(`(?m)^    needs: \[ci, build\]$`).MatchString(jobs["release"]) {
-		t.Error("release.yml: the release job must need ci and build")
+	if !regexp.MustCompile(`(?m)^    needs: \[provenance, ci, build\]$`).MatchString(jobs["release"]) {
+		t.Error("release.yml: the release job must need provenance, ci and build")
+	}
+	// The provenance gate: nothing is built or published unless the tag's
+	// commit is in main's history (a full clone; the script fetches the tag
+	// and main afresh and fails closed).
+	if !regexp.MustCompile(`(?m)^    needs: \[provenance\]$`).MatchString(jobs["build"]) {
+		t.Error("release.yml: the build job must need provenance")
+	}
+	prov := jobs["provenance"]
+	if !strings.Contains(prov, "permissions:\n      contents: read\n") || strings.Contains(prov, "needs:") {
+		t.Error("release.yml: the provenance job runs first, with contents: read")
+	}
+	if len(hephaestusSteps(prov)) != 0 {
+		t.Error("release.yml: the provenance job runs no Hephaestus step")
+	}
+	inOrder(t, "release.yml provenance", prov,
+		"uses: actions/checkout@",
+		"fetch-depth: 0\n          persist-credentials: false\n",
+		`run: .github/release/verify-tag-provenance.sh --ref "$GITHUB_REF" --sha "$GITHUB_SHA" main`+"\n")
+	if n := len(jobSteps(prov)); n != 2 {
+		t.Errorf("release.yml: the provenance job has %d steps, want 2 (checkout, verify)", n)
+	}
+	for _, step := range jobSteps(prov) {
+		if cond := stepField(step, "if"); cond != "" || strings.Contains(step, "continue-on-error") {
+			t.Errorf("release.yml: provenance step %q may be skipped or ignored (if: %q)", stepField(step, "name"), cond)
+		}
 	}
 	for _, bad := range []string{"PERSONAL_GITHUB_TOKEN", "pull_request_target", "continue-on-error", "goreleaser"} {
 		if strings.Contains(strings.ToLower(all), strings.ToLower(bad)) {
@@ -1213,7 +1238,12 @@ func TestWorkflowChecks_CatchMutations(t *testing.T) {
 			{"release step publishes with the tap token", replace("          command: release\n", "          command: release\n          github-token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}\n")},
 			{"checksum file not attested", replace("            dist/ark_checksums.txt\n", "")},
 			{"no release environment", replace("    environment: release\n", "")},
-			{"release does not wait for the build", replace("    needs: [ci, build]\n", "    needs: [ci]\n")},
+			{"release does not wait for the build", replace("    needs: [provenance, ci, build]\n", "    needs: [provenance, ci]\n")},
+			{"release does not wait for provenance", replace("    needs: [provenance, ci, build]\n", "    needs: [ci, build]\n")},
+			{"build does not wait for provenance", replace("    needs: [provenance]\n", "")},
+			{"provenance from a shallow clone", replace("          fetch-depth: 0\n", "")},
+			{"provenance allows another branch", replace(`--sha "$GITHUB_SHA" main`+"\n", `--sha "$GITHUB_SHA" main topic/tree-sitter`+"\n")},
+			{"provenance check skipped", replace("      - name: Verify the tag is on an allowed release branch\n", "      - name: Verify the tag is on an allowed release branch\n        if: false\n")},
 			{"rehearsal publishes", replace("          dry-run: \"true\"\n", "")},
 			{"build without go.mod's Go", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version: stable\n          cache: false\n")},
 			{"build with another Go as well", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version-file: 'go.mod'\n          go-version: stable\n          cache: false\n")},

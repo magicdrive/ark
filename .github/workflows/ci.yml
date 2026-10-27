@@ -410,6 +410,12 @@ jobs:
 
       - name: Run actionlint
         run: make actionlint
+      # The release workflow's tag provenance check (release.yml, job
+      # provenance), against local repositories: shellcheck and its tests.
+      - name: Release tag provenance check
+        run: |
+          shellcheck .github/release/verify-tag-provenance.sh .github/release/verify-tag-provenance_test.sh
+          .github/release/verify-tag-provenance_test.sh
 
       - name: Run shellcheck
         run: shellcheck .github/release/*.sh .github/ci/*.sh .github/ts-oracle/run.sh .github/renovate-check/run.sh

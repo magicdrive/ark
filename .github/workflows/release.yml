@@ -14,6 +14,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # PROVENANCE: a tag's commit must be in the history of an allowed release
+  # branch (only main, the default branch): a v* tag pushed on any other
+  # commit (another branch, a commit on no branch) builds and publishes
+  # nothing. The script fetches the tag and the branch afresh, requires the
+  # tag to name this run's commit and fails closed on anything it cannot
+  # establish (.github/release/verify-tag-provenance.sh). To release from a
+  # maintenance branch, add its exact name after main.
+  provenance:
+    # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
+    # the release path changes its image only through a reviewed pull request.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code (full history)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the tag is on an allowed release branch
+        run: .github/release/verify-tag-provenance.sh --ref "$GITHUB_REF" --sha "$GITHUB_SHA" main
+
   # QUALITY GATES: exactly the CI of every push to main — tests, race,
   # staticcheck, fuzz smoke, the TypeScript compiler differential, the
   # release snapshot, the native runs of every release binary and the
@@ -28,6 +52,7 @@ jobs:
   # read-only token and no secret: build steps run code from the module
   # graph. Only the verified dist/ moves on.
   build:
+    needs: [provenance]
     # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
     # the release path changes its image only through a reviewed pull request.
     runs-on: ubuntu-24.04
@@ -79,7 +104,7 @@ jobs:
   # environment secret of `release`, which deploys only from v* tags.
   release:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [ci, build]
+    needs: [provenance, ci, build]
     # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
     # the release path changes its image only through a reviewed pull request.
     runs-on: ubuntu-24.04
