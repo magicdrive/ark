@@ -243,7 +243,7 @@ func (x *extractor) collectReturn(d *decl, depth int) {
 	switch {
 	case x.isContainer(v):
 		d.returns = x.openContainer(v, d.ident+"::()", d.name+"()", hidden, true, depth)
-	case v != nil && x.typ(v) == "identifier":
+	case v != nil && x.typ(v) == "identifier" && x.countDecls(body, identifierName(x.text(v)), 0) == 1:
 		name := identifierName(x.text(v))
 		for _, st := range x.named(body) {
 			if x.typ(st) == "variable_declaration" && x.declName(st) == name && !x.hasToken(st, "var") && x.isContainer(x.initializer(st)) {
@@ -255,6 +255,25 @@ func (x *extractor) collectReturn(d *decl, depth int) {
 			}
 		}
 	}
+}
+
+// countDecls counts the declarations of name in a function body, not in
+// the containers it declares.
+func (x *extractor) countDecls(n *ts.Node, name string, depth int) int {
+	if n == nil || depth > maxDepth || name == "" {
+		return 0
+	}
+	count := 0
+	for _, ch := range x.named(n) {
+		switch {
+		case x.typ(ch) == "variable_declaration" && x.declName(ch) == name:
+			count++
+		case x.isContainer(ch):
+			continue
+		}
+		count += x.countDecls(ch, name, depth+1)
+	}
+	return count
 }
 
 // findReturns collects the return expressions of a function body, not
@@ -357,12 +376,17 @@ func (x *extractor) collectAnonymous(n *ts.Node, ident string, s *scope, out *[]
 // one).
 func (x *extractor) aliasesOf(d *decl) {
 	iv := x.denote(d.init, d.scope, 0)
+	cap := ""
 	if len(iv.ns) > 1 {
+		// Which alternative the build compiles is not chosen; one may lie
+		// outside the repository or hold the member as a field: a member
+		// found in one alternative alone is no more than a Candidate.
 		x.alternativeAlias[d.ident] = true
+		cap = "candidate"
 	}
 	for _, t := range iv.ns {
 		if t != d.ident {
-			x.aliases = append(x.aliases, language.AliasDraft{Qualified: d.ident, Target: t, Location: x.loc(d.node), Members: true})
+			x.aliases = append(x.aliases, language.AliasDraft{Qualified: d.ident, Target: t, Location: x.loc(d.node), Members: true, ConfidenceCap: cap})
 		}
 	}
 }

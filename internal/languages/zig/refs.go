@@ -123,6 +123,16 @@ func (x *extractor) walkBlock(n *ts.Node, c ctx, depth int) {
 func (x *extractor) walkLocal(st *ts.Node, c ctx, depth int) {
 	name, typ, init := x.declName(st), x.field(st, "type"), x.initializer(st)
 	x.walkNode(typ, c, reference.KindTypeUse, depth+1)
+	if x.isContainer(init) && name != "" && name != "_" && x.hasToken(st, "var") {
+		// A comptime var's container is declared, but the name may be
+		// assigned another: it is a local whose value is unknown.
+		word := strings.TrimSuffix(x.typ(init), "_declaration")
+		sc := x.openContainer(init, c.prefix+"::{"+word+"}", word, c.s, false, depth)
+		x.emitScope(sc)
+		x.walkContainer(sc, init, c, depth+1)
+		c.s.bind(&decl{name: name, scope: c.s, local: true, mutable: true, typ: typ, node: st, v: &val{}})
+		return
+	}
 	if x.isContainer(init) && name != "" && name != "_" {
 		ident := c.prefix + "::" + name
 		sc := x.scopeOf[keyOf(init)]
@@ -141,6 +151,9 @@ func (x *extractor) walkLocal(st *ts.Node, c ctx, depth int) {
 	}
 	x.walkResult(init, typ, c.s, c, depth+1)
 	d := &decl{name: name, scope: c.s, local: true, typ: typ, init: init, mutable: x.hasToken(st, "var"), node: st}
+	if d.mutable && x.typ(st.Parent()) == "comptime_statement" {
+		d.v = &val{} // a comptime var may be assigned a value of another type
+	}
 	x.valOf(d, 0)
 	c.s.bind(d)
 }
@@ -466,7 +479,9 @@ func (x *extractor) emitMembers(v val, members []*ts.Node, kind reference.Refere
 					v = val{}
 				}
 			case known:
-				x.emit(m, k, mn, c, ident, nil) // two containers share t: ambiguous
+				// Two containers share t: what one declares may be the
+				// other's field. Never more than a Candidate.
+				x.emit(m, k, mn, c, ident, ambiguous)
 				v = val{}
 			case x.inFile(t) && !x.alternativeAlias[t]:
 				unresolvedCall() // a member of a function or value of this file
@@ -509,7 +524,7 @@ func (x *extractor) emitMembers(v val, members []*ts.Node, kind reference.Refere
 				}
 			case known:
 				if call {
-					x.emit(m, k, mn, c, t+"::"+m, nil)
+					x.emit(m, k, mn, c, t+"::"+m, ambiguous)
 				}
 				v = val{}
 			case !x.inFile(t) || x.alternativeAlias[t]:
@@ -527,6 +542,9 @@ func (x *extractor) emitMembers(v val, members []*ts.Node, kind reference.Refere
 		}
 	}
 }
+
+// ambiguous caps a member of an identity two declarations share.
+func ambiguous(d *language.ReferenceDraft) { d.ConfidenceCap = "candidate" }
 
 // unproven qualifies a member of a value another file types (a declared
 // type of another file, a function's stated result type): the member may

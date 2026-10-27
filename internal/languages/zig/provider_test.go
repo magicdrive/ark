@@ -975,3 +975,87 @@ fn f() void {
 		"7 call copy -> {module}stdx::mem::copy",
 	})
 }
+
+// Review findings: each of these was resolved Exact to one declaration a
+// comptime condition, a field or a reassignment may not denote.
+func TestReview_NoExactPastUnprovenAlternatives(t *testing.T) {
+	got := resolveRepo(t, map[string]string{
+		// 1: one alternative outside the repository (std).
+		"src/a.zig": `const std = @import("std");
+const builtin = @import("builtin");
+const DummyMutex = struct {
+    pub fn lock(_: *DummyMutex) void {}
+};
+pub const Mutex = if (builtin.single_threaded) DummyMutex else std.Thread.Mutex;
+var m: Mutex = .{};
+pub fn main() void { m.lock(); Mutex.lock(&m); }
+`,
+		// 1: one alternative a missing / outside file.
+		"src/b.zig": `const builtin = @import("builtin");
+const Impl = switch (builtin.os.tag) { .windows => @import("../../vendor/win.zig"), else => @import("posix.zig") };
+pub fn main() void { Impl.open(); }
+`,
+		"src/posix.zig": "pub fn open() void {}\npub fn run() void {}\n",
+		// 2: one alternative's run is a field holding a function.
+		"src/c.zig": `const builtin = @import("builtin");
+fn g() void {}
+const Posix = struct { pub fn run(_: Posix) void {} };
+const Win = struct { run: *const fn () void = &g };
+pub const Impl = if (builtin.os.tag == .windows) Win else Posix;
+pub fn main() void { const impl: Impl = .{}; impl.run(); }
+`,
+		"src/d.zig": "const c = @import(\"c.zig\");\npub fn main() void { const i: c.Impl = .{}; i.run(); }\n",
+		// 3: anonymous containers sharing an identity.
+		"src/e.zig": `fn g() void {}
+const Event = union(enum) {
+    key: struct { handler: *const fn () void },
+    mouse: struct { x: i32, pub fn handler(self: @This()) void { _ = self; } },
+};
+pub fn main() void { const ev: Event = .{ .key = .{ .handler = &g } }; ev.key.handler(); }
+`,
+		// 3: block-local containers of one name in one function.
+		"src/f.zig": `fn g() bool { return true; }
+fn sort(k: u8) void {
+    switch (k) {
+        0 => { const Ctx = struct { pub fn lessThan(_: @This()) bool { return true; } }; _ = Ctx; },
+        else => { const Ctx = struct { lessThan: *const fn () bool = &g }; const c: Ctx = .{}; _ = c.lessThan(); },
+    }
+}
+`,
+		// 4: a comptime var holding a type may be reassigned.
+		"src/g.zig": `const B = struct { pub fn run() void {} };
+pub fn main() void {
+    comptime var S = struct { pub fn run() void {} };
+    S = B;
+    S.run();
+}
+`,
+		// 5: a returned name declared twice in the body.
+		"src/h.zig": `fn g() void {}
+fn F(comptime b: bool) type {
+    if (b) {
+        const Impl = struct { run: *const fn () void = &g };
+        return Impl;
+    }
+    const Impl = struct { pub fn run(_: @This()) void {} };
+    return Impl;
+}
+pub fn main() void { const v: F(true) = .{}; v.run(); }
+`,
+		// 5: a quoted name containing a separator is no identity.
+		"src/i.zig": "pub const X = struct { y: *const fn () void };\npub fn @\"X::y\"() void {}\n",
+		"src/j.zig": "const i = @import(\"i.zig\");\nfn f(v: i.X) void { v.y(); }\n",
+	})
+	for k, v := range got {
+		if strings.HasPrefix(v, "exact") || strings.HasPrefix(v, "strong") {
+			for _, bad := range []string{
+				"src/a.zig:8 lock", "src/b.zig:3 open", "src/c.zig:6 run", "src/d.zig:2 run",
+				"src/e.zig:6 handler", "src/f.zig:5 lessThan", "src/g.zig:5 run", "src/h.zig:10 run", "src/j.zig:2 y",
+			} {
+				if strings.HasPrefix(k, bad+" ") {
+					t.Errorf("%s: %s, want at most candidate", k, v)
+				}
+			}
+		}
+	}
+}

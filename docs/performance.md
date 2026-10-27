@@ -117,7 +117,7 @@ others).
 
 Their Zig sources are large — 6.4 MB and 13.7 MB, files up to 570 and
 730 KB — and densely cross-referenced: 87,000 and 233,000 references, of
-which 41,000 and 90,000 become graph edges. A heap profile of the
+which 40,700 and 89,600 become graph edges. A heap profile of the
 TigerBeetle build attributes the allocations to the index's work per
 reference (resolution, edges, completeness, reference identities) in
 proportion to their number; the Zig provider's own share is the reference

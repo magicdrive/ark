@@ -164,8 +164,8 @@ ref Backend kind=value_reference container="src/platform.zig::Backend" receiver=
 ## imports
 ## identity_only
 ## aliases
-alias src/platform.zig::Backend -> src/posix.zig::Backend members @src/platform.zig:5:1-5:88
-alias src/platform.zig::Backend -> src/windows.zig::Backend members @src/platform.zig:5:1-5:88
+alias src/platform.zig::Backend -> src/posix.zig::Backend members cap=candidate @src/platform.zig:5:1-5:88
+alias src/platform.zig::Backend -> src/windows.zig::Backend members cap=candidate @src/platform.zig:5:1-5:88
 alias src/platform.zig::builtin -> {module}builtin members @src/platform.zig:1:1-1:36
 alias src/platform.zig::posix -> src/posix.zig members @src/platform.zig:2:1-2:36
 alias src/platform.zig::windows -> src/windows.zig members @src/platform.zig:3:1-3:40

@@ -299,8 +299,10 @@ generic extensions carry what Zig adds, and none names a language:
 `AliasDraft.Members` (a constant whose value is a namespace — an import,
 `@This()`, a path, a call of a type factory — is a declaration of its own:
 a reference to it resolves to it, a member path through it reaches the
-target's member; a comptime choice between namespaces states one alias per
-alternative, so a member through it is a Candidate), `AliasDraft.ConfidenceCap`
+target's member; a comptime choice between namespaces states one capped
+alias per alternative, so a member through it is a Candidate even when one
+alternative alone declares it — the other may be `std`'s or hold it as a
+field), `AliasDraft.ConfidenceCap`
 (build.zig's literal `addModule` / `addImport` / `.imports` map a named
 module to its root file, `{module}name`, capped at Strong: a dependency's
 module of the name may be the one imported; build.zig is read, never run)
@@ -315,6 +317,7 @@ Authority: `languages/zig/provider.go` (header), `languages/zig/buildzig.go`,
 Tests: `TestNegative_*`, `TestShadowing`, `TestReceivers_*`,
 `TestConditionalCompilation_IsCandidate`, `TestGenerics_ContainerFactories`,
 `TestNamedModules_FromBuildZig`, `TestCompleteness_UnprovenCallsStayAttributable`,
+`TestReview_NoExactPastUnprovenAlternatives`,
 `TestAlias_MembersReadOnlyBelowTheDeclaration`, `TestAlias_CapBoundsWhatFollowsIt`,
 `TestTentativeIdentity_MissIsUnresolvedNotOutside`,
 `TestCompleteness_TentativeIdentityIsSameNameAttributed`, `TestGraph_Fixture`,

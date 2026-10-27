@@ -147,8 +147,10 @@ func lookup(s *scope, name string) (ds []*decl, unknown bool) {
 func identifierName(text string) string {
 	if strings.HasPrefix(text, `@"`) && strings.HasSuffix(text, `"`) && len(text) >= 3 {
 		inner := text[2 : len(text)-1]
-		if strings.ContainsAny(inner, `\`) {
-			return "" // an escape: not decoded, so no name is claimed
+		if strings.ContainsAny(inner, `\:.(){}`) {
+			// An escape (not decoded), or a separator of identities: no
+			// name is claimed.
+			return ""
 		}
 		return inner
 	}

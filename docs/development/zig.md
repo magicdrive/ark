@@ -82,17 +82,17 @@ random edge sample, `ARK_ZIG_INCREMENTAL=1` the cache builds):
 | | TigerBeetle | Ghostty |
 |---|---:|---:|
 | Files with a parse error | 0 | 6 (11 diagnostics) |
-| Symbols (graph nodes) | 18,526 | 35,408 |
-| References | 86,824 | 232,890 |
-| — exact / strong | 60,326 / 4,656 | 138,367 / 2,991 |
-| — candidate | 22 | 247 |
-| — unresolved | 18,816 | 80,371 |
+| Symbols (graph nodes) | 18,522 | 35,408 |
+| References | 86,820 | 232,890 |
+| — exact / strong | 60,272 / 4,609 | 138,178 / 2,991 |
+| — candidate | 117 | 436 |
+| — unresolved | 18,818 | 80,371 |
 | Speculative, no declaration (dropped) | 3,004 | 10,914 |
 | Imports resolved | 1,136 | 3,010 |
 | Imports unresolved: named modules, ZON | 327 | 1,310 |
 | Imports unresolved: missing file | 0 | 2 |
-| Graph edges (exact / strong) | 40,753 (37,371 / 3,382) | 89,785 (88,675 / 1,110) |
-| — calls / references / uses_type / imports | 14,375 / 15,282 / 9,961 / 1,135 | 30,552 / 37,048 / 19,180 / 3,005 |
+| Graph edges (exact / strong) | 40,684 (37,329 / 3,355) | 89,613 (88,503 / 1,110) |
+| — calls / references / uses_type / imports | 14,331 / 15,259 / 9,959 / 1,135 | 30,497 / 36,965 / 19,146 / 3,005 |
 
 The unresolved imports by name are `std`, `builtin` and named modules no
 build.zig maps literally (TigerBeetle's `vsr` passes through a struct
@@ -108,8 +108,22 @@ reached through a type, import or re-export, the declarations on the way
 `QueueType(Completion)` of another file to `QueueType::()::push`, or
 `stream.deinit()` through `Terminal.vtStream`'s result type `Stream`, a
 re-export of `stream.Stream(Handler)`). No false `exact` or `strong` edge
-was found. This is a sample of about 0.2 % of the edges, not a proof; no
-independent oracle (a Zig compiler's semantic analysis) was run.
+was found in it. This is a sample of about 0.2 % of the edges, not a proof;
+no independent oracle (a Zig compiler's semantic analysis) was run.
+
+**Adversarial review.** An independent review searching for valid Zig that
+Ark resolves wrongly found four shapes the sample had not drawn, each
+reproduced and fixed with a test (`TestReview_NoExactPastUnprovenAlternatives`):
+a comptime choice whose other alternative lies outside the repository
+(`if (builtin.single_threaded) DummyMutex else std.Thread.Mutex`) or holds
+the member as a field — a member found in one alternative alone is now a
+Candidate (the alternatives' aliases are capped); containers sharing an
+identity (unnamed payload structs of a union, same-named containers of two
+blocks) — a member through one is now a Candidate; a `comptime var`
+holding a type, which may be reassigned — no longer a namespace; quoted
+names containing an identity separator — no name. On the two
+repositories this turned 69 and 172 edges into Candidates. Twenty
+soundness mutations, these four included, are each killed by the tests.
 
 **False negatives seen.** Method calls on values whose type needs
 inference (a capture's, an `anytype` parameter's, a call result of a

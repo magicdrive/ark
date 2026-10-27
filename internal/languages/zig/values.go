@@ -150,6 +150,9 @@ func (x *extractor) valOf(d *decl, depth int) val {
 	defer func() { d.busy = false }()
 	var v val
 	switch {
+	case d.mutable && d.body != nil:
+		// A var holding a type (comptime) may be assigned another one:
+		// it is no namespace. (A runtime var's type never changes: below.)
 	case d.body != nil:
 		v = val{ns: []string{d.body.prefix}}
 	case d.fn != nil:
