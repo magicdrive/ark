@@ -7,6 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 // Windows: os.Root handles (NtCreateFile relative to a directory handle).
@@ -168,3 +171,45 @@ func pathIdentity(path string) (Identity, error) {
 func fileIdentity(_ *os.File, fi fs.FileInfo) (Identity, error) { return Identity{fi: fi}, nil }
 
 func openNoBlock(path string) (*os.File, error) { return os.OpenFile(path, os.O_RDONLY, 0) }
+
+// readFileStable opens name as openFile does and reads it in a stable read
+// (stable.go).
+func (d *winDir) readFileStable(name string, want Identity) ([]byte, Stamp, error) {
+	f, info, err := d.openFile(name, want)
+	if err != nil {
+		return nil, Stamp{}, err
+	}
+	defer f.Close()
+	return readStableFile(f, info.id, name)
+}
+
+// fileBasicInfo is FILE_BASIC_INFO (GetFileInformationByHandleEx).
+type fileBasicInfo struct {
+	CreationTime, LastAccessTime, LastWriteTime, ChangeTime int64
+	FileAttributes                                          uint32
+	_                                                       uint32
+}
+
+// filetimeNano converts a FILETIME (100ns intervals since 1601) to
+// nanoseconds since the Unix epoch.
+func filetimeNano(t int64) int64 { return (t - 116444736000000000) * 100 }
+
+// readStableFile is a stable read of f, which must be identity id. The
+// change time (FILE_BASIC_INFO.ChangeTime) plays the part of the ctime.
+func readStableFile(f *os.File, id Identity, name string) ([]byte, Stamp, error) {
+	stat := func() (Stamp, error) {
+		fi, err := f.Stat()
+		if err != nil {
+			return Stamp{}, err
+		}
+		if !fi.Mode().IsRegular() {
+			return Stamp{}, &fs.PathError{Op: "read", Path: name, Err: ErrNotRegular}
+		}
+		var bi fileBasicInfo
+		if err := windows.GetFileInformationByHandleEx(windows.Handle(f.Fd()), windows.FileBasicInfo, (*byte)(unsafe.Pointer(&bi)), uint32(unsafe.Sizeof(bi))); err != nil {
+			return Stamp{}, &fs.PathError{Op: "GetFileInformationByHandleEx", Path: name, Err: err}
+		}
+		return Stamp{ID: Identity{fi: fi}, Size: fi.Size(), Mtime: filetimeNano(bi.LastWriteTime), Ctime: filetimeNano(bi.ChangeTime)}, nil
+	}
+	return readStable(id, f.Read, stat, name)
+}

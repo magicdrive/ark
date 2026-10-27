@@ -24,6 +24,7 @@ type ChainFile struct {
 	NotRegular bool     // a directory, device, pipe or socket: not read
 	Data       []byte   // the contents of a regular file
 	ID         Identity // the regular file read
+	Stamp      Stamp    // of the read (a stable read: stable.go)
 	Err        error    // it could not be examined or read
 }
 
@@ -42,7 +43,8 @@ type ChainFile struct {
 // The file must be listed under exactly name: one present only in another
 // spelling of it (case-insensitive file systems) is absent.
 //
-// A file replaced while it is opened is ErrChanged: the chain is not
+// Files are read in stable reads (stable.go): a file replaced while it is
+// opened, or changed while it is read, is ErrChanged: the chain is not
 // returned.
 func (t *Tree) ReadChain(rel, name string, read func(dir string) bool) ([]ChainDir, error) {
 	return t.readChain(rel, name, read, true)
@@ -149,7 +151,7 @@ func (t *Tree) chainFile(dir handle, d *ChainDir, name string, read func(string)
 		d.File.NotRegular = true
 		return nil
 	}
-	b, oi, err := dir.readFile(name, info.id)
+	b, st, err := dir.readFileStable(name, info.id)
 	if err != nil {
 		if errors.Is(err, ErrChanged) || errors.Is(err, ErrNotRegular) || errors.Is(err, fs.ErrNotExist) {
 			return &fs.PathError{Op: "read", Path: name, Err: ErrChanged}
@@ -157,7 +159,7 @@ func (t *Tree) chainFile(dir handle, d *ChainDir, name string, read func(string)
 		d.File.Err = err
 		return nil
 	}
-	d.File.Data, d.File.ID = b, oi.id
+	d.File.Data, d.File.ID, d.File.Stamp = b, st.ID, st
 	return nil
 }
 

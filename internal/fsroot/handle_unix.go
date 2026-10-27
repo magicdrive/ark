@@ -3,6 +3,7 @@
 package fsroot
 
 import (
+	"io"
 	"io/fs"
 	"os"
 	"sort"
@@ -268,4 +269,59 @@ func fileIdentity(f *os.File, _ fs.FileInfo) (Identity, error) {
 
 func openNoBlock(path string) (*os.File, error) {
 	return os.OpenFile(path, os.O_RDONLY|unix.O_NONBLOCK, 0)
+}
+
+// readFileStable opens name as openFile does and reads it in a stable read
+// (stable.go) on the descriptor itself.
+func (d *unixDir) readFileStable(name string, want Identity) ([]byte, Stamp, error) {
+	fd, info, err := d.openFD(name, want)
+	if err != nil {
+		return nil, Stamp{}, err
+	}
+	defer unix.Close(fd)
+	return readStableFD(fd, info.id, name)
+}
+
+// readStableFile is a stable read of f, which must be identity id.
+func readStableFile(f *os.File, id Identity, name string) ([]byte, Stamp, error) {
+	rc, err := f.SyscallConn()
+	if err != nil {
+		return nil, Stamp{}, err
+	}
+	var b []byte
+	var st Stamp
+	var rerr error
+	if err := rc.Control(func(fd uintptr) { b, st, rerr = readStableFD(int(fd), id, name) }); err != nil {
+		return nil, Stamp{}, err
+	}
+	return b, st, rerr
+}
+
+func readStableFD(fd int, id Identity, name string) ([]byte, Stamp, error) {
+	read := func(p []byte) (int, error) {
+		for {
+			n, err := unix.Read(fd, p)
+			if err == unix.EINTR {
+				continue
+			}
+			if err != nil {
+				return 0, err
+			}
+			if n == 0 {
+				return 0, io.EOF
+			}
+			return n, nil
+		}
+	}
+	stat := func() (Stamp, error) {
+		var st unix.Stat_t
+		if err := unix.Fstat(fd, &st); err != nil {
+			return Stamp{}, &fs.PathError{Op: "fstat", Path: name, Err: err}
+		}
+		if st.Mode&unix.S_IFMT != unix.S_IFREG {
+			return Stamp{}, &fs.PathError{Op: "read", Path: name, Err: ErrNotRegular}
+		}
+		return Stamp{ID: statIdentity(&st), Size: st.Size, Mtime: st.Mtim.Nano(), Ctime: st.Ctim.Nano()}, nil
+	}
+	return readStable(id, read, stat, name)
 }

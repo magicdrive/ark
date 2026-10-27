@@ -22,3 +22,7 @@ func pathIdentity(path string) (Identity, error) { return Identity{}, errUnsuppo
 func fileIdentity(*os.File, fs.FileInfo) (Identity, error) { return Identity{}, errUnsupported }
 
 func openNoBlock(path string) (*os.File, error) { return nil, errUnsupported }
+
+func readStableFile(*os.File, Identity, string) ([]byte, Stamp, error) {
+	return nil, Stamp{}, errUnsupported
+}

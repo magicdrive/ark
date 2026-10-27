@@ -1,7 +1,6 @@
 package accesspolicy
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -23,7 +22,8 @@ import (
 // whole repository's rules do. BuildScoped returns a snapshot that captures
 // those on demand, through the snapshot's tree: each directory's rule file
 // is read from the directory's own handle in one walk from the root
-// (fsroot.ReadChain), read a second time to rule out a rewrite in progress,
+// (fsroot.ReadChain), read a second time (stable reads, the second settled,
+// as Build reads them) to rule out a rewrite in progress,
 // and kept with the directory's identity for the rest of the snapshot's
 // life — later decisions reuse it, and a resolution that passed another
 // object at that path is refused (ErrDirectoryChanged), as with Build.
@@ -137,6 +137,7 @@ func (s *Snapshot) capture(rel string) error {
 	// same bytes, or a rewrite was in progress. Files read through the
 	// chain are read again through a second chain walk (no resolution);
 	// symlinked ones through their resolution.
+	settle(stampsOf(fresh))
 	hook("verify", rel)
 	if err := s.verifyChain(rel, chain, fresh); err != nil {
 		return err
@@ -205,7 +206,7 @@ func (s *Snapshot) verifyChain(rel string, chain []fsroot.ChainDir, fresh []capt
 		}
 		first := byDir[d.Rel]
 		if !d.ID.Same(first.ID) || d.File.Link || d.File.Err != nil || !d.File.Present ||
-			!d.File.ID.Same(first.File.ID) || !bytes.Equal(d.File.Data, first.File.Data) {
+			!d.File.ID.Same(first.File.ID) || !confirms(d.File.Stamp, d.File.Data, first.File.Stamp, first.File.Data) {
 			return errRetry
 		}
 		seen++
@@ -246,14 +247,14 @@ func (s *Snapshot) scopedCapture(d fsroot.ChainDir) (*capture, error) {
 			if links := r.Links(); len(links) == 0 || links[0] != rel {
 				return nil, errRetry
 			}
-			b, err := readResolved(s.tree, r)
+			b, st, err := s.tree.ReadResolvedStable(r)
 			if err != nil {
 				return nil, errRetry
 			}
-			c.file.Data, c.id = b, r.Identity()
+			c.file.Data, c.id, c.stamp = b, r.Identity(), st
 		}
 	default:
-		c.file.Data, c.id = f.Data, f.ID
+		c.file.Data, c.id, c.stamp = f.Data, f.ID, f.Stamp
 	}
 	return c, nil
 }
@@ -510,10 +511,13 @@ func (s *Snapshot) captureListed(read, reread func() (fsroot.ChainDir, error)) e
 		if err != nil {
 			return err
 		}
+		if c != nil && c.file.Err == nil {
+			settle([]fsroot.Stamp{c.stamp})
+		}
 		hook("verify", d.Rel)
 		if c != nil && c.file.Err == nil && !d.File.Link {
 			again, err := reread()
-			if err != nil || !again.File.Present || again.File.Link || !again.ID.Same(d.ID) || !again.File.ID.Same(d.File.ID) || !bytes.Equal(again.File.Data, d.File.Data) {
+			if err != nil || !again.File.Present || again.File.Link || !again.ID.Same(d.ID) || !again.File.ID.Same(d.File.ID) || !confirms(again.File.Stamp, again.File.Data, d.File.Stamp, d.File.Data) {
 				last = errRetry
 				continue
 			}
@@ -544,4 +548,15 @@ func (s *Snapshot) captureListed(read, reread func() (fsroot.ChainDir, error)) e
 		return nil
 	}
 	return fmt.Errorf("%w (%d attempts): %v", ErrRuleChanged, maxAttempts, last)
+}
+
+// stampsOf returns the stamps of the captured rule files read.
+func stampsOf(caps []capture) []fsroot.Stamp {
+	out := make([]fsroot.Stamp, 0, len(caps))
+	for _, c := range caps {
+		if c.file.Err == nil {
+			out = append(out, c.stamp)
+		}
+	}
+	return out
 }
