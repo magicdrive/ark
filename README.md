@@ -14,8 +14,8 @@ code it needs to read before editing — and get an answer that states how
 certain it is.
 
 Ark is a single static binary. It analyzes Go, TypeScript, TSX, PHP,
-Terraform, Rust, Java, JavaScript and Python without running any code from
-the repository.
+Terraform, Rust, Java, Zig, JavaScript and Python without running any code
+from the repository.
 
 ## Why Ark
 
@@ -250,6 +250,7 @@ highest stage Ark's tests cover:
 | HTML | graph | Ids and their references (IDREF attributes, fragments) within a document as the browser builds it, links to documents, stylesheets and scripts by relative path, the declarations of inline styles and scripts, and links to images, fonts and media; no absolute URLs |
 | CSS | graph | `@keyframes`, `@font-face`, `@property`, custom properties and CSS Modules classes with their references within a stylesheet, `@import` by relative path, CSS Modules classes JavaScript and TypeScript imports use, `url()` of images and fonts; no selector matching |
 | Python | graph | Scopes (LEGB), imports and relative imports, package re-exports, `self` / `cls` / `super()`, inheritance; no type inference for locals, star imports or dynamic attributes |
+| Zig | graph | Lexical scopes, relative `@import`, containers and `@This()`, re-exports, generic type factories, receivers of declared types and declared result types, named modules build.zig maps literally (strong); no comptime evaluation, `std` or dependency modules |
 | JavaScript | references | Declarations, class members, ES modules and CommonJS (TypeScript's extractor), scope-aware; not certified for graph or context quality |
 
 Graph tools answer for every language, but results above a language's

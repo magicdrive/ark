@@ -1,6 +1,6 @@
 # Language support
 
-Ark analyzes eleven languages. They are not supported equally: each language
+Ark analyzes twelve languages. They are not supported equally: each language
 has a **support level**, the highest stage its tests certify, and every
 language has constructs Ark deliberately leaves unresolved.
 
@@ -32,11 +32,12 @@ Levels build on each other:
 | HTML | `.html`, `.htm` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Zig | `.zig` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript, and `get_context` still works for PHP, Terraform,
-Rust, HTML, CSS and Python, but those results are not covered by the tests the level names.
+Rust, HTML, CSS, Python and Zig, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -743,6 +744,68 @@ outside the repository; inside a body, that body states no references.
 Files named `Test*.java`, `*Test.java`, `*Tests.java`, `*TestCase.java` and
 those under a `test/` or `tests/` directory are test files. Ark never runs
 `javac`, Maven or Gradle and reads no build file.
+
+## Zig
+
+Zig 0.15 to 0.17 (the current release, 0.17.0), as the grammar
+[tree-sitter-zig](https://github.com/tree-sitter-grammars/tree-sitter-zig)
+parses it (its corpus follows Zig 0.15). Older code parses too, but
+constructs Zig has removed are read conservatively: a container with
+`usingnamespace` (removed in 0.15) may bring any name, so names it could
+bring stay unresolved.
+
+**Extracted:** each file itself (a Zig file is a struct; kind `module`),
+functions (`fn`, `pub`, `export`, `extern`, `inline`), methods (functions of
+a container), `const` and `var` declarations, `struct`, `union`, `enum`,
+`opaque` and error sets (`error{...}`) with their fields, enum fields and
+error names, containers declared in function bodies (a generic type
+factory's returned struct), `test` declarations (`test "name"`, `test decl`).
+A constant whose value is a type by its syntax (`*const T`, `?T`, `E || F`,
+`@This()`) or a container of the file is a `type_alias`; an `@import` a
+`module`. Function parameters, locals and captures are analyzed for scoping,
+not extracted. References: calls, `T{...}` constructions, type uses, value
+references to declarations, imports (`@import`), decl and enum literals
+where a declared type fixes their result type (`const e: Engine = .init();`,
+`.red`), `@This()` as a use of its container, and calls of computed callees
+(`handlers[i]()`, reported as dynamic).
+
+**Identity.** A declaration's qualified name is its file's
+repository-relative path followed by the containers down to it:
+`src/engine.zig::Engine::run`. A struct or union field is
+`src/engine.zig::Engine.count` (no member access names a field); a
+declaration in a function body is `f::name`; the one container a function
+returns (`fn List(comptime T: type) type { return struct {...}; }`) is
+`src/list.zig::List::()`, and an unnamed container elsewhere is
+`...::{struct}`. The file itself is `src/engine.zig`, which a relative
+`@import` of it names. Get a declaration by its Zig path: `Engine.run`.
+
+**Resolution:** only what Zig's own rules and the files' declarations fix
+resolves — `exact` when one declaration has the identity:
+
+| | |
+|---|---|
+| **Supported** | names by lexical scope (a block's locals before their declaration, parameters, captures, the declarations of the enclosing containers, innermost first, through the function bodies a container is declared in); members of a container of the file, of a file a relative `@import` names (`@import("../x.zig")` from its directory), and of a constant naming either — an import, `@This()`, a path, a re-export of another file (`pub const Vec = @import("vec.zig").Vec;`) — through any chain of files; generic type factories (`List(u32).append`, `var l: List(u8)`, also of another file) whose one return is a container; method calls on a receiver whose type the file proves: a declared type (`v: T`, `*T`, `*const T`, a parameter `self: *Self`), a construction (`T{...}`), a call of a function whose written result type is a container (`T.init()` returning `Self`, through `try` / `catch` for an error union — also of another file), a field of a struct of the file; decl and enum literals of a declared type; named modules (`@import("stdx")`) that a `build.zig` maps literally — `b.addModule("name", .{ .root_source_file = b.path("...") })`, `addImport("name", m)` with `m` a module a constant of the scope creates, `.imports = &.{ .{ .name, .module } }` — at **strong** at most |
+| **Candidate** | a namespace a comptime condition chooses (`pub const Impl = if (builtin.os.tag == .windows) win.Impl else posix.Impl;`, `switch` the same way): a member through it is either alternative; a name declared twice in one scope; a module name two build.zig files map to different files |
+| **Unresolved by design** | `std`, `builtin`, `root` and anything through them (the compiler provides them); a named module build.zig maps at build time (a computed name or path, a dependency's `b.dependency(...).module(...)`, a module passed through a struct field); a ZON import (`@import("build.zig.zon")`); method calls on a value whose type needs inference (an `anytype` or `comptime T: type` parameter, a capture, an optional, slice or array, a call of a function stating no container result type); a member another file's type may hold as a field holding a function (the call is observed, unresolved); a name a `usingnamespace` of a nearer container may bring; `@field`, `@call` targets and other computed names; a file a relative import names that does not exist (or differs only in case) |
+| **Not implemented** | comptime evaluation (which branch a target compiles, `inline` loops, type construction with `@Type` / `@Struct`), reading build.zig beyond literal module declarations (options, dependencies, `build.zig.zon`), field accesses as references, the types of a container's fields declared in another file (`x.field.method()` through a field of another file's struct), struct-field aliases (`.{ .x = ... }` initializer names) |
+
+**Measured on real projects.** On TigerBeetle and Ghostty (pinned commits;
+see [the evaluation record](development/zig.md)), every graph edge of a
+random sample checked by hand pointed at the declaration the reference
+names; no false `exact` or `strong` edge was found in the sample. This is a
+sample, not a proof.
+
+A file the parser rejects (inline assembly clobbers written as a struct
+literal, `*if (c) A else B` as a type) is reported by `get_diagnostics`;
+its rejected region is not analyzed.
+
+Tests written inline (`test "..." { ... }`) are ordinary declarations of
+their file; files named `*_test.zig`, `test.zig` or `tests.zig` and files
+under a `test/` or `tests/` directory are test files.
+
+Ark never runs `zig`, `zig build`, `build.zig` or any build step, and never
+reads `build.zig.zon`. A `zig-cache/` or `.zig-cache/` directory is skipped
+only as `.gitignore` excludes it (a dot directory always is).
 
 ## Known gaps
 

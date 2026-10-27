@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; the language's own search (`ReferenceDraft.Lookup` / `ReceiverLookup`, `ArgumentCount` / `ArgumentTypes`; `SymbolDraft.Parameters` / `ImplicitMembers` / `Overrides`; `Extraction.SourceRoot`); `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `TentativeIdentity`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases` (`AliasDraft.Members` / `ConfidenceCap`), `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; the language's own search (`ReferenceDraft.Lookup` / `ReceiverLookup`, `ArgumentCount` / `ArgumentTypes`; `SymbolDraft.Parameters` / `ImplicitMembers` / `Overrides`; `Extraction.SourceRoot`); `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -280,6 +280,48 @@ repository", "the subclass's `m(int)` hides the base's `m(String)`" — an
 inherited overload, a same-package class of another file, an on-demand
 import, an inherited member type or a library supertype decides what a Java
 name is.
+
+**Files are containers, imports are paths** (Zig). A Zig file is a struct
+whose declarations are its members, and `@import("x.zig")` is the file
+the path names from the importing file's directory — so, as for Rust, the
+provider derives every identity from the file's own path and reads no
+other file: `src/engine.zig::Engine::run`; the file itself is a
+declaration (`src/engine.zig`, the target of its imports); a function's one
+returned container is `F::()`. Every file is `IdentityOnly`. A name
+resolves by lexical scope — locals, parameters and captures (not
+observed), then the enclosing containers' declarations through the function
+bodies they are declared in; a `usingnamespace` in a nearer container
+leaves a name unresolved. A member resolves where the file proves where it
+is declared: a container of the file, a file a relative import names, or a
+receiver whose declared type the file states (`v: *T`, `T{...}`, a call of
+a function of the file whose written result type it resolves). Three
+generic extensions carry what Zig adds, and none names a language:
+`AliasDraft.Members` (a constant whose value is a namespace — an import,
+`@This()`, a path, a call of a type factory — is a declaration of its own:
+a reference to it resolves to it, a member path through it reaches the
+target's member; a comptime choice between namespaces states one alias per
+alternative, so a member through it is a Candidate), `AliasDraft.ConfidenceCap`
+(build.zig's literal `addModule` / `addImport` / `.imports` map a named
+module to its root file, `{module}name`, capped at Strong: a dependency's
+module of the name may be the one imported; build.zig is read, never run)
+and `ReferenceDraft.TentativeIdentity` (another file states the type of a
+value — a function's written result type, `F::()` — and the member may be
+a field holding a function: no declaration with the identity leaves a call
+Unresolved, neither outside nor excluded from same-named declarations'
+completeness; a non-call member is `Speculative`). Nothing is evaluated at
+comptime: every branch of a condition is analyzed, none chosen.
+Authority: `languages/zig/provider.go` (header), `languages/zig/buildzig.go`,
+`resolver/identity.go` (`ExpandAliases`, `noQualifiedDeclaration`).
+Tests: `TestNegative_*`, `TestShadowing`, `TestReceivers_*`,
+`TestConditionalCompilation_IsCandidate`, `TestGenerics_ContainerFactories`,
+`TestNamedModules_FromBuildZig`, `TestCompleteness_UnprovenCallsStayAttributable`,
+`TestAlias_MembersReadOnlyBelowTheDeclaration`, `TestAlias_CapBoundsWhatFollowsIt`,
+`TestTentativeIdentity_MissIsUnresolvedNotOutside`,
+`TestCompleteness_TentativeIdentityIsSameNameAttributed`, `TestGraph_Fixture`,
+`TestMCPZig_Graph`, `FuzzExtractZig`.
+Danger: "the only `run` in the repository", "a named module is the file of
+its name" or "the branch for this target" — a value of an unproven type, a
+module the build maps, or a comptime condition decides what a Zig name is.
 
 ## 2. Confidence
 

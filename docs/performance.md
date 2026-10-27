@@ -100,6 +100,29 @@ file, qualified name and kind (77 MB, in proportion to the symbols) and the
 resolutions kept by target (37 MB); the Python provider's own module
 candidates are a few percent of what is allocated.
 
+### Zig
+
+Zig support was measured separately on the `feat/zig-graph` working tree,
+on the same machine and script, three runs each, median with [min–max].
+Each repository is a shallow clone of the pinned commit of the
+[evaluation record](development/zig.md) (a fresh copy, since the script
+writes the cache into it); files indexed include every language the
+repository holds (TigerBeetle's client libraries in Go, Java, Python and
+others).
+
+| Repository (commit) | Files indexed | Zig files | Cold | Warm | Restore | Peak RSS |
+|---|---:|---:|---:|---:|---:|---:|
+| [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) `0450c32` | 368 | 248 | 2,274 [2,253–2,298] | 49 [46–59] | 1,113 [1,105–1,116] | 716 MB |
+| [Ghostty](https://github.com/ghostty-org/ghostty) `83fb956` | 832 | 814 | 6,405 [5,944–6,415] | 142 [139–143] | 2,639 [2,624–2,658] | 1,056 MB |
+
+Their Zig sources are large — 6.4 MB and 13.7 MB, files up to 570 and
+730 KB — and densely cross-referenced: 87,000 and 233,000 references, of
+which 41,000 and 90,000 become graph edges. A heap profile of the
+TigerBeetle build attributes the allocations to the index's work per
+reference (resolution, edges, completeness, reference identities) in
+proportion to their number; the Zig provider's own share is the reference
+drafts it emits (about a tenth).
+
 ### Reading the results
 
 - **File count is a poor predictor.** Cost depends on the amount of source
