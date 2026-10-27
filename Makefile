@@ -135,9 +135,12 @@ ACTIONLINT_VERSION = v1.7.12
 fmt:
 	@git ls-files '*.go' | grep -v '/testdata/' | xargs gofmt -w
 
+# (git and gofmt are checked: either one failing prints nothing, which must
+# not read as "formatted"; xargs exits non-zero when gofmt does)
 .PHONY: fmt-check
 fmt-check:
-	@files=$$(git ls-files '*.go' | grep -v '/testdata/' | xargs gofmt -l); \
+	@list=$$(git ls-files '*.go') || exit 1; \
+	files=$$(printf '%s\n' "$$list" | grep -v '/testdata/' | xargs gofmt -l) || { echo "fmt-check: gofmt failed"; exit 1; }; \
 	if [ -n "$$files" ]; then echo "gofmt found unformatted files:"; echo "$$files"; exit 1; fi
 
 # Known vulnerabilities in the code paths Ark uses (Go modules and stdlib)
