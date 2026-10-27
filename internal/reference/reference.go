@@ -78,6 +78,9 @@ type Reference struct {
 	// IdentityInRepository qualifies the qualified identities (see
 	// language.ReferenceDraft.IdentityInRepository).
 	IdentityInRepository bool
+	// TentativeIdentity: NameQualified names the target only if a
+	// declaration carries it (language.ReferenceDraft.TentativeIdentity).
+	TentativeIdentity bool
 	// FileIdentity: NameQualified is a repository file's path, naming the
 	// declaration of that file itself in any language
 	// (language.ReferenceDraft.FileIdentity).

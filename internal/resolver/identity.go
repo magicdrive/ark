@@ -2,6 +2,7 @@ package resolver
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -54,11 +55,26 @@ func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 	r.qualOnce.Do(func() {
 		r.qualified = make(map[langQualified][]symbol.Symbol)
 		r.aliases = make(map[langQualified][]string)
+		r.memberAliases = make(map[langQualified][]string)
+		r.aliasCaps = make(map[langQualified]Confidence)
 		for _, fi := range r.files {
 			for _, a := range fi.Aliases {
 				if a.Qualified != "" && a.Target != "" {
 					k := langQualified{fi.Language, a.Qualified}
-					r.aliases[k] = append(r.aliases[k], a.Target)
+					if a.ConfidenceCap != "" {
+						limit := ConfidenceCandidate // unknown caps fail safe
+						if a.ConfidenceCap == ConfidenceStrong.String() {
+							limit = ConfidenceStrong
+						}
+						if prev, ok := r.aliasCaps[k]; !ok || limit < prev {
+							r.aliasCaps[k] = limit
+						}
+					}
+					if a.Members {
+						r.memberAliases[k] = append(r.memberAliases[k], a.Target)
+					} else {
+						r.aliases[k] = append(r.aliases[k], a.Target)
+					}
 				}
 			}
 			for _, s := range fi.Symbols {
@@ -72,9 +88,11 @@ func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 		for _, syms := range r.qualified {
 			sortSymbols(syms)
 		}
-		for k, targets := range r.aliases {
-			sort.Strings(targets)
-			r.aliases[k] = targets
+		for _, m := range []map[langQualified][]string{r.aliases, r.memberAliases} {
+			for k, targets := range m {
+				sort.Strings(targets)
+				m[k] = targets
+			}
 		}
 	})
 	return r.qualified[langQualified{language, qualified}]
@@ -90,11 +108,15 @@ const MaxAliasDepth = 8
 // module: `pub use a::b as m;` then m::x) — all of them, so an identity two
 // readings give (#[cfg] alternatives: an item in one configuration, an alias
 // in the other) names both, as does a path two of whose leading parts are
-// aliases. via lists the aliases followed. Each identity is expanded once,
-// by its shortest chain, so a cycle ends and shared aliases cost nothing
-// more; a chain longer than MaxAliasDepth is not followed. Both R0 and the index's
-// lookup of a re-exported name (index.SymbolsThroughAliases) use it.
-func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases func(string) []string) (out []symbol.Symbol, via []string) {
+// aliases. aliases(q, below) returns the targets of q's aliases: below is
+// false for the identity being read itself, true for a leading part of its
+// path, which an alias stated for the members below its identity only
+// (language.AliasDraft.Members) also reads. via lists the aliases followed.
+// Each identity is expanded once, by its shortest chain, so a cycle ends and
+// shared aliases cost nothing more; a chain longer than MaxAliasDepth is not
+// followed. Both R0 and the index's lookup of a re-exported name
+// (index.SymbolsThroughAliases) use it.
+func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases func(q string, below bool) []string) (out []symbol.Symbol, via []string) {
 	// Breadth first: an identity is first reached by its shortest chain, so
 	// marking it seen never cuts a shorter path the depth bound would allow.
 	type step struct {
@@ -113,7 +135,7 @@ func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases
 		st := queue[0]
 		queue = queue[1:]
 		out = append(out, decls(st.q)...)
-		for _, target := range aliases(st.q) {
+		for _, target := range aliases(st.q, false) {
 			via = append(via, st.q)
 			visit(target, st.depth+1)
 		}
@@ -123,7 +145,7 @@ func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases
 		for i := len(parts) - 1; i >= 1; i-- {
 			prefix := strings.Join(parts[:i], "::")
 			rest := strings.Join(parts[i:], "::")
-			for _, target := range aliases(prefix) {
+			for _, target := range aliases(prefix, true) {
 				via = append(via, prefix)
 				visit(target+"::"+rest, st.depth+1)
 			}
@@ -137,8 +159,28 @@ func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases
 func (r *Resolver) identityDecls(language, qualified string) (decls []symbol.Symbol, via []string) {
 	d, via := ExpandAliases(qualified,
 		func(q string) []symbol.Symbol { return r.typeDecls(language, q) },
-		func(q string) []string { return r.aliases[langQualified{language, q}] })
+		func(q string, below bool) []string {
+			k := langQualified{language, q}
+			if below {
+				return aliasTargets(r.aliases[k], r.memberAliases[k])
+			}
+			return r.aliases[k]
+		})
 	return uniqueSymbols(d), via
+}
+
+// aliasTargets returns an identity's alias targets, those of the aliases
+// that read it and those that read only the members below it, sorted.
+func aliasTargets(own, members []string) []string {
+	if len(members) == 0 {
+		return own
+	}
+	if len(own) == 0 {
+		return members
+	}
+	out := append(slices.Clone(own), members...)
+	sort.Strings(out)
+	return slices.Compact(out)
 }
 
 // uniqueSymbols drops repeated symbols, keeping the order.
@@ -210,19 +252,32 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		where = fmt.Sprintf("declared %d times", len(types))
 	}
 	// pickBest downgrades several declarations to Candidate.
-	return r.pickBest(res, types, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is "+where)
+	res = r.pickBest(res, types, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is "+where)
+	// An alias followed on the way may rest on weaker evidence than the
+	// language's rules (AliasDraft.ConfidenceCap): it bounds the result.
+	for _, q := range via {
+		if limit, ok := r.aliasCaps[langQualified{ref.Language, q}]; ok {
+			res = capConfidence(res, limit, ResolutionEvidence{
+				Kind:   EvidenceConfidenceCap,
+				Detail: fmt.Sprintf("the alias %s permits at most %s", q, limit),
+			})
+		}
+	}
+	return res
 }
 
 // noQualifiedDeclaration is the R0 answer when no declaration carries the
 // identity: outside the repository — unless the identity names a scope of
 // the repository itself (IdentityInRepository), where it is undeclared or
-// declared in syntax no provider extracts: Unresolved, and not external.
+// declared in syntax no provider extracts: Unresolved, and not external —
+// or names the target only if declared (TentativeIdentity): Unresolved,
+// with nothing known.
 func noQualifiedDeclaration(res Resolution, ref reference.Reference, detail string) Resolution {
 	res.Evidence = []ResolutionEvidence{{
 		Kind:   EvidenceQualifiedIdentity,
 		Detail: detail + " is not declared in the repository",
 	}}
-	res.OutsideRepository = !ref.IdentityInRepository
+	res.OutsideRepository = !ref.IdentityInRepository && !ref.TentativeIdentity
 	return res
 }
 

@@ -287,3 +287,23 @@ func TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed(t *testing.T
 		t.Errorf("same-name rule changed: incoming %d", in)
 	}
 }
+
+// An unresolved reference whose identity names its target only if declared
+// (TentativeIdentity) rules nothing out: it is same-name attributed, so a
+// same-named declaration never reads as completely known.
+func TestCompleteness_TentativeIdentityIsSameNameAttributed(t *testing.T) {
+	byName := map[string][]symbol.Symbol{
+		"run": {complSym("src/a.zig::Engine::run", "run", "Engine", "zig")},
+	}
+	c := index.NewCompleteness(byName)
+	ref := complRef("run", "e", "zig", reference.KindCall)
+	ref.NameQualified = "src/b.zig::make::()::run"
+	ref.TentativeIdentity = true
+	c.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "src/main.zig::main", true)
+	if in := c.Incoming("src/a.zig::Engine::run"); in != 1 {
+		t.Errorf("a same-named method got unattributed %d, want 1", in)
+	}
+	if out := c.Outgoing("src/main.zig::main"); out != 1 {
+		t.Errorf("outgoing unattributed %d, want 1", out)
+	}
+}

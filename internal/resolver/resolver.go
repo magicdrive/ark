@@ -95,6 +95,12 @@ type Resolver struct {
 	// aliases maps (language, qualified) to the identities the aliases of
 	// that identity name (language.AliasDraft); built with qualified.
 	aliases map[langQualified][]string
+	// memberAliases are the aliases that read only the members below their
+	// identity (language.AliasDraft.Members).
+	memberAliases map[langQualified][]string
+	// aliasCaps bound the resolutions that follow an alias of the identity
+	// (language.AliasDraft.ConfidenceCap): the lowest its aliases state.
+	aliasCaps map[langQualified]Confidence
 
 	// Lookup indexes for the name-based stages (see lookup.go). They return
 	// exactly the symbols the corresponding full scans would, in a fixed order,

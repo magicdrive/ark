@@ -263,6 +263,18 @@ type ReferenceDraft struct {
 	// type cannot change, used where its one declaration is in scope).
 	ReceiverChain string `json:",omitempty"`
 
+	// TentativeIdentity qualifies NameQualified: the identity names the
+	// target only if a declaration carries it. The provider reads the
+	// receiver's type from what another file states (the result type a
+	// function declares, a member of it) and cannot tell whether Name is a
+	// declaration of that type or something no declaration is (a field
+	// holding a function): no declaration with the identity leaves the
+	// reference Unresolved — neither outside the repository nor excluded
+	// from any same-named declaration's completeness (IdentityInRepository
+	// claims both, and is not set with it). Such a reference is a member: it
+	// carries its ReceiverExpr, which the identity decides before (R0).
+	TentativeIdentity bool `json:",omitempty"`
+
 	// Speculative marks a reference the provider records only in case Name
 	// denotes a declaration Ark extracts: a selector x.f whose receiver has
 	// type evidence, where f may equally be a member no provider extracts
@@ -380,6 +392,21 @@ type AliasDraft struct {
 	Qualified string
 	Target    string
 	Location  source.Location
+
+	// Members states that Qualified is itself a declaration — a constant
+	// whose value is what Target names (Zig `pub const Vec = vec.Vec;`) —
+	// so the alias reads only the identities below it: Qualified::x names
+	// Target::x, while Qualified itself names its own declaration and never
+	// Target's. Without it the alias reads Qualified too.
+	Members bool `json:",omitempty"`
+
+	// ConfidenceCap bounds every resolution that follows the alias: ""
+	// (no bound), "strong" or "candidate" (ReferenceDraft.ConfidenceCap's
+	// values and rules). A provider sets it when the alias rests on weaker
+	// evidence than the language's own rules — a module name a build script
+	// maps statically, which a dependency's module of the name may stand
+	// for instead (Zig build.zig). It only lowers.
+	ConfidenceCap string `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.
