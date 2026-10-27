@@ -192,6 +192,27 @@ The MCP server never returns anything from a file the repository's
   change alters is rebuilt. Cache entries written before a file was
   excluded stay on disk (and are never served); delete `<root>/.ark/index`
   to remove them.
+- **Rule files rewritten while read.** A request never decides by a rule
+  file read half-written. Each rule file is read whole between two `fstat`
+  calls, twice; both readings must find the same file (device and inode),
+  size, modification time, change time (`ctime`) and bytes, the bytes read
+  must be the size `fstat` reports, and the second reading must be
+  *settled*: the file's change time more than the timestamp granularity
+  (100ms; 2.1s on file systems with whole-second times) away from the
+  reading itself, so that a change during it would have changed the
+  `ctime` it saw — the change time cannot be restored, so a rewrite of the
+  same size with the modification time put back (`touch -r`, `os.Chtimes`)
+  is still seen. A rule file changed less than that before the request
+  delays the request until it is (about 100ms, once); a rule file that
+  keeps changing refuses the request with `ignore rules changed while being
+  read` rather than deciding by a mix of versions. Not detected, as no
+  reader can detect it alone: a single `write` call still copying bytes in
+  place, at the same size, through both readings; writes through a shared
+  memory mapping; a system clock set back during the reading; network file
+  systems whose clock is not this machine's. Tools that rewrite rule files
+  should replace them atomically — write a temporary file in the same
+  directory and rename it over the rule file — which every reading sees as
+  one version or the other.
 - **Symlinked root.** A server root (or dump target) given through a
   symlink behaves as the directory it leads to: the same rules, files and
   answers ([Symlink policy](#symlink-policy)).

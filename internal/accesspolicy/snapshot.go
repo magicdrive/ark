@@ -5,9 +5,15 @@
 // Build walks the pinned tree (fsroot), captures the bytes of every
 // .arkignore and .gitignore it finds, together with the identity of every
 // directory it walks, and reads every rule file a second time when the walk
-// is done: the bytes and the object must be the same, or the build starts
-// over (a rule file being rewritten is never taken half-written; after a few
-// attempts it fails with ErrRuleChanged). The rules are then compiled from
+// is done: the object, its size and times (fsroot.Stamp) and the bytes must
+// be the same, or the build starts over (a rule file being rewritten is
+// never taken half-written; after a few attempts it fails with
+// ErrRuleChanged). Each reading is a stable read (fsroot.Stamp: fstat
+// before and after, exactly the size read), and the second must be settled
+// — the file's last change far enough from the reading that a change during
+// it would have changed its ctime; a file changed just before waits that
+// long first (settle). What a stable read cannot detect, and why writers
+// should replace rule files by rename, is stated with fsroot.Stamp. The rules are then compiled from
 // the captured bytes by libgitignore — the same compiler, matcher and
 // fingerprint as before — and never read again: changes after Build do not
 // affect the snapshot; the next snapshot sees them.
@@ -33,13 +39,13 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/magicdrive/ark/internal/fsroot"
 	"github.com/magicdrive/ark/internal/libgitignore"
@@ -129,6 +135,9 @@ type capture struct {
 	dir  string // root-relative directory
 	file libgitignore.CapturedFile
 	id   fsroot.Identity
+	// stamp of the stable read that captured the file (fsroot.Stamp): the
+	// second reading must find the same, settled.
+	stamp fsroot.Stamp
 }
 
 func isRuleName(name string) bool { return name == ".arkignore" || name == ".gitignore" }
@@ -198,6 +207,13 @@ func build(tree *fsroot.Tree, opts Options) (*Snapshot, error) {
 		return nil, err
 	}
 	if walkErr == nil {
+		stamps := make([]fsroot.Stamp, 0, len(caps))
+		for _, c := range caps {
+			if c.file.Err == nil {
+				stamps = append(stamps, c.stamp)
+			}
+		}
+		settle(stamps)
 		hook("verify", "")
 		for _, c := range caps {
 			if c.file.Err != nil {
@@ -255,13 +271,13 @@ func captureRule(tree *fsroot.Tree, e fsroot.Entry) (*capture, error) {
 			c.file.Err = fsroot.ErrNotRegular
 			return c, nil
 		}
-		b, err := readResolved(tree, r)
+		b, st, err := tree.ReadResolvedStable(r)
 		if err != nil {
 			return nil, errRetry
 		}
-		c.file.Data, c.id = b, r.Identity()
+		c.file.Data, c.id, c.stamp = b, r.Identity(), st
 	case e.Type().IsRegular():
-		b, id, err := e.ReadAll()
+		b, st, err := e.ReadStable()
 		if err != nil {
 			if errors.Is(err, fs.ErrNotExist) || errors.Is(err, fsroot.ErrNotRegular) || errors.Is(err, fsroot.ErrChanged) || isLoop(err) {
 				return nil, errRetry
@@ -269,7 +285,7 @@ func captureRule(tree *fsroot.Tree, e fsroot.Entry) (*capture, error) {
 			c.file.Err = err
 			return c, nil
 		}
-		c.file.Data, c.id = b, id
+		c.file.Data, c.id, c.stamp = b, st.ID, st
 	default:
 		// A FIFO, socket or device named like a rule file: never read.
 		c.file.Err = fsroot.ErrNotRegular
@@ -277,28 +293,51 @@ func captureRule(tree *fsroot.Tree, e fsroot.Entry) (*capture, error) {
 	return c, nil
 }
 
-// verifyRule reads a captured rule file again: the same object with the same
-// bytes, or the tree changed during the build.
+// verifyRule reads a captured rule file again (a stable read): the same
+// object, stamp and bytes, read settled — or the tree changed during the
+// build.
 func verifyRule(tree *fsroot.Tree, c capture) error {
-	b, err := tree.ReadFileChecked(c.rel, func(r fsroot.Resolved) error {
+	b, st, err := tree.ReadFileStable(c.rel, func(r fsroot.Resolved) error {
 		if !r.Identity().Same(c.id) {
 			return errRetry
 		}
 		return nil
 	})
-	if err != nil || !bytes.Equal(b, c.file.Data) {
+	if err != nil || !confirms(st, b, c.stamp, c.file.Data) {
 		return errRetry
 	}
 	return nil
 }
 
-func readResolved(tree *fsroot.Tree, r fsroot.Resolved) ([]byte, error) {
-	f, err := tree.Open(r)
-	if err != nil {
-		return nil, err
+// confirms reports whether a second stable reading (st, b) confirms the
+// first (first, data): the same object, size and times, the same bytes, and
+// the second read settled — a change during it would have changed the
+// ctime it saw (fsroot.Stamp.Settled). The bytes captured are then the
+// whole content of the file at one instant.
+func confirms(st fsroot.Stamp, b []byte, first fsroot.Stamp, data []byte) bool {
+	return st.Same(first) && st.Settled() && bytes.Equal(b, data)
+}
+
+// maxSettle bounds the wait for one build's rule files to settle.
+const maxSettle = 5 * time.Second
+
+// settle waits until a stable read of each file stamped, unchanged, would be
+// settled: until its last change is more than the timestamp granularity in
+// the past (fsroot.Stamp.SettleTime). Rule files rarely change: most builds
+// do not wait; one that reads a file just written waits about 100ms (on a
+// file system with whole-second times, about two seconds).
+func settle(stamps []fsroot.Stamp) {
+	var until time.Time
+	for _, st := range stamps {
+		if !st.Settled() {
+			if t := st.SettleTime(); t.After(until) {
+				until = t
+			}
+		}
 	}
-	defer f.Close()
-	return io.ReadAll(f)
+	if d := time.Until(until); d > 0 {
+		time.Sleep(min(d, maxSettle))
+	}
 }
 
 // isLoop reports a symlink where a regular file was listed (ELOOP).

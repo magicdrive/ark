@@ -118,6 +118,9 @@ type handle interface {
 	// readFile opens name as openFile does (the same checks) and returns
 	// its whole content.
 	readFile(name string, want Identity) ([]byte, objInfo, error)
+	// readFileStable opens name as openFile does (the same checks) and reads
+	// it in a stable read (stable.go).
+	readFileStable(name string, want Identity) ([]byte, Stamp, error)
 	readlink(name string) (string, error)
 	// readDir lists the directory, sorted by name. Types are hints: every
 	// open re-checks the object it finds. owned: no other goroutine reads
