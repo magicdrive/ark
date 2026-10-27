@@ -23,7 +23,9 @@ AI ツールは前提にしない。ここに書いたコマンドは、状態�
 | Go の major | （グループ名 `Go major dependencies`） | — | 毎月 1 日 |
 | GitHub Actions | `renovate/github-actions` | checkout・setup-go | digest に pin される |
 | Hephaestus | `renovate/hephaestus` | `magicdrive/hephaestus` action と Makefile の `HEPHAESTUS_VERSION` | 両者を 1 つの PR で上げる（`TestHephaestusVersionIsConsistent` が一致を確かめる） |
-| Makefile のツール | `renovate/development-tools` | govulncheck・actionlint・renovate（validator） | `customManagers` が `# renovate:` コメントの付いた版を追う。staticcheck は対象外（3.4） |
+| Makefile のツール | `renovate/development-tools` | govulncheck・actionlint | `customManagers` が `# renovate:` コメントの付いた版を追う。staticcheck は対象外（3.4） |
+| Renovate validator | `renovate/renovate-validator` | `.github/renovate-check` の renovate・Node.js（`.node-version`） | `make renovate-check` が使う Renovate。npm manager が `package.json` と `package-lock.json` を、nodenv manager が `.node-version` を上げる |
+| lockfile の更新 | `renovate/lock-file-maintenance` | `.github/renovate-check/package-lock.json` の推移的依存 | 毎週月曜。`.github/ts-oracle` は対象外 |
 | 脆弱性修正 | 例 `renovate/go-golang.org-x-net-vulnerability` | x/net（PR #65） | タイトル末尾が ` [SECURITY]`。スケジュールを待たない |
 
 - `minimumReleaseAge: 3 days`: 公開から 3 日経たない版は `renovate/stability-days` が **pending** のまま。
@@ -48,7 +50,7 @@ CI は ubuntu-latest、`GOTOOLCHAIN: local`、Go は `go.mod` の版。
 | typescript-compiler-differential | 固定版の TypeScript コンパイラとの差分 | `make ts-oracle` |
 | native-tests (1)〜(4) | macOS で `go test -race ./...` を race と同じ 4 分割（分割は macOS の `go list ./...` から計算。Windows では全体はまだ通らない） | macOS では `go test -race ./...`、1 シャードなら `python3 .github/ci/race-shard.py run 1 out.json` |
 | vulncheck | govulncheck | `make vulncheck` |
-| workflow-lint | actionlint・shellcheck・`renovate-config-validator --strict` | `make actionlint`、`make renovate-check` |
+| workflow-lint | actionlint・shellcheck・renovate-check の install の失敗注入テスト・`renovate-config-validator --strict` | `make actionlint`、`make renovate-check-test`、`make renovate-check` |
 | release-snapshot | Hephaestus action で全 8 ターゲットの snapshot を作り、`verify-dist.sh --snapshot` で検証 | `make snapshot` |
 | release-binaries | snapshot のバイナリを各 OS・arch の runner で実行（`smoke.sh`） | 手元の OS の分だけ `.github/release/smoke.sh` |
 | homebrew-e2e | snapshot から formula を作り、Linux と macOS の Homebrew で style・audit・install・test・uninstall | `make snapshot homebrew-e2e`（Homebrew の prefix に入れて消す） |
@@ -531,6 +533,14 @@ push と PR の作成は通常どおり。取り消した版を Renovate が再�
 
 - `.github/ts-oracle/run.sh` の `ARK_TS_ORACLE_DIR` は既存のディレクトリでなければならない（無いと `cp` が失敗する）。
   指定しなければ一時ディレクトリを使う。
+- `make renovate-check` の Renovate は `.github/renovate-check/package-lock.json` が依存ツリーごと固定し、
+  `npm ci --ignore-scripts --engine-strict` で入れる（`.github/renovate-check/run.sh`）。以前の
+  `npx --package renovate@<版>` は推移的依存を実行時に解決していたため、数分前に公開された版
+  （2026-10-26 の bowser 2.15.0）を取りに行き、registry にまだ無く 404 で落ちた（CI run 40393137410）。
+  Node.js は Renovate の engines（`^24.11.0`）を満たす `.github/renovate-check/.node-version` の版。
+  それより古い Node.js では `EBADENGINE` で失敗する。
+- `--ignore-scripts` のため re2 は組み込まれず、validator は `RE2 not usable, falling back to RegExp` と警告する。
+  以前の `npx` でも re2 は入っていなかった（同じ警告）。
 
 ## 9. 人が判断すること
 
@@ -546,7 +556,7 @@ push と PR の作成は通常どおり。取り消した版を Renovate が再�
   `"vulnerabilityAlerts": { "labels": ["security"] }` を足す。変えたら validator で確かめる:
 
   ```sh
-  npx --yes --package renovate@44.164.1 -- renovate-config-validator renovate.json   # Config validated successfully
+  make renovate-check   # Config validated successfully
   ```
 
 ## 付録 A. この Runbook の検証記録

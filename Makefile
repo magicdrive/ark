@@ -128,8 +128,6 @@ HEPHAESTUS ?= go run github.com/magicdrive/hephaestus@$(HEPHAESTUS_VERSION)
 GOVULNCHECK_VERSION = v1.9.0
 # renovate: datasource=go depName=github.com/rhysd/actionlint
 ACTIONLINT_VERSION = v1.7.12
-# renovate: datasource=npm depName=renovate
-RENOVATE_VERSION = 44.178.3
 
 # gofmt over the tracked Go files, as the lint job of ci.yml (testdata holds
 # deliberately malformed fixtures)
@@ -190,10 +188,19 @@ preflight:
 actionlint:
 	@cd $(CURDIR) && go run github.com/rhysd/actionlint/cmd/actionlint@$(ACTIONLINT_VERSION)
 
-# Validate renovate.json (needs Node.js and npm)
+# Validate renovate.json (needs Node.js, of .github/renovate-check/.node-version,
+# and npm). Renovate and its whole dependency tree are pinned by
+# .github/renovate-check/package-lock.json and installed with `npm ci`, which
+# Renovate updates (npm manager, lockFileMaintenance).
 .PHONY: renovate-check
 renovate-check:
-	@cd $(CURDIR) && npx --yes --package renovate@$(RENOVATE_VERSION) -- renovate-config-validator --strict renovate.json
+	@$(CURDIR)/.github/renovate-check/run.sh
+
+# The failure-injection tests of renovate-check's install (a fake registry:
+# lockfile pinning, 404 and integrity failures)
+.PHONY: renovate-check-test
+renovate-check-test:
+	@python3 $(CURDIR)/.github/renovate-check/test_run.py
 
 # Install application. Use `go install`
 .PHONY: install
@@ -320,6 +327,7 @@ help:
 	@echo "  make preflight tag=<tag> - Read-only release checks (strict)"
 	@echo "  make actionlint        - Lint the GitHub Actions workflows"
 	@echo "  make renovate-check    - Validate renovate.json"
+	@echo "  make renovate-check-test - Test renovate-check's pinned install (fake registry)"
 	@echo "  make publish <tag>     - Check, push the tag, follow and verify the release (also tag=<tag>, VERSION=<tag>; YES=1 skips the prompt)"
 	@echo "  make publish-check <tag>  - Release preflight only (read-only)"
 	@echo "  make publish-status <tag> - What exists for a version (read-only)"
