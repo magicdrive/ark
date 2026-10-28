@@ -112,12 +112,14 @@ others).
 
 | Repository (commit) | Files indexed | Zig files | Cold | Warm | Restore | Peak RSS |
 |---|---:|---:|---:|---:|---:|---:|
-| [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) `0450c32` | 368 | 248 | 2,274 [2,253–2,298] | 49 [46–59] | 1,113 [1,105–1,116] | 716 MB |
-| [Ghostty](https://github.com/ghostty-org/ghostty) `83fb956` | 832 | 814 | 6,405 [5,944–6,415] | 142 [139–143] | 2,639 [2,624–2,658] | 1,056 MB |
+| [TigerBeetle](https://github.com/tigerbeetle/tigerbeetle) `0450c32` | 368 | 248 | 2,692 [2,675–2,697] | 52 [51–54] | 1,488 [1,487–1,495] | 734 MB |
+| [Ghostty](https://github.com/ghostty-org/ghostty) `83fb956` | 832 | 814 | 7,658 [7,632–7,751] | 142 [133–146] | 3,979 [3,959–4,011] | 1,366 MB |
 
 Their Zig sources are large — 6.4 MB and 13.7 MB, files up to 570 and
 730 KB — and densely cross-referenced: 87,000 and 233,000 references, of
-which 40,700 and 89,600 become graph edges. A heap profile of the
+which 29,600 and 63,800 become graph edges (both repositories' builds are
+open to Ark: every import is a Candidate — see the evaluation record —
+whose aliases and open completeness the restore re-resolves). A heap profile of the
 TigerBeetle build attributes the allocations to the index's work per
 reference (resolution, edges, completeness, reference identities) in
 proportion to their number; the Zig provider's own share is the reference

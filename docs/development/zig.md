@@ -236,6 +236,8 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    | illegal behavior (Zig's undefined behavior) | outside the boundary |
    | a compilation a command of the build runs (`b.addSystemCommand` running `zig`, a program of the repository the build runs) | outside the boundary, as a command line |
    | a module rooted at a copy (`WriteFile.addCopyFile`, a generated file) | outside the boundary: what compiles is the copy, no file of the repository |
+   | a build.zig the index does not hold (under a directory it skips: `.gitignore`d, `vendor/`, `.arkignore`) | outside the boundary: a build Ark does not read is neither closed nor open to it — exclude no build.zig the repository runs |
+   | a source file a build rewrites (a write at configure time, `UpdateSourceFiles`) | outside the boundary: the files are the indexed ones — index again after a build that rewrites sources |
    | a path through a symbolic link (a module rooted at `link/main.zig`, `link` a link to `b`) | outside the boundary: the index follows no link (files are what the walk reaches by their own paths), so a module root named through one roots no indexed file |
 
    **Completeness.** An open build's unknowns are open (`AliasDraft.Open`):
@@ -274,19 +276,23 @@ random edge sample, `ARK_ZIG_INCREMENTAL=1` the cache builds):
 |---|---:|---:|
 | Files with a parse error | 0 | 6 (11 diagnostics) |
 | Symbols (graph nodes) | 18,522 | 35,408 |
-| References | 86,820 | 232,890 |
-| — exact / strong | 60,272 / 5,894 | 137,902 / 26 |
-| — candidate | 117 | 713 |
-| — unresolved | 17,535 | 83,335 |
+| References | 87,039 | 233,072 |
+| — exact / strong | 50,581 / 0 | 105,880 / 0 |
+| — candidate | 15,589 | 32,746 |
+| — unresolved | 17,867 | 83,532 |
 | Speculative, no declaration (dropped) | 3,002 | 10,914 |
-| Imports resolved | 1,154 | 2,926 |
-| Imports unresolved: named modules, ZON | 309 | 1,378 |
-| Imports unresolved: missing file, or capped | 0 | 18 |
-| Graph edges (exact / strong) | 41,670 (37,329 / 4,341) | 88,400 (88,375 / 25) |
-| — calls / references / uses_type / imports | 14,604 / 15,831 / 10,082 / 1,153 | 29,980 / 36,475 / 19,024 / 2,921 |
+| Imports: relative files (candidates, every build open) | 994 | 2,942 |
+| Imports: named modules, ZON | 469 | 1,380 |
+| Graph edges (all exact, within a file) | 29,632 | 63,842 |
+| — calls / references / uses_type / imports | 9,212 / 12,001 / 8,419 / 0 | 19,476 / 29,117 / 15,249 / 0 |
 
-(With the module environments of decision 6; the first measurements and
-how they changed are below.) The unresolved imports by name are `std`,
+(With the closed and open builds of decision 8: both repositories' root
+builds are open — TigerBeetle's calls a step's make function through a
+function pointer and casts with `@fieldParentPtr`; Ghostty's imports its
+build helpers `src/build/` — so every import is a Candidate and only a
+file's references to its own declarations are edges. Of the 56 build.zig
+files of the two, 2 are closed. The earlier measurements and how they
+changed are below.) The unresolved imports by name are `std`,
 `builtin`, `root` and named modules no build.zig of the repository binds
 for the importing file's module (Ghostty's are bound in `src/build/*.zig`,
 or are fetched packages: GTK and others). The two missing files are
@@ -370,6 +376,29 @@ file's importers. A new stratified sample of 149 edges (seed `20261029`,
 the strong edges of TigerBeetle's new `vsr` stratum and all 25 of
 Ghostty's included) was checked by hand: see the audit record.
 
+**Fourth round (closed and open builds).** The maintainers chose
+soundness first: decision 8. Four adversarial reviews of the closedness
+rules followed (with the compiler and Zig 0.17.0's std and Maker as
+oracles; `review_r1_test.go` to `review_r4b_test.go`, `world_test.go`,
+`world_rules_test.go`). The first three found shapes, each turned into a
+rule that does not rest on the one before it: the builder laundered past
+the taint (an address, a pointer std makes, a literal's field) — no other
+file's code is imported, no pointer made, no std function outside a list
+called; values of another file's types reached through a branch's value
+or a type parameter — any other file's import opens; modules the compiler
+makes beside the Module API (a test runner, another std, a name the
+command line splits) and a dependency's build sharing the graph — open.
+The fourth (two reviewers, one reading Maker's translation of modules to
+the command line) found none in the graph; the one shape it found, a
+build rewriting a source file, is outside the boundary. Twenty-two
+mutations of the rules: twenty-one are killed by the tests; the one
+surviving (the compiler-made-modules rule for anonymous options) is
+covered by the unknown-option rule first. A new stratified sample of 100
+edges (seed `20261030`; the graph holds only exact edges within a file:
+member calls, plain calls, references, uses_type, 50 of each repository)
+was checked by three independent readers: 100 correct, none wrong or
+unsure.
+
 **False negatives seen.** Method calls on values whose type needs
 inference (a capture's, an `anytype` parameter's, a call result of a
 function stating no container type), members through a field of another
@@ -378,9 +407,9 @@ through struct fields or dependencies.
 
 **Performance.** Same machine as [performance](../performance.md) (Intel
 Xeon W-2140B, macOS 15.7.9, Go 1.27.2). In-process, Zig files only: index
-build 3.1 s (TigerBeetle) and 8.4 s (Ghostty); with the extraction cache,
-cold 1.9 s / 6.1 s, every file cached 0.75 s / 2.1 s, after editing one
-file 0.75 s / 2.0 s, the graph identical in all three. The MCP server on
+build 3.6 s (TigerBeetle) and 9.8 s (Ghostty); with the extraction cache,
+cold 2.3 s / 7.5 s, every file cached 1.1 s / 3.5 s, after editing one
+file 1.2 s / 3.5 s, the graph identical in all three. The MCP server on
 the whole repository (every language, `docs/scripts/ark-mcp-timing.py`,
 three runs) is in [performance](../performance.md#zig).
 
