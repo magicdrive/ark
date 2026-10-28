@@ -215,7 +215,25 @@ func (w *world) run(root *ts.Node) string {
 		return w.open("a taint that does not settle")
 	}
 	w.check(root, 0)
+	if debugWorld != nil {
+		debugWorld(w)
+	}
 	return w.why
+}
+
+// debugWorld, set by a test, sees each world once it is read.
+var debugWorld func(w *world)
+
+// taintedDecls are the names of the declarations holding a graph value
+// (for tests).
+func (w *world) taintedDecls() map[string]bool {
+	out := map[string]bool{}
+	for k, v := range w.tainted {
+		if v && strings.HasPrefix(k, "d:") {
+			out[k[strings.LastIndex(k, ":")+1:]] = true
+		}
+	}
+	return out
 }
 
 func (w *world) open(why string) string {
@@ -1412,7 +1430,16 @@ func (w *world) runtimeValue(n *ts.Node) bool {
 	case d == nil:
 		return false
 	case strings.HasPrefix(key, "d:"):
-		return x.hasToken(d, "var") && !x.hasToken(d, "comptime")
+		if x.hasToken(d, "comptime") {
+			return false
+		}
+		if x.hasToken(d, "var") {
+			return true
+		}
+		// A constant pointing to a runtime value (`const p = &list;`).
+		init := x.initializer(d)
+		return init != nil && x.typ(init) == "unary_expression" && init.ChildCount() > 0 && x.typ(init.Child(0)) == "&" &&
+			x.firstNamed(init) != nil && keyOf(x.firstNamed(init)) != keyOf(n) && w.runtimeValue(x.firstNamed(init))
 	case strings.HasPrefix(key, "p:"):
 		t := strings.TrimSpace(x.text(x.field(d, "type")))
 		return t != "" && t != "type" && t != "anytype" && !x.hasToken(d, "comptime")
