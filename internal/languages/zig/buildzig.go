@@ -1210,6 +1210,17 @@ func (x *extractor) buildAliases(facts buildFacts) {
 	}
 	for _, root := range sortedKeys(facts.owners) {
 		add(dirIdent(path.Dir(root)), moduleIdentOf(root), "", true)
+		// A root the index does not hold (named through a symbolic link,
+		// under a directory the index skips): the module's files are not
+		// the ones under that path — any file's imports may be its.
+		absent := [][2]string{{anyModule, moduleIdentOf(root)}}
+		if d := path.Dir(root); d != "." {
+			absent = append(absent, [2]string{specIdent("."), specIdent(d)}) // "." is every file's already
+		}
+		for _, a := range absent {
+			x.aliases = append(x.aliases, language.AliasDraft{Qualified: a[0], Target: a[1], Location: at, Members: true,
+				ConfidenceCap: "candidate", Absent: root})
+		}
 	}
 	for _, k := range sortedKeys(facts.entries) {
 		for _, m := range uniqueStrings(facts.entries[k]) {

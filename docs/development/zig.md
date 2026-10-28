@@ -234,11 +234,12 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    | several build roots | each read alone; one open build opens every module |
    | a consumer outside the repository, a command line (`zig build-exe --dep`) | outside the boundary: the graph is the repository's builds' |
    | illegal behavior (Zig's undefined behavior) | outside the boundary |
-   | a compilation a command of the build runs (`b.addSystemCommand` running `zig`, a program of the repository the build runs) | outside the boundary, as a command line |
-   | a module rooted at a copy (`WriteFile.addCopyFile`, a generated file) | outside the boundary: what compiles is the copy, no file of the repository |
-   | a build.zig the index does not hold (under a directory it skips: `.gitignore`d, `vendor/`, `.arkignore`) | outside the boundary: a build Ark does not read is neither closed nor open to it — exclude no build.zig the repository runs |
-   | a source file a build rewrites (a write at configure time, `UpdateSourceFiles`) | outside the boundary: the files are the indexed ones — index again after a build that rewrites sources |
-   | a path through a symbolic link (a module rooted at `link/main.zig`, `link` a link to `b`) | outside the boundary: the index follows no link (files are what the walk reaches by their own paths), so a module root named through one roots no indexed file |
+   | a compilation a command of the build runs (`b.addSystemCommand` running `zig`, a program of the repository the build runs) | outside the boundary (the maintainers' decision), as a command line |
+   | a copy of a Zig source of the repository (`WriteFile.addCopyFile` / `addCopyDirectory` of a `.zig` file, a directory, a path Ark cannot read) | open: a module rooted at the copy compiles it with neighbors Ark does not see (a copy of data — `.json`, `.c` — keeps the build closed) |
+   | a module root the index does not hold (a build names `b.path("x/main.zig")` and no indexed file has the path: under a directory the index skips, generated) | every import a Candidate: the module may hold any file (`AliasDraft.Absent`: aliases from `{zigany}` and `{zigspec}.` to its table, read only while no file has the path) |
+   | a build.zig the index does not hold, that no build Ark reads names | outside the boundary: a build Ark does not read is neither closed nor open to it (the index does not report what it skips) — exclude no build.zig the repository runs; one a read build runs is a dependency (open) |
+   | a source file a build rewrites (a write at configure time, `UpdateSourceFiles`) | outside the boundary (the maintainers' decision): Ark reads a static snapshot of the sources — index again after a build that rewrites them |
+   | a path through a symbolic link (a module rooted at `link/main.zig`, `link` a link to `b`) | the index follows no link, so the root names no indexed file: as a root the index does not hold (above) |
 
    **Completeness.** An open build's unknowns are open (`AliasDraft.Open`):
    a resolution through one counts, besides its Candidates, as an
@@ -277,20 +278,22 @@ random edge sample, `ARK_ZIG_INCREMENTAL=1` the cache builds):
 | Files with a parse error | 0 | 6 (11 diagnostics) |
 | Symbols (graph nodes) | 18,522 | 35,408 |
 | References | 87,039 | 233,072 |
-| — exact / strong | 50,581 / 0 | 105,880 / 0 |
-| — candidate | 15,589 | 32,746 |
+| — exact / strong | 50,579 / 0 | 105,870 / 0 |
+| — candidate | 15,591 | 32,756 |
 | — unresolved | 17,867 | 83,532 |
 | Speculative, no declaration (dropped) | 3,002 | 10,914 |
 | Imports: relative files (candidates, every build open) | 994 | 2,942 |
 | Imports: named modules, ZON | 469 | 1,380 |
-| Graph edges (all exact, within a file) | 29,632 | 63,842 |
-| — calls / references / uses_type / imports | 9,212 / 12,001 / 8,419 / 0 | 19,476 / 29,117 / 15,249 / 0 |
+| Graph edges (all exact, within a file) | 29,630 | 63,836 |
+| — calls / references / uses_type / imports | 9,212 / 11,999 / 8,419 / 0 | 19,474 / 29,117 / 15,245 / 0 |
 
 (With the closed and open builds of decision 8: both repositories' root
 builds are open — TigerBeetle's calls a step's make function through a
 function pointer and casts with `@fieldParentPtr`; Ghostty's imports its
 build helpers `src/build/` — so every import is a Candidate and only a
-file's references to its own declarations are edges. Of the 56 build.zig
+file's references to its own declarations are edges — but for 8, members
+of an anonymous struct passed to a std generic (`std.PriorityQueue(..., struct
+{ ... }.compare)`), which the open std alias caps at Candidate. Of the 56 build.zig
 files of the two, 2 are closed. The earlier measurements and how they
 changed are below.) The unresolved imports by name are `std`,
 `builtin`, `root` and named modules no build.zig of the repository binds
@@ -397,7 +400,8 @@ covered by the unknown-option rule first. A new stratified sample of 100
 edges (seed `20261030`; the graph holds only exact edges within a file:
 member calls, plain calls, references, uses_type, 50 of each repository)
 was checked by three independent readers: 100 correct, none wrong or
-unsure.
+unsure. (Drawn from the graph before the last rules; the final graph is a
+subset of it, 8 edges fewer, and holds all 100.)
 
 **False negatives seen.** Method calls on values whose type needs
 inference (a capture's, an `anytype` parameter's, a call result of a
@@ -414,6 +418,33 @@ the whole repository (every language, `docs/scripts/ark-mcp-timing.py`,
 three runs) is in [performance](../performance.md#zig).
 
 ## Remaining work
+
+Tracked follow-ups of the closed-build change (2026-10-28):
+
+- **Edge kinds.** Two edges of the precision sample point at the right
+  declaration under a kind that does not fit the syntax: a struct literal
+  `Color{ ... }` (Ghostty `src/config/Config.zig:10790`) and a type
+  written `Cell.EncodedWidth` in a type position
+  (`src/terminal/snapshot/grid.zig:1177`), both `calls`. A call of a type name used as a literal or a type is a
+  `uses_type`; the provider's call classification should look at the
+  syntax around the name (struct initializer, type position).
+- **Performance.** On the two repositories the MCP restore takes 34 % and
+  51 % longer than before the change and Ghostty's peak RSS 29 % more
+  (`docs/performance.md`): every relative import has an alias chain of its
+  own (`{zigimp}` → the file and `{zigspec}` per directory), and an open
+  build makes every import an open Candidate, which completeness counts
+  toward every same-named declaration. Directions: one `{zigspec}` alias
+  per importer directory rather than per import; skipping the
+  `{zigspec}` chain when no build binds a name ending in `.zig`; caching
+  the open-reference attribution by name.
+- **Recall.** A path folded in case inside a chain of re-exports leaves a
+  member Unresolved (attributable) where it could be a Candidate; the
+  repositories whose builds Ark reads as open — any with a dependency, a
+  helper file, a ZON import — have no Strong and no relative Exact.
+- **Builds the index skips.** A `build.zig` under a directory the index
+  skips that no read build names is not seen; the walk does not report
+  what it skips. A diagnostic of skipped `build.zig` files would let the
+  provider read the repository as open then.
 
 - Build code that is no `build.zig`: the helper files a build imports
   (Ghostty's `src/build/`) bind most of a large project's modules. Reading

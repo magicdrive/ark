@@ -51,7 +51,7 @@ package cache
 // ArgumentCount / ArgumentTypes, SymbolDraft.Parameters / ImplicitMembers /
 // Overrides and Extraction.SourceRoot are optional the same way; only the
 // Java provider (java-1, its first version) states them. AliasDraft.Members
-// AliasDraft.ConfidenceCap / Open / Fallback, ReferenceDraft.TentativeIdentity /
+// AliasDraft.ConfidenceCap / Open / Fallback / Absent, ReferenceDraft.TentativeIdentity /
 // PathCaseFold / MayBeAnyFile are optional the same way; only the Zig
 // provider (zig-1, its first version) states them.
 //

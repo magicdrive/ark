@@ -313,10 +313,15 @@ module Ark cannot name, or of a name it cannot read, is capped at
 Candidate and is open — `AliasDraft.Open`: its candidates do not bound
 the referent, completeness counts it as unresolved besides; a name no build
 registers stands for the unknown through `AliasDraft.Fallback`, an alias
-read only where its identity names nothing else; `@import("x.zig")`
-consults the table first, through `{zigspec}dir::x.zig`; build.zig is read
-by a static evaluator, never run: an operation on a module it does not
-read leaves the module's names unknown)
+read only where its identity names nothing else; a module root the index
+does not hold (named through a symbolic link, under a skipped directory)
+may hold any file, through `AliasDraft.Absent`, an alias read only where
+no file has its path; `@import("x.zig")` has the importer's identity
+`{zigimp}path` and consults the table first, through `{zigspec}dir::x.zig`;
+build.zig is read by a static evaluator, never run, and its facts ground a
+Strong or an Exact only when the build is closed — Ark follows every way
+its code may reach the graph; any other build leaves every module's names
+unknown)
 and `ReferenceDraft.TentativeIdentity` (another file states the type of a
 value — a function's written result type, `F::()` — and the member may be
 a field holding a function: no declaration with the identity leaves a call

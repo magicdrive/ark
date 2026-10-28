@@ -15,7 +15,9 @@ ref installArtifact kind=call container="build.zig::build" receiver="b" name_qua
 ## identity_only
 ## aliases
 alias build.zig::std -> {module}std members @build.zig:1:1-1:28
+alias {zigany} -> {zigmod}src/main.zig members cap=candidate absent=src/main.zig @build.zig:1:1-10:1
 alias {zigdir}src -> {zigmod}src/main.zig members @build.zig:1:1-10:1
+alias {zigspec}. -> {zigspec}src members cap=candidate absent=src/main.zig @build.zig:1:1-10:1
 ## diagnostics
 
 # file: src/broken.zig

@@ -61,8 +61,21 @@ func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 		r.heads = make(map[langQualified]bool)
 		r.fallbacks = make(map[langQualified][]string)
 		r.openAliases = make(map[langQualified]bool)
+		// The files of the index, by path: an Absent alias holds only
+		// where its path names none.
+		present := make(map[langQualified]bool)
+		for _, fi := range r.files {
+			for _, s := range fi.Symbols {
+				if s.Qualified != "" && s.Qualified == string(s.Location.File) {
+					present[langQualified{fi.Language, s.Qualified}] = true
+				}
+			}
+		}
 		for _, fi := range r.files {
 			for _, a := range fi.Aliases {
+				if a.Absent != "" && present[langQualified{fi.Language, a.Absent}] {
+					continue
+				}
 				if a.Qualified != "" && a.Target != "" {
 					k := langQualified{fi.Language, a.Qualified}
 					head, _, _ := strings.Cut(a.Qualified, "::")

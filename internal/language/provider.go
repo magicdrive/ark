@@ -436,6 +436,13 @@ type AliasDraft struct {
 	// declaration otherwise (a name a build registers nowhere Ark reads, a
 	// bound file the index does not hold, stands for what Target names).
 	Fallback bool `json:",omitempty"`
+
+	// Absent states the alias holds only where no file of the language has
+	// this path in the index — a path the walk does not reach (through a
+	// symbolic link, under a directory the index skips, generated): what
+	// it would name is not a file Ark sees (Zig: a module rooted there may
+	// hold any file).
+	Absent string `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

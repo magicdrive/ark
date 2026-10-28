@@ -852,6 +852,13 @@ pub fn main() void {
 		// for what Ark does not see (read only where the file is absent).
 		"{zigabsent}lib/util.zig -> {zigunknown} candidate",
 		"{zigabsent}src/core/root.zig -> {zigunknown} candidate",
+		// A root the index does not hold may hold any file (read only then:
+		// AliasDraft.Absent; here every root is a file of the repository).
+		"{zigany} -> {zigmod}lib/util.zig candidate",
+		"{zigany} -> {zigmod}src/core/root.zig candidate",
+		"{zigany} -> {zigmod}src/dyn.zig candidate",
+		"{zigany} -> {zigmod}src/fake_std.zig candidate",
+		"{zigany} -> {zigmod}src/main.zig candidate",
 		// Each module is owned by its root's directory...
 		"{zigdir}lib -> {zigmod}lib/util.zig ",
 		"{zigdir}src -> {zigmod}src/dyn.zig ",
@@ -868,6 +875,13 @@ pub fn main() void {
 		// of the repository) stands for what Ark does not see.
 		"{zigreg}core -> src/core/root.zig strong",
 		"{zigreg}escape -> {zigunknown} candidate",
+		// (Absent: what a root the index does not hold binds under a file's
+		// name, every file's.)
+		"{zigspec}. -> {zigspec}lib candidate",
+		"{zigspec}. -> {zigspec}src candidate",
+		"{zigspec}. -> {zigspec}src candidate",
+		"{zigspec}. -> {zigspec}src candidate",
+		"{zigspec}. -> {zigspec}src/core candidate",
 	})
 
 	// Another build registering util binds nothing in main.zig's module:

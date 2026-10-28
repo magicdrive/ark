@@ -1,6 +1,7 @@
 package zig
 
 import (
+	"path"
 	"strconv"
 	"strings"
 
@@ -780,6 +781,10 @@ func (w *world) check(n *ts.Node, depth int) {
 			w.open("a call of " + why + ": " + collapse(x.text(x.field(n, "function"))) + at(n))
 			return
 		}
+		if why := w.copiedSource(n); why != "" {
+			w.open(why + at(n))
+			return
+		}
 		if path, std := w.stdPath(x.field(n, "function")); std && !stdFunction(path) {
 			// A function of std's namespaces Ark does not list may write
 			// through what it is given (std.mem.swap, a sort): taint or
@@ -1373,6 +1378,38 @@ func (w *world) mentionsForeign(n *ts.Node, depth int) bool {
 		}
 	}
 	return false
+}
+
+// copiedSource is why call n copies a Zig source of the repository (or a
+// directory, or what Ark cannot tell) where a module may be rooted (a
+// WriteFile's copy): the copy compiles with neighbors Ark does not see —
+// what it imports is not what the repository's file imports. "" for none.
+func (w *world) copiedSource(n *ts.Node) string {
+	x := w.x
+	f := x.field(n, "function")
+	if f == nil || x.typ(f) != "field_expression" {
+		return ""
+	}
+	switch identifierName(x.text(x.field(f, "member"))) {
+	case "addCopyFile", "addCopyDirectory":
+	default:
+		return ""
+	}
+	args := x.named(x.field(n, "arguments"))
+	if len(args) == 0 {
+		return ""
+	}
+	src := args[0]
+	if x.typ(src) == "call_expression" {
+		if sf := x.field(src, "function"); sf != nil && x.typ(sf) == "field_expression" && identifierName(x.text(x.field(sf, "member"))) == "path" {
+			if a := x.named(x.field(src, "arguments")); len(a) == 1 {
+				if p, ok := x.stringLiteral(a[len(a)-1]); ok && path.Ext(p) != "" && path.Ext(p) != ".zig" && path.Ext(p) != ".zon" {
+					return "" // a file of another kind (data, C)
+				}
+			}
+		}
+	}
+	return "a copy of a Zig source of the repository (a module rooted at the copy compiles it with other neighbors)"
 }
 
 // stdPath is the path of a field expression rooted at the file's

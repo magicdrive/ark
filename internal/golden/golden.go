@@ -73,6 +73,9 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 			if a.ConfidenceCap != "" {
 				members += " cap=" + a.ConfidenceCap
 			}
+			if a.Absent != "" {
+				members += " absent=" + a.Absent
+			}
 			fmt.Fprintf(&b, "alias %s -> %s%s %s\n", a.Qualified, a.Target, members, loc(a.Location))
 		}
 	}
