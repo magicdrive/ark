@@ -95,7 +95,25 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    compiler as oracle (`review3_test.go` to `review6_test.go`, 48 shapes)
    drove these rules; each found shapes the previous rules misread, so the
    evaluator's reading of build code is the part of Zig support most
-   likely to hold another. Results through a binding are capped at
+   likely to hold another. A fifth (`review7_test.go`) found, beside build
+   code, shapes of the shared resolution: a chain of aliases cut at
+   `MaxAliasDepth` (now an open Candidate: what it names is unknown), a
+   bound root the index does not hold (a vendored or skipped file: an open
+   Candidate, through `AliasDraft.Fallback`), paths apart in Unicode
+   normalization or full case folding (`source.FoldPath`), names with
+   escapes and `@field` by a literal name in ordinary sources (decoded,
+   observed).
+
+   **Open question (for the maintainers).** Five reviews did not converge:
+   build.zig is arbitrary Zig, and each round found another construct the
+   evaluator misreads. Two ways out, each a decision of what Strong and
+   relative Exact may rest on: keep the evaluator and state as the premise
+   that build code uses the constructs it reads (what it misreads is a
+   documented gap, found shapes fixed as they come); or read a build.zig
+   only if every statement of it is one the evaluator models, and treat
+   any other build.zig as binding anything (sound by construction; on
+   TigerBeetle and Ghostty most named-module Strong edges and every
+   relative Exact edge under those builds would become Candidates). Results through a binding are capped at
    Strong: build code Ark does not read is assumed not to rebind a name,
    and a fetched package's module of the name may be the one used. `std`
    and `builtin` are never mapped; `root` is unresolved (its calls stay

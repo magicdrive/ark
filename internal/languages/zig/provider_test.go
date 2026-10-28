@@ -849,6 +849,10 @@ pub fn main() void {
 		}
 	}
 	equalLines(t, "aliases", aliases, []string{
+		// A bound or registered root the index may not hold stands, there,
+		// for what Ark does not see (read only where the file is absent).
+		"{zigabsent}lib/util.zig -> {zigunknown} candidate",
+		"{zigabsent}src/core/root.zig -> {zigunknown} candidate",
 		// Each module is owned by its root's directory...
 		"{zigdir}lib -> {zigmod}lib/util.zig ",
 		"{zigdir}src -> {zigmod}src/dyn.zig ",
@@ -1247,5 +1251,25 @@ pub fn main() void { const v: F(true) = .{}; v.run(); }
 				}
 			}
 		}
+	}
+}
+
+// Zig's escapes decode in strings and quoted names; one Zig does not have
+// decodes to nothing.
+func TestDecodeEscapes(t *testing.T) {
+	for in, want := range map[string]string{
+		`hel\x70er.zig`: "helper.zig", `wh\x69ch`: "which", `a\u{e9}`: "aé", `q\"\\\n`: "q\"\\\n", `plain`: "plain",
+	} {
+		if got, ok := decodeEscapes(in); !ok || got != want {
+			t.Errorf("decodeEscapes(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+	}
+	for _, bad := range []string{`\q`, `\x6`, `\u{110000}`, `\u{zz}`, `end\`} {
+		if _, ok := decodeEscapes(bad); ok {
+			t.Errorf("decodeEscapes(%q): ok, want none", bad)
+		}
+	}
+	if identifierName(`@"wh\x69ch"`) != "which" || identifierName(`@"a\x2eb"`) != "" {
+		t.Error("quoted names: an escape decodes; a decoded separator claims no name")
 	}
 }

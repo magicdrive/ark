@@ -348,6 +348,22 @@ func (x *extractor) walkBuiltin(n *ts.Node, c ctx, depth int) {
 			x.emit("@This", reference.KindTypeUse, n, c, sc.prefix, nil)
 		}
 		return
+	case "@field":
+		// @field(x, "name"): x's member name, observed (unresolved, any
+		// declaration of the name may be it); a computed name is Dynamic.
+		if len(args) == 2 {
+			x.walkNode(args[0], c, reference.KindValueReference, depth+1)
+			d := language.ReferenceDraft{Kind: string(reference.KindValueReference), Container: c.container, Location: x.loc(args[1]),
+				ReceiverExpr: collapse(x.text(args[0]))}
+			if name, ok := x.stringLiteral(args[1]); ok && name != "" {
+				d.Name, d.TentativeIdentity = name, true
+			} else {
+				d.Name, d.Dynamic = collapse(x.text(n)), true
+				x.walkNode(args[1], c, reference.KindValueReference, depth+1)
+			}
+			x.refs = append(x.refs, d)
+			return
+		}
 	}
 	for i, a := range args {
 		if i == 0 && typeArgumentBuiltins[name] {

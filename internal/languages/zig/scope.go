@@ -151,10 +151,10 @@ func lookup(s *scope, name string) (ds []*decl, unknown bool) {
 // name itself.
 func identifierName(text string) string {
 	if strings.HasPrefix(text, `@"`) && strings.HasSuffix(text, `"`) && len(text) >= 3 {
-		inner := text[2 : len(text)-1]
-		if strings.ContainsAny(inner, `\:.(){}`) {
-			// An escape (not decoded), or a separator of identities: no
-			// name is claimed.
+		inner, ok := decodeEscapes(text[2 : len(text)-1])
+		if !ok || inner == "" || strings.ContainsAny(inner, `:.(){}`) {
+			// An escape Zig does not have, or a separator of identities:
+			// no name is claimed.
 			return ""
 		}
 		return inner

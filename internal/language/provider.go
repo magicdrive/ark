@@ -431,8 +431,10 @@ type AliasDraft struct {
 	Open bool `json:",omitempty"`
 
 	// Fallback states an alias read only where its identity names nothing
-	// else: no declaration and no other alias carries it (a name a build
-	// registers nowhere Ark reads stands for what Target names).
+	// else — no declaration carries it and no other alias of it leads to
+	// anything declared or aliased — and only on a reading that found no
+	// declaration otherwise (a name a build registers nowhere Ark reads, a
+	// bound file the index does not hold, stands for what Target names).
 	Fallback bool `json:",omitempty"`
 }
 

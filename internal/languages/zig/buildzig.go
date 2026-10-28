@@ -8,6 +8,7 @@ import (
 	ts "github.com/odvcencio/gotreesitter"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/source"
 )
 
 // Named modules.
@@ -140,8 +141,8 @@ func moduleIdentOf(root string) string { return "{zigmod}" + root }
 // `b.path("Src/main.zig")` the root of the files under src/ (two
 // directories apart in case alone, on a case-sensitive one, then share
 // their modules: more Candidates, nothing claimed).
-func dirIdent(dir string) string    { return "{zigdir}" + strings.ToLower(dir) }
-func specIdent(dir string) string   { return "{zigspec}" + strings.ToLower(dir) }
+func dirIdent(dir string) string    { return "{zigdir}" + source.FoldPath(dir) }
+func specIdent(dir string) string   { return "{zigspec}" + source.FoldPath(dir) }
 func registered(name string) string { return "{zigreg}" + name }
 
 // keyDir is the directory of the module a binding key's module is rooted
@@ -274,7 +275,9 @@ type buildFacts struct {
 func (x *extractor) readBuild(root *ts.Node) {
 	e := &buildEval{x: x, calls: map[string][]*ts.Node{}, methodCalls: map[string]bool{}, fns: map[string]*ts.Node{}, lookups: map[string]bool{}, busy: map[evalKey]bool{}, copyIters: map[nodeKey]bool{}, memo: map[nodeKey]bval{}}
 	var all, optionLits, importTableUses, idents, builtinCalls, assigns, derefs, memCalls []*ts.Node
-	lexicalUnknown := false
+	// A build script named apart in case (Build.zig) is the build only on
+	// a case-insensitive file system: what it binds may or may not be.
+	lexicalUnknown := path.Base(x.key) != "build.zig"
 	var walk func(n *ts.Node, depth int)
 	walk = func(n *ts.Node, depth int) {
 		if n == nil {
@@ -287,6 +290,12 @@ func (x *extractor) readBuild(root *ts.Node) {
 		switch x.typ(n) {
 		case "call_expression":
 			all = append(all, n)
+			// X.build(...): another package's build run with this build's
+			// b (a dependency's build.zig, imported by name): its paths are
+			// this build's.
+			if f := x.field(n, "function"); f != nil && x.typ(f) == "field_expression" && identifierName(x.text(x.field(f, "member"))) == "build" && e.buildModule(x.field(f, "object")) {
+				lexicalUnknown = true
+			}
 			// Functions that rewrite memory (a module's own bytes:
 			// std.mem.swap(Module, a, c), std.mem.copyForwards, ...).
 			if f := x.field(n, "function"); f != nil && strings.HasPrefix(collapse(x.text(f)), "std.mem.") {
@@ -305,7 +314,7 @@ func (x *extractor) readBuild(root *ts.Node) {
 				}
 			}
 		case "identifier":
-			if t := x.text(n); strings.HasPrefix(t, "@\"") && strings.Contains(t, "\\") {
+			if t := x.text(n); strings.HasPrefix(t, "@\"") && strings.Contains(t, "\\") && identifierName(t) == "" {
 				// A name with an escape Ark does not decode: any word,
 				// a table's or a binding's among them.
 				lexicalUnknown = true
@@ -340,7 +349,7 @@ func (x *extractor) readBuild(root *ts.Node) {
 				// Another build.zig's code run with this build's b: its paths
 				// are this build's, not its own directory's.
 				if args := x.builtinArgs(n); len(args) == 1 {
-					if spec, ok := x.stringLiteral(args[0]); ok && path.Base(spec) == "build.zig" {
+					if spec, ok := x.stringLiteral(args[0]); !ok || strings.EqualFold(path.Base(spec), "build.zig") {
 						lexicalUnknown = true
 					}
 				}
@@ -915,6 +924,33 @@ func (e *buildEval) declaredModulePointer(n *ts.Node) bool {
 	return strings.Contains(t, "Module") || strings.Contains(t, "Compile")
 }
 
+// buildModule reports an expression that may name another package's
+// build.zig: an import by name (a dependency's build module), of a path
+// ending in build.zig, or what Ark cannot tell. A relative import of
+// another file (a build helper) is no build.zig.
+func (e *buildEval) buildModule(n *ts.Node) bool {
+	x := e.x
+	if n == nil {
+		return true
+	}
+	if x.typ(n) == "identifier" {
+		b, ok := e.binding(n, identifierName(x.text(n)))
+		if !ok || b.kind != bindDecl || e.declCount(b.node) != 1 {
+			return true
+		}
+		n = x.initializer(b.node)
+	}
+	if n == nil || x.typ(n) != "builtin_function" || x.builtinName(n) != "@import" {
+		return true
+	}
+	args := x.builtinArgs(n)
+	if len(args) != 1 {
+		return true
+	}
+	spec, ok := x.stringLiteral(args[0])
+	return !ok || !strings.HasSuffix(spec, ".zig") || strings.EqualFold(path.Base(spec), "build.zig")
+}
+
 // assignedTo reports n as the target of assignment statement st (the
 // grammar derives `a.b = c;` as a variable_declaration with no const/var).
 func (e *buildEval) assignedTo(st, n *ts.Node) bool {
@@ -1148,6 +1184,26 @@ func (x *extractor) buildAliases(facts buildFacts) {
 		for _, root := range uniqueStrings(facts.regs[name]) {
 			add(registered(name), root, "strong", false)
 		}
+	}
+	// A bound or registered root the index does not hold (a vendored or
+	// generated file, one under a directory Ark skips) is what Ark does
+	// not see: read only where no declaration carries the file's identity.
+	roots := map[string]bool{}
+	for _, k := range sortedKeys(facts.entries) {
+		for _, m := range facts.entries[k] {
+			if !strings.HasPrefix(m, "{") {
+				roots[m] = true
+			}
+		}
+	}
+	for _, rs := range facts.regs {
+		for _, m := range rs {
+			roots[m] = true
+		}
+	}
+	for _, root := range sortedKeys(roots) {
+		x.aliases = append(x.aliases, language.AliasDraft{Qualified: root, Target: "{zigabsent}" + root, Location: at, Fallback: true})
+		add("{zigabsent}"+root, unknownModule, "candidate", false)
 	}
 	for _, name := range sortedKeys(facts.unknownRegs) {
 		add(registered(name), unknownModule, "candidate", false)

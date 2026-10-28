@@ -4,6 +4,7 @@ import (
 	"path"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	ts "github.com/odvcencio/gotreesitter"
@@ -61,7 +62,7 @@ type extractor struct {
 
 func newExtractor(lang *ts.Language, src []byte, file source.FileID) *extractor {
 	return &extractor{
-		lang: lang, src: src, file: file, key: fileKey(file), build: path.Base(fileKey(file)) == "build.zig",
+		lang: lang, src: src, file: file, key: fileKey(file), build: strings.EqualFold(path.Base(fileKey(file)), "build.zig"),
 		containers: map[string]*scope{}, scopeOf: map[nodeKey]*scope{}, declOf: map[nodeKey]*decl{}, alternativeAlias: map[string]bool{},
 	}
 }
@@ -626,11 +627,80 @@ func (x *extractor) stringLiteral(n *ts.Node) (string, bool) {
 	if n == nil || x.typ(n) != "string" {
 		return "", false
 	}
+	var b strings.Builder
 	parts := x.named(n)
-	if len(parts) != 1 || x.typ(parts[0]) != "string_content" {
+	for _, p := range parts {
+		switch x.typ(p) {
+		case "string_content":
+			b.WriteString(x.text(p))
+		case "escape_sequence":
+			s, ok := decodeEscapes(x.text(p))
+			if !ok {
+				return "", false
+			}
+			b.WriteString(s)
+		default:
+			return "", false
+		}
+	}
+	if len(parts) == 0 {
 		return "", false
 	}
-	return x.text(parts[0]), true
+	return b.String(), true
+}
+
+// decodeEscapes decodes the escape sequences of a Zig string or quoted
+// identifier's text (\n \r \t \\ \' \" \xhh \u{h...}); ok is false
+// for one Zig does not have.
+func decodeEscapes(s string) (string, bool) {
+	if !strings.Contains(s, "\\") {
+		return s, true
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if s[i] != '\\' {
+			b.WriteByte(s[i])
+			continue
+		}
+		if i+1 >= len(s) {
+			return "", false
+		}
+		i++
+		switch s[i] {
+		case 'n':
+			b.WriteByte('\n')
+		case 'r':
+			b.WriteByte('\r')
+		case 't':
+			b.WriteByte('\t')
+		case '\\', '\'', '"':
+			b.WriteByte(s[i])
+		case 'x':
+			if i+2 >= len(s) {
+				return "", false
+			}
+			v, err := strconv.ParseUint(s[i+1:i+3], 16, 8)
+			if err != nil {
+				return "", false
+			}
+			b.WriteByte(byte(v))
+			i += 2
+		case 'u':
+			end := strings.IndexByte(s[i:], '}')
+			if i+1 >= len(s) || s[i+1] != '{' || end < 0 {
+				return "", false
+			}
+			v, err := strconv.ParseUint(s[i+2:i+end], 16, 21)
+			if err != nil || v > 0x10FFFF {
+				return "", false
+			}
+			b.WriteRune(rune(v))
+			i += end
+		default:
+			return "", false
+		}
+	}
+	return b.String(), true
 }
 
 func (x *extractor) text(n *ts.Node) string {
