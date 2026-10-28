@@ -54,14 +54,14 @@ symbol windows.zig kind=module lang=zig qualified="src/windows.zig" receiver="" 
 symbol Backend kind=struct lang=zig qualified="src/windows.zig::Backend" receiver="" exported=true @src/windows.zig:1:1-3:3
 symbol open kind=method lang=zig qualified="src/windows.zig::Backend::open" receiver="Backend" exported=true @src/windows.zig:2:5-2:26
 ## references
-ref std kind=import container="build.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true call=false @build.zig:1:21-1:26
+ref std kind=import container="build.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true may_be_any_file=true call=false @build.zig:1:21-1:26
 ref std kind=value_reference container="build.zig::build" receiver="" name_qualified="build.zig::std" identity_in_repository=true call=false @build.zig:3:18-3:21
 ref Build kind=type_use container="build.zig::build" receiver="" name_qualified="{module}std::Build" identity_in_repository=true call=false @build.zig:3:22-3:27
 ref addExecutable kind=call container="build.zig::build" receiver="b" name_qualified="{module}std::Build::addExecutable" tentative_identity=true call=true @build.zig:4:19-4:32
 ref createModule kind=call container="build.zig::build" receiver="b" name_qualified="{module}std::Build::createModule" tentative_identity=true call=true @build.zig:6:26-6:38
 ref path kind=call container="build.zig::build" receiver="b" name_qualified="{module}std::Build::path" tentative_identity=true call=true @build.zig:6:64-6:68
 ref installArtifact kind=call container="build.zig::build" receiver="b" name_qualified="{module}std::Build::installArtifact" tentative_identity=true call=true @build.zig:8:7-8:22
-ref std kind=import container="src/broken.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true call=false @src/broken.zig:1:21-1:26
+ref std kind=import container="src/broken.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true may_be_any_file=true call=false @src/broken.zig:1:21-1:26
 ref broken kind=type_use container="src/broken.zig" receiver="" call=false @src/broken.zig:2:8-2:14
 ref good kind=type_use container="src/broken.zig" receiver="" call=false @src/broken.zig:4:8-4:12
 ref broken kind=call container="src/broken.zig" receiver="" call=true @src/broken.zig:5:5-5:11
@@ -77,7 +77,7 @@ ref @This kind=type_use container="src/list.zig::List::()::Self" receiver="" nam
 ref Self kind=type_use container="src/list.zig::List::()::count" receiver="" name_qualified="src/list.zig::List::()::Self" identity_in_repository=true call=false @src/list.zig:7:28-7:32
 ref Self kind=type_use container="src/list.zig::List::()::push" receiver="" name_qualified="src/list.zig::List::()::Self" identity_in_repository=true call=false @src/list.zig:11:28-11:32
 ref count kind=call container="src/list.zig::List::()::push" receiver="" name_qualified="src/list.zig::List::()::count" identity_in_repository=true call=true @src/list.zig:13:22-13:27
-ref std kind=import container="src/main.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true call=false @src/main.zig:1:21-1:26
+ref std kind=import container="src/main.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true may_be_any_file=true call=false @src/main.zig:1:21-1:26
 ref engine.zig kind=import container="src/main.zig::engine" receiver="" name_qualified="{zigimp}src/engine.zig" identity_in_repository=true path_case_fold=true may_be_any_file=true call=false @src/main.zig:2:24-2:36
 ref math.zig kind=import container="src/main.zig::math" receiver="" name_qualified="{zigimp}src/math.zig" identity_in_repository=true path_case_fold=true may_be_any_file=true call=false @src/main.zig:3:22-3:32
 ref list.zig kind=import container="src/main.zig::list" receiver="" name_qualified="{zigimp}src/list.zig" identity_in_repository=true path_case_fold=true may_be_any_file=true call=false @src/main.zig:4:22-4:32

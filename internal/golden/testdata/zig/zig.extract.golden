@@ -4,7 +4,7 @@ symbol build.zig kind=module qualified="build.zig" parent="" receiver="" exporte
 symbol std kind=module qualified="build.zig::std" parent="build.zig" receiver="" exported=false @build.zig:1:1-1:28
 symbol build kind=function qualified="build.zig::build" parent="build.zig" receiver="" exported=true @build.zig:3:1-9:2
 ## references
-ref std kind=import container="build.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true call=false @build.zig:1:21-1:26
+ref std kind=import container="build.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true may_be_any_file=true call=false @build.zig:1:21-1:26
 ref std kind=value_reference container="build.zig::build" receiver="" name_qualified="build.zig::std" identity_in_repository=true call=false @build.zig:3:18-3:21
 ref Build kind=type_use container="build.zig::build" receiver="" name_qualified="{module}std::Build" identity_in_repository=true call=false @build.zig:3:22-3:27
 ref addExecutable kind=call container="build.zig::build" receiver="b" name_qualified="{module}std::Build::addExecutable" tentative_identity=true call=true @build.zig:4:19-4:32
@@ -23,7 +23,7 @@ alias {zigdir}src -> {zigmod}src/main.zig members @build.zig:1:1-10:1
 symbol broken.zig kind=module qualified="src/broken.zig" parent="" receiver="" exported=true @src/broken.zig:1:1-7:1
 symbol std kind=module qualified="src/broken.zig::std" parent="src/broken.zig" receiver="" exported=false @src/broken.zig:1:1-1:28
 ## references
-ref std kind=import container="src/broken.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true call=false @src/broken.zig:1:21-1:26
+ref std kind=import container="src/broken.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true may_be_any_file=true call=false @src/broken.zig:1:21-1:26
 ref broken kind=type_use container="src/broken.zig" receiver="" call=false @src/broken.zig:2:8-2:14
 ref good kind=type_use container="src/broken.zig" receiver="" call=false @src/broken.zig:4:8-4:12
 ref broken kind=call container="src/broken.zig" receiver="" call=true @src/broken.zig:5:5-5:11
@@ -95,7 +95,7 @@ symbol platform kind=module qualified="src/main.zig::platform" parent="src/main.
 symbol Engine kind=constant qualified="src/main.zig::Engine" parent="src/main.zig" receiver="" exported=false @src/main.zig:7:1-7:30
 symbol main kind=function qualified="src/main.zig::main" parent="src/main.zig" receiver="" exported=true @src/main.zig:9:1-19:2
 ## references
-ref std kind=import container="src/main.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true call=false @src/main.zig:1:21-1:26
+ref std kind=import container="src/main.zig::std" receiver="" name_qualified="{module}std" identity_in_repository=true may_be_any_file=true call=false @src/main.zig:1:21-1:26
 ref engine.zig kind=import container="src/main.zig::engine" receiver="" name_qualified="{zigimp}src/engine.zig" identity_in_repository=true path_case_fold=true may_be_any_file=true call=false @src/main.zig:2:24-2:36
 ref math.zig kind=import container="src/main.zig::math" receiver="" name_qualified="{zigimp}src/math.zig" identity_in_repository=true path_case_fold=true may_be_any_file=true call=false @src/main.zig:3:22-3:32
 ref list.zig kind=import container="src/main.zig::list" receiver="" name_qualified="{zigimp}src/list.zig" identity_in_repository=true path_case_fold=true may_be_any_file=true call=false @src/main.zig:4:22-4:32

@@ -333,6 +333,11 @@ func (x *extractor) walkBuiltin(n *ts.Node, c ctx, depth int) {
 				x.namedImports = x.namedImports || strings.HasPrefix(t, "{zigenv}")
 				d.IdentityInRepository, d.TentativeIdentity = false, true
 				d.MayBeAnyFile = !strings.HasSuffix(spec, ".zon")
+			case t == "{module}std":
+				// The compiler's — outside the repository, unless a build
+				// makes the library a file of it (buildzig.go: std's alias
+				// is then open): then it may be any file.
+				d.MayBeAnyFile = true
 			case strings.HasPrefix(t, importPrefix):
 				// A relative file — unless the module's import table has
 				// the spec as a name (buildzig.go); a case-insensitive

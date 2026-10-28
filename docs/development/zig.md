@@ -154,16 +154,26 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    (a dependency's `b.dependency`) or a build run otherwise may stand for it.
 
    **Closed.** A build.zig is closed when Ark follows every way its code
-   may reach the build graph. Three rules do not rest on following values
-   at all: the file imports no other file's code (no `@import` but `std`,
-   `builtin` and ZON data — the only way to name another file's code, so
-   no helper, no dependency's build code, no build runner root ever runs,
-   whatever path its values would take); a function of std's namespaces is
+   may reach the build graph. Rules that do not rest on following values
+   at all: the file imports no other file's code (no `@import` but `std`
+   and `builtin` — the only way to name another file's code, so no helper,
+   no dependency's build code, no build runner root ever runs, whatever
+   path its values would take; a ZON import is one too, since a package may
+   have a dependency named `cfg.zon`); it runs no dependency's build
+   (`b.dependency`, `b.lazyDependency`: a dependency's builder shares this
+   build's graph — its steps, their modules — so a fetched package's code
+   may rebind them even given nothing); a function of std's namespaces is
    one of a list that only reads, makes a container type, or operates on
    paths and files (`std.mem.eql`, `std.ArrayList`, `std.fs.path.join`;
    `std.mem.swap`, `std.mem.bytesToValue`, a sort are not); no function of
    the file is named like a std.Build call `buildEval` reads by its name
-   (`createModule`, `addExecutable`, `module`). Pointers are never made or
+   (`createModule`, `addExecutable`, `module`), nor like a function std calls
+   by name on what it is given (`format`, `hash`, `eql`, `lessThan`, the
+   JSON ones); no module is made by the compiler beside the Module API (a
+   `test_runner`, a `zig_lib_dir`, a table binding `std` — the compiler
+   then takes it for the standard library, whose imports are open), and
+   no name a table binds is one the command line splits (`a=b`, `-x`).
+   Pointers are never made or
    cast (`@ptrFromInt`, `@ptrCast`, `@fieldParentPtr`, `@bitCast`, ...), and
    nothing is written through a pointer or into an element (`p.* = v`,
    `a[i] = v`; a slot of a map's `getOrPut` excepted). Zig 0.17.0's std keeps the graph in no global
@@ -216,14 +226,16 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    | one build.zig, its own functions | closed if every use above is |
    | a helper file (`@import("build/x.zig")`), its functions | open when given a graph value (not read) |
    | a dependency's build code (`@import("dep")`), its helpers | open when given a graph value |
-   | a dependency the build fetches (`b.dependency`) | its modules are what its build registers: Strong at most; one no build of the repository registers is unknown |
+   | a dependency (`b.dependency`, a fetched package or a path of the repository) | open: its build shares this build's graph (so `dep.module` grounds no Strong) |
    | build options, `builtin` | not evaluated: every branch is read (a Candidate when they bind apart; a branch never taken is read too) |
    | comptime choices | every branch, as options |
    | std.Build | Zig 0.17.0's source (`TestClosedTablesAgainstStd` checks the tables against a std tree); another version's API Ark does not list opens the build |
-   | `build.zig.zon` | not read: its packages are dependencies (above) |
+   | `build.zig.zon` | not read: its packages are dependencies (above); a ZON import is code (a dependency may be named like a file) |
    | several build roots | each read alone; one open build opens every module |
    | a consumer outside the repository, a command line (`zig build-exe --dep`) | outside the boundary: the graph is the repository's builds' |
    | illegal behavior (Zig's undefined behavior) | outside the boundary |
+   | a compilation a command of the build runs (`b.addSystemCommand` running `zig`, a program of the repository the build runs) | outside the boundary, as a command line |
+   | a module rooted at a copy (`WriteFile.addCopyFile`, a generated file) | outside the boundary: what compiles is the copy, no file of the repository |
    | a path through a symbolic link (a module rooted at `link/main.zig`, `link` a link to `b`) | outside the boundary: the index follows no link (files are what the walk reaches by their own paths), so a module root named through one roots no indexed file |
 
    **Completeness.** An open build's unknowns are open (`AliasDraft.Open`):

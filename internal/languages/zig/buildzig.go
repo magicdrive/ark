@@ -216,6 +216,9 @@ type buildEval struct {
 	memo map[nodeKey]bval
 	// lookups are the registered names looked up (`.module("name")`).
 	lookups map[string]bool
+	// stdBound: a table binds std, which the compiler then takes for the
+	// standard library (every module's imports of std are another file).
+	stdBound bool
 	// busy guards evaluation cycles; depth bounds it.
 	busy map[evalKey]bool
 }
@@ -280,6 +283,8 @@ type buildFacts struct {
 	// (`dep.module("name")`): a name registered nowhere Ark reads stands
 	// for what Ark does not see.
 	lookups map[string]bool
+	// stdBound: a table binds std.
+	stdBound bool
 }
 
 // readBuild reads a build.zig's module declarations and states them as
@@ -407,6 +412,11 @@ func (x *extractor) readBuild(root *ts.Node) {
 		dynamic: map[string]bool{}, regs: map[string][]string{}, unknownRegs: map[string]bool{}, lookups: map[string]bool{},
 	}
 	bind := func(keys []string, name string, ok bool, v bval) {
+		if ok && (strings.Contains(name, "=") || strings.HasPrefix(name, "-")) {
+			// A name the command line splits (`--dep a=b`): what imports
+			// see is not the table's.
+			lexicalUnknown, ok = true, false
+		}
 		for _, k := range keys {
 			if !ok {
 				facts.dynamic[k] = true
@@ -528,7 +538,7 @@ func (x *extractor) readBuild(root *ts.Node) {
 				keys, skip := receivers(e.eval(x.field(obj, "object"), nil, 0))
 				if !skip {
 					name, ok := x.stringLiteral(args[1])
-					bind(keys, name, ok && !reservedModules[name], e.eval(args[2], nil, 0))
+					bind(keys, name, ok && !e.reserved(name), e.eval(args[2], nil, 0))
 				}
 				continue
 			}
@@ -557,7 +567,7 @@ func (x *extractor) readBuild(root *ts.Node) {
 				continue
 			}
 			name, ok := x.stringLiteral(args[0])
-			if ok && reservedModules[name] {
+			if ok && e.reserved(name) {
 				continue
 			}
 			bind(keys, name, ok, e.eval(args[1], nil, 0))
@@ -573,12 +583,12 @@ func (x *extractor) readBuild(root *ts.Node) {
 				v = bval{mods: []string{strings.TrimPrefix(anon[0], "{zigmod}")}}
 			}
 			name, ok := x.stringLiteral(args[0])
-			bind(keys, name, ok && !reservedModules[name], v)
+			bind(keys, name, ok && !e.reserved(name), v)
 		case "addOptions":
 			// A module the build generates, bound under the name.
 			if len(args) == 2 {
 				name, ok := x.stringLiteral(args[0])
-				bind(keys, name, ok && !reservedModules[name], bval{unknown: true})
+				bind(keys, name, ok && !e.reserved(name), bval{unknown: true})
 			} else {
 				bind(keys, "", false, bval{})
 			}
@@ -735,6 +745,10 @@ func (x *extractor) readBuild(root *ts.Node) {
 	}
 	// What the build may do that Ark does not follow opens it (closed.go):
 	// any module's names are unknown.
+	if e.stdBound {
+		bind([]string{anyModule}, "", false, bval{})
+		facts.stdBound = true
+	}
 	if why := e.openWhy(root); why != "" {
 		bind([]string{anyModule}, "", false, bval{})
 		if debugOpen != nil {
@@ -745,6 +759,16 @@ func (x *extractor) readBuild(root *ts.Node) {
 		facts.lookups[name] = true
 	}
 	x.buildAliases(facts)
+}
+
+// reserved reports a name the compiler provides (never a table's), noting
+// std bound: the compiler takes a module bound under std for the standard
+// library of the whole compilation.
+func (e *buildEval) reserved(name string) bool {
+	if name == "std" {
+		e.stdBound = true
+	}
+	return reservedModules[name]
 }
 
 // callShape is a call as a method of a value: obj.method(args), also when
@@ -1170,7 +1194,7 @@ func (e *buildEval) importList(list *ts.Node, f *frame, bind func(name string, o
 			continue
 		}
 		name, ok := x.stringLiteral(x.option(entry, "name"))
-		if ok && reservedModules[name] {
+		if ok && e.reserved(name) {
 			continue
 		}
 		bind(name, ok, e.eval(x.option(entry, "module"), f, 0))
@@ -1198,6 +1222,12 @@ func (x *extractor) buildAliases(facts buildFacts) {
 	for _, k := range sortedKeys(facts.dynamic) {
 		add(k, unknownModule, "candidate", true)
 		add(specIdent(keyDir(k)), unknownModule, "candidate", true)
+	}
+	if facts.dynamic[anyModule] || facts.stdBound {
+		// What a build Ark does not follow may make the standard library
+		// a file of the repository (a module bound under std, a library
+		// directory of the repository): an import of std may be one.
+		add("{module}std", unknownModule, "candidate", false)
 	}
 	for _, name := range sortedKeys(facts.regs) {
 		for _, root := range uniqueStrings(facts.regs[name]) {

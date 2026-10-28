@@ -188,6 +188,11 @@ func (w *world) run(root *ts.Node) string {
 		if modeledMethods[name] && name != "build" {
 			return w.open("a function of the file named like a std.Build call Ark reads: " + name)
 		}
+		if conventionNames[name] {
+			// std calls a function of the name of what it is given
+			// (`{f}`: format): what it binds no call of the file shows.
+			return w.open("a function std may call by its name: " + name)
+		}
 	}
 	// The build function's builder: the graph.
 	for _, fn := range w.fns["build"] {
@@ -848,6 +853,17 @@ func (w *world) check(n *ts.Node, depth int) {
 				}
 			}
 		}
+	case "struct_initializer":
+		// A typed literal (`std.Build.TestOptions{ ... }`): its fields as an
+		// anonymous one's.
+		for _, a := range x.named(x.childOfType(n, "initializer_list")) {
+			if l := x.field(a, "left"); x.typ(a) == "assignment_expression" && l != nil && x.typ(l) == "field_expression" && x.field(l, "object") == nil {
+				if f := identifierName(x.text(x.field(l, "member"))); compilerFields[f] || f == "test_runner" || f == "dependencies" || f == "source_file" || f == "main_pkg_path" || f == "main_mod_path" {
+					w.open("a typed literal's field Ark does not follow: ." + f + at(n))
+					return
+				}
+			}
+		}
 	case "anonymous_struct_initializer":
 		if x.option(n, "root_source_file") != nil || x.option(n, "imports") != nil || x.option(n, "root_module") != nil {
 			for _, a := range x.named(x.firstNamed(n)) {
@@ -863,7 +879,12 @@ func (w *world) check(n *ts.Node, depth int) {
 		}
 		for _, a := range x.named(x.firstNamed(n)) {
 			if l := x.field(a, "left"); x.typ(a) == "assignment_expression" && l != nil && x.typ(l) == "field_expression" && x.field(l, "object") == nil {
-				if f := identifierName(x.text(x.field(l, "member"))); f == "test_runner" {
+				if f := identifierName(x.text(x.field(l, "member"))); compilerFields[f] {
+					// Another std, a runner module: modules the compiler
+					// makes, not the Module API.
+					w.open("a module the compiler makes (." + f + ")" + at(n))
+					return
+				} else if f == "test_runner" {
 					// A runner module rooted at its path, given the root
 					// module's table: a module Ark does not read.
 					w.open("a test runner's module" + at(n))
@@ -897,6 +918,7 @@ func (w *world) assignment(l, r *ts.Node) string {
 	case "field_expression":
 		obj := x.field(l, "object")
 		f := identifierName(x.text(x.field(l, "member")))
+		lt = lt || (obj != nil && w.expr(obj, 0)) // a field of a graph value, whatever it holds
 		if !lt && !rt {
 			return ""
 		}
@@ -958,14 +980,10 @@ func (w *world) modeledCall(f *ts.Node, args []*ts.Node) bool {
 		}
 		if w.expr(obj, 0) {
 			if dependencyMethods[m] {
-				// A dependency's build runs with what it is given: a graph
-				// value among its arguments reaches code Ark does not read.
-				for _, a := range args {
-					if w.expr(a, 0) {
-						return false
-					}
-				}
-				return true
+				// A dependency's build runs with this build's graph (a child
+				// builder shares it, its steps among it): a fetched one's
+				// code Ark does not read.
+				return false
 			}
 			return modeledMethods[m] || neutralMethods[m] || graphFreeResults[m] || containerMethods[m]
 		}
@@ -1032,6 +1050,15 @@ func (w *world) fileType(n *ts.Node) bool {
 	}
 	return false
 }
+
+// compilerFields are settings that make the compiler see modules the
+// Module API does not state: another standard library (zig_lib_dir).
+var compilerFields = setOf("zig_lib_dir")
+
+// conventionNames are the functions std calls by name on what it is given
+// (formatting, hashing, comparing, sorting, JSON).
+var conventionNames = setOf("format", "formatNumber", "hash", "eql", "lessThan", "compare",
+	"jsonStringify", "jsonParse", "jsonParseFromValue")
 
 // dependencyMethods run a dependency's build (with the arguments given).
 var dependencyMethods = setOf("dependency", "lazyDependency", "dependencyFromBuildZig")
@@ -1235,9 +1262,10 @@ func (w *world) slotWrite(l *ts.Node) bool {
 	if cf == nil || x.typ(cf) != "field_expression" {
 		return false
 	}
-	switch identifierName(x.text(x.field(cf, "member"))) {
+	switch m := identifierName(x.text(x.field(cf, "member"))); m {
 	case "getOrPut", "getOrPutValue", "getOrPutAssumeCapacity", "getOrPutAdapted", "getOrPutContext":
-		return !tableReceiver(x, x.field(cf, "object"))
+		_, own := w.fns[m]
+		return !own && !tableReceiver(x, x.field(cf, "object"))
 	}
 	return false
 }
@@ -1285,7 +1313,9 @@ func (w *world) foreignImport(n *ts.Node) bool {
 		return true
 	}
 	spec, ok := x.stringLiteral(a[0])
-	return !ok || (spec != "std" && spec != "builtin" && !strings.HasSuffix(spec, ".zon"))
+	// A ZON file's import names a dependency's build when the package's
+	// build.zig.zon has a dependency of the name (`.@"cfg.zon"`): code.
+	return !ok || (spec != "std" && spec != "builtin")
 }
 
 // mentionsForeign reports syntax naming another file's code: an @import
@@ -1570,7 +1600,7 @@ var neutralFields = setOf(
 	"compress_debug_sections", "lto", "use_llvm", "use_lld", "skip_foreign_checks",
 	"failing_to_execute_foreign_is_an_error", "producer", "version", "emit_object", "filters", "image_base", "link_eh_frame_hdr",
 	"link_emit_relocs", "link_z_notext", "link_z_relro", "link_z_lazy", "link_z_common_page_size",
-	"link_z_max_page_size", "force_load_objc", "discard_local_symbols", "zig_lib_dir", "export_memory", "import_memory", "import_symbols",
+	"link_z_max_page_size", "force_load_objc", "discard_local_symbols", "export_memory", "import_memory", "import_symbols",
 	"initial_memory", "max_memory", "shared_memory", "global_base",
 	// std.Build.Module's settings (CreateOptions' own), a target's parts.
 	"resolved_target", "optimize", "dwarf_format", "strip", "unwind_tables", "single_threaded",
@@ -1587,7 +1617,7 @@ var optionFields = setOf(
 	"single_threaded", "strip", "unwind_tables", "dwarf_format", "code_model", "stack_protector",
 	"stack_check", "sanitize_c", "sanitize_thread", "fuzz", "valgrind", "pic", "red_zone",
 	"omit_frame_pointer", "error_tracing", "no_builtin", "patchable_function_entry",
-	"name", "root_module", "version", "linkage", "max_rss", "use_llvm", "use_lld", "zig_lib_dir",
+	"name", "root_module", "version", "linkage", "max_rss", "use_llvm", "use_lld",
 	"filters", "test_runner", "emit_object",
 )
 

@@ -798,7 +798,6 @@ pub fn build(b: *std.Build, options: anytype) void {
     _ = b.addModule("core", .{ .root_source_file = b.path("src/core/root.zig"), .imports = &.{.{ .name = "helpers", .module = util }} });
     const exe = b.addExecutable(.{ .name = "x", .root_module = b.createModule(.{ .root_source_file = b.path("src/main.zig") }) });
     exe.root_module.addImport("util", util);
-    exe.root_module.addImport("dep", b.dependency("dep", .{}).module("dep"));
     exe.root_module.addImport("computed", options.mod);
     const name = "dyn";
     _ = b.addModule(name, .{ .root_source_file = b.path("src/dyn.zig") });
@@ -860,20 +859,15 @@ pub fn main() void {
 		"{zigdir}src -> {zigmod}src/main.zig ",
 		"{zigdir}src/core -> {zigmod}src/core/root.zig ",
 		// ...and binds what its import table states: a module Ark names,
-		// a module a build registers under a name, or one it cannot name
+		// or one it cannot name
 		// (a parameter no call of the file passes: at most a Candidate).
 		"{zigmod}src/core/root.zig::helpers -> lib/util.zig strong",
 		"{zigmod}src/main.zig::computed -> {zigunknown} candidate",
-		"{zigmod}src/main.zig::dep -> {zigreg}dep strong",
 		"{zigmod}src/main.zig::util -> lib/util.zig strong",
 		// A registration (never std's); one whose root Ark cannot name (out
 		// of the repository) stands for what Ark does not see.
 		"{zigreg}core -> src/core/root.zig strong",
-		"{zigreg}dep -> {zigunregistered}dep ",
 		"{zigreg}escape -> {zigunknown} candidate",
-		// dep is looked up and registered by no build Ark reads (read only
-		// where nothing else carries the name: a fallback).
-		"{zigunregistered}dep -> {zigunknown} candidate",
 	})
 
 	// Another build registering util binds nothing in main.zig's module:
