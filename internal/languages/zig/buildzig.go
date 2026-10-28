@@ -1656,8 +1656,8 @@ func (e *buildEval) isBuild(n *ts.Node, depth int) bool {
 		// this build's (another builder — `dep.builder` — roots paths in
 		// its package).
 		fname := identifierName(x.text(x.field(b.node, "name")))
-		if fname == "build" && b.node.Parent() == e.x.root {
-			return true
+		if fname == "build" && b.node.Parent() == e.x.root && len(e.calls[fname]) == 0 && !e.methodCalls[fname] {
+			return true // the runner's call alone: this build's builder
 		}
 		calls := e.calls[fname]
 		if len(calls) == 0 || e.methodCalls[fname] || e.fns[fname] != b.node {

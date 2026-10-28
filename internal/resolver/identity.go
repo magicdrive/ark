@@ -389,6 +389,14 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		}
 		return res
 	}
+	// A path a case-insensitive file system opens in another case may be
+	// what the reference names besides what the identity's aliases lead to
+	// (a module a table binds under an import's spec, the file beside the
+	// importer in another case): one of the Candidates.
+	folded := r.foldedDecls(ref)
+	if len(folded) > 0 {
+		types = uniqueSymbols(append(types, folded...))
+	}
 	// The aliases on a chain to a declaration explain it; one followed in
 	// vain only bounds it (below).
 	if len(used) > 0 {
@@ -420,6 +428,12 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 			Detail: fmt.Sprintf("a chain of aliases longer than %d is not followed: what it names is unknown", MaxAliasDepth),
 		})
 	}
+	if len(folded) > 0 {
+		res = capConfidence(res, ConfidenceCandidate, ResolutionEvidence{
+			Kind:   EvidenceConfidenceCap,
+			Detail: "a path matching only in another case names a file on a case-insensitive file system alone",
+		})
+	}
 	res.Open = open
 	return res
 }
@@ -430,12 +444,27 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 // the declarations the identity names in each such file, never more than a
 // Candidate — on a case-sensitive file system the path names nothing.
 func (r *Resolver) caseFoldedResolution(res Resolution, ref reference.Reference, detail string) (Resolution, bool) {
-	if !ref.PathCaseFold {
+	found := r.foldedDecls(ref)
+	if len(found) == 0 {
 		return res, false
 	}
+	res = r.pickBest(res, found, ConfidenceCandidate, EvidenceQualifiedIdentity,
+		fmt.Sprintf("%s names no file; a file of the path in another case declares it", detail))
+	return capConfidence(res, ConfidenceCandidate, ResolutionEvidence{
+		Kind:   EvidenceConfidenceCap,
+		Detail: "a path matching only in another case names the file on a case-insensitive file system alone",
+	}), true
+}
+
+// foldedDecls are the declarations a PathCaseFold reference's identity
+// names in the files whose path folds to its leading path — or to a path
+// an identity standing for one aliases (an import's own identity) — where
+// that path names no file of the repository.
+func (r *Resolver) foldedDecls(ref reference.Reference) []symbol.Symbol {
+	if !ref.PathCaseFold {
+		return nil
+	}
 	file, rest, _ := strings.Cut(ref.NameQualified, "::")
-	// The leading path, or the paths an identity standing for one aliases
-	// (an import's own identity, which stands for the file it names).
 	paths := []string{file}
 	for _, t := range r.aliases[langQualified{ref.Language, file}] {
 		if !strings.HasPrefix(t, "{") && !strings.Contains(t, "::") {
@@ -444,6 +473,9 @@ func (r *Resolver) caseFoldedResolution(res Resolution, ref reference.Reference,
 	}
 	var found []symbol.Symbol
 	for _, p := range paths {
+		if len(r.typeDecls(ref.Language, p)) > 0 {
+			continue // the path names a file: no other is opened for it
+		}
 		for _, other := range r.filesByFoldedPath(ref.Language, p) {
 			if other == p {
 				continue
@@ -456,16 +488,7 @@ func (r *Resolver) caseFoldedResolution(res Resolution, ref reference.Reference,
 			found = append(found, d...)
 		}
 	}
-	if len(found) == 0 {
-		return res, false
-	}
-	found = uniqueSymbols(found)
-	res = r.pickBest(res, found, ConfidenceCandidate, EvidenceQualifiedIdentity,
-		fmt.Sprintf("%s names no file; a file of the path in another case declares it", detail))
-	return capConfidence(res, ConfidenceCandidate, ResolutionEvidence{
-		Kind:   EvidenceConfidenceCap,
-		Detail: "a path matching only in another case names the file on a case-insensitive file system alone",
-	}), true
+	return uniqueSymbols(found)
 }
 
 // filesByFoldedPath returns the paths of the language's files equal to

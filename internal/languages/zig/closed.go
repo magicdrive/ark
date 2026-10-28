@@ -59,7 +59,7 @@ import (
 
 // openWhy is why the build's facts are not closed ("" when closed).
 func (e *buildEval) openWhy(root *ts.Node) string {
-	w := &world{e: e, x: e.x, tainted: map[string]bool{}, fnRet: map[string]bool{}, fns: map[string][]*ts.Node{}, resolved: map[nodeKey]string{}, fields: map[string]bool{}, keyNode: map[string]*ts.Node{}}
+	w := &world{e: e, x: e.x, tainted: map[string]bool{}, fnRet: map[string]bool{}, fns: map[string][]*ts.Node{}, resolved: map[nodeKey]string{}, fields: map[string]bool{}, keyNode: map[string]*ts.Node{}, foreign: map[string]bool{}}
 	return w.run(root)
 }
 
@@ -85,8 +85,10 @@ type world struct {
 	stdGiven bool
 	// fields are the names of the fields the file's types declare.
 	fields map[string]bool
-	// keyNode is the declaration (or parameter) a binding key names.
+	// keyNode is the declaration (parameter, payload) a binding key names.
 	keyNode map[string]*ts.Node
+	// foreign memoizes mentionsForeign for constants.
+	foreign map[string]bool
 	changed bool
 	why     string
 }
@@ -265,6 +267,7 @@ func (w *world) resolveName(n *ts.Node, name string) string {
 			if x.typ(ch) == "payload" {
 				for _, id := range x.named(ch) {
 					if x.typ(id) == "identifier" && identifierName(x.text(id)) == name {
+						w.keyNode[captureKey(ch, name)] = ch
 						return captureKey(ch, name)
 					}
 				}
@@ -330,6 +333,25 @@ func (w *world) propagate(n *ts.Node, depth int) {
 	}
 	switch x.typ(n) {
 	case "variable_declaration":
+		if x.hasToken(n, "const") || x.hasToken(n, "var") {
+			// A name holding a pointer to another binding (`&y`), or a
+			// container method's result (a slot): what is written through
+			// it is the other's.
+			names := w.e.declNames(n)
+			held := false
+			for _, name := range names {
+				held = held || w.tainted[declKey(n, name)]
+			}
+			if held {
+				for _, y := range w.aliased(x.initializer(n)) {
+					w.taintTarget(y)
+				}
+			}
+		} else if l := x.firstNamed(n); l != nil && w.expr(l, 0) {
+			for _, y := range w.aliased(x.lastNamed(n)) {
+				w.taintTarget(y)
+			}
+		}
 		if r := x.initializer(n); r != nil && w.expr(r, 0) {
 			if x.hasToken(n, "const") || x.hasToken(n, "var") {
 				for _, name := range w.e.declNames(n) {
@@ -442,13 +464,30 @@ func (w *world) callTaint(f *ts.Node, args []*ts.Node) {
 	}
 	objT := obj != nil && w.expr(obj, 0)
 	argT := make([]bool, len(args))
-	any := objT
+	any := objT || len(w.fns[name]) > 0
 	for i, a := range args {
 		argT[i] = w.expr(a, 0)
 		any = any || argT[i]
 	}
 	if !any {
 		return
+	}
+	// A parameter holding a graph value may be written through (a pointer
+	// to the caller's container): the caller's argument holds it too.
+	for _, fn := range w.fns[name] {
+		for i := range w.paramNames(fn) {
+			if !w.tainted[paramKey(fn, i)] {
+				continue
+			}
+			for _, j := range []int{i, i - 1} {
+				if j >= 0 && j < len(args) {
+					w.taintTarget(args[j])
+				}
+			}
+			if i == 0 && obj != nil {
+				w.taintTarget(obj)
+			}
+		}
 	}
 	for _, fn := range w.fns[name] {
 		ps := w.paramNames(fn)
@@ -478,6 +517,39 @@ func (w *world) callTaint(f *ts.Node, args []*ts.Node) {
 		// list.append(gpa, m): the container holds it.
 		w.taintTarget(obj)
 	}
+}
+
+// aliased are the bindings expression n may point into: those written
+// `&y` in it, and the receiver of a container method it calls (a slot of
+// it).
+func (w *world) aliased(n *ts.Node) []*ts.Node {
+	x := w.x
+	var out []*ts.Node
+	var walk func(n *ts.Node, depth int)
+	walk = func(n *ts.Node, depth int) {
+		if n == nil || depth > maxEvalDepth {
+			return
+		}
+		switch x.typ(n) {
+		case "unary_expression":
+			if n.ChildCount() > 0 && x.typ(n.Child(0)) == "&" {
+				out = append(out, x.firstNamed(n))
+			}
+		case "call_expression":
+			if f := x.field(n, "function"); f != nil && x.typ(f) == "field_expression" && containerMethods[identifierName(x.text(x.field(f, "member")))] {
+				if obj := x.field(f, "object"); obj != nil {
+					out = append(out, obj)
+				}
+			}
+		case "function_declaration", "struct_declaration":
+			return
+		}
+		for _, ch := range x.named(n) {
+			walk(ch, depth+1)
+		}
+	}
+	walk(n, 0)
+	return out
 }
 
 // allParams taints every parameter of the file's functions f may name.
@@ -621,12 +693,11 @@ func (w *world) expr(n *ts.Node, depth int) bool {
 		// file declares a field of the name (what it holds Ark does not
 		// type).
 		f := identifierName(x.text(x.field(n, "member")))
-		return !graphFreeFields[f] || w.fields[f]
+		return !(graphFreeFields[f] && w.builder(obj)) || w.fields[f]
 	case "binary_expression":
 		switch binaryOperator(x, n) {
-		case "orelse", "catch", "++", "**":
-		default:
-			return false // a comparison, arithmetic, logic: no graph value
+		case "==", "!=", "<", ">", "<=", ">=", "and", "or":
+			return false // a comparison or logic: a flag
 		}
 	case "call_expression":
 		f := x.field(n, "function")
@@ -642,7 +713,7 @@ func (w *world) expr(n *ts.Node, depth int) bool {
 			if fn && w.fnRet[m] {
 				return true
 			}
-			if path, std := w.stdPath(f); graphFreeResults[m] && !std || std && graphFreeStd[path] {
+			if path, std := w.stdPath(f); graphFreeResults[m] && !std && w.builder(x.field(f, "object")) && !w.graphOption(n) || std && graphFreeStd[path] {
 				return false
 			}
 		}
@@ -665,6 +736,10 @@ func (w *world) check(n *ts.Node, depth int) {
 	at := func(n *ts.Node) string { return " (line " + strconv.Itoa(int(n.StartPoint().Row)+1) + ")" }
 	switch x.typ(n) {
 	case "call_expression":
+		if why := w.foreignWhy(x.field(n, "function")); why != "" {
+			w.open("a call of " + why + ": " + collapse(x.text(x.field(n, "function"))) + at(n))
+			return
+		}
 		if w.callInputs(n) && !w.modeledCall(x.field(n, "function"), x.named(x.field(n, "arguments"))) {
 			detail := ""
 			if debugOpenAll != nil {
@@ -682,6 +757,20 @@ func (w *world) check(n *ts.Node, depth int) {
 		tainted := false
 		for _, a := range x.builtinArgs(n) {
 			tainted = tainted || w.expr(a, 0)
+		}
+		if pointerBuiltins[name] {
+			// A pointer made or retyped: what it points to Ark does not
+			// follow, taint or not.
+			w.open("a pointer made or cast: " + name + at(n))
+			return
+		}
+		if name == "@call" {
+			if args := x.builtinArgs(n); len(args) == 3 {
+				if why := w.foreignWhy(args[1]); why != "" {
+					w.open("@call of " + why + at(n))
+					return
+				}
+			}
 		}
 		switch {
 		case !tainted || name == "@as" || pureBuiltins[name]:
@@ -750,7 +839,12 @@ func (w *world) check(n *ts.Node, depth int) {
 		}
 		for _, a := range x.named(x.firstNamed(n)) {
 			if l := x.field(a, "left"); x.typ(a) == "assignment_expression" && l != nil && x.typ(l) == "field_expression" && x.field(l, "object") == nil {
-				if f := identifierName(x.text(x.field(l, "member"))); f == "dependencies" || f == "source_file" || f == "main_pkg_path" || f == "main_mod_path" {
+				if f := identifierName(x.text(x.field(l, "member"))); f == "test_runner" {
+					// A runner module rooted at its path, given the root
+					// module's table: a module Ark does not read.
+					w.open("a test runner's module" + at(n))
+					return
+				} else if f == "dependencies" || f == "source_file" || f == "main_pkg_path" || f == "main_mod_path" {
 					w.open("options of another Zig version's module API: " + f + at(n))
 					return
 				}
@@ -787,8 +881,13 @@ func (w *world) assignment(l, r *ts.Node) string {
 		}
 		return "an assignment Ark does not model of a graph value: ." + f
 	}
-	if lt || rt {
-		return "an assignment Ark does not model of a graph value: " + x.typ(l)
+	if w.slotWrite(l) {
+		return "" // the container's slot (taint follows: propagate)
+	}
+	if lt || rt || x.typ(l) == "dereference_expression" || x.typ(l) == "index_expression" {
+		// A write through a pointer or into an element: what it writes
+		// may be a module's memory (a pointer Ark does not follow).
+		return "an assignment Ark does not model: " + x.typ(l)
 	}
 	return ""
 }
@@ -824,7 +923,7 @@ func (w *world) modeledCall(f *ts.Node, args []*ts.Node) bool {
 		if obj == nil {
 			return false
 		}
-		if _, fn := w.fns[m]; fn && !oldModuleAPI[m] && !modeledMethods[m] && (w.expr(obj, 0) || w.fileType(obj)) {
+		if _, fn := w.fns[m]; fn && !oldModuleAPI[m] && !modeledMethods[m] && w.fileType(obj) {
 			return true // a method of the file's (its body is read)
 		}
 		if tableReceiver(x, obj) {
@@ -834,6 +933,16 @@ func (w *world) modeledCall(f *ts.Node, args []*ts.Node) bool {
 			return (putMethods[m] && (len(args) == 3 || len(args) == 4)) || (m == "iterator" && w.e.copyIters[keyOf(obj)])
 		}
 		if w.expr(obj, 0) {
+			if dependencyMethods[m] {
+				// A dependency's build runs with what it is given: a graph
+				// value among its arguments reaches code Ark does not read.
+				for _, a := range args {
+					if w.expr(a, 0) {
+						return false
+					}
+				}
+				return true
+			}
 			return modeledMethods[m] || neutralMethods[m] || graphFreeResults[m] || containerMethods[m]
 		}
 		// A graph value given to a function of std (by its path from
@@ -896,6 +1005,300 @@ func (w *world) fileType(n *ts.Node) bool {
 			return false
 		}
 		return false
+	}
+	return false
+}
+
+// dependencyMethods run a dependency's build (with the arguments given).
+var dependencyMethods = setOf("dependency", "lazyDependency", "dependencyFromBuildZig")
+
+// pointerBuiltins make a pointer or give one another type: what it points
+// to Ark does not follow.
+var pointerBuiltins = setOf("@ptrFromInt", "@ptrCast", "@alignCast", "@constCast", "@volatileCast",
+	"@fieldParentPtr", "@bitCast", "@addrSpaceCast", "@memcpy", "@memmove", "@memset")
+
+// graphOption reports b.option(T, ...) of a type Ark does not know holds
+// no graph value (a LazyPath option's value is a path of the build).
+func (w *world) graphOption(call *ts.Node) bool {
+	x := w.x
+	f := x.field(call, "function")
+	if identifierName(x.text(x.field(f, "member"))) != "option" {
+		return false
+	}
+	args := x.named(x.field(call, "arguments"))
+	if len(args) == 0 {
+		return true
+	}
+	t := collapse(x.text(args[0]))
+	switch strings.TrimPrefix(strings.TrimPrefix(t, "[]const "), "?") {
+	case "bool", "u8", "i8", "u16", "i16", "u32", "i32", "u64", "i64", "usize", "isize",
+		"f32", "f64", "[]const u8", "[]u8", "[]const []const u8":
+		return false
+	}
+	return !strings.HasPrefix(t, "enum") && !w.enumType(args[0])
+}
+
+// enumType reports a type expression naming an enum the file declares or
+// std's (std.builtin.OptimizeMode, ...): its values hold no graph value.
+func (w *world) enumType(n *ts.Node) bool {
+	x := w.x
+	if _, std := w.stdPath(n); std {
+		return !strings.Contains(x.text(n), "Build")
+	}
+	if x.typ(n) == "identifier" {
+		if d := w.keyNode[w.resolve(n)]; d != nil && x.typ(d) == "variable_declaration" {
+			init := x.initializer(d)
+			return init != nil && x.typ(init) == "enum_declaration"
+		}
+	}
+	return false
+}
+
+// builder reports this build's *std.Build (the build function's, or one
+// every call passes it) or its graph: the receivers std states some fields
+// and results of hold no graph value.
+func (w *world) builder(n *ts.Node) bool {
+	x := w.x
+	if n != nil && x.typ(n) == "field_expression" && identifierName(x.text(x.field(n, "member"))) == "graph" {
+		n = x.field(n, "object")
+	}
+	return w.e.isBuild(n, 0)
+}
+
+// foreignWhy is what code a call of callee f may run that Ark does not
+// read — another file's (a namespace another file is, a value of a type
+// another file declares), a function value, a parameter of any type's
+// method — or "" for the file's functions, std's, and the methods of the
+// file's and std's values.
+func (w *world) foreignWhy(f *ts.Node) string {
+	x := w.x
+	if f == nil {
+		return "a callee Ark does not follow"
+	}
+	if x.typ(f) == "identifier" {
+		key := w.resolve(f)
+		switch {
+		case strings.HasPrefix(key, "f:"):
+			return ""
+		case strings.HasPrefix(key, "d:"):
+			d := w.keyNode[key]
+			if d != nil && x.hasToken(d, "const") {
+				if init := x.initializer(d); init != nil {
+					if _, std := w.stdPath(init); std {
+						return "" // const assert = std.debug.assert;
+					}
+				}
+			}
+		}
+		return "a function value"
+	}
+	if x.typ(f) == "field_expression" && x.field(f, "object") == nil {
+		// A decl literal (`.init(gpa)`): a function of the type the result
+		// is declared of.
+		if t := w.declaredType(f.Parent()); t != nil && !w.mentionsForeign(t, 0) {
+			return ""
+		}
+		return "a function of a type Ark does not see"
+	}
+	if x.typ(f) != "field_expression" {
+		return "a callee Ark does not follow"
+	}
+	root := w.chainRoot(x.field(f, "object"))
+	switch {
+	case root == nil:
+		return "a callee Ark does not follow"
+	case x.typ(root) == "builtin_function":
+		switch {
+		case x.builtinName(root) == "@This":
+			return ""
+		case x.builtinName(root) == "@import" && !w.foreignImport(root):
+			return ""
+		}
+		return "another file's code"
+	case x.typ(root) != "identifier":
+		return "" // a literal's, a type's
+	}
+	key := w.resolve(root)
+	d := w.keyNode[key]
+	switch {
+	case strings.HasPrefix(key, "f:"):
+		// A call's result: the file's function's, unless its result is
+		// another file's type.
+		for _, fn := range w.fns[strings.TrimPrefix(key, "f:")] {
+			if w.mentionsForeign(x.field(fn, "type"), 0) {
+				return "a method of another file's type"
+			}
+		}
+		return ""
+	case d == nil:
+		return "a callee Ark does not follow"
+	case strings.HasPrefix(key, "p:"):
+		t := strings.TrimSpace(x.text(x.field(d, "type")))
+		if t == "anytype" || t == "type" || t == "" {
+			return "a method of a parameter of any type"
+		}
+		if w.mentionsForeign(x.field(d, "type"), 0) {
+			return "a method of another file's type"
+		}
+		return ""
+	case strings.HasPrefix(key, "c:"):
+		if p := d.Parent(); p != nil && w.mentionsForeign(p, 0) {
+			return "a method of another file's value"
+		}
+		return ""
+	}
+	if w.mentionsForeign(d, 0) {
+		return "another file's code"
+	}
+	return ""
+}
+
+// declaredType is the type the declaration call is the value of states
+// (`var s: std.ArrayList(u8) = .init(gpa)`), through try and catch; nil for
+// none.
+func (w *world) declaredType(call *ts.Node) *ts.Node {
+	x := w.x
+	n := call
+	for depth := 0; n != nil && depth < maxEvalDepth; depth++ {
+		p := n.Parent()
+		if p == nil {
+			return nil
+		}
+		switch x.typ(p) {
+		case "try_expression", "catch_expression", "parenthesized_expression":
+			if x.typ(p) == "catch_expression" && keyOf(x.firstNamed(p)) != keyOf(n) {
+				return nil
+			}
+			n = p
+			continue
+		case "variable_declaration":
+			if (x.hasToken(p, "const") || x.hasToken(p, "var")) && keyOf(x.initializer(p)) == keyOf(n) {
+				return x.field(p, "type")
+			}
+		}
+		return nil
+	}
+	return nil
+}
+
+// slotWrite reports `gop.value_ptr.* = v` (or key_ptr): a write into a
+// container's slot, gop a getOrPut's result.
+func (w *world) slotWrite(l *ts.Node) bool {
+	x := w.x
+	if l == nil || x.typ(l) != "dereference_expression" {
+		return false
+	}
+	fe := x.firstNamed(l)
+	if fe == nil || x.typ(fe) != "field_expression" {
+		return false
+	}
+	if m := identifierName(x.text(x.field(fe, "member"))); m != "value_ptr" && m != "key_ptr" {
+		return false
+	}
+	obj := x.field(fe, "object")
+	if obj == nil || x.typ(obj) != "identifier" {
+		return false
+	}
+	d := w.keyNode[w.resolve(obj)]
+	if d == nil || x.typ(d) != "variable_declaration" || !x.hasToken(d, "const") {
+		return false
+	}
+	call := w.unwrap(x.initializer(d))
+	if call == nil || x.typ(call) != "call_expression" {
+		return false
+	}
+	cf := x.field(call, "function")
+	if cf == nil || x.typ(cf) != "field_expression" {
+		return false
+	}
+	switch identifierName(x.text(x.field(cf, "member"))) {
+	case "getOrPut", "getOrPutValue", "getOrPutAssumeCapacity", "getOrPutAdapted", "getOrPutContext":
+		return !tableReceiver(x, x.field(cf, "object"))
+	}
+	return false
+}
+
+// unwrap is n through try, catch's left side and parentheses.
+func (w *world) unwrap(n *ts.Node) *ts.Node {
+	x := w.x
+	for depth := 0; n != nil && depth < maxEvalDepth; depth++ {
+		switch x.typ(n) {
+		case "try_expression", "catch_expression", "parenthesized_expression":
+			n = x.firstNamed(n)
+		default:
+			return n
+		}
+	}
+	return nil
+}
+
+// chainRoot is the expression a receiver chain starts from: through member
+// accesses, calls, indexes, dereferences, unwraps.
+func (w *world) chainRoot(n *ts.Node) *ts.Node {
+	x := w.x
+	for depth := 0; n != nil && depth < maxEvalDepth; depth++ {
+		switch x.typ(n) {
+		case "field_expression":
+			n = x.field(n, "object")
+		case "call_expression":
+			n = x.field(n, "function")
+		case "index_expression", "dereference_expression", "null_coercion_expression",
+			"parenthesized_expression", "try_expression", "unary_expression":
+			n = x.firstNamed(n)
+		default:
+			return n
+		}
+	}
+	return nil
+}
+
+// foreignImport reports an @import of another file's code: neither std,
+// builtin nor ZON data.
+func (w *world) foreignImport(n *ts.Node) bool {
+	x := w.x
+	a := x.builtinArgs(n)
+	if len(a) != 1 {
+		return true
+	}
+	spec, ok := x.stringLiteral(a[0])
+	return !ok || (spec != "std" && spec != "builtin" && !strings.HasSuffix(spec, ".zon"))
+}
+
+// mentionsForeign reports syntax naming another file's code: an @import
+// of it, or a constant whose value does.
+func (w *world) mentionsForeign(n *ts.Node, depth int) bool {
+	x := w.x
+	if n == nil || depth > maxDepth {
+		return n != nil
+	}
+	switch x.typ(n) {
+	case "builtin_function":
+		if x.builtinName(n) == "@import" && w.foreignImport(n) {
+			return true
+		}
+	case "identifier":
+		if w.calleeOrDeclared(n) && x.typ(n.Parent()) != "call_expression" {
+			return false
+		}
+		key := w.resolve(n)
+		if !strings.HasPrefix(key, "d:") {
+			return false
+		}
+		if v, ok := w.foreign[key]; ok {
+			return v
+		}
+		w.foreign[key] = false // a cycle names nothing more
+		d := w.keyNode[key]
+		v := d != nil && x.hasToken(d, "const") && (w.mentionsForeign(x.initializer(d), depth+1) || w.mentionsForeign(x.field(d, "type"), depth+1))
+		w.foreign[key] = v
+		return v
+	case "function_declaration", "block":
+		return false // a body's code is read as the file's
+	}
+	for _, ch := range x.named(n) {
+		if w.mentionsForeign(ch, depth+1) {
+			return true
+		}
 	}
 	return false
 }
