@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -241,5 +243,80 @@ func TestTentativeIdentity_MissIsUnresolvedNotOutside(t *testing.T) {
 	ref.NameQualified, ref.TentativeIdentity = "crate::zz", false
 	if res := resolveIn(fis, "src/b.cfg", ref); !res.OutsideRepository {
 		t.Error("without the qualifier a missing identity is outside the repository (unchanged rule)")
+	}
+}
+
+// The evidence of a resolution names the aliases on a chain to its
+// declaration; one followed in vain still bounds it (its cap applies)
+// but explains nothing.
+func TestAlias_EvidenceNamesOnlyTheAliasesUsed(t *testing.T) {
+	fis := aliasFixture(
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::a", Members: true},
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::nowhere", Members: true, ConfidenceCap: "strong"},
+	)
+	res := resolveQualified(fis, "crate::m::f")
+	if res.Confidence != resolver.ConfidenceStrong || len(res.Candidates) != 1 {
+		t.Fatalf("got %s with %d candidates, want Strong (the vain alias's cap applies)", res.Confidence, len(res.Candidates))
+	}
+	for _, ev := range res.Evidence {
+		if ev.Kind == resolver.EvidenceQualifiedIdentity && ev.Detail != `"crate::m::f" (through the re-export of crate::m) is declared at src/a.cfg` {
+			t.Errorf("evidence %q", ev.Detail)
+		}
+	}
+	// An alias into an identity nothing declares or aliases is not expanded
+	// (nothing can be found there), yet it is followed: its cap applies.
+	fis = aliasFixture(
+		language.AliasDraft{Qualified: "crate::a::f", Target: "{unknown}", ConfidenceCap: "candidate"},
+	)
+	if res := resolveQualified(fis, "crate::a::f"); res.Confidence != resolver.ConfidenceCandidate {
+		t.Errorf("through an alias into nothing: %s, want Candidate", res.Confidence)
+	}
+}
+
+// Several files stating one alias state one reading: one candidate.
+func TestAlias_RepeatedAliasIsOneReading(t *testing.T) {
+	fis := aliasFixture(
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::a", Members: true},
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::a", Members: true},
+	)
+	if res := resolveQualified(fis, "crate::m::f"); res.Confidence != resolver.ConfidenceExact || len(res.Candidates) != 1 {
+		t.Errorf("got %s with %d candidates, want Exact", res.Confidence, len(res.Candidates))
+	}
+}
+
+// A path naming no file, but a file of the path in another case, is that
+// file's — a Candidate, never more; the exact path wins; without the
+// qualifier nothing changes.
+func TestPathCaseFold_IsACandidateOnly(t *testing.T) {
+	file := func(path string, members ...string) resolver.FileIndex {
+		syms := []symbol.Symbol{cfgSym(path, path, path, symbol.KindModule)}
+		for _, m := range members {
+			syms = append(syms, cfgSym(path, m, path+"::"+m, symbol.KindFunction))
+		}
+		return resolver.FileIndex{FileID: source.FileID(path), Language: "cfg", IdentityOnly: true, Symbols: syms}
+	}
+	fis := []resolver.FileIndex{file("engine.cfg", "run"), file("Other.cfg", "go"), file("other.cfg", "go"), file("main.cfg")}
+	ref := func(q string, fold bool) reference.Reference {
+		r := cfgRef("main.cfg", q)
+		r.NameQualified, r.IdentityInRepository, r.PathCaseFold = q, true, fold
+		return r
+	}
+	for _, tc := range []struct {
+		q     string
+		fold  bool
+		conf  resolver.Confidence
+		count int
+	}{
+		{"Engine.cfg::run", true, resolver.ConfidenceCandidate, 1},
+		{"Engine.cfg", true, resolver.ConfidenceCandidate, 1},
+		{"engine.cfg::run", true, resolver.ConfidenceExact, 1},
+		{"OTHER.cfg::go", true, resolver.ConfidenceCandidate, 2},
+		{"Engine.cfg::run", false, resolver.ConfidenceUnresolved, 0},
+		{"Engine.cfg::nothing", true, resolver.ConfidenceUnresolved, 0},
+	} {
+		res := resolveIn(fis, "main.cfg", ref(tc.q, tc.fold))
+		if res.Confidence != tc.conf || len(res.Candidates) != tc.count {
+			t.Errorf("%s fold=%v: %s with %d candidates, want %s with %d", tc.q, tc.fold, res.Confidence, len(res.Candidates), tc.conf, tc.count)
+		}
 	}
 }

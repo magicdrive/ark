@@ -24,7 +24,7 @@ func FuzzExtractZig(f *testing.F) {
 		"const C = enum { a, b }; const U = union(enum) { x: u8 }; const E = error{ Bad }; fn f() E!C { return .a; }",
 		"fn f(x: anytype, comptime T: type) void { x.m(); T.m(); for (xs) |*it, i| it.m(i); if (o) |v| v.m() else |e| e.m(); }",
 		"test \"x\" { const S = struct { fn m() void {} }; S.m(); } test f { }",
-		"pub fn build(b: anytype) void { const m = b.createModule(.{ .root_source_file = b.path(\"src/m.zig\") }); _ = b.addModule(\"n\", .{ .root_source_file = b.path(\"x.zig\"), .imports = &.{.{ .name = \"m\", .module = m }} }); }",
+		"const std = @import(\"std\");\npub fn build(b: *std.Build) void { const m = b.createModule(.{ .root_source_file = b.path(\"src/m.zig\") }); _ = b.addModule(\"n\", .{ .root_source_file = b.path(\"x.zig\"), .imports = &.{.{ .name = \"m\", .module = m }} }); }",
 		"fn broken( { } fn good() void {}",
 		"const = ; pub fn ( struct { fn } @import( .{ .a = } => |*|",
 		"const @\"weird name\" = struct {}; fn f(p: ?*const a.B, q: *a.B) void { q.m(); handlers[i](); @field(p, \"x\")(); }",

@@ -33,6 +33,12 @@ type Resolution struct {
 	// reference cannot denote any same-named repository symbol. It is metadata
 	// only; it never changes candidates, confidence or evidence.
 	OutsideRepository bool
+
+	// Open is set on a resolution that followed an alias whose target may
+	// also be something no declaration of the index is (language.
+	// AliasDraft.Open): its candidates do not bound the referent, and
+	// completeness counts the reference as unresolved besides them.
+	Open bool
 }
 
 // HasUniqueTarget reports whether this resolution has exactly one candidate at

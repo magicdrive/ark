@@ -275,6 +275,21 @@ type ReferenceDraft struct {
 	// carries its ReceiverExpr, which the identity decides before (R0).
 	TentativeIdentity bool `json:",omitempty"`
 
+	// PathCaseFold qualifies NameQualified, whose leading part (up to the
+	// first "::") is a file's path: a file whose path differs from it in
+	// case alone may be the one meant (a case-insensitive file system opens
+	// it). No declaration with the identity, the identity read in such a
+	// file names Candidates — never more: on a case-sensitive file system
+	// the path names no file.
+	PathCaseFold bool `json:",omitempty"`
+
+	// MayBeAnyFile states that the reference, unresolved, may denote the
+	// declaration of any file of its language, whatever its name: an import
+	// of a module a build maps by code Ark does not evaluate (Zig
+	// `@import("name")`). Completeness counts it toward every file's
+	// declaration, so no file's importers read complete while it exists.
+	MayBeAnyFile bool `json:",omitempty"`
+
 	// Speculative marks a reference the provider records only in case Name
 	// denotes a declaration Ark extracts: a selector x.f whose receiver has
 	// type evidence, where f may equally be a member no provider extracts
@@ -407,6 +422,18 @@ type AliasDraft struct {
 	// maps statically, which a dependency's module of the name may stand
 	// for instead (Zig build.zig). It only lowers.
 	ConfidenceCap string `json:",omitempty"`
+
+	// Open states that what the alias stands for may also be something no
+	// declaration Ark has is (a module a build makes by means Ark does not
+	// read): a resolution that follows it is open — its candidates do not
+	// bound the referent, and completeness counts the reference as it
+	// counts an unresolved one, besides its candidates. Set with a cap.
+	Open bool `json:",omitempty"`
+
+	// Fallback states an alias read only where its identity names nothing
+	// else: no declaration and no other alias carries it (a name a build
+	// registers nowhere Ark reads stands for what Target names).
+	Fallback bool `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

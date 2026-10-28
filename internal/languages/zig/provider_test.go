@@ -715,9 +715,12 @@ func TestFileKeysAndImportPaths(t *testing.T) {
 		{"src/a.zig", "./x/../b.zig", "src/b.zig", true, true},
 		{"a.zig", "../b.zig", "../b.zig", false, true},
 		{"src/a.zig", "std", "{module}std", true, true},
-		{"src/a.zig", "my_mod", "{module}my_mod", true, true},
-		{"src/a.zig", "a/b", "", false, false},
-		{"src/a.zig", "data.zon", "", false, false},
+		{"src/a.zig", "my_mod", "{zigenv}src/a.zig::my_mod", true, true},
+		{"src/a.zig", "root", "{module}root", true, true},
+		// Module names may be any string (Zig accepts these with --dep).
+		{"src/a.zig", "a/b", "{zigenv}src/a.zig::a/b", true, true},
+		{"src/a.zig", "data.zon", "{zigenv}src/a.zig::data.zon", true, true},
+		{"src/a.zig", "a::b", "", false, false},
 		{"src/a.zig", `sub\b.zig`, "", false, false},
 		{"src/a.zig", "/abs/b.zig", "", false, false},
 	} {
@@ -783,10 +786,10 @@ func TestEmptyContainers(t *testing.T) {
 	}
 }
 
-// build.zig's literal module declarations map a named import to its root
-// file (Strong at most); a module of a dependency, one a struct field or a
-// computed name gives, and the compiler's std / builtin / root are not
-// mapped.
+// A build.zig's bindings map a named import of its modules' files to the
+// bound module's root file (Strong at most); a registration binds nothing,
+// a module Ark cannot name caps the name, and the compiler's std /
+// builtin / root are not mapped.
 func TestNamedModules_FromBuildZig(t *testing.T) {
 	files := map[string]string{
 		"build.zig": `const std = @import("std");
@@ -823,13 +826,15 @@ pub fn main() void {
 	}
 	got := resolveRepo(t, files)
 	expectResolutions(t, got, map[string]string{
-		"src/main.zig:1 std import":          "unresolved",
-		"src/main.zig:2 util import":         "strong lib/util.zig",
-		"src/main.zig:3 core import":         "strong src/core/root.zig",
+		"src/main.zig:1 std import":  "unresolved",
+		"src/main.zig:2 util import": "strong lib/util.zig",
+		// core is registered (addModule), not bound in main.zig's module:
+		// Zig rejects the import; nothing proves a target.
+		"src/main.zig:3 core import":         "unresolved",
 		"src/main.zig:4 dep import":          "unresolved",
 		"src/main.zig:5 dyn import":          "unresolved",
 		"src/main.zig:7 helper call":         "strong lib/util.zig::helper",
-		"src/main.zig:8 run call":            "strong src/core/root.zig::run",
+		"src/main.zig:8 run call":            "unresolved",
 		"src/main.zig:9 x call":              "unresolved",
 		"src/main.zig:10 y call":             "unresolved",
 		"src/main.zig:11 print call":         "unresolved",
@@ -839,28 +844,47 @@ pub fn main() void {
 	ex := extract(t, "build.zig", files["build.zig"])
 	var aliases []string
 	for _, a := range ex.Aliases {
-		if strings.HasPrefix(a.Qualified, "{module}") {
+		if strings.HasPrefix(a.Qualified, "{zig") {
 			aliases = append(aliases, a.Qualified+" -> "+a.Target+" "+a.ConfidenceCap)
 		}
 	}
 	equalLines(t, "aliases", aliases, []string{
-		"{module}core -> src/core/root.zig strong",
-		"{module}helpers -> lib/util.zig strong",
-		"{module}util -> lib/util.zig strong",
+		// Each module is owned by its root's directory...
+		"{zigdir}lib -> {zigmod}lib/util.zig ",
+		"{zigdir}src -> {zigmod}src/dyn.zig ",
+		"{zigdir}src -> {zigmod}src/fake_std.zig ",
+		"{zigdir}src -> {zigmod}src/main.zig ",
+		"{zigdir}src/core -> {zigmod}src/core/root.zig ",
+		// ...and binds what its import table states: a module Ark names,
+		// a module a build registers under a name, or one it cannot name
+		// (a parameter no call of the file passes: at most a Candidate).
+		"{zigmod}src/core/root.zig::helpers -> lib/util.zig strong",
+		"{zigmod}src/main.zig::computed -> {zigunknown} candidate",
+		"{zigmod}src/main.zig::dep -> {zigreg}dep strong",
+		"{zigmod}src/main.zig::util -> lib/util.zig strong",
+		// A registration (never std's); one whose root Ark cannot name (out
+		// of the repository) stands for what Ark does not see.
+		"{zigreg}core -> src/core/root.zig strong",
+		"{zigreg}dep -> {zigunregistered}dep ",
+		"{zigreg}escape -> {zigunknown} candidate",
+		// dep is looked up and registered by no build Ark reads (read only
+		// where nothing else carries the name: a fallback).
+		"{zigunregistered}dep -> {zigunknown} candidate",
 	})
 
-	// Two builds mapping one name to two files: an import of it is either.
-	files["pkg/build.zig"] = "pub fn build(b: anytype) void { _ = b.addModule(\"util\", .{ .root_source_file = b.path(\"u.zig\") }); }\n"
+	// Another build registering util binds nothing in main.zig's module:
+	// its import of util is still the one its own table binds.
+	files["pkg/build.zig"] = "const std = @import(\"std\");\npub fn build(b: *std.Build) void { _ = b.addModule(\"util\", .{ .root_source_file = b.path(\"u.zig\") }); }\n"
 	files["pkg/u.zig"] = "pub fn helper() void {}\n"
 	got = resolveRepo(t, files)
 	expectResolutions(t, got, map[string]string{
-		"src/main.zig:7 helper call": "candidate lib/util.zig::helper|pkg/u.zig::helper",
+		"src/main.zig:7 helper call": "strong lib/util.zig::helper",
 	})
 	// A file named build.zig elsewhere is read the same way; one of
 	// another name never maps a module.
 	ex = extract(t, "src/not_build.zig", files["build.zig"])
 	for _, a := range ex.Aliases {
-		if strings.HasPrefix(a.Qualified, "{module}") {
+		if strings.HasPrefix(a.Qualified, "{zigmod}") || strings.HasPrefix(a.Qualified, "{zigreg}") || strings.HasPrefix(a.Qualified, "{zigdir}") {
 			t.Errorf("a file that is no build.zig mapped a module: %v", a)
 		}
 	}
@@ -917,7 +941,7 @@ func TestCompleteness_MembersPastAnotherFilesMemberStayAttributable(t *testing.T
 		target string
 	}{
 		{"a named module no build maps", map[string]string{
-			"build.zig":    "pub fn build(b: anytype) void { _ = b; }\n",
+			"build.zig":    "const std = @import(\"std\");\npub fn build(b: *std.Build) void { _ = b; }\n",
 			"src/core.zig": "pub fn fatal() void {}\n",
 			"src/cli.zig":  "const core = @import(\"core\");\npub fn main() void {\n    core.fatal();\n}\n",
 		}, "src/core.zig::fatal"},
@@ -930,7 +954,7 @@ func TestCompleteness_MembersPastAnotherFilesMemberStayAttributable(t *testing.T
 			"src/b.zig": "const a = @import(\"a.zig\");\npub fn f() void {\n    a.global.arena.alloc();\n}\n",
 		}, "src/a.zig::Arena::alloc"},
 		{"a field of a var of a mapped module", map[string]string{
-			"build.zig":    "pub fn build(b: anytype) void { _ = b.addModule(\"core\", .{ .root_source_file = b.path(\"src/core.zig\") }); }\n",
+			"build.zig":    "const std = @import(\"std\");\npub fn build(b: *std.Build) void {\n    const core = b.addModule(\"core\", .{ .root_source_file = b.path(\"src/core.zig\") });\n    b.createModule(.{ .root_source_file = b.path(\"src/cli.zig\") }).addImport(\"core\", core);\n}\n",
 			"src/core.zig": "pub const Arena = struct {\n    pub fn alloc(self: *Arena) void { _ = self; }\n};\npub const Shell = struct { arena: Arena = .{} };\npub var global: Shell = .{};\n",
 			"src/cli.zig":  "const core = @import(\"core\");\npub fn main() void {\n    core.global.arena.alloc();\n}\n",
 		}, "src/core.zig::Arena::alloc"},
@@ -954,7 +978,7 @@ func TestCompleteness_MembersPastAnotherFilesMemberStayAttributable(t *testing.T
 
 	// Declared where the path names it, the member resolves as before.
 	idx := buildIndex(t, writeTree(t, map[string]string{
-		"build.zig":    "pub fn build(b: anytype) void { _ = b.addModule(\"core\", .{ .root_source_file = b.path(\"src/core.zig\") }); }\n",
+		"build.zig":    "const std = @import(\"std\");\npub fn build(b: *std.Build) void {\n    const core = b.addModule(\"core\", .{ .root_source_file = b.path(\"src/core.zig\") });\n    const m = b.createModule(.{ .root_source_file = b.path(\"src/b.zig\") });\n    m.addImport(\"core\", core);\n}\n",
 		"src/core.zig": "pub const Engine = struct {\n    pub fn run() void {}\n};\npub fn fatal() void {}\n",
 		"src/a.zig":    "pub const Engine = struct {\n    pub fn run() void {}\n};\n",
 		"src/b.zig":    "const a = @import(\"a.zig\");\nconst core = @import(\"core\");\nconst std = @import(\"std\");\npub fn f() void {\n    a.Engine.run();\n    core.Engine.run();\n    core.fatal();\n    std.debug.fatal();\n}\n",
@@ -1129,7 +1153,7 @@ fn f() void {
 	equalLines(t, "references", refLines(ex), []string{
 		"1 import std -> {module}std",
 		"2 import builtin -> {module}builtin",
-		"3 import stdx -> {module}stdx",
+		"3 import stdx -> {zigenv}src/a.zig::stdx ?",
 		"5 value_reference std -> src/a.zig::std",
 		"5 call print -> {module}std::debug::print",
 		"6 value_reference builtin -> src/a.zig::builtin",
@@ -1137,8 +1161,8 @@ fn f() void {
 		"7 value_reference stdx -> src/a.zig::stdx",
 		// A module a build maps is whatever file it is given: its
 		// members name targets only if declared (tentative).
-		"7 value_reference mem -> {module}stdx::mem ?",
-		"7 call copy -> {module}stdx::mem::copy ?",
+		"7 value_reference mem -> {zigenv}src/a.zig::stdx::mem ?",
+		"7 call copy -> {zigenv}src/a.zig::stdx::mem::copy ?",
 	})
 }
 

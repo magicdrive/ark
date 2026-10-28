@@ -101,6 +101,20 @@ type Resolver struct {
 	// aliasCaps bound the resolutions that follow an alias of the identity
 	// (language.AliasDraft.ConfidenceCap): the lowest its aliases state.
 	aliasCaps map[langQualified]Confidence
+	// heads are the leading parts (up to the first "::") of the identities
+	// declared or aliased, by language: what no identity starts with names
+	// nothing (expandAliases need not follow it).
+	heads map[langQualified]bool
+	// fallbacks are the aliases read only where their identity names
+	// nothing else (language.AliasDraft.Fallback); openAliases the
+	// identities with an alias whose target may be what no declaration is
+	// (language.AliasDraft.Open).
+	fallbacks   map[langQualified][]string
+	openAliases map[langQualified]bool
+	// foldedFiles are the files' paths by language and lower-cased path
+	// (ReferenceDraft.PathCaseFold), built on first use.
+	foldOnce    sync.Once
+	foldedFiles map[langQualified][]string
 
 	// Lookup indexes for the name-based stages (see lookup.go). They return
 	// exactly the symbols the corresponding full scans would, in a fixed order,

@@ -197,3 +197,74 @@ func TestMCPZig_CacheDoesNotChangeTheGraph(t *testing.T) {
 		t.Errorf("the graph depends on the cache:\ncold:\n%s\nwarm:\n%s\nno cache:\n%s", cold, warm, none)
 	}
 }
+
+// Named modules through the real binary: a module a build.zig binds is a
+// Strong edge; a module no build Ark reads binds leaves every file's
+// importers and every same-named function's callers unattributed, never
+// complete; a module named like a file beside it is no Exact edge.
+func TestMCPZig_NamedModulesNeverReadComplete(t *testing.T) {
+	bin := buildArk(t)
+	proj := t.TempDir()
+	for name, src := range map[string]string{
+		"build.zig":      "const std = @import(\"std\");\npub fn build(b: *std.Build) void {\n    const core = b.createModule(.{ .root_source_file = b.path(\"lib/core.zig\") });\n    const other = b.createModule(.{ .root_source_file = b.path(\"lib/other.zig\") });\n    const m = b.createModule(.{ .root_source_file = b.path(\"src/main.zig\") });\n    m.addImport(\"core\", core);\n    m.addImport(\"helper.zig\", other);\n}\n",
+		"src/main.zig":   "const core = @import(\"core\");\nconst h = @import(\"helper.zig\");\npub fn main() void {\n    core.run();\n    h.which();\n}\n",
+		"src/helper.zig": "pub fn which() void {}\n",
+		"lib/core.zig":   "pub fn run() void {}\n",
+		"lib/other.zig":  "pub fn which() void {}\n",
+		"tools/cli.zig":  "const vsr = @import(\"vsr\");\npub fn cli() void {\n    vsr.fatal();\n}\n",
+		"tools/vsr.zig":  "pub fn fatal() void {}\n",
+	} {
+		p := filepath.Join(proj, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := startServer(t, proj, t.TempDir(), bin, "mcp-server", "--root", "./", "--no-cache")
+	c.handshake()
+
+	callers := func(sym, file string) (edges []zigEdge, unattributed int) {
+		text, isErr := c.tool("get_callers", map[string]any{"path": ".", "symbol": sym, "filePattern": file})
+		if isErr {
+			t.Fatalf("get_callers %s: %s", sym, text)
+		}
+		var out struct {
+			Edges        []zigEdge
+			Unattributed int
+		}
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("get_callers %s: %v\n%s", sym, err, text)
+		}
+		return out.Edges, out.Unattributed
+	}
+	if e, _ := callers("run", "lib/core.zig"); len(e) != 1 || e[0].Confidence != "strong" {
+		t.Errorf("core.run: callers %+v, want main (strong)", e)
+	}
+	// helper.zig is the module the table binds or (were it not) the file:
+	// two Candidates, no edge to either.
+	for _, file := range []string{"src/helper.zig", "lib/other.zig"} {
+		if e, u := callers("which", file); len(e) != 0 || u != 1 {
+			t.Errorf("which in %s: %d edges, %d unattributed; want 0, 1", file, len(e), u)
+		}
+	}
+	// vsr: no build binds it. fatal's caller and every file's importers
+	// stay open.
+	if e, u := callers("fatal", "tools/vsr.zig"); len(e) != 0 || u != 1 {
+		t.Errorf("fatal: %d edges, %d unattributed; want 0, 1", len(e), u)
+	}
+	for _, file := range []string{"tools/vsr.zig", "lib/core.zig", "src/helper.zig"} {
+		if _, u := callers(file, ""); u == 0 {
+			t.Errorf("importers of %s read complete while @import(\"vsr\") may be one", file)
+		}
+	}
+	impact, _ := c.tool("analyze_change_impact", map[string]any{"path": ".", "symbol": "run", "filePattern": "lib/core.zig", "format": "json"})
+	if !strings.Contains(impact, "src/main.zig::main") {
+		t.Errorf("impact of core.run misses main:\n%s", impact)
+	}
+	ctx, _ := c.tool("get_context", map[string]any{"path": ".", "symbol": "main", "filePattern": "src/main.zig"})
+	if !strings.Contains(ctx, "pub fn run()") {
+		t.Errorf("context of main lacks core.run:\n%s", ctx)
+	}
+}

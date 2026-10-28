@@ -303,25 +303,43 @@ target's member; a comptime choice between namespaces states one capped
 alias per alternative, so a member through it is a Candidate even when one
 alternative alone declares it — the other may be `std`'s or hold it as a
 field), `AliasDraft.ConfidenceCap`
-(build.zig's literal `addModule` / `addImport` / `.imports` map a named
-module to its root file, `{module}name`, capped at Strong: a dependency's
-module of the name may be the one imported; build.zig is read, never run)
+(a named module is what the importing file's module's import table binds
+— a table is a module's, and a file belongs only to a module rooted in its
+directory or above: each file states its view `{zigenv}file` →
+`{zigdir}dir`, a build.zig states `{zigdir}dir` → `{zigmod}root` and
+`{zigmod}root::name` → the bound module's root file, capped at Strong — a
+fetched package's module of the name may be the one used; a binding to a
+module Ark cannot name, or of a name it cannot read, is capped at
+Candidate and is open — `AliasDraft.Open`: its candidates do not bound
+the referent, completeness counts it as unresolved besides; a name no build
+registers stands for the unknown through `AliasDraft.Fallback`, an alias
+read only where its identity names nothing else; `@import("x.zig")`
+consults the table first, through `{zigspec}dir::x.zig`; build.zig is read
+by a static evaluator, never run: an operation on a module it does not
+read leaves the module's names unknown)
 and `ReferenceDraft.TentativeIdentity` (another file states the type of a
 value — a function's written result type, `F::()` — and the member may be
 a field holding a function: no declaration with the identity leaves a call
 Unresolved, neither outside nor excluded from same-named declarations'
-completeness; a non-call member is `Speculative`). Nothing is evaluated at
-comptime: every branch of a condition is analyzed, none chosen.
+completeness; a non-call member is `Speculative`; so is a member past
+another file's first member, which may be a value, and of a named module).
+Two more flags carry what Zig's files add: `ReferenceDraft.PathCaseFold`
+(a relative path may name a file of another case, which a case-insensitive
+file system opens: a Candidate, never more) and
+`ReferenceDraft.MayBeAnyFile` (an import of a named module no build Ark
+reads binds: unresolved, it counts toward every file's importers). Nothing
+is evaluated at comptime: every branch of a condition is analyzed, none
+chosen.
 Authority: `languages/zig/provider.go` (header), `languages/zig/buildzig.go`,
 `resolver/identity.go` (`ExpandAliases`, `noQualifiedDeclaration`).
 Tests: `TestNegative_*`, `TestShadowing`, `TestReceivers_*`,
 `TestConditionalCompilation_IsCandidate`, `TestGenerics_ContainerFactories`,
-`TestNamedModules_FromBuildZig`, `TestCompleteness_UnprovenCallsStayAttributable`,
+`TestNamedModules_FromBuildZig`, `TestModules_*`, `TestReview3_ModuleBindingsArkMustNotMiss`, `TestCompleteness_UnprovenCallsStayAttributable`,
 `TestReview_NoExactPastUnprovenAlternatives`,
 `TestAlias_MembersReadOnlyBelowTheDeclaration`, `TestAlias_CapBoundsWhatFollowsIt`,
 `TestTentativeIdentity_MissIsUnresolvedNotOutside`,
 `TestCompleteness_TentativeIdentityIsSameNameAttributed`, `TestGraph_Fixture`,
-`TestMCPZig_Graph`, `FuzzExtractZig`.
+`TestMCPZig_Graph`, `TestMCPZig_NamedModulesNeverReadComplete`, `FuzzExtractZig`.
 Danger: "the only `run` in the repository", "a named module is the file of
 its name" or "the branch for this target" — a value of an unproven type, a
 module the build maps, or a comptime condition decides what a Zig name is.
@@ -534,6 +552,12 @@ improvement and is not.
    An unresolved reference with `IdentityInRepository` is never same-name
    attributed: its identity already excludes every other declaration
    (`TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed`).
+   One with `MayBeAnyFile` may denote any file's declaration of its
+   language (an import a build maps by code Ark does not read): it counts
+   toward each (`TestModules_ImportersNeverReadComplete`); one resolved
+   through an open alias (`resolver.Resolution.Open`) counts toward its
+   candidates and as an unresolved reference besides
+   (`TestCompleteness_OpenResolutionIsNotBounded`).
    Danger: dropping the count when it is 0 or "noisy"; adding unresolved
    references to `unattributed` (or to a caller's count) to "be safe" —
    that attributes a reference to symbols it cannot denote; resolving a

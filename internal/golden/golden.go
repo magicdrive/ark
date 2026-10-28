@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+tentative(r.TentativeIdentity)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+tentative(r.TentativeIdentity)+flag(r.PathCaseFold, "path_case_fold")+flag(r.MayBeAnyFile, "may_be_any_file")+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -121,7 +121,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+tentative(r.TentativeIdentity)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+tentative(r.TentativeIdentity)+flag(r.PathCaseFold, "path_case_fold")+flag(r.MayBeAnyFile, "may_be_any_file")+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -404,6 +404,15 @@ func inRepository(in bool) string {
 func tentative(t bool) string {
 	if t {
 		return " tentative_identity=true"
+	}
+	return ""
+}
+
+// flag renders a boolean qualifier as name=true; nothing when unset, so
+// snapshots of providers that never state it are unchanged.
+func flag(set bool, name string) string {
+	if set {
+		return " " + name + "=true"
 	}
 	return ""
 }

@@ -62,9 +62,14 @@
 // (`if (builtin.os.tag == .windows) A else B`) names each alternative: a
 // member through it is a Candidate.
 //
-// Not resolved (Unresolved): a named module import (`@import("std")`,
-// `"builtin"`, `"root"`, a module build.zig maps — build.zig is not
-// evaluated) and everything reached through it; a ZON import; a member of a
+// A named module import (`@import("stdx")`) is the module the importing
+// file's module's import table binds, as a build.zig states it, read by
+// its syntax and capped at Strong (buildzig.go); `@import("x.zig")` too,
+// before the file.
+//
+// Not resolved (Unresolved): `@import("std")`, `"builtin"`, `"root"`, a
+// named module no build.zig Ark reads binds, and everything reached
+// through them; a ZON import; a member of a
 // value whose type needs inference (a generic parameter's, `anytype`'s, a
 // capture's, a call result of another file's function); a name a
 // `usingnamespace` of an enclosing container may bring; `@field`,

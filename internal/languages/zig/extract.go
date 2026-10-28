@@ -45,6 +45,12 @@ type extractor struct {
 	alternativeAlias map[string]bool
 	// build: the file is a build.zig, whose module declarations are read.
 	build bool
+	// root is the file's syntax tree; namedImports whether the file
+	// imports a named module (other than std and builtin);
+	// relativeImports its relative imports: [file, spec] (buildzig.go).
+	root            *ts.Node
+	namedImports    bool
+	relativeImports [][2]string
 
 	symbols []language.SymbolDraft
 	aliases []language.AliasDraft
@@ -67,6 +73,7 @@ func fileKey(file source.FileID) string {
 }
 
 func (x *extractor) run(root *ts.Node) {
+	x.root = root
 	file := newScope(nil, x.key, true)
 	file.node, file.symbol, file.name = root, true, path.Base(x.key)
 	x.register(x.key, file, root)
@@ -77,6 +84,10 @@ func (x *extractor) run(root *ts.Node) {
 	x.collect(file, root, 0)
 	x.emitScope(file)
 	x.walkContainer(file, root, ctx{s: file, container: x.key}, 0)
+	if x.build {
+		x.readBuild(root)
+	}
+	x.importerAliases()
 	sort.SliceStable(x.aliases, func(i, j int) bool {
 		a, b := x.aliases[i], x.aliases[j]
 		if a.Qualified != b.Qualified {
@@ -567,14 +578,21 @@ func collapse(s string) string {
 // only a build.zig mapping names (buildzig.go). ok is false for a ZON
 // import (data, no Zig declaration) and for a spec no module can have.
 func importTarget(fromKey, spec string) (ident string, inRepo, ok bool) {
-	if spec == "" || strings.ContainsAny(spec, "\\\x00") || strings.HasSuffix(spec, ".zon") {
+	if spec == "" || strings.ContainsAny(spec, "\\\x00") {
 		return "", false, false
 	}
 	if !strings.HasSuffix(spec, ".zig") {
-		if strings.Contains(spec, "::") || strings.Contains(spec, "/") {
+		// A module name: any string ("vendor/util" too). One holding the
+		// identity separator has no identity (the import may still be any
+		// file's: refs.go).
+		if strings.Contains(spec, "::") {
 			return "", false, false
 		}
-		return moduleIdent(spec), true, true
+		switch spec {
+		case "std", "builtin", "root":
+			return "{module}" + spec, true, true
+		}
+		return envIdent(fromKey, spec), true, true
 	}
 	if path.IsAbs(spec) {
 		return "", false, false

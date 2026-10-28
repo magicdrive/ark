@@ -59,12 +59,68 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    (`ReferenceDraft.TentativeIdentity`): it may be a field holding a
    function, and it must stay attributable to every method of its name, or
    `get_callers` would report a false "complete".
-6. **build.zig read, never run.** Only literal module declarations
-   (`addModule`, `addImport` of a module a constant of the scope creates,
-   `.imports`) map a named module, as an alias capped at Strong
-   (`AliasDraft.ConfidenceCap`): a dependency's module of the name may be
-   the one imported. `std`, `builtin`, `root` are never mapped; a path
-   through them is observed by its last member only.
+6. **Module environments: a name is what the importer's module binds.**
+   Zig 0.17.0 resolves `@import("name")` — `@import("x.zig")` too — in the
+   import table of the module the importing file is compiled in, before any
+   file (checked with the compiler: a table entry `helper.zig` wins over
+   the `helper.zig` beside the importer; two modules of one compilation
+   bind `util` to two files and each sees its own), and a file can be in a
+   module only if it lies in the module root's directory ("import of file
+   outside module path"). So three identities are kept apart — a file
+   (`src/vsr.zig`), a module (`{zigmod}src/vsr.zig`, every module a build
+   creates with that root, their tables merged) and an importer's view
+   (`{zigenv}src/cli.zig`, the tables of the modules rooted in its
+   directories) — and the alias graph joins them: the file states its view
+   → `{zigdir}<dir>` for its directories, a build.zig states `{zigdir}<dir>`
+   → `{zigmod}<root>` and `{zigmod}<root>::name` → the bound module's root.
+   A file several modules may hold sees all their bindings (a Candidate
+   when they differ). A relative import's file states `{zigspec}<dir>::spec`
+   for its importers' directories; a build states it for a binding named
+   like a file. Unknowns stay unknown, as caps: a binding to a module the
+   syntax does not name caps the name at Candidate; a binding of a name it
+   does not state caps the module (every import of its files); a binding on
+   a module the syntax does not name may be any module's (`{zigany}`).
+   build.zig is read by a static evaluator (`buildEval`), never run: module
+   values through constants, tuple elements, if-captures, the file's
+   function parameters (every call of the file: its arguments), returns,
+   artifacts' `.root_module`, dependencies' `.module("name")` (the module a
+   build of the repository registers under the name, `{zigreg}name`),
+   tables chosen by a comptime condition (all branches) or copied from
+   another module's `import_table`. Its soundness does not rest on listing
+   operations: every occurrence of a module or artifact it names is
+   classified where it is written, and any it does not read leaves the
+   module's names unknown; an assignment of a root, a root module or a
+   table — whatever the receiver — or a dereferenced write of a module
+   leaves every module's unknown. Four adversarial reviews with the
+   compiler as oracle (`review3_test.go` to `review6_test.go`, 48 shapes)
+   drove these rules; each found shapes the previous rules misread, so the
+   evaluator's reading of build code is the part of Zig support most
+   likely to hold another. Results through a binding are capped at
+   Strong: build code Ark does not read is assumed not to rebind a name,
+   and a fetched package's module of the name may be the one used. `std`
+   and `builtin` are never mapped; `root` is unresolved (its calls stay
+   attributable).
+
+   Alternatives weighed: keeping one repository-wide mapping per name (the
+   first design) made a registration (`b.addModule("name")`, which names a
+   module for dependents) a binding of every importer's — wrong where two
+   modules bind the name apart (F7) or a module binds a name ending in
+   `.zig` (F5); evaluating build.zig's control flow (a build interpreter)
+   would reimplement the build runner; resolving through each file's
+   relative-import reachability from module roots would need alias chains
+   as long as import chains (bounded by `MaxAliasDepth`) — the directory
+   rule over-approximates membership by the compiler's own constraint and
+   costs one alias per directory.
+7. **Unknown imports count toward every file.** An import of a named module
+   no build.zig Ark reads binds (a helper file's binding, a fetched
+   package's) may name any file: it is unresolved and
+   `ReferenceDraft.MayBeAnyFile`, which completeness counts toward every
+   file's declaration of the language — no file's importers read complete
+   while such an import exists. Narrowing it to the files a build roots a
+   module at would trust build code Ark does not read. A relative import
+   whose path names no file but differs from one in case alone
+   (`ReferenceDraft.PathCaseFold`) resolves to that file as a Candidate:
+   macOS's default file system opens it, a case-sensitive one does not.
 
 ## Evaluation on real projects
 
@@ -84,21 +140,25 @@ random edge sample, `ARK_ZIG_INCREMENTAL=1` the cache builds):
 | Files with a parse error | 0 | 6 (11 diagnostics) |
 | Symbols (graph nodes) | 18,522 | 35,408 |
 | References | 86,820 | 232,890 |
-| — exact / strong | 60,272 / 4,609 | 138,178 / 2,991 |
-| — candidate | 117 | 436 |
-| — unresolved | 18,818 | 80,371 |
-| Speculative, no declaration (dropped) | 3,004 | 10,914 |
-| Imports resolved | 1,136 | 3,010 |
-| Imports unresolved: named modules, ZON | 327 | 1,310 |
-| Imports unresolved: missing file | 0 | 2 |
-| Graph edges (exact / strong) | 40,684 (37,329 / 3,355) | 89,612 (88,502 / 1,110) |
-| — calls / references / uses_type / imports | 14,331 / 15,259 / 9,959 / 1,135 | 30,497 / 36,964 / 19,146 / 3,005 |
+| — exact / strong | 60,272 / 5,894 | 137,902 / 26 |
+| — candidate | 117 | 713 |
+| — unresolved | 17,535 | 83,335 |
+| Speculative, no declaration (dropped) | 3,002 | 10,914 |
+| Imports resolved | 1,154 | 2,926 |
+| Imports unresolved: named modules, ZON | 309 | 1,378 |
+| Imports unresolved: missing file, or capped | 0 | 18 |
+| Graph edges (exact / strong) | 41,670 (37,329 / 4,341) | 88,400 (88,375 / 25) |
+| — calls / references / uses_type / imports | 14,604 / 15,831 / 10,082 / 1,153 | 29,980 / 36,475 / 19,024 / 2,921 |
 
-The unresolved imports by name are `std`, `builtin` and named modules no
-build.zig maps literally (TigerBeetle's `vsr` passes through a struct
-field; Ghostty's GTK and other dependencies are fetched). The two missing
-files are generated at build time or differ in case (`config.zig` for
-`Config.zig`).
+(With the module environments of decision 6; the first measurements and
+how they changed are below.) The unresolved imports by name are `std`,
+`builtin`, `root` and named modules no build.zig of the repository binds
+for the importing file's module (Ghostty's are bound in `src/build/*.zig`,
+or are fetched packages: GTK and others). The two missing files are
+generated at build time or differ in case (`config.zig` for `Config.zig`:
+a Candidate now); the other 16 are `pkg/wuffs/src`'s relative imports, which
+its build makes Candidates: it binds test images under names a comptime
+loop computes (`std.fmt.comptimePrint`), names Ark does not read.
 
 **Precision.** 230 graph edges drawn at random (seed 1; all edges, strong
 edges only, and call edges only, of both repositories) were checked by
@@ -157,6 +217,24 @@ and `TestReview2_CompletenessAndNoFalseExact` now pin:
 - `@"u0"`, `@"f80"`, `@"c_char"` declarations taken for the unquoted
   primitive.
 
+**Third round (module environments).** The second audit's remaining
+blockers — F5, F7 and files' importers that read complete — share a root
+cause: a build's registration of a module was read as every file's
+binding, and a module's identity was a file's. With decisions 6 and 7 the
+same measurement gives (TigerBeetle / Ghostty): graph edges 41,670 /
+88,400, exact 37,329 / 88,375 (TigerBeetle's unchanged; Ghostty's
+`pkg/wuffs/src`, 127 edges, Candidates: see above), strong 4,341 / 25
+(3,355 / 1,110 before). TigerBeetle gains the `vsr` module, whose table the
+evaluator now reads through `build_vsr_module`'s parameters and tuple
+(+986 strong edges, none lost). Ghostty loses the strong edges from `src/`
+into its `pkg/` modules (1,085, every one through the old repository-wide
+mapping): `src/`'s modules and their tables are made in
+`src/build/*.zig`, build code that is no build.zig — those imports are
+unresolved now, attributable to every same-named declaration and every
+file's importers. A new stratified sample of 149 edges (seed `20261029`,
+the strong edges of TigerBeetle's new `vsr` stratum and all 25 of
+Ghostty's included) was checked by hand: see the audit record.
+
 **False negatives seen.** Method calls on values whose type needs
 inference (a capture's, an `anytype` parameter's, a call result of a
 function stating no container type), members through a field of another
@@ -173,24 +251,14 @@ three runs) is in [performance](../performance.md#zig).
 
 ## Remaining work
 
-Found by the second audit and not fixed (each a wrong edge or a false
-"complete" in a rare shape; see the audit report):
-
-- A named module whose name ends in `.zig`: Zig looks the import table up
-  first, so `@import("helper.zig")` is that module, not the file beside
-  the importer; Ark resolves it Exact to the file.
-- Named modules are mapped for the whole repository, not per module: a
-  module importing `util` through a computed mapping resolves Strong to
-  another module's literal `util`.
-- An `@import` whose case differs from the file's (accepted on a
-  case-insensitive file system) and an import of a named module no
-  build.zig maps are not attributed to the file they import: the file's
-  importers can read complete.
-
+- Build code that is no `build.zig`: the helper files a build imports
+  (Ghostty's `src/build/`) bind most of a large project's modules. Reading
+  them needs the build root `b.path` is relative to, which a helper file
+  does not state.
+- A dependency's modules by its `build.zig.zon` entry (a local `.path`
+  package's registration rather than any build's of the name).
 - Field types of another file's structs (`x.field.method()` across files):
   a field identity is `T.field`, which no member path computes.
-- Named modules a build passes through struct fields or options, and
-  dependencies' modules (`b.dependency(...)`, `build.zig.zon`).
 - An independent oracle: comparing against the Zig compiler's own name
   resolution (e.g. `zig ast-check` output or a semantic dump) on a corpus,
   as Rust and Java have.

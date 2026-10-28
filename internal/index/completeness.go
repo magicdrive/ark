@@ -25,7 +25,12 @@ import (
 //	           scope (reference.Reference.IdentityInRepository: then no other
 //	           symbol can be its target), and T has r's name and language —
 //	           and, when T is a member, r has a receiver (a receiverless name
-//	           never denotes a member);
+//	           never denotes a member) — or T is a file's declaration of r's
+//	           language and r may denote any file (reference.Reference.
+//	           MayBeAnyFile: an import of a module a build maps at run time);
+//	open       r's resolution followed an alias that may stand for what no
+//	           declaration is (resolver.Resolution.Open): r counts toward
+//	           its candidates and as an unresolved reference besides;
 //	sourceless r resolves uniquely (Strong+) to T but its enclosing code is no
 //	           symbol (e.g. top-level script statements), so no edge records it.
 //
@@ -57,6 +62,7 @@ import (
 // edge.
 type Completeness struct {
 	byName  map[string][]symbol.Symbol
+	files   map[string][]symbol.Symbol // files' own declarations by language (MayBeAnyFile)
 	in      map[symbol.SymbolID]int
 	out     map[symbol.SymbolID]int
 	samples samples // candidate relations of graph-edge kinds, both directions
@@ -120,8 +126,17 @@ const MaxCandidateSources = 10
 // NewCompleteness returns an empty Completeness that matches unresolved
 // references against byName (bare name → symbols).
 func NewCompleteness(byName map[string][]symbol.Symbol) *Completeness {
+	files := map[string][]symbol.Symbol{}
+	for _, syms := range byName {
+		for _, s := range syms {
+			if s.Qualified != "" && s.Qualified == string(s.Location.File) { // a file's own declaration
+				files[s.Language] = append(files[s.Language], s)
+			}
+		}
+	}
 	return &Completeness{
 		byName:  byName,
+		files:   files,
 		in:      make(map[symbol.SymbolID]int),
 		out:     make(map[symbol.SymbolID]int),
 		samples: newSamples(),
@@ -153,21 +168,14 @@ func (c *Completeness) Observe(ref reference.Reference, res resolver.Resolution,
 	}
 	candidate := len(res.Candidates) > 0
 	reason := UnresolvedSameName
-	switch {
-	case candidate:
-		for _, cand := range res.Candidates {
-			add(cand.SymbolID)
+	// unbounded counts ref toward every symbol it may denote by its name
+	// (and, MayBeAnyFile, every file of its language).
+	unbounded := func() {
+		if ref.MayBeAnyFile {
+			for _, s := range c.files[ref.Language] {
+				add(s.ID)
+			}
 		}
-	case res.OutsideRepository:
-		reason = UnresolvedOutside
-	case ref.Dynamic:
-		reason = UnresolvedDynamic
-	case ref.IdentityInRepository:
-		// Its identity names a repository scope and no declaration there
-		// carries it: no symbol of another identity can be its target,
-		// whatever its name (language.ReferenceDraft.IdentityInRepository).
-		reason = UnresolvedUnknown
-	default:
 		for _, s := range c.byName[ref.Name] {
 			if s.Language != ref.Language {
 				continue
@@ -177,6 +185,27 @@ func (c *Completeness) Observe(ref reference.Reference, res resolver.Resolution,
 			}
 			add(s.ID)
 		}
+	}
+	switch {
+	case candidate:
+		for _, cand := range res.Candidates {
+			add(cand.SymbolID)
+		}
+		if res.Open {
+			// The candidates do not bound it (resolver.Resolution.Open).
+			unbounded()
+		}
+	case res.OutsideRepository:
+		reason = UnresolvedOutside
+	case ref.Dynamic:
+		reason = UnresolvedDynamic
+	case ref.IdentityInRepository && !res.Open:
+		// Its identity names a repository scope and no declaration there
+		// carries it: no symbol of another identity can be its target,
+		// whatever its name (language.ReferenceDraft.IdentityInRepository).
+		reason = UnresolvedUnknown
+	default:
+		unbounded()
 		if len(targets) == 0 {
 			reason = UnresolvedUnknown
 		}

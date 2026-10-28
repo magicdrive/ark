@@ -293,9 +293,6 @@ func (x *extractor) walkCall(n *ts.Node, c ctx, depth int) {
 		x.walkNode(f, c, reference.KindValueReference, depth+1)
 	}
 	x.walkNode(x.field(n, "arguments"), c, reference.KindValueReference, depth+1)
-	if x.build {
-		x.buildModules(n, c)
-	}
 }
 
 // typeArgumentBuiltins are the builtins whose first argument is a type.
@@ -321,6 +318,27 @@ func (x *extractor) walkBuiltin(n *ts.Node, c ctx, depth int) {
 		d := language.ReferenceDraft{Name: spec, Kind: string(reference.KindImport), Container: c.container, Location: x.loc(args[0])}
 		if t, inRepo, ok := importTarget(x.key, spec); ok {
 			d.NameQualified, d.IdentityInRepository = t, inRepo
+			switch {
+			case unprovenModule(t):
+				// A named module (root): whatever file the build gives
+				// it, which may be any file of the repository — but a
+				// ZON file's data, unless a table Ark reads binds the name.
+				x.namedImports = x.namedImports || strings.HasPrefix(t, "{zigenv}")
+				d.IdentityInRepository, d.TentativeIdentity = false, true
+				d.MayBeAnyFile = !strings.HasSuffix(spec, ".zon")
+			case !strings.HasPrefix(t, "{") && inRepo:
+				// A relative file — unless the module's import table has
+				// the spec as a name (buildzig.go); a case-insensitive
+				// file system opens it in another case.
+				x.relativeImports = append(x.relativeImports, [2]string{t, spec})
+				// Where a table Ark cannot read may bind the spec (an open
+				// resolution), any file may be the one imported.
+				d.PathCaseFold, d.MayBeAnyFile = true, true
+			}
+		} else if !strings.HasSuffix(spec, ".zon") {
+			// A module name no identity can carry: unresolved, it may be
+			// any file.
+			d.TentativeIdentity, d.MayBeAnyFile = true, true
 		}
 		x.refs = append(x.refs, d)
 		return
@@ -593,6 +611,9 @@ func (x *extractor) emit(name string, k reference.ReferenceKind, at *ts.Node, c 
 			file = file[:i]
 		}
 		d.IdentityInRepository = file != ".." && !strings.HasPrefix(file, "../")
+		// Another file's path: a case-insensitive file system may open it
+		// under another case.
+		d.PathCaseFold = file != x.key && !strings.HasPrefix(file, "{") && d.IdentityInRepository
 	}
 	if mod != nil {
 		mod(&d)

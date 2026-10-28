@@ -213,7 +213,7 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 | HTML | graph | ブラウザが構築するとおりの文書の中の id とその参照（IDREF 属性、フラグメント）、相対パスによる文書・スタイルシート・スクリプトへのリンク、インラインの style・script の宣言、画像・フォント・メディアへのリンク。絶対 URL は扱わない |
 | CSS | graph | `@keyframes`・`@font-face`・`@property`・カスタムプロパティ・CSS Modules のクラスと、同じスタイルシートの中のそれらへの参照、相対パスの `@import`、JavaScript・TypeScript の import が使う CSS Modules のクラス、画像・フォントの `url()`。セレクタと要素の対応は扱わない |
 | Python | graph | スコープ（LEGB）、import と相対 import、パッケージの再エクスポート、`self` / `cls` / `super()`、継承。ローカル変数の型推論、star import、動的な属性は解決しない |
-| Zig | graph | 字句スコープ、相対パスの `@import`、コンテナと `@This()`、再エクスポート、generic な型ファクトリ、型を宣言した値と宣言された戻り値型によるレシーバー、build.zig が文字どおりに対応付ける名前付き module（strong）。comptime の評価、`std` や依存パッケージの module は扱わない |
+| Zig | graph | 字句スコープ、相対パスの `@import`、コンテナと `@This()`、再エクスポート、generic な型ファクトリ、型を宣言した値と宣言された戻り値型によるレシーバー、import 元の module の import 表を build.zig の記述から読んだ名前付き module（strong）。comptime の評価、`std`、build.zig 以外の build コードだけが束縛する module は扱わない |
 | JavaScript | references | 宣言、クラスのメンバー、ES module と CommonJS（TypeScript と同じ抽出器）、スコープを考慮。グラフと context の品質は未認定 |
 
 グラフ系のツールはすべての言語で動作しますが、認定レベルを超える結果はテストの対象外です。詳細と言語ごとの制限は[言語サポート](docs/language-support.md)を参照してください。

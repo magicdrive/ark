@@ -304,6 +304,8 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			Dynamic:               rd.Dynamic,
 			IdentityInRepository:  rd.IdentityInRepository,
 			TentativeIdentity:     rd.TentativeIdentity,
+			PathCaseFold:          rd.PathCaseFold,
+			MayBeAnyFile:          rd.MayBeAnyFile,
 			FileIdentity:          rd.FileIdentity,
 			NamedArgument:         rd.NamedArgument,
 			IsCall:                rd.IsCall,
@@ -785,7 +787,7 @@ func (b *builder) aliases() (own, members map[aliasKey][]string) {
 	for _, m := range []map[aliasKey][]string{own, members} {
 		for k, t := range m {
 			sort.Strings(t)
-			m[k] = t
+			m[k] = slices.Compact(t) // several files may state one alias
 		}
 	}
 	return own, members

@@ -81,6 +81,12 @@ type Reference struct {
 	// TentativeIdentity: NameQualified names the target only if a
 	// declaration carries it (language.ReferenceDraft.TentativeIdentity).
 	TentativeIdentity bool
+	// PathCaseFold: NameQualified's path may name a file written in
+	// another case (language.ReferenceDraft.PathCaseFold).
+	PathCaseFold bool
+	// MayBeAnyFile: unresolved, the reference may denote any file of its
+	// language (language.ReferenceDraft.MayBeAnyFile).
+	MayBeAnyFile bool
 	// FileIdentity: NameQualified is a repository file's path, naming the
 	// declaration of that file itself in any language
 	// (language.ReferenceDraft.FileIdentity).
