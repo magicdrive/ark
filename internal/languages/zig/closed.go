@@ -151,6 +151,16 @@ func (w *world) run(root *ts.Node) string {
 			w.open("syntax Ark does not read: " + x.typ(n))
 			return
 		}
+		if x.typ(n) == "builtin_function" && x.builtinName(n) == "@import" && w.foreignImport(n) {
+			// Another file's code (a helper, a dependency's build, the
+			// build runner's root): the only way to name it. Whatever path
+			// its values take — a capture, a branch's value, a type
+			// parameter, std calling their format — it may run with the
+			// graph.
+			ok = false
+			w.open("an import of another file's code: " + collapse(x.text(n)))
+			return
+		}
 		if x.typ(n) == "function_declaration" {
 			if nm := x.field(n, "name"); nm != nil {
 				name := identifierName(x.text(nm))
@@ -171,6 +181,13 @@ func (w *world) run(root *ts.Node) string {
 	collect(root, 0)
 	if !ok {
 		return w.why
+	}
+	// buildEval reads the std.Build calls by their names: a function of
+	// the file named like one may be what such a call calls.
+	for _, name := range sortedKeys(w.fns) {
+		if modeledMethods[name] && name != "build" {
+			return w.open("a function of the file named like a std.Build call Ark reads: " + name)
+		}
 	}
 	// The build function's builder: the graph.
 	for _, fn := range w.fns["build"] {
@@ -738,6 +755,13 @@ func (w *world) check(n *ts.Node, depth int) {
 	case "call_expression":
 		if why := w.foreignWhy(x.field(n, "function")); why != "" {
 			w.open("a call of " + why + ": " + collapse(x.text(x.field(n, "function"))) + at(n))
+			return
+		}
+		if path, std := w.stdPath(x.field(n, "function")); std && !stdFunction(path) {
+			// A function of std's namespaces Ark does not list may write
+			// through what it is given (std.mem.swap, a sort): taint or
+			// not.
+			w.open("a std function Ark does not list: " + path + at(n))
 			return
 		}
 		if w.callInputs(n) && !w.modeledCall(x.field(n, "function"), x.named(x.field(n, "arguments"))) {
@@ -1322,6 +1346,14 @@ func (w *world) stdPath(n *ts.Node) (string, bool) {
 		return "", false
 	}
 	init := x.initializer(st)
+	if init != nil && x.typ(init) == "field_expression" && len(members) < maxEvalDepth {
+		// A constant naming a part of std (`const mem = std.mem;`).
+		base, ok := w.stdPath(init)
+		if !ok {
+			return "", false
+		}
+		return strings.Join(append([]string{base}, members...), "."), true
+	}
 	if init == nil || x.typ(init) != "builtin_function" || x.builtinName(init) != "@import" {
 		return "", false
 	}
@@ -1448,7 +1480,7 @@ var allowedNodes = setOf(
 var pureBuiltins = setOf(
 	"@import", "@This", "@TypeOf", "@typeInfo", "@typeName", "@sizeOf", "@alignOf", "@bitSizeOf",
 	"@hasDecl", "@hasField", "@tagName", "@errorName", "@intFromEnum", "@src", "@compileError",
-	"@compileLog", "@embedFile", "@panic", "@intFromBool", "@inComptime", "@intFromPtr",
+	"@compileLog", "@embedFile", "@panic", "@intFromBool", "@inComptime",
 )
 
 // modeledMethods are the calls buildEval reads (std.Build and its
@@ -1572,6 +1604,41 @@ var containerMethods = setOf(
 	"addOne", "addOneAssumeCapacity",
 )
 
+// stdFunction reports a function of std's namespaces a closed build may
+// call whatever it is given: one that only reads (readOnlyStd), a
+// container type, a path's or a file's operation, a step's or a module's
+// create (read by buildEval).
+func stdFunction(path string) bool {
+	if readOnlyStd[path] || stdTypes[path] || path == "std.Build.Module.create" {
+		return true
+	}
+	if kind, ok := strings.CutPrefix(path, "std.Build.Step."); ok && stepKinds[strings.TrimSuffix(kind, ".create")] && strings.HasSuffix(kind, ".create") {
+		return true
+	}
+	for _, p := range []string{"std.fs.path.", "std.Io.Dir.", "std.Io.File.", "std.ascii.", "std.debug.", "std.log.", "std.fmt."} {
+		if strings.HasPrefix(path, p) {
+			return true
+		}
+	}
+	return stdOther[path]
+}
+
+// stdTypes are std's container type functions.
+var stdTypes = setOf(
+	"std.ArrayList", "std.ArrayListUnmanaged", "std.AutoHashMap", "std.AutoHashMapUnmanaged",
+	"std.StringHashMap", "std.StringHashMapUnmanaged", "std.AutoArrayHashMap",
+	"std.AutoArrayHashMapUnmanaged", "std.StringArrayHashMap", "std.StringArrayHashMapUnmanaged",
+	"std.BufSet", "std.BufMap", "std.EnumSet", "std.EnumArray",
+)
+
+// stdOther are std functions of other namespaces that only read or make a
+// value holding no graph value.
+var stdOther = setOf(
+	"std.SemanticVersion.parse", "std.SemanticVersion.order", "std.zig.LibCInstallation.findNative",
+	"std.Target.Query.parse", "std.meta.stringToEnum", "std.process.getEnvVarOwned",
+	"std.unicode.utf8ValidateSlice",
+)
+
 // stepKinds are the steps of Zig 0.17.0 whose create (Step.X.create(b,
 // ...)) makes a step: none creates, roots, binds or registers a module.
 var stepKinds = setOf(
@@ -1603,7 +1670,7 @@ var graphFreeStd = setOf(
 	"std.mem.eql", "std.mem.startsWith", "std.mem.endsWith", "std.mem.indexOf",
 	"std.mem.indexOfScalar", "std.mem.indexOfAny", "std.mem.lastIndexOf",
 	"std.mem.lastIndexOfScalar", "std.mem.count", "std.mem.containsAtLeast", "std.mem.order",
-	"std.mem.lessThan", "std.mem.join", "std.fmt.allocPrint", "std.fmt.bufPrint",
+	"std.mem.lessThan", "std.mem.join",
 	"std.fmt.comptimePrint", "std.fmt.parseInt", "std.fmt.parseUnsigned", "std.fs.path.join",
 	"std.fs.path.joinZ", "std.fs.path.basename", "std.fs.path.dirname", "std.fs.path.extension",
 	"std.fs.path.stem", "std.fs.path.relative", "std.fs.path.isAbsolute", "std.meta.stringToEnum",

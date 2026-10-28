@@ -154,7 +154,19 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    (a dependency's `b.dependency`) or a build run otherwise may stand for it.
 
    **Closed.** A build.zig is closed when Ark follows every way its code
-   may reach the build graph. Zig 0.17.0's std keeps the graph in no global
+   may reach the build graph. Three rules do not rest on following values
+   at all: the file imports no other file's code (no `@import` but `std`,
+   `builtin` and ZON data — the only way to name another file's code, so
+   no helper, no dependency's build code, no build runner root ever runs,
+   whatever path its values would take); a function of std's namespaces is
+   one of a list that only reads, makes a container type, or operates on
+   paths and files (`std.mem.eql`, `std.ArrayList`, `std.fs.path.join`;
+   `std.mem.swap`, `std.mem.bytesToValue`, a sort are not); no function of
+   the file is named like a std.Build call `buildEval` reads by its name
+   (`createModule`, `addExecutable`, `module`). Pointers are never made or
+   cast (`@ptrFromInt`, `@ptrCast`, `@fieldParentPtr`, `@bitCast`, ...), and
+   nothing is written through a pointer or into an element (`p.* = v`,
+   `a[i] = v`; a slot of a map's `getOrPut` excepted). Zig 0.17.0's std keeps the graph in no global
    (neither `std.Build` nor the configurer has a container-level `var`):
    code reaches it only through a value it is given — the build function's
    `*std.Build` and what is derived from it (a module, an artifact, a step,
@@ -212,6 +224,7 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    | several build roots | each read alone; one open build opens every module |
    | a consumer outside the repository, a command line (`zig build-exe --dep`) | outside the boundary: the graph is the repository's builds' |
    | illegal behavior (Zig's undefined behavior) | outside the boundary |
+   | a path through a symbolic link (a module rooted at `link/main.zig`, `link` a link to `b`) | outside the boundary: the index follows no link (files are what the walk reaches by their own paths), so a module root named through one roots no indexed file |
 
    **Completeness.** An open build's unknowns are open (`AliasDraft.Open`):
    a resolution through one counts, besides its Candidates, as an
