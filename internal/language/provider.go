@@ -263,6 +263,33 @@ type ReferenceDraft struct {
 	// type cannot change, used where its one declaration is in scope).
 	ReceiverChain string `json:",omitempty"`
 
+	// TentativeIdentity qualifies NameQualified: the identity names the
+	// target only if a declaration carries it. The provider reads the
+	// receiver's type from what another file states (the result type a
+	// function declares, a member of it) and cannot tell whether Name is a
+	// declaration of that type or something no declaration is (a field
+	// holding a function): no declaration with the identity leaves the
+	// reference Unresolved — neither outside the repository nor excluded
+	// from any same-named declaration's completeness (IdentityInRepository
+	// claims both, and is not set with it). Such a reference is a member: it
+	// carries its ReceiverExpr, which the identity decides before (R0).
+	TentativeIdentity bool `json:",omitempty"`
+
+	// PathCaseFold qualifies NameQualified, whose leading part (up to the
+	// first "::") is a file's path: a file whose path differs from it in
+	// case alone may be the one meant (a case-insensitive file system opens
+	// it). No declaration with the identity, the identity read in such a
+	// file names Candidates — never more: on a case-sensitive file system
+	// the path names no file.
+	PathCaseFold bool `json:",omitempty"`
+
+	// MayBeAnyFile states that the reference, unresolved, may denote the
+	// declaration of any file of its language, whatever its name: an import
+	// of a module a build maps by code Ark does not evaluate (Zig
+	// `@import("name")`). Completeness counts it toward every file's
+	// declaration, so no file's importers read complete while it exists.
+	MayBeAnyFile bool `json:",omitempty"`
+
 	// Speculative marks a reference the provider records only in case Name
 	// denotes a declaration Ark extracts: a selector x.f whose receiver has
 	// type evidence, where f may equally be a member no provider extracts
@@ -380,6 +407,42 @@ type AliasDraft struct {
 	Qualified string
 	Target    string
 	Location  source.Location
+
+	// Members states that Qualified is itself a declaration — a constant
+	// whose value is what Target names (Zig `pub const Vec = vec.Vec;`) —
+	// so the alias reads only the identities below it: Qualified::x names
+	// Target::x, while Qualified itself names its own declaration and never
+	// Target's. Without it the alias reads Qualified too.
+	Members bool `json:",omitempty"`
+
+	// ConfidenceCap bounds every resolution that follows the alias: ""
+	// (no bound), "strong" or "candidate" (ReferenceDraft.ConfidenceCap's
+	// values and rules). A provider sets it when the alias rests on weaker
+	// evidence than the language's own rules — a module name a build script
+	// maps statically, which a dependency's module of the name may stand
+	// for instead (Zig build.zig). It only lowers.
+	ConfidenceCap string `json:",omitempty"`
+
+	// Open states that what the alias stands for may also be something no
+	// declaration Ark has is (a module a build makes by means Ark does not
+	// read): a resolution that follows it is open — its candidates do not
+	// bound the referent, and completeness counts the reference as it
+	// counts an unresolved one, besides its candidates. Set with a cap.
+	Open bool `json:",omitempty"`
+
+	// Fallback states an alias read only where its identity names nothing
+	// else — no declaration carries it and no other alias of it leads to
+	// anything declared or aliased — and only on a reading that found no
+	// declaration otherwise (a name a build registers nowhere Ark reads, a
+	// bound file the index does not hold, stands for what Target names).
+	Fallback bool `json:",omitempty"`
+
+	// Absent states the alias holds only where no file of the language has
+	// this path in the index — a path the walk does not reach (through a
+	// symbolic link, under a directory the index skips, generated): what
+	// it would name is not a file Ark sees (Zig: a module rooted there may
+	// hold any file).
+	Absent string `json:",omitempty"`
 }
 
 // ImportDraft is a raw import extracted from a source file.

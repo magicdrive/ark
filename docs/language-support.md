@@ -1,6 +1,6 @@
 # Language support
 
-Ark analyzes eleven languages. They are not supported equally: each language
+Ark analyzes twelve languages. They are not supported equally: each language
 has a **support level**, the highest stage its tests certify, and every
 language has constructs Ark deliberately leaves unresolved.
 
@@ -32,11 +32,12 @@ Levels build on each other:
 | HTML | `.html`, `.htm` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Zig | `.zig` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript, and `get_context` still works for PHP, Terraform,
-Rust, HTML, CSS and Python, but those results are not covered by the tests the level names.
+Rust, HTML, CSS, Python and Zig, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -743,6 +744,84 @@ outside the repository; inside a body, that body states no references.
 Files named `Test*.java`, `*Test.java`, `*Tests.java`, `*TestCase.java` and
 those under a `test/` or `tests/` directory are test files. Ark never runs
 `javac`, Maven or Gradle and reads no build file.
+
+## Zig
+
+Zig 0.15 to 0.17 (the current release, 0.17.0), as the grammar
+[tree-sitter-zig](https://github.com/tree-sitter-grammars/tree-sitter-zig)
+parses it (its corpus follows Zig 0.15). Older code parses too, but
+constructs Zig has removed are read conservatively: a container with
+`usingnamespace` (removed in 0.15) may bring any name, so names it could
+bring stay unresolved.
+
+**Extracted:** each file itself (a Zig file is a struct; kind `module`),
+functions (`fn`, `pub`, `export`, `extern`, `inline`), methods (functions of
+a container), `const` and `var` declarations, `struct`, `union`, `enum`,
+`opaque` and error sets (`error{...}`) with their fields, enum fields and
+error names, containers declared in function bodies (a generic type
+factory's returned struct), `test` declarations (`test "name"`, `test decl`).
+A constant whose value is a type by its syntax (`*const T`, `?T`, `E || F`,
+`@This()`) or a container of the file is a `type_alias`; an `@import` a
+`module`. Function parameters, locals and captures are analyzed for scoping,
+not extracted. References: calls, `T{...}` constructions, type uses, value
+references to declarations, imports (`@import`), decl and enum literals
+where a declared type fixes their result type (`const e: Engine = .init();`,
+`.red`), `@This()` as a use of its container, and calls of computed callees
+(`handlers[i]()`, reported as dynamic).
+
+**Identity.** A declaration's qualified name is its file's
+repository-relative path followed by the containers down to it:
+`src/engine.zig::Engine::run`. A struct or union field is
+`src/engine.zig::Engine.count` (no member access names a field); a
+declaration in a function body is `f::name`; the one container a function
+returns (`fn List(comptime T: type) type { return struct {...}; }`) is
+`src/list.zig::List::()`, and an unnamed container elsewhere is
+`...::{struct}`. The file itself is `src/engine.zig`, which a relative
+`@import` of it names. Get a declaration by its Zig path: `Engine.run`.
+
+**Resolution:** only what Zig's own rules and the files' declarations fix
+resolves — `exact` when one declaration has the identity:
+
+| | |
+|---|---|
+| **Supported** | names by lexical scope (a block's locals before their declaration, parameters, captures, the declarations of the enclosing containers, innermost first, through the function bodies a container is declared in); members of a container of the file, of a file a relative `@import` names (`@import("../x.zig")` from its directory), and of a constant naming either — an import, `@This()`, a path, a re-export of another file (`pub const Vec = @import("vec.zig").Vec;`) — through any chain of files; generic type factories (`List(u32).append`, `var l: List(u8)`, also of another file) whose one return is a container; method calls on a receiver whose type the file proves: a declared type (`v: T`, `*T`, `*const T`, a parameter `self: *Self`), a construction (`T{...}`), a call of a function whose written result type is a container (`T.init()` returning `Self`, through `try` / `catch` for an error union — also of another file), a field of a struct of the file; decl and enum literals of a declared type; named modules (`@import("stdx")`) by the import table of the importing file's module, as a closed `build.zig` states it (below) — `m.addImport("name", other)`, `.imports = &.{ .{ .name, .module } }` (also chosen by a comptime condition, or copied from another module's `import_table`), where a module is a `b.createModule` / `b.addModule` with a literal `.root_source_file = b.path("...")`, an artifact's `.root_module`, or a constant, tuple element, function parameter (what the file's calls pass) or return naming one; a file may belong to a module rooted in its directory or above (Zig rejects an import out of the module's directory) — at **strong** at most (a fetched package's module of the name may be the one used); `@import("x.zig")` is the module the table binds under that name, else the file — while every `build.zig` of the repository is closed |
+| **Candidate** | every import — named or relative, and every member through one — while a `build.zig` of the repository is open: it gives the builder or a module to code Ark does not read (a helper file, a dependency's build code, a function pointer), uses one in a way Ark does not model, or holds syntax Ark does not read; what it runs may bind any name in any module (a file's references to its own declarations are untouched); a namespace a comptime condition chooses (`pub const Impl = if (builtin.os.tag == .windows) win.Impl else posix.Impl;`, `switch` the same way): a member through it is either alternative — also when only one alternative declares it (the other may be `std`'s, a file outside the repository, or hold it as a field); a member of containers that share an identity (unnamed payload structs of one union, same-named containers of two blocks of a function); a name declared twice in one scope; a module name the modules a file may belong to bind to different files; a binding to a module the build's syntax does not name, or of a name it does not state (computed at build time) — then every import of the module's files is a Candidate, `@import("x.zig")` included; a file a module's table also binds under its relative path's name (Zig takes the module); a file whose path differs from the import's in case alone (a case-insensitive file system opens it) |
+| **Unresolved by design** | `std`, `builtin`, `root` and anything through them (the compiler provides them; root's calls stay attributable to every declaration of their name); a named module no `build.zig` of the repository binds for the importing file's module — a binding in build code that is no `build.zig` (a helper file the build imports, such as Ghostty's `src/build/`), a fetched package's, one a function of another file makes: the import counts toward every file's importers and its calls toward every same-named declaration, never ruled out; a ZON import (`@import("build.zig.zon")`); method calls on a value whose type needs inference (an `anytype` or `comptime T: type` parameter, a capture, a `comptime var` holding a type, an optional, slice or array, a call of a function stating no container result type); a member another file's type may hold as a field holding a function (the call is observed, unresolved); a name a `usingnamespace` of a nearer container may bring; `@field`, `@call` targets and other computed names; a file a relative import names that does not exist |
+| **Not implemented** | comptime evaluation (which branch a target compiles, `inline` loops, type construction with `@Type` / `@Struct`), reading build code beyond `build.zig` files (helper files they import, a dependency's build through `build.zig.zon`) and beyond the module values above (options, struct fields of values the file does not construct, loops), field accesses as references, the types of a container's fields declared in another file (`x.field.method()` through a field of another file's struct), struct-field aliases (`.{ .x = ... }` initializer names) |
+
+**Measured on real projects.** On TigerBeetle and Ghostty (pinned commits;
+see [the evaluation record](development/zig.md)), every graph edge of a
+random sample checked by hand pointed at the declaration the reference
+names; no false `exact` or `strong` edge was found in the sample. This is a
+sample, not a proof.
+
+A file the parser rejects (inline assembly clobbers written as a struct
+literal, `*if (c) A else B` as a type) is reported by `get_diagnostics`;
+its rejected region is not analyzed.
+
+Tests written inline (`test "..." { ... }`) are ordinary declarations of
+their file; files named `*_test.zig`, `test.zig` or `tests.zig` and files
+under a `test/` or `tests/` directory are test files.
+
+Ark never runs `zig`, `zig build`, `build.zig` or any build step, and never
+reads `build.zig.zon`. What a `build.zig` binds is read from its syntax
+(`addImport`, `addAnonymousImport`, `addOptions`, `.imports`,
+`import_table`); an operation on a module it does not read leaves the
+module's names unknown — their imports Candidates, counted as unresolved
+besides. Its bindings ground a Strong (and the absence of one a relative
+Exact) only when the build is **closed**: Ark follows every use of a value
+that reaches the build graph — the builder and what is derived from it —
+through the file's own functions, the std.Build methods Zig 0.17.0's source
+shows keep every module's root, table and registration, containers, and
+std functions that only read. A build that imports another file's code
+(a helper file, a dependency's build module, ZON), runs a dependency's
+build (`b.dependency`), gives such a value to anything else (an unknown
+method, a function pointer, a pointer cast), assigns one where Ark does not
+follow it, makes modules the compiler adds (a test runner, another
+standard library), or holds syntax Ark does not read is **open**: every import of the
+repository is then a Candidate, counted as unresolved besides. See
+[the design record](development/zig.md), decision 8. A `zig-cache/` or `.zig-cache/` directory is skipped
+only as `.gitignore` excludes it (a dot directory always is).
 
 ## Known gaps
 

@@ -1,0 +1,28 @@
+symbol build.zig::std unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate std kind=import receiver="" reason=unresolved @build.zig:1:21-1:26
+symbol build.zig::build unattributed_in=0 unattributed_out=0 unresolved=5 outside=0
+  no_candidate Build kind=type_use receiver="" reason=unresolved @build.zig:3:22-3:27
+  no_candidate addExecutable kind=call receiver="b" reason=unresolved @build.zig:4:19-4:32
+  no_candidate createModule kind=call receiver="b" reason=unresolved @build.zig:6:26-6:38
+  no_candidate path kind=call receiver="b" reason=unresolved @build.zig:6:64-6:68
+  no_candidate installArtifact kind=call receiver="b" reason=unresolved @build.zig:8:7-8:22
+symbol src/broken.zig unattributed_in=0 unattributed_out=0 unresolved=3 outside=0
+  no_candidate broken kind=type_use receiver="" reason=unresolved @src/broken.zig:2:8-2:14
+  no_candidate good kind=type_use receiver="" reason=unresolved @src/broken.zig:4:8-4:12
+  no_candidate broken kind=call receiver="" reason=unresolved @src/broken.zig:5:5-5:11
+symbol src/broken.zig::std unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate std kind=import receiver="" reason=unresolved @src/broken.zig:1:21-1:26
+symbol src/main.zig::std unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate std kind=import receiver="" reason=unresolved @src/main.zig:1:21-1:26
+symbol src/main.zig::main unattributed_in=0 unattributed_out=1 unresolved=1 outside=0
+  no_candidate print kind=call receiver="" reason=unresolved @src/main.zig:18:15-18:20
+  candidate_callee src/windows.zig::Backend::open kind=call confidence=candidate refs=1
+  candidate_callee src/posix.zig::Backend::open kind=call confidence=candidate refs=1
+symbol src/platform.zig::builtin unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate builtin kind=import receiver="" reason=unresolved @src/platform.zig:1:25-1:34
+symbol src/platform.zig::Backend unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate tag kind=value_reference receiver="" reason=unresolved @src/platform.zig:5:36-5:39
+symbol src/posix.zig::Backend::open unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller src/main.zig::main kind=call confidence=candidate refs=1
+symbol src/windows.zig::Backend::open unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller src/main.zig::main kind=call confidence=candidate refs=1

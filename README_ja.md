@@ -8,7 +8,7 @@
 
 Ark はリポジトリを構文解析して宣言と参照を抽出し、各参照がどの宣言を指すかを解決したうえで、その結果のグラフを [Model Context Protocol](https://modelcontextprotocol.io)（MCP）でコーディングエージェントに提供します。エージェントは「この関数を呼んでいるのはどこか」「この変更は何に影響するか」「編集の前に読むべきコードはどれか」を問い合わせ、どこまで確かな答えなのかを添えた回答を受け取れます。
 
-Ark は単一の静的バイナリです。Go、TypeScript、TSX、PHP、Terraform、Rust、Java、JavaScript、Python を、リポジトリのコードを一切実行せずに解析します。
+Ark は単一の静的バイナリです。Go、TypeScript、TSX、PHP、Terraform、Rust、Java、Zig、JavaScript、Python を、リポジトリのコードを一切実行せずに解析します。
 
 > 詳細なドキュメント（`docs/` 以下）は英語で提供しています。
 
@@ -213,6 +213,7 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 | HTML | graph | ブラウザが構築するとおりの文書の中の id とその参照（IDREF 属性、フラグメント）、相対パスによる文書・スタイルシート・スクリプトへのリンク、インラインの style・script の宣言、画像・フォント・メディアへのリンク。絶対 URL は扱わない |
 | CSS | graph | `@keyframes`・`@font-face`・`@property`・カスタムプロパティ・CSS Modules のクラスと、同じスタイルシートの中のそれらへの参照、相対パスの `@import`、JavaScript・TypeScript の import が使う CSS Modules のクラス、画像・フォントの `url()`。セレクタと要素の対応は扱わない |
 | Python | graph | スコープ（LEGB）、import と相対 import、パッケージの再エクスポート、`self` / `cls` / `super()`、継承。ローカル変数の型推論、star import、動的な属性は解決しない |
+| Zig | graph | 字句スコープ、相対パスの `@import`、コンテナと `@This()`、再エクスポート、generic な型ファクトリ、型を宣言した値と宣言された戻り値型によるレシーバー、import 元の module の import 表を build.zig の記述から読んだ名前付き module（strong）。comptime の評価、`std`、build.zig 以外の build コードだけが束縛する module は扱わない |
 | JavaScript | references | 宣言、クラスのメンバー、ES module と CommonJS（TypeScript と同じ抽出器）、スコープを考慮。グラフと context の品質は未認定 |
 
 グラフ系のツールはすべての言語で動作しますが、認定レベルを超える結果はテストの対象外です。詳細と言語ごとの制限は[言語サポート](docs/language-support.md)を参照してください。

@@ -2,10 +2,12 @@ package resolver
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/magicdrive/ark/internal/reference"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -54,11 +56,50 @@ func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 	r.qualOnce.Do(func() {
 		r.qualified = make(map[langQualified][]symbol.Symbol)
 		r.aliases = make(map[langQualified][]string)
+		r.memberAliases = make(map[langQualified][]string)
+		r.aliasCaps = make(map[langQualified]Confidence)
+		r.heads = make(map[langQualified]bool)
+		r.fallbacks = make(map[langQualified][]string)
+		r.openAliases = make(map[langQualified]bool)
+		// The files of the index, by path: an Absent alias holds only
+		// where its path names none.
+		present := make(map[langQualified]bool)
+		for _, fi := range r.files {
+			for _, s := range fi.Symbols {
+				if s.Qualified != "" && s.Qualified == string(s.Location.File) {
+					present[langQualified{fi.Language, s.Qualified}] = true
+				}
+			}
+		}
 		for _, fi := range r.files {
 			for _, a := range fi.Aliases {
+				if a.Absent != "" && present[langQualified{fi.Language, a.Absent}] {
+					continue
+				}
 				if a.Qualified != "" && a.Target != "" {
 					k := langQualified{fi.Language, a.Qualified}
-					r.aliases[k] = append(r.aliases[k], a.Target)
+					head, _, _ := strings.Cut(a.Qualified, "::")
+					r.heads[langQualified{fi.Language, head}] = true
+					if a.ConfidenceCap != "" {
+						limit := ConfidenceCandidate // unknown caps fail safe
+						if a.ConfidenceCap == ConfidenceStrong.String() {
+							limit = ConfidenceStrong
+						}
+						if prev, ok := r.aliasCaps[k]; !ok || limit < prev {
+							r.aliasCaps[k] = limit
+						}
+					}
+					if a.Open {
+						r.openAliases[k] = true
+					}
+					switch {
+					case a.Fallback:
+						r.fallbacks[k] = append(r.fallbacks[k], a.Target)
+					case a.Members:
+						r.memberAliases[k] = append(r.memberAliases[k], a.Target)
+					default:
+						r.aliases[k] = append(r.aliases[k], a.Target)
+					}
 				}
 			}
 			for _, s := range fi.Symbols {
@@ -67,14 +108,19 @@ func (r *Resolver) typeDecls(language, qualified string) []symbol.Symbol {
 				}
 				k := langQualified{s.Language, s.Qualified}
 				r.qualified[k] = append(r.qualified[k], s)
+				head, _, _ := strings.Cut(s.Qualified, "::")
+				r.heads[langQualified{s.Language, head}] = true
 			}
 		}
 		for _, syms := range r.qualified {
 			sortSymbols(syms)
 		}
-		for k, targets := range r.aliases {
-			sort.Strings(targets)
-			r.aliases[k] = targets
+		for _, m := range []map[langQualified][]string{r.aliases, r.memberAliases, r.fallbacks} {
+			for k, targets := range m {
+				// Several files may state one alias: it is one reading.
+				sort.Strings(targets)
+				m[k] = slices.Compact(targets)
+			}
 		}
 	})
 	return r.qualified[langQualified{language, qualified}]
@@ -90,55 +136,190 @@ const MaxAliasDepth = 8
 // module: `pub use a::b as m;` then m::x) — all of them, so an identity two
 // readings give (#[cfg] alternatives: an item in one configuration, an alias
 // in the other) names both, as does a path two of whose leading parts are
-// aliases. via lists the aliases followed. Each identity is expanded once,
-// by its shortest chain, so a cycle ends and shared aliases cost nothing
-// more; a chain longer than MaxAliasDepth is not followed. Both R0 and the index's
-// lookup of a re-exported name (index.SymbolsThroughAliases) use it.
-func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases func(string) []string) (out []symbol.Symbol, via []string) {
+// aliases. aliases(q, below) returns the targets of q's aliases: below is
+// false for the identity being read itself, true for a leading part of its
+// path, which an alias stated for the members below its identity only
+// (language.AliasDraft.Members) also reads. via lists the aliases followed.
+// Each identity is expanded once, by its shortest chain, so a cycle ends and
+// shared aliases cost nothing more; a chain longer than MaxAliasDepth is not
+// followed. Both R0 and the index's lookup of a re-exported name
+// (index.SymbolsThroughAliases) use it.
+func ExpandAliases(qualified string, decls func(string) []symbol.Symbol, aliases func(q string, below bool) []string) (out []symbol.Symbol, via []string) {
+	out, via, _, _ = expandAliases(qualified, decls, aliases, nil, nil)
+	return out, via
+}
+
+// expandAliases is ExpandAliases, which also returns used: the aliases of
+// via on a chain that reaches a declaration, in via's order. via bounds a
+// resolution (AliasDraft.ConfidenceCap: an alias followed may name what
+// the reference denotes even where Ark finds nothing); used explains one.
+// live, when set, reports whether anything is declared or aliased under an
+// identity's leading part: an alias target under none names nothing and is
+// not expanded (it stays in via).
+func expandAliases(qualified string, decls func(string) []symbol.Symbol, aliases, fallbacks func(q string, below bool) []string, live func(string) bool) (out []symbol.Symbol, via, used []string, truncated bool) {
 	// Breadth first: an identity is first reached by its shortest chain, so
 	// marking it seen never cuts a shorter path the depth bound would allow.
 	type step struct {
 		q     string
 		depth int
+		found bool
 	}
-	seen := map[string]bool{qualified: true}
-	queue := []step{{qualified, 0}}
-	visit := func(q string, depth int) {
-		if depth <= MaxAliasDepth && !seen[q] {
-			seen[q] = true
-			queue = append(queue, step{q, depth})
-		}
+	type edge struct {
+		alias string
+		from  int
+		to    int // -1: not followed (names nothing, or past the depth bound)
 	}
-	for len(queue) > 0 {
-		st := queue[0]
-		queue = queue[1:]
-		out = append(out, decls(st.q)...)
-		for _, target := range aliases(st.q) {
-			via = append(via, st.q)
-			visit(target, st.depth+1)
+	type deferred struct {
+		from         int
+		alias        string
+		target, rest string
+		done         bool
+	}
+	var edges []edge
+	var pending []deferred
+	index := map[string]int{qualified: 0}
+	steps := []step{{q: qualified}}
+	visit := func(from int, alias, target, rest string, depth int) {
+		if live != nil && !live(target) {
+			// Nothing is declared or aliased under it: it names nothing.
+			via = append(via, alias)
+			edges = append(edges, edge{alias, from, -1})
+			return
 		}
-		// Every leading part of the path that is an alias gives a reading:
-		// all of them are followed.
-		parts := strings.Split(st.q, "::")
-		for i := len(parts) - 1; i >= 1; i-- {
-			prefix := strings.Join(parts[:i], "::")
-			rest := strings.Join(parts[i:], "::")
-			for _, target := range aliases(prefix) {
-				via = append(via, prefix)
-				visit(target+"::"+rest, st.depth+1)
+		q := target
+		if rest != "" {
+			q += "::" + rest
+		}
+		to, ok := index[q]
+		if !ok {
+			to = -1
+			if depth <= MaxAliasDepth {
+				to = len(steps)
+				index[q] = to
+				steps = append(steps, step{q: q, depth: depth})
+			} else {
+				truncated = true // what it names is not known
+			}
+		}
+		via = append(via, alias)
+		edges = append(edges, edge{alias, from, to})
+	}
+	expand := func(start int) {
+		for i := start; i < len(steps); i++ {
+			st := steps[i]
+			d := decls(st.q)
+			steps[i].found = len(d) > 0
+			out = append(out, d...)
+			for _, target := range aliases(st.q, false) {
+				visit(i, st.q, target, "", st.depth+1)
+			}
+			if fallbacks != nil {
+				for _, target := range fallbacks(st.q, false) {
+					pending = append(pending, deferred{from: i, alias: st.q, target: target})
+				}
+			}
+			// Every leading part of the path that is an alias gives a
+			// reading: all of them are followed.
+			parts := strings.Split(st.q, "::")
+			for j := len(parts) - 1; j >= 1; j-- {
+				prefix := strings.Join(parts[:j], "::")
+				rest := strings.Join(parts[j:], "::")
+				for _, target := range aliases(prefix, true) {
+					visit(i, prefix, target, rest, st.depth+1)
+				}
+				if fallbacks != nil {
+					for _, target := range fallbacks(prefix, true) {
+						pending = append(pending, deferred{from: i, alias: prefix, target: target, rest: rest})
+					}
+				}
 			}
 		}
 	}
-	return out, via
+	// A step reaches a declaration when it is one or an edge leads to one
+	// that does (to a fixed point: an edge may lead back to an earlier step).
+	settle := func() {
+		for changed := true; changed; {
+			changed = false
+			for _, e := range edges {
+				if e.to >= 0 && steps[e.to].found && !steps[e.from].found {
+					steps[e.from].found, changed = true, true
+				}
+			}
+		}
+	}
+	expand(0)
+	settle()
+	// A fallback is read only where the identity names nothing otherwise:
+	// from a step that reaches no declaration, once the rest is expanded.
+	for more := true; more; {
+		more = false
+		start := len(steps)
+		for k := range pending {
+			p := &pending[k]
+			if !p.done && !steps[p.from].found {
+				p.done, more = true, true
+				visit(p.from, p.alias, p.target, p.rest, steps[p.from].depth+1)
+			}
+		}
+		if more {
+			expand(start)
+			settle()
+		}
+	}
+	for _, e := range edges {
+		if e.to >= 0 && steps[e.to].found {
+			used = append(used, e.alias)
+		}
+	}
+	return out, via, used, truncated
 }
 
 // identityDecls returns the declarations an identity names in language
 // (ExpandAliases over the language's declarations and aliases).
-func (r *Resolver) identityDecls(language, qualified string) (decls []symbol.Symbol, via []string) {
-	d, via := ExpandAliases(qualified,
+func (r *Resolver) identityDecls(language, qualified string) (decls []symbol.Symbol, via, used []string, truncated bool) {
+	d, via, used, truncated := expandAliases(qualified,
 		func(q string) []symbol.Symbol { return r.typeDecls(language, q) },
-		func(q string) []string { return r.aliases[langQualified{language, q}] })
-	return uniqueSymbols(d), via
+		func(q string, below bool) []string {
+			k := langQualified{language, q}
+			if below {
+				return aliasTargets(r.aliases[k], r.memberAliases[k])
+			}
+			return r.aliases[k]
+		},
+		func(q string, below bool) []string {
+			// Read only where q names nothing else: no declaration, no
+			// alias into anything declared or aliased.
+			k := langQualified{language, q}
+			if len(r.fallbacks[k]) == 0 || len(r.typeDecls(language, q)) > 0 {
+				return nil
+			}
+			for _, t := range aliasTargets(r.aliases[k], r.memberAliases[k]) {
+				head, _, _ := strings.Cut(t, "::")
+				if r.heads[langQualified{language, head}] {
+					return nil
+				}
+			}
+			return r.fallbacks[k]
+		},
+		func(q string) bool {
+			head, _, _ := strings.Cut(q, "::")
+			return r.heads[langQualified{language, head}]
+		})
+	return uniqueSymbols(d), via, used, truncated
+}
+
+// aliasTargets returns an identity's alias targets, those of the aliases
+// that read it and those that read only the members below it, sorted.
+func aliasTargets(own, members []string) []string {
+	if len(members) == 0 {
+		return own
+	}
+	if len(own) == 0 {
+		return members
+	}
+	out := append(slices.Clone(own), members...)
+	sort.Strings(out)
+	return slices.Compact(out)
 }
 
 // uniqueSymbols drops repeated symbols, keeping the order.
@@ -197,32 +378,165 @@ func (r *Resolver) resolveQualifiedIdentity(res Resolution, ref reference.Refere
 		return own
 	}
 
-	types, via := r.identityDecls(ref.Language, ref.NameQualified)
+	types, via, used, truncated := r.identityDecls(ref.Language, ref.NameQualified)
 	detail := fmt.Sprintf("%q", ref.NameQualified)
-	if len(via) > 0 {
-		detail += fmt.Sprintf(" (through the re-export of %s)", strings.Join(via, ", "))
+	// A chain past the depth bound names what Ark did not follow: the
+	// result is bounded by nothing it found.
+	open := truncated
+	for _, q := range via {
+		open = open || r.openAliases[langQualified{ref.Language, q}]
 	}
 	if len(types) == 0 {
-		return noQualifiedDeclaration(res, ref, detail)
+		if len(via) > 0 {
+			detail += fmt.Sprintf(" (through the re-export of %s)", strings.Join(via, ", "))
+		}
+		if folded, ok := r.caseFoldedResolution(res, ref, detail); ok {
+			folded.Open = open
+			return folded
+		}
+		res = noQualifiedDeclaration(res, ref, detail)
+		if open {
+			// What the identity stands for may be no declaration of the
+			// index: not outside the repository, and unbounded.
+			res.OutsideRepository, res.Open = false, true
+		}
+		return res
+	}
+	// A path a case-insensitive file system opens in another case may be
+	// what the reference names besides what the identity's aliases lead to
+	// (a module a table binds under an import's spec, the file beside the
+	// importer in another case): one of the Candidates.
+	folded := r.foldedDecls(ref)
+	if len(folded) > 0 {
+		types = uniqueSymbols(append(types, folded...))
+	}
+	// The aliases on a chain to a declaration explain it; one followed in
+	// vain only bounds it (below).
+	if len(used) > 0 {
+		detail += fmt.Sprintf(" (through the re-export of %s)", strings.Join(used, ", "))
 	}
 	where := fmt.Sprintf("declared at %s", types[0].Location.File)
 	if len(types) > 1 {
 		where = fmt.Sprintf("declared %d times", len(types))
 	}
 	// pickBest downgrades several declarations to Candidate.
-	return r.pickBest(res, types, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is "+where)
+	res = r.pickBest(res, types, ConfidenceExact, EvidenceQualifiedIdentity, detail+" is "+where)
+	// An alias followed on the way may rest on weaker evidence than the
+	// language's rules (AliasDraft.ConfidenceCap): it bounds the result,
+	// even where it names nothing Ark finds (what it stands for may be the
+	// target).
+	capped := map[string]bool{}
+	for _, q := range via {
+		if limit, ok := r.aliasCaps[langQualified{ref.Language, q}]; ok && !capped[q] {
+			capped[q] = true
+			res = capConfidence(res, limit, ResolutionEvidence{
+				Kind:   EvidenceConfidenceCap,
+				Detail: fmt.Sprintf("the alias %s permits at most %s", q, limit),
+			})
+		}
+	}
+	if truncated {
+		res = capConfidence(res, ConfidenceCandidate, ResolutionEvidence{
+			Kind:   EvidenceConfidenceCap,
+			Detail: fmt.Sprintf("a chain of aliases longer than %d is not followed: what it names is unknown", MaxAliasDepth),
+		})
+	}
+	if len(folded) > 0 {
+		res = capConfidence(res, ConfidenceCandidate, ResolutionEvidence{
+			Kind:   EvidenceConfidenceCap,
+			Detail: "a path matching only in another case names a file on a case-insensitive file system alone",
+		})
+	}
+	res.Open = open
+	return res
+}
+
+// caseFoldedResolution resolves a reference whose identity's leading path
+// names no file of the repository but may name one written in another case
+// (ReferenceDraft.PathCaseFold: a case-insensitive file system opens it):
+// the declarations the identity names in each such file, never more than a
+// Candidate — on a case-sensitive file system the path names nothing.
+func (r *Resolver) caseFoldedResolution(res Resolution, ref reference.Reference, detail string) (Resolution, bool) {
+	found := r.foldedDecls(ref)
+	if len(found) == 0 {
+		return res, false
+	}
+	res = r.pickBest(res, found, ConfidenceCandidate, EvidenceQualifiedIdentity,
+		fmt.Sprintf("%s names no file; a file of the path in another case declares it", detail))
+	return capConfidence(res, ConfidenceCandidate, ResolutionEvidence{
+		Kind:   EvidenceConfidenceCap,
+		Detail: "a path matching only in another case names the file on a case-insensitive file system alone",
+	}), true
+}
+
+// foldedDecls are the declarations a PathCaseFold reference's identity
+// names in the files whose path folds to its leading path — or to a path
+// an identity standing for one aliases (an import's own identity) — where
+// that path names no file of the repository.
+func (r *Resolver) foldedDecls(ref reference.Reference) []symbol.Symbol {
+	if !ref.PathCaseFold {
+		return nil
+	}
+	file, rest, _ := strings.Cut(ref.NameQualified, "::")
+	paths := []string{file}
+	for _, t := range r.aliases[langQualified{ref.Language, file}] {
+		if !strings.HasPrefix(t, "{") && !strings.Contains(t, "::") {
+			paths = append(paths, t)
+		}
+	}
+	var found []symbol.Symbol
+	for _, p := range paths {
+		if len(r.typeDecls(ref.Language, p)) > 0 {
+			continue // the path names a file: no other is opened for it
+		}
+		for _, other := range r.filesByFoldedPath(ref.Language, p) {
+			if other == p {
+				continue
+			}
+			q := other
+			if rest != "" {
+				q += "::" + rest
+			}
+			d, _, _, _ := r.identityDecls(ref.Language, q)
+			found = append(found, d...)
+		}
+	}
+	return uniqueSymbols(found)
+}
+
+// filesByFoldedPath returns the paths of the language's files equal to
+// path but for case.
+func (r *Resolver) filesByFoldedPath(language, path string) []string {
+	r.foldOnce.Do(func() {
+		r.foldedFiles = map[langQualified][]string{}
+		for _, fi := range r.files {
+			for _, s := range fi.Symbols {
+				if s.Qualified != "" && s.Qualified == string(s.Location.File) { // a file's own declaration
+					k := langQualified{fi.Language, source.FoldPath(s.Qualified)}
+					r.foldedFiles[k] = append(r.foldedFiles[k], s.Qualified)
+				}
+			}
+		}
+		for k, paths := range r.foldedFiles {
+			sort.Strings(paths)
+			r.foldedFiles[k] = slices.Compact(paths)
+		}
+	})
+	return r.foldedFiles[langQualified{language, source.FoldPath(path)}]
 }
 
 // noQualifiedDeclaration is the R0 answer when no declaration carries the
 // identity: outside the repository — unless the identity names a scope of
 // the repository itself (IdentityInRepository), where it is undeclared or
-// declared in syntax no provider extracts: Unresolved, and not external.
+// declared in syntax no provider extracts: Unresolved, and not external —
+// or names the target only if declared (TentativeIdentity): Unresolved,
+// with nothing known.
 func noQualifiedDeclaration(res Resolution, ref reference.Reference, detail string) Resolution {
 	res.Evidence = []ResolutionEvidence{{
 		Kind:   EvidenceQualifiedIdentity,
 		Detail: detail + " is not declared in the repository",
 	}}
-	res.OutsideRepository = !ref.IdentityInRepository
+	res.OutsideRepository = !ref.IdentityInRepository && !ref.TentativeIdentity
 	return res
 }
 

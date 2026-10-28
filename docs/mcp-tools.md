@@ -262,7 +262,7 @@ languages omit.
 | `format` | string (`text`, `json`) |  | `text` |  |
 | `groupBy` | string |  |  | Count the matches instead of listing them, by one or two comma-separated keys: `kind`, `language`, `directory`, `file`, `resourceType` |
 | `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro); HTML: `document` (a file), `element` (an element with an id); CSS: `stylesheet`, `keyframes`, `font_face`, `property_registration`, `custom_property`, `css_class` (a CSS Modules class); JavaScript: `script` (a file); `asset` (an image, a font or a media file web documents link to) |
-| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css |
+| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig |
 | `maxResults` | integer |  | `50` | Maximum number of matches listed (the total is always reported); with `groupBy`, of group lines (at most 1000) |
 | `namePattern` | string |  |  | Name substring filter (case-insensitive) |
 | `usesType` | string |  |  | Only symbols that reference a type whose name contains this string |
@@ -317,7 +317,7 @@ it with [`search_in_files`](#search_in_files), e.g. the regex
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `path` | string | yes |  | File path to analyze |
-| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css). Auto-detected if not specified. |
+| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig). Auto-detected if not specified. |
 
 Example:
 

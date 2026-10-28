@@ -45,7 +45,7 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	b.WriteString("## references\n")
 	for _, r := range refs {
 		fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
+			r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+tentative(r.TentativeIdentity)+flag(r.PathCaseFold, "path_case_fold")+flag(r.MayBeAnyFile, "may_be_any_file")+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
 	}
 
 	imps := slices.Clone(ext.Imports)
@@ -66,7 +66,17 @@ func ExtractionSnapshot(fileID source.FileID, ext language.Extraction) string {
 	if len(ext.Aliases) > 0 {
 		b.WriteString("## aliases\n")
 		for _, a := range ext.Aliases {
-			fmt.Fprintf(&b, "alias %s -> %s %s\n", a.Qualified, a.Target, loc(a.Location))
+			members := ""
+			if a.Members {
+				members = " members"
+			}
+			if a.ConfidenceCap != "" {
+				members += " cap=" + a.ConfidenceCap
+			}
+			if a.Absent != "" {
+				members += " absent=" + a.Absent
+			}
+			fmt.Fprintf(&b, "alias %s -> %s%s %s\n", a.Qualified, a.Target, members, loc(a.Location))
 		}
 	}
 
@@ -114,7 +124,7 @@ func IndexSnapshot(idx *index.RepositoryIndex) string {
 		sort.Slice(refs, func(i, j int) bool { return refLess(refs[i], refs[j]) })
 		for _, r := range refs {
 			fmt.Fprintf(&b, "ref %s kind=%s container=%q receiver=%q%s%s call=%t %s\n",
-				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
+				r.Name, r.Kind, r.Container, r.ReceiverExpr, receiverType(r.ReceiverType), qualifiedIdentity(r.NameQualified, r.ReceiverTypeQualified)+inRepository(r.IdentityInRepository)+tentative(r.TentativeIdentity)+flag(r.PathCaseFold, "path_case_fold")+flag(r.MayBeAnyFile, "may_be_any_file")+namedArgument(r.NamedArgument)+dynamicName(r.Dynamic)+receiverChain(r.ReceiverChain, r.Speculative)+languageLookup(r.Lookup, r.ReceiverLookup, r.CountsArguments, r.ArgumentCount, r.ArgumentTypes), r.IsCall, loc(r.Location))
 		}
 	}
 
@@ -388,6 +398,24 @@ func diagCode(c string) string {
 func inRepository(in bool) string {
 	if in {
 		return " identity_in_repository=true"
+	}
+	return ""
+}
+
+// tentative renders TentativeIdentity; nothing when unset, so snapshots of
+// providers that never state it are unchanged.
+func tentative(t bool) string {
+	if t {
+		return " tentative_identity=true"
+	}
+	return ""
+}
+
+// flag renders a boolean qualifier as name=true; nothing when unset, so
+// snapshots of providers that never state it are unchanged.
+func flag(set bool, name string) string {
+	if set {
+		return " " + name + "=true"
 	}
 	return ""
 }

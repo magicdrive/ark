@@ -303,6 +303,9 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 			TargetKinds:           rd.TargetKinds,
 			Dynamic:               rd.Dynamic,
 			IdentityInRepository:  rd.IdentityInRepository,
+			TentativeIdentity:     rd.TentativeIdentity,
+			PathCaseFold:          rd.PathCaseFold,
+			MayBeAnyFile:          rd.MayBeAnyFile,
 			FileIdentity:          rd.FileIdentity,
 			NamedArgument:         rd.NamedArgument,
 			IsCall:                rd.IsCall,
@@ -724,6 +727,8 @@ func (b *builder) freeze() *RepositoryIndex {
 		b.unidentified.seal()
 	}
 
+	aliases, memberAliases := b.aliases()
+
 	// Deduplicate and sort graph edges.
 	for id := range b.callsFrom {
 		b.callsFrom[id] = dedupeEdges(b.callsFrom[id])
@@ -750,7 +755,8 @@ func (b *builder) freeze() *RepositoryIndex {
 		files:                 files,
 		diagnostics:           b.diagnostics,
 		stats:                 b.stats,
-		aliases:               b.aliases(),
+		aliases:               aliases,
+		memberAliases:         memberAliases,
 		assets:                b.sortedAssets(),
 		assetPaths:            b.assetPaths,
 	}
@@ -762,22 +768,29 @@ func (b *builder) sortedAssets() []symbol.Symbol {
 }
 
 // aliases collects the files' aliases (language.AliasDraft) by language and
-// identity, targets sorted.
-func (b *builder) aliases() map[aliasKey][]string {
-	out := map[aliasKey][]string{}
+// identity, targets sorted: those that read their identity, and those that
+// read only the members below it (AliasDraft.Members).
+func (b *builder) aliases() (own, members map[aliasKey][]string) {
+	own, members = map[aliasKey][]string{}, map[aliasKey][]string{}
 	for _, fi := range b.resolverFiles {
 		for _, a := range fi.Aliases {
 			if a.Qualified != "" && a.Target != "" {
 				k := aliasKey{fi.Language, a.Qualified}
-				out[k] = append(out[k], a.Target)
+				if a.Members {
+					members[k] = append(members[k], a.Target)
+				} else {
+					own[k] = append(own[k], a.Target)
+				}
 			}
 		}
 	}
-	for k, t := range out {
-		sort.Strings(t)
-		out[k] = t
+	for _, m := range []map[aliasKey][]string{own, members} {
+		for k, t := range m {
+			sort.Strings(t)
+			m[k] = slices.Compact(t) // several files may state one alias
+		}
 	}
-	return out
+	return own, members
 }
 
 // edgeKey uniquely identifies a directed relationship including its semantic kind.

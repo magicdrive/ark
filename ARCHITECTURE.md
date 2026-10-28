@@ -30,7 +30,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 
 | Layer | Owns | Must not |
 |---|---|---|
-| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases`, `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; the language's own search (`ReferenceDraft.Lookup` / `ReceiverLookup`, `ArgumentCount` / `ArgumentTypes`; `SymbolDraft.Parameters` / `ImplicitMembers` / `Overrides`; `Extraction.SourceRoot`); `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
+| Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `TentativeIdentity`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases` (`AliasDraft.Members` / `ConfidenceCap`), `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; the language's own search (`ReferenceDraft.Lookup` / `ReceiverLookup`, `ArgumentCount` / `ArgumentTypes`; `SymbolDraft.Parameters` / `ImplicitMembers` / `Overrides`; `Extraction.SourceRoot`); `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
 | Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
@@ -281,6 +281,74 @@ inherited overload, a same-package class of another file, an on-demand
 import, an inherited member type or a library supertype decides what a Java
 name is.
 
+**Files are containers, imports are paths** (Zig). A Zig file is a struct
+whose declarations are its members, and `@import("x.zig")` is the file
+the path names from the importing file's directory — so, as for Rust, the
+provider derives every identity from the file's own path and reads no
+other file: `src/engine.zig::Engine::run`; the file itself is a
+declaration (`src/engine.zig`, the target of its imports); a function's one
+returned container is `F::()`. Every file is `IdentityOnly`. A name
+resolves by lexical scope — locals, parameters and captures (not
+observed), then the enclosing containers' declarations through the function
+bodies they are declared in; a `usingnamespace` in a nearer container
+leaves a name unresolved. A member resolves where the file proves where it
+is declared: a container of the file, a file a relative import names, or a
+receiver whose declared type the file states (`v: *T`, `T{...}`, a call of
+a function of the file whose written result type it resolves). Three
+generic extensions carry what Zig adds, and none names a language:
+`AliasDraft.Members` (a constant whose value is a namespace — an import,
+`@This()`, a path, a call of a type factory — is a declaration of its own:
+a reference to it resolves to it, a member path through it reaches the
+target's member; a comptime choice between namespaces states one capped
+alias per alternative, so a member through it is a Candidate even when one
+alternative alone declares it — the other may be `std`'s or hold it as a
+field), `AliasDraft.ConfidenceCap`
+(a named module is what the importing file's module's import table binds
+— a table is a module's, and a file belongs only to a module rooted in its
+directory or above: each file states its view `{zigenv}file` →
+`{zigdir}dir`, a build.zig states `{zigdir}dir` → `{zigmod}root` and
+`{zigmod}root::name` → the bound module's root file, capped at Strong — a
+fetched package's module of the name may be the one used; a binding to a
+module Ark cannot name, or of a name it cannot read, is capped at
+Candidate and is open — `AliasDraft.Open`: its candidates do not bound
+the referent, completeness counts it as unresolved besides; a name no build
+registers stands for the unknown through `AliasDraft.Fallback`, an alias
+read only where its identity names nothing else; a module root the index
+does not hold (named through a symbolic link, under a skipped directory)
+may hold any file, through `AliasDraft.Absent`, an alias read only where
+no file has its path; `@import("x.zig")` has the importer's identity
+`{zigimp}path` and consults the table first, through `{zigspec}dir::x.zig`;
+build.zig is read by a static evaluator, never run, and its facts ground a
+Strong or an Exact only when the build is closed — Ark follows every way
+its code may reach the graph; any other build leaves every module's names
+unknown)
+and `ReferenceDraft.TentativeIdentity` (another file states the type of a
+value — a function's written result type, `F::()` — and the member may be
+a field holding a function: no declaration with the identity leaves a call
+Unresolved, neither outside nor excluded from same-named declarations'
+completeness; a non-call member is `Speculative`; so is a member past
+another file's first member, which may be a value, and of a named module).
+Two more flags carry what Zig's files add: `ReferenceDraft.PathCaseFold`
+(a relative path may name a file of another case, which a case-insensitive
+file system opens: a Candidate, never more) and
+`ReferenceDraft.MayBeAnyFile` (an import of a named module no build Ark
+reads binds: unresolved, it counts toward every file's importers). Nothing
+is evaluated at comptime: every branch of a condition is analyzed, none
+chosen.
+Authority: `languages/zig/provider.go` (header), `languages/zig/buildzig.go`,
+`resolver/identity.go` (`ExpandAliases`, `noQualifiedDeclaration`).
+Tests: `TestNegative_*`, `TestShadowing`, `TestReceivers_*`,
+`TestConditionalCompilation_IsCandidate`, `TestGenerics_ContainerFactories`,
+`TestNamedModules_FromBuildZig`, `TestModules_*`, `TestReview3_ModuleBindingsArkMustNotMiss`, `TestCompleteness_UnprovenCallsStayAttributable`,
+`TestReview_NoExactPastUnprovenAlternatives`,
+`TestAlias_MembersReadOnlyBelowTheDeclaration`, `TestAlias_CapBoundsWhatFollowsIt`,
+`TestTentativeIdentity_MissIsUnresolvedNotOutside`,
+`TestCompleteness_TentativeIdentityIsSameNameAttributed`, `TestGraph_Fixture`,
+`TestMCPZig_Graph`, `TestMCPZig_NamedModulesNeverReadComplete`, `FuzzExtractZig`.
+Danger: "the only `run` in the repository", "a named module is the file of
+its name" or "the branch for this target" — a value of an unproven type, a
+module the build maps, or a comptime condition decides what a Zig name is.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -489,6 +557,12 @@ improvement and is not.
    An unresolved reference with `IdentityInRepository` is never same-name
    attributed: its identity already excludes every other declaration
    (`TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed`).
+   One with `MayBeAnyFile` may denote any file's declaration of its
+   language (an import a build maps by code Ark does not read): it counts
+   toward each (`TestModules_ImportersNeverReadComplete`); one resolved
+   through an open alias (`resolver.Resolution.Open`) counts toward its
+   candidates and as an unresolved reference besides
+   (`TestCompleteness_OpenResolutionIsNotBounded`).
    Danger: dropping the count when it is 0 or "noisy"; adding unresolved
    references to `unattributed` (or to a caller's count) to "be safe" —
    that attributes a reference to symbols it cannot denote; resolving a

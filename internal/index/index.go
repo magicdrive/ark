@@ -93,8 +93,10 @@ type RepositoryIndex struct {
 	fingerprint string
 
 	// aliases are the identities the files declare to name others
-	// (language.AliasDraft), by language and identity.
-	aliases map[aliasKey][]string
+	// (language.AliasDraft), by language and identity; memberAliases those
+	// that name others only for the members below them (AliasDraft.Members).
+	aliases       map[aliasKey][]string
+	memberAliases map[aliasKey][]string
 
 	// --- meta ---
 	files []source.FileID // sorted
@@ -230,8 +232,10 @@ type aliasKey struct{ language, qualified string }
 // (see FindSymbolsByQualified).
 func (idx *RepositoryIndex) SymbolsThroughAliases(qualified string) []symbol.Symbol {
 	languages := map[string]bool{}
-	for k := range idx.aliases {
-		languages[k.language] = true
+	for _, m := range []map[aliasKey][]string{idx.aliases, idx.memberAliases} {
+		for k := range m {
+			languages[k.language] = true
+		}
 	}
 	var out []symbol.Symbol
 	seen := map[symbol.SymbolID]bool{}
@@ -246,7 +250,13 @@ func (idx *RepositoryIndex) SymbolsThroughAliases(qualified string) []symbol.Sym
 				}
 				return d
 			},
-			func(q string) []string { return idx.aliases[aliasKey{lang, q}] })
+			func(q string, below bool) []string {
+				k := aliasKey{lang, q}
+				if below && len(idx.memberAliases[k]) > 0 {
+					return append(slices.Clone(idx.aliases[k]), idx.memberAliases[k]...)
+				}
+				return idx.aliases[k]
+			})
 		if len(via) == 0 {
 			continue
 		}

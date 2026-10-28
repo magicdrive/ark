@@ -4,7 +4,9 @@ import (
 	"testing"
 
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -123,7 +125,7 @@ func TestAlias_SharedTargetsExpandOnce(t *testing.T) {
 	}
 	resolver.ExpandAliases("crate::l0::a",
 		func(string) []symbol.Symbol { calls++; return nil },
-		func(q string) []string { return aliases[q] })
+		func(q string, _ bool) []string { return aliases[q] })
 	if calls > 8*9+1 {
 		t.Errorf("%d expansions; each identity at most once (%d)", calls, 8*9+1)
 	}
@@ -139,7 +141,7 @@ func TestAlias_ShortestChainWins(t *testing.T) {
 		}
 		aliases["L7"] = []string{"X"}
 		decls := map[string][]symbol.Symbol{"Y": {cfgSym("src/y.cfg", "Y", "Y", symbol.KindFunction)}}
-		got, _ := resolver.ExpandAliases("q0", func(q string) []symbol.Symbol { return decls[q] }, func(q string) []string { return aliases[q] })
+		got, _ := resolver.ExpandAliases("q0", func(q string) []symbol.Symbol { return decls[q] }, func(q string, _ bool) []string { return aliases[q] })
 		if len(got) != 1 {
 			t.Errorf("targets %v: q0 names %d declarations, want Y (q0 → S → X → Y)", first, len(got))
 		}
@@ -154,8 +156,167 @@ func TestAlias_EveryAliasedPrefixIsARead(t *testing.T) {
 		"crate::p::b::c": {cfgSym("src/p.cfg", "c", "crate::p::b::c", symbol.KindFunction)},
 		"crate::q::c":    {cfgSym("src/q.cfg", "c", "crate::q::c", symbol.KindFunction)},
 	}
-	got, _ := resolver.ExpandAliases("crate::a::b::c", func(q string) []symbol.Symbol { return decls[q] }, func(q string) []string { return aliases[q] })
+	got, _ := resolver.ExpandAliases("crate::a::b::c", func(q string) []symbol.Symbol { return decls[q] }, func(q string, _ bool) []string { return aliases[q] })
 	if len(got) != 2 {
 		t.Errorf("crate::a::b::c names %d declarations, want both readings", len(got))
+	}
+}
+
+// An alias stated for the members below a declaration (AliasDraft.Members:
+// a constant whose value another identity names) reads only those members:
+// the identity itself names its own declaration alone, never the target's,
+// and a member path below it reaches the target's member.
+func TestAlias_MembersReadOnlyBelowTheDeclaration(t *testing.T) {
+	fis := aliasFixture(language.AliasDraft{Qualified: "crate::v", Target: "crate::a::T", Members: true})
+	fis[1].Symbols = []symbol.Symbol{cfgSym("src/lib.cfg", "v", "crate::v", symbol.KindConstant)}
+	for q, want := range map[string]string{"crate::v": "crate::v", "crate::v::new": "crate::a::T::new"} {
+		res := resolveQualified(fis, q)
+		if res.Confidence != resolver.ConfidenceExact || len(res.Candidates) != 1 {
+			t.Errorf("%s: %s with %d candidates, want Exact", q, res.Confidence, len(res.Candidates))
+			continue
+		}
+		for _, f := range fis {
+			for _, s := range f.Symbols {
+				if s.ID == res.Candidates[0].SymbolID && s.Qualified != want {
+					t.Errorf("%s resolved to %s, want %s", q, s.Qualified, want)
+				}
+			}
+		}
+	}
+	// Without the flag the identity itself is read through the alias too:
+	// its declaration and the target are both candidates.
+	fis = aliasFixture(language.AliasDraft{Qualified: "crate::v", Target: "crate::a::T"})
+	fis[1].Symbols = []symbol.Symbol{cfgSym("src/lib.cfg", "v", "crate::v", symbol.KindConstant)}
+	if res := resolveQualified(fis, "crate::v"); res.Confidence != resolver.ConfidenceCandidate || len(res.Candidates) != 2 {
+		t.Errorf("crate::v through a plain alias: %s with %d candidates, want 2 Candidates", res.Confidence, len(res.Candidates))
+	}
+	// Two member aliases of one declaration (alternatives a condition picks
+	// between) leave a member path ambiguous.
+	fis = append(aliasFixture(
+		language.AliasDraft{Qualified: "crate::v", Target: "crate::a::T", Members: true},
+		language.AliasDraft{Qualified: "crate::v", Target: "crate::zz::T", Members: true},
+	), resolver.FileIndex{FileID: "src/zz.cfg", Language: "cfg", IdentityOnly: true, Symbols: []symbol.Symbol{
+		cfgSym("src/zz.cfg", "new", "crate::zz::T::new", symbol.KindMethod),
+	}})
+	if res := resolveQualified(fis, "crate::v::new"); res.Confidence != resolver.ConfidenceCandidate || len(res.Candidates) != 2 {
+		t.Errorf("crate::v::new through two member aliases: %s with %d candidates, want 2 Candidates", res.Confidence, len(res.Candidates))
+	}
+}
+
+// An alias stating a cap (a module a build script maps) bounds every
+// resolution that follows it — directly, below it, or through another
+// alias that leads to it — and never raises one.
+func TestAlias_CapBoundsWhatFollowsIt(t *testing.T) {
+	fis := aliasFixture(
+		language.AliasDraft{Qualified: "{module}a", Target: "crate::a", ConfidenceCap: "strong"},
+		language.AliasDraft{Qualified: "crate::m", Target: "{module}a", Members: true},
+		language.AliasDraft{Qualified: "crate::two", Target: "crate::a::f", ConfidenceCap: "strong"},
+		language.AliasDraft{Qualified: "crate::two", Target: "crate::a::g"},
+	)
+	for _, q := range []string{"{module}a::f", "crate::m::f", "{module}a::T::new"} {
+		if res := resolveQualified(fis, q); res.Confidence != resolver.ConfidenceStrong || len(res.Candidates) != 1 {
+			t.Errorf("%s: %s with %d candidates, want Strong", q, res.Confidence, len(res.Candidates))
+		}
+	}
+	if res := resolveQualified(fis, "crate::a::f"); res.Confidence != resolver.ConfidenceExact {
+		t.Errorf("crate::a::f follows no alias: %s, want Exact", res.Confidence)
+	}
+	if res := resolveQualified(fis, "crate::two"); res.Confidence != resolver.ConfidenceCandidate {
+		t.Errorf("two targets: %s, want Candidate (a cap never raises)", res.Confidence)
+	}
+}
+
+// A tentative identity no declaration carries is Unresolved, and claims
+// nothing: not outside the repository.
+func TestTentativeIdentity_MissIsUnresolvedNotOutside(t *testing.T) {
+	fis := aliasFixture()
+	ref := cfgRef("src/b.cfg", "zz")
+	ref.NameQualified = "crate::zz"
+	ref.TentativeIdentity = true
+	if res := resolveIn(fis, "src/b.cfg", ref); res.Confidence != resolver.ConfidenceUnresolved || res.OutsideRepository {
+		t.Errorf("got %s outside=%v, want Unresolved, not outside", res.Confidence, res.OutsideRepository)
+	}
+	ref.NameQualified = "crate::a::f"
+	if res := resolveIn(fis, "src/b.cfg", ref); res.Confidence != resolver.ConfidenceExact {
+		t.Errorf("a declared tentative identity: %s, want Exact", res.Confidence)
+	}
+	ref.NameQualified, ref.TentativeIdentity = "crate::zz", false
+	if res := resolveIn(fis, "src/b.cfg", ref); !res.OutsideRepository {
+		t.Error("without the qualifier a missing identity is outside the repository (unchanged rule)")
+	}
+}
+
+// The evidence of a resolution names the aliases on a chain to its
+// declaration; one followed in vain still bounds it (its cap applies)
+// but explains nothing.
+func TestAlias_EvidenceNamesOnlyTheAliasesUsed(t *testing.T) {
+	fis := aliasFixture(
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::a", Members: true},
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::nowhere", Members: true, ConfidenceCap: "strong"},
+	)
+	res := resolveQualified(fis, "crate::m::f")
+	if res.Confidence != resolver.ConfidenceStrong || len(res.Candidates) != 1 {
+		t.Fatalf("got %s with %d candidates, want Strong (the vain alias's cap applies)", res.Confidence, len(res.Candidates))
+	}
+	for _, ev := range res.Evidence {
+		if ev.Kind == resolver.EvidenceQualifiedIdentity && ev.Detail != `"crate::m::f" (through the re-export of crate::m) is declared at src/a.cfg` {
+			t.Errorf("evidence %q", ev.Detail)
+		}
+	}
+	// An alias into an identity nothing declares or aliases is not expanded
+	// (nothing can be found there), yet it is followed: its cap applies.
+	fis = aliasFixture(
+		language.AliasDraft{Qualified: "crate::a::f", Target: "{unknown}", ConfidenceCap: "candidate"},
+	)
+	if res := resolveQualified(fis, "crate::a::f"); res.Confidence != resolver.ConfidenceCandidate {
+		t.Errorf("through an alias into nothing: %s, want Candidate", res.Confidence)
+	}
+}
+
+// Several files stating one alias state one reading: one candidate.
+func TestAlias_RepeatedAliasIsOneReading(t *testing.T) {
+	fis := aliasFixture(
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::a", Members: true},
+		language.AliasDraft{Qualified: "crate::m", Target: "crate::a", Members: true},
+	)
+	if res := resolveQualified(fis, "crate::m::f"); res.Confidence != resolver.ConfidenceExact || len(res.Candidates) != 1 {
+		t.Errorf("got %s with %d candidates, want Exact", res.Confidence, len(res.Candidates))
+	}
+}
+
+// A path naming no file, but a file of the path in another case, is that
+// file's — a Candidate, never more; the exact path wins; without the
+// qualifier nothing changes.
+func TestPathCaseFold_IsACandidateOnly(t *testing.T) {
+	file := func(path string, members ...string) resolver.FileIndex {
+		syms := []symbol.Symbol{cfgSym(path, path, path, symbol.KindModule)}
+		for _, m := range members {
+			syms = append(syms, cfgSym(path, m, path+"::"+m, symbol.KindFunction))
+		}
+		return resolver.FileIndex{FileID: source.FileID(path), Language: "cfg", IdentityOnly: true, Symbols: syms}
+	}
+	fis := []resolver.FileIndex{file("engine.cfg", "run"), file("Other.cfg", "go"), file("other.cfg", "go"), file("main.cfg")}
+	ref := func(q string, fold bool) reference.Reference {
+		r := cfgRef("main.cfg", q)
+		r.NameQualified, r.IdentityInRepository, r.PathCaseFold = q, true, fold
+		return r
+	}
+	for _, tc := range []struct {
+		q     string
+		fold  bool
+		conf  resolver.Confidence
+		count int
+	}{
+		{"Engine.cfg::run", true, resolver.ConfidenceCandidate, 1},
+		{"Engine.cfg", true, resolver.ConfidenceCandidate, 1},
+		{"engine.cfg::run", true, resolver.ConfidenceExact, 1},
+		{"OTHER.cfg::go", true, resolver.ConfidenceCandidate, 2},
+		{"Engine.cfg::run", false, resolver.ConfidenceUnresolved, 0},
+		{"Engine.cfg::nothing", true, resolver.ConfidenceUnresolved, 0},
+	} {
+		res := resolveIn(fis, "main.cfg", ref(tc.q, tc.fold))
+		if res.Confidence != tc.conf || len(res.Candidates) != tc.count {
+			t.Errorf("%s fold=%v: %s with %d candidates, want %s with %d", tc.q, tc.fold, res.Confidence, len(res.Candidates), tc.conf, tc.count)
+		}
 	}
 }

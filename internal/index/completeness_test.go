@@ -8,6 +8,7 @@ import (
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/reference"
 	"github.com/magicdrive/ark/internal/resolver"
+	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -285,5 +286,89 @@ func TestCompleteness_IdentityInRepositoryIsNeverSameNameAttributed(t *testing.T
 	c2.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "db/output.x", true)
 	if in := c2.Incoming("net/aws_vpc.main"); in != 1 {
 		t.Errorf("same-name rule changed: incoming %d", in)
+	}
+}
+
+// An unresolved reference whose identity names its target only if declared
+// (TentativeIdentity) rules nothing out: it is same-name attributed, so a
+// same-named declaration never reads as completely known.
+func TestCompleteness_TentativeIdentityIsSameNameAttributed(t *testing.T) {
+	byName := map[string][]symbol.Symbol{
+		"run": {complSym("src/a.zig::Engine::run", "run", "Engine", "zig")},
+	}
+	c := index.NewCompleteness(byName)
+	ref := complRef("run", "e", "zig", reference.KindCall)
+	ref.NameQualified = "src/b.zig::make::()::run"
+	ref.TentativeIdentity = true
+	c.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "src/main.zig::main", true)
+	if in := c.Incoming("src/a.zig::Engine::run"); in != 1 {
+		t.Errorf("a same-named method got unattributed %d, want 1", in)
+	}
+	if out := c.Outgoing("src/main.zig::main"); out != 1 {
+		t.Errorf("outgoing unattributed %d, want 1", out)
+	}
+}
+
+// An unresolved reference that may denote any file (MayBeAnyFile: an
+// import of a module a build maps by code Ark does not read) counts toward
+// every file's own declaration of its language — no other symbol, no other
+// language; resolved, it counts toward none.
+func TestCompleteness_MayBeAnyFileCountsTowardEveryFile(t *testing.T) {
+	file := func(path, lang string) symbol.Symbol {
+		s := complSym(path, path, "", lang)
+		s.Qualified, s.Location.File = path, source.FileID(path)
+		return s
+	}
+	a, b, py := file("src/a.zig", "zig"), file("src/b.zig", "zig"), file("x.py", "python")
+	fn := complSym("src/a.zig::f", "f", "", "zig")
+	byName := map[string][]symbol.Symbol{"a.zig": {a}, "b.zig": {b}, "x.py": {py}, "f": {fn}}
+	ref := complRef("vsr", "", "zig", reference.KindImport)
+	ref.MayBeAnyFile = true
+	c := index.NewCompleteness(byName)
+	c.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "src/a.zig", true)
+	for id, want := range map[string]int{"src/a.zig": 1, "src/b.zig": 1, "x.py": 0, "src/a.zig::f": 0} {
+		if in := c.Incoming(symbol.SymbolID(id)); in != want {
+			t.Errorf("%s: incoming %d, want %d", id, in, want)
+		}
+	}
+	c2 := index.NewCompleteness(byName)
+	c2.Observe(ref, cands(resolver.ConfidenceStrong, "src/b.zig"), "src/a.zig", true)
+	if in := c2.Incoming("src/a.zig"); in != 0 {
+		t.Errorf("a resolved import counted toward another file: %d", in)
+	}
+	ref.MayBeAnyFile = false
+	c3 := index.NewCompleteness(byName)
+	c3.Observe(ref, resolver.Resolution{Confidence: resolver.ConfidenceUnresolved}, "src/a.zig", true)
+	if in := c3.Incoming("src/b.zig"); in != 0 {
+		t.Errorf("without the qualifier (unchanged rule): incoming %d", in)
+	}
+}
+
+// A resolution through an alias that may stand for what no declaration is
+// (resolver.Resolution.Open) is bounded by nothing: the reference counts
+// toward its candidates and, as an unresolved one, toward every symbol of
+// its name — even with an identity in the repository.
+func TestCompleteness_OpenResolutionIsNotBounded(t *testing.T) {
+	byName := map[string][]symbol.Symbol{"helper": {complSym("lib/a.zig::helper", "helper", "", "zig"), complSym("lib/b.zig::helper", "helper", "", "zig")}}
+	ref := complRef("helper", "", "zig", reference.KindCall)
+	ref.IdentityInRepository = true
+	open := cands(resolver.ConfidenceCandidate, "lib/a.zig::helper")
+	open.Open = true
+	c := index.NewCompleteness(byName)
+	c.Observe(ref, open, "src/main.zig::main", true)
+	if a, b := c.Incoming("lib/a.zig::helper"), c.Incoming("lib/b.zig::helper"); a != 1 || b != 1 {
+		t.Errorf("open: incoming a=%d b=%d, want 1 and 1", a, b)
+	}
+	unresolved := resolver.Resolution{Confidence: resolver.ConfidenceUnresolved, Open: true}
+	c2 := index.NewCompleteness(byName)
+	c2.Observe(ref, unresolved, "src/main.zig::main", true)
+	if b := c2.Incoming("lib/b.zig::helper"); b != 1 {
+		t.Errorf("open and unresolved with an identity in the repository: incoming %d, want 1", b)
+	}
+	closed := cands(resolver.ConfidenceCandidate, "lib/a.zig::helper")
+	c3 := index.NewCompleteness(byName)
+	c3.Observe(ref, closed, "src/main.zig::main", true)
+	if b := c3.Incoming("lib/b.zig::helper"); b != 0 {
+		t.Errorf("a closed Candidate counted toward another symbol (unchanged rule): %d", b)
 	}
 }

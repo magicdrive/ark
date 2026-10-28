@@ -249,6 +249,35 @@ func TestTargetLookup_OtherLanguagesUnchanged(t *testing.T) {
 	}
 }
 
+// A member written with "." reaches an identity whose members are separated
+// by "::" (Zig), at a segment boundary only, and never picks among several.
+func TestTargetLookup_DotReachesPathSeparators(t *testing.T) {
+	root := t.TempDir()
+	writeTree(t, root, map[string]string{
+		"src/engine.zig": "pub const Engine = struct {\n    pub fn run() void {}\n};\npub const MyEngine = struct {\n    pub fn run() void {}\n};\n",
+		"src/other.zig":  "pub const Other = struct {\n    pub fn go() void {}\n};\npub const Twin = struct { pub fn go() void {} };\n",
+		"src/twin.zig":   "pub const Twin = struct { pub fn go() void {} };\n",
+	})
+	for input, want := range map[string]string{
+		"Engine.run":                  "src/engine.zig::Engine::run",
+		"Other.go":                    "src/other.zig::Other::go",
+		"src/engine.zig::Engine::run": "src/engine.zig::Engine::run",
+	} {
+		_, text := callAt(t, root, "analyze_change_impact", map[string]interface{}{"path": ".", "symbol": input})
+		if !strings.Contains(text, "Impact analysis: "+want+"\n") {
+			t.Errorf("%q: want target %s:\n%s", input, want, text)
+		}
+	}
+	res, text := callAt(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": "Twin.go"})
+	if !res.IsError || !strings.Contains(text, "Ambiguous") {
+		t.Errorf("Twin.go of two files must be ambiguous, got isError=%v:\n%s", res.IsError, text)
+	}
+	res, text = callAt(t, root, "get_callers", map[string]interface{}{"path": ".", "symbol": "gine.run"})
+	if !res.IsError || !strings.Contains(text, "not found") {
+		t.Errorf("a non-boundary suffix matched, isError=%v:\n%s", res.IsError, text)
+	}
+}
+
 func TestGetCallers_ResultSemantics(t *testing.T) {
 	dir := phpSemanticsRepo(t)
 	cases := []struct {
