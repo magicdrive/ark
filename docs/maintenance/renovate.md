@@ -225,13 +225,13 @@ Renovate は `gomodTidy` を実行するので、普通 `go mod tidy -diff` は�
 
 ### 3.2 Go の toolchain との互換性
 
-- `go.mod` の `go` 行（例 `go 1.27.2`）が CI とリリースの Go の版である（`go-version-file: 'go.mod'`）。
+- `go.mod` の `go` 行（例 `go 1.27.3`）が CI とリリースの Go の版である（`go-version-file: 'go.mod'`）。
 - CI は `GOTOOLCHAIN: local` で動く。依存が新しい Go を要求すると、ローカルでも CI でも失敗する。
   依存の要求は、その版の `go.mod` で確かめる:
 
   ```sh
   grep '^go ' "$(go mod download -json golang.org/x/net@v0.61.0 | sed -n 's/.*"GoMod": "\(.*\)",/\1/p')"
-  # 例: go 1.26.0（Ark の go 1.27.2 以下なので可）
+  # 例: go 1.26.0（Ark の go 1.27.3 以下なので可）
   ```
 
 - ローカルの Go が `go.mod` と違うと、結果が CI と一致しない。`go version` を確かめる（[8.3](#83-ローカルの-go-が-compile-の版の不一致で失敗する)）。
@@ -255,8 +255,9 @@ GOTOOLCHAIN=local make staticcheck
 ```
 
 `make staticcheck` は CI と同じ版の staticcheck（`go run` で取得）を CI と同じパッケージに対して走らせる
-（`TestMakefile_StaticcheckMatchesCI` が両者の一致を保つ）。staticcheck 2026.2.1（v0.8.1）は Go 1.27.2 の
-export data を読めない。2026.2.2（v0.8.2）は読める（CI と同じ対象で指摘なしを確認済み）。CI の pin を
+（`TestMakefile_StaticcheckMatchesCI` が両者の一致を保つ）。staticcheck 2026.2.1（v0.8.1）は Go 1.27.2 と 1.27.3 の
+export data を読めない（1.27.3 は `export data version 5 is greater than maximum supported version 4` で確認）。
+2026.2.2（v0.8.2）は Go 1.27.2 で読めることを確認済み（CI と同じ対象で指摘なし。1.27.3 では未確認）。CI の pin を
 リリース版に戻すときは、`ci.yml` と `Makefile` の版を同時に変える（テストが不一致を検出する）。
 
 `make lint` は vet・test・race・staticcheck をまとめて流す（gofmt は含まない）。

@@ -375,7 +375,7 @@ func checkCIWorkflow(t tb, all string) {
 	require("gofmt", "gofmt -l")
 	require("go vet", "go vet ./...")
 	require("the unit tests", "go test -json ./... >")
-	require("staticcheck (pinned for Go 1.27.2)",
+	require("staticcheck (pinned for Go 1.27.3)",
 		"go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45",
 		"./internal/cache/...", "./internal/context/...", "./internal/index/...", "./internal/resolver/...",
 		"./internal/language/...", "./internal/languages/...", "./internal/mcp/...", "./internal/symbol/...",
