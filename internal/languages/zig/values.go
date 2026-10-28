@@ -18,6 +18,9 @@ func (x *extractor) denote(n *ts.Node, s *scope, depth int) val {
 	}
 	switch x.typ(n) {
 	case "identifier":
+		if x.primitive(n) {
+			return val{}
+		}
 		ds, unknown := lookup(s, identifierName(x.text(n)))
 		switch {
 		case unknown || len(ds) == 0:
@@ -120,7 +123,10 @@ func (x *extractor) builtinVal(n *ts.Node, s *scope, depth int) val {
 		if len(args) == 1 {
 			if spec, ok := x.stringLiteral(args[0]); ok {
 				if t, _, ok := importTarget(x.key, spec); ok {
-					return val{ns: []string{t}}
+					// A named module is whatever file the build gives it,
+					// root the root module's (std and builtin are the
+					// compiler's).
+					return val{ns: []string{t}, tent: unprovenModule(t)}
 				}
 			}
 		}
@@ -174,16 +180,18 @@ func (x *extractor) valOf(d *decl, depth int) val {
 				if iv.spec && len(iv.ns) == 1 {
 					// A value another file's declaration types: its members
 					// are looked up there, a var's as a const's.
-					v.ns, v.spec = iv.ns, true
+					v.ns, v.spec, v.tent = iv.ns, true, iv.tent
 				} else if !d.mutable {
 					switch {
 					case len(iv.ns) == 1:
-						v.ns = iv.ns
+						v.ns, v.tent = iv.ns, iv.tent
 					case len(iv.ns) > 1 && d.ident != "":
 						// Alternatives: the constant's own identity, whose
 						// aliases name each of them (a member is a
-						// Candidate of every alternative).
-						v.ns = []string{d.ident}
+						// Candidate of every alternative, and any of them
+						// may be another file's member, not proven a
+						// container).
+						v.ns, v.tent = []string{d.ident}, true
 					}
 				}
 			}
@@ -214,8 +222,9 @@ func (x *extractor) member(v val, m string, depth int) val {
 			return val{} // a member of a function or a value of this file
 		}
 		// A container of another file (or a constant this file declares
-		// to name several): its member's identity, whatever it is.
-		return val{ns: []string{t + "::" + m}, spec: v.spec}
+		// to name several): its member's identity, whatever it is — a
+		// container or a value, which that file alone says (tent).
+		return val{ns: []string{t + "::" + m}, spec: v.spec, tent: !reservedPath(t) || unprovenModule(t)}
 	}
 	if t := v.typ; t != "" && !v.errU {
 		sc, known := x.containers[t]

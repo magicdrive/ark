@@ -1,12 +1,14 @@
 package zig
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/symbol"
 )
 
@@ -900,6 +902,168 @@ func TestCompleteness_UnprovenCallsStayAttributable(t *testing.T) {
 	}
 }
 
+// A member path through another file reaches its first member, a
+// declaration of that file; past it the path may go through a value (a
+// var of a type declared elsewhere, a field of it), and a named module is
+// whatever file the build gives it. Undeclared there, such a member is
+// observed and attributable to every declaration of its name, never ruled
+// out: get_callers must not read complete while the call exists (each
+// shape below compiles with Zig 0.17.0 and calls the target). Declared, it
+// resolves as before.
+func TestCompleteness_MembersPastAnotherFilesMemberStayAttributable(t *testing.T) {
+	cases := []struct {
+		name   string
+		files  map[string]string
+		target string
+	}{
+		{"a named module no build maps", map[string]string{
+			"build.zig":    "pub fn build(b: anytype) void { _ = b; }\n",
+			"src/core.zig": "pub fn fatal() void {}\n",
+			"src/cli.zig":  "const core = @import(\"core\");\npub fn main() void {\n    core.fatal();\n}\n",
+		}, "src/core.zig::fatal"},
+		{"a var of an imported file", map[string]string{
+			"src/a.zig": "pub const Shell = struct {\n    pub fn run(self: *Shell) void { _ = self; }\n};\npub var global: Shell = .{};\n",
+			"src/b.zig": "const a = @import(\"a.zig\");\npub fn f() void {\n    a.global.run();\n}\n",
+		}, "src/a.zig::Shell::run"},
+		{"a field of a var of an imported file", map[string]string{
+			"src/a.zig": "pub const Arena = struct {\n    pub fn alloc(self: *Arena) void { _ = self; }\n};\npub const Shell = struct { arena: Arena = .{} };\npub var global: Shell = .{};\n",
+			"src/b.zig": "const a = @import(\"a.zig\");\npub fn f() void {\n    a.global.arena.alloc();\n}\n",
+		}, "src/a.zig::Arena::alloc"},
+		{"a field of a var of a mapped module", map[string]string{
+			"build.zig":    "pub fn build(b: anytype) void { _ = b.addModule(\"core\", .{ .root_source_file = b.path(\"src/core.zig\") }); }\n",
+			"src/core.zig": "pub const Arena = struct {\n    pub fn alloc(self: *Arena) void { _ = self; }\n};\npub const Shell = struct { arena: Arena = .{} };\npub var global: Shell = .{};\n",
+			"src/cli.zig":  "const core = @import(\"core\");\npub fn main() void {\n    core.global.arena.alloc();\n}\n",
+		}, "src/core.zig::Arena::alloc"},
+		{"a constant naming another file's member", map[string]string{
+			"src/a.zig": "pub const Shell = struct {\n    pub fn run(self: Shell) void { _ = self; }\n};\npub var global: Shell = .{};\n",
+			"src/b.zig": "const g = @import(\"a.zig\").global;\npub fn f() void {\n    g.run();\n}\n",
+		}, "src/a.zig::Shell::run"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			idx := buildIndex(t, writeTree(t, c.files))
+			s := symbolByQualified(t, idx, c.target)
+			if in, _ := idx.Unattributed(s.ID); in != 1 {
+				t.Errorf("%s: unattributed incoming %d, want 1 (the call may be it)", c.target, in)
+			}
+			if n := len(idx.GetCallers(s.ID)); n != 0 {
+				t.Errorf("%s: %d callers; nothing proves one", c.target, n)
+			}
+		})
+	}
+
+	// Declared where the path names it, the member resolves as before.
+	idx := buildIndex(t, writeTree(t, map[string]string{
+		"build.zig":    "pub fn build(b: anytype) void { _ = b.addModule(\"core\", .{ .root_source_file = b.path(\"src/core.zig\") }); }\n",
+		"src/core.zig": "pub const Engine = struct {\n    pub fn run() void {}\n};\npub fn fatal() void {}\n",
+		"src/a.zig":    "pub const Engine = struct {\n    pub fn run() void {}\n};\n",
+		"src/b.zig":    "const a = @import(\"a.zig\");\nconst core = @import(\"core\");\nconst std = @import(\"std\");\npub fn f() void {\n    a.Engine.run();\n    core.Engine.run();\n    core.fatal();\n    std.debug.fatal();\n}\n",
+	}))
+	got := strings.Join(edgeLines(idx), "\n")
+	for _, want := range []string{
+		"src/b.zig::f -calls-> src/a.zig::Engine::run exact",
+		"src/b.zig::f -calls-> src/core.zig::Engine::run strong",
+		"src/b.zig::f -calls-> src/core.zig::fatal strong",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing edge %q:\n%s", want, got)
+		}
+	}
+	// std is the compiler's: a call through it is no repository function's.
+	if in, _ := idx.Unattributed(symbolByQualified(t, idx, "src/core.zig::fatal").ID); in != 0 {
+		t.Errorf("core.fatal: unattributed incoming %d, want 0 (std.debug.fatal is std's)", in)
+	}
+}
+
+// Second review findings (each shape checked with Zig 0.17.0): a call the
+// compiler reaches must be an edge or stay unattributed, and no edge may be
+// stronger than what the source proves.
+func TestReview2_CompletenessAndNoFalseExact(t *testing.T) {
+	incomplete := func(t *testing.T, files map[string]string, target string) {
+		t.Helper()
+		idx := buildIndex(t, writeTree(t, files))
+		s := symbolByQualified(t, idx, target)
+		if in, _ := idx.Unattributed(s.ID); len(idx.GetCallers(s.ID)) == 0 && in == 0 {
+			t.Errorf("%s: no caller and nothing unattributed, but the call exists", target)
+		}
+	}
+	noEdge := func(t *testing.T, files map[string]string, from, to string) {
+		t.Helper()
+		for _, l := range edgeLines(buildIndex(t, writeTree(t, files))) {
+			if strings.HasPrefix(l, from+" ") && strings.Contains(l, "-> "+to+" ") {
+				t.Errorf("an edge nothing proves: %s", l)
+			}
+		}
+	}
+	t.Run("a namespace constant of another file the file cannot denote", func(t *testing.T) {
+		incomplete(t, map[string]string{
+			"src/platform.zig": "const builtin = @import(\"builtin\");\npub const Impl = switch (builtin.os.tag) {\n    .linux, .macos => @import(\"posix.zig\"),\n    else => @compileError(\"unsupported\"),\n};\n",
+			"src/posix.zig":    "pub fn open() void {}\n",
+			"src/main.zig":     "const plat = @import(\"platform.zig\");\npub fn main() void { plat.Impl.open(); }\n",
+		}, "src/posix.zig::open")
+	})
+	t.Run("root is the root module's file", func(t *testing.T) {
+		incomplete(t, map[string]string{
+			"src/main.zig": "const lib = @import(\"lib.zig\");\npub fn hook() void {}\npub fn main() void { lib.run(); }\n",
+			"src/lib.zig":  "const root = @import(\"root\");\npub fn run() void { root.hook(); }\n",
+		}, "src/main.zig::hook")
+	})
+	t.Run("a re-export chain longer than the alias depth", func(t *testing.T) {
+		files := map[string]string{"src/r9.zig": "pub const T = struct {\n    pub fn run() void {}\n};\n"}
+		for i := 0; i < 9; i++ {
+			files[fmt.Sprintf("src/r%d.zig", i)] = fmt.Sprintf("pub const T = @import(\"r%d.zig\").T;\n", i+1)
+		}
+		files["src/main.zig"] = "const r = @import(\"r0.zig\");\npub fn main() void { r.T.run(); }\n"
+		incomplete(t, files, "src/r9.zig::T::run")
+	})
+	t.Run("unnamed alternatives sharing an identity", func(t *testing.T) {
+		// On windows run is a field holding a function: the call is not the
+		// method's.
+		noEdge(t, map[string]string{
+			"src/a.zig": "const builtin = @import(\"builtin\");\nfn g() void {}\npub const Impl = if (builtin.os.tag == .windows) struct {\n    run: *const fn () void = &g,\n} else struct {\n    pub fn run(_: @This()) void {}\n};\n",
+			"src/b.zig": "const a = @import(\"a.zig\");\npub fn main() void {\n    const i: a.Impl = .{};\n    i.run();\n}\n",
+		}, "src/b.zig::main", "src/a.zig::Impl::{struct}::run")
+	})
+	t.Run("an unquoted primitive is never a quoted declaration", func(t *testing.T) {
+		files := map[string]string{"src/a.zig": "const @\"c_char\" = struct {};\nconst @\"f80\" = struct {};\nconst @\"u0\" = struct {};\nfn a(x: c_char) void { _ = x; }\nfn b(x: f80) void { _ = x; }\nfn c(x: u0) void { _ = x; }\nfn d() void { _ = @\"u0\"; }\n"}
+		for _, p := range [][2]string{{"src/a.zig::a", "src/a.zig::c_char"}, {"src/a.zig::b", "src/a.zig::f80"}, {"src/a.zig::c", "src/a.zig::u0"}} {
+			noEdge(t, files, p[0], p[1])
+		}
+		// Quoted, it is the declaration.
+		if got := strings.Join(edgeLines(buildIndex(t, writeTree(t, files))), "\n"); !strings.Contains(got, "src/a.zig::d -references-> src/a.zig::u0 exact") {
+			t.Errorf("@\"u0\" is not its declaration:\n%s", got)
+		}
+	})
+}
+
+// writeTree writes files (slash paths) into a new directory.
+func writeTree(t *testing.T, files map[string]string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for name, src := range files {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+// symbolByQualified is the one symbol of the identity.
+func symbolByQualified(t *testing.T, idx *index.RepositoryIndex, qualified string) symbol.Symbol {
+	t.Helper()
+	for _, s := range idx.FindSymbols("") {
+		if s.Qualified == qualified {
+			return s
+		}
+	}
+	t.Fatalf("no %s", qualified)
+	return symbol.Symbol{}
+}
+
 // Optional, slice and array types have no members of their element's
 // container: a method call on such a value is not resolved (Zig needs .?
 // or an index first).
@@ -971,8 +1135,10 @@ fn f() void {
 		"6 value_reference builtin -> src/a.zig::builtin",
 		"6 value_reference tag -> {module}builtin::os::tag",
 		"7 value_reference stdx -> src/a.zig::stdx",
-		"7 value_reference mem -> {module}stdx::mem",
-		"7 call copy -> {module}stdx::mem::copy",
+		// A module a build maps is whatever file it is given: its
+		// members name targets only if declared (tentative).
+		"7 value_reference mem -> {module}stdx::mem ?",
+		"7 call copy -> {module}stdx::mem::copy ?",
 	})
 }
 

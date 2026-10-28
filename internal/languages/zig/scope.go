@@ -111,12 +111,17 @@ type decl struct {
 //	spec  ns is a value of another file whose type that file states (a call
 //	      result F::(), a member of it): a member is looked up there, and
 //	      may be a field, which no declaration is (Speculative)
+//	tent  ns is a member of another file's namespace, or a named module a
+//	      build may map: what it is (a container, or a value of a type
+//	      declared elsewhere) is not proven, so a member's identity names
+//	      its target only if declared (TentativeIdentity)
 type val struct {
 	ns   []string
 	typ  string
 	errU bool
 	fn   *decl
 	spec bool
+	tent bool
 }
 
 // nsOne is the one namespace the value is, or "".
@@ -167,6 +172,14 @@ var primitives = map[string]bool{
 	"c_ulong": true, "c_longlong": true, "c_ulonglong": true, "c_longdouble": true,
 	"f16": true, "f32": true, "f64": true, "f80": true, "f128": true,
 	"true": true, "false": true, "null": true, "undefined": true, "unreachable": true,
+}
+
+// primitive reports an identifier that is a primitive whatever is in scope:
+// written without quotes (`u0`, `f80`, `c_char` are identifiers to the
+// grammar), a declaration `@"u0"` never shadows it.
+func (x *extractor) primitive(n *ts.Node) bool {
+	text := x.text(n)
+	return !strings.HasPrefix(text, "@") && isPrimitive(text)
 }
 
 // isPrimitive reports a predeclared name: those above and the arbitrary

@@ -46,6 +46,18 @@ func reservedPath(ident string) bool {
 	return reservedModules[name]
 }
 
+// unprovenModule reports a named module whose file the repository may hold
+// under another identity: one a build maps (or does not map literally), and
+// root, the root module's file. std and builtin are the compiler's.
+func unprovenModule(ident string) bool {
+	name, ok := strings.CutPrefix(ident, "{module}")
+	if !ok {
+		return false
+	}
+	name, _, _ = strings.Cut(name, "::")
+	return name != "std" && name != "builtin"
+}
+
 // buildModules reads the module declarations of build.zig's call n,
 // written in ctx c.
 func (x *extractor) buildModules(n *ts.Node, c ctx) {

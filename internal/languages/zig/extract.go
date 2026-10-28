@@ -385,6 +385,14 @@ func (x *extractor) aliasesOf(d *decl) {
 		cap = "candidate"
 	}
 	for _, t := range iv.ns {
+		if sc, known := x.containers[t]; known && sc == nil {
+			// Containers of this file sharing the identity (unnamed
+			// alternatives `if (c) struct {...} else struct {...}`): what
+			// one declares may be the other's field.
+			cap = "candidate"
+		}
+	}
+	for _, t := range iv.ns {
 		if t != d.ident {
 			x.aliases = append(x.aliases, language.AliasDraft{Qualified: d.ident, Target: t, Location: x.loc(d.node), Members: true, ConfidenceCap: cap})
 		}

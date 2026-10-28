@@ -91,8 +91,8 @@ random edge sample, `ARK_ZIG_INCREMENTAL=1` the cache builds):
 | Imports resolved | 1,136 | 3,010 |
 | Imports unresolved: named modules, ZON | 327 | 1,310 |
 | Imports unresolved: missing file | 0 | 2 |
-| Graph edges (exact / strong) | 40,684 (37,329 / 3,355) | 89,613 (88,503 / 1,110) |
-| — calls / references / uses_type / imports | 14,331 / 15,259 / 9,959 / 1,135 | 30,497 / 36,965 / 19,146 / 3,005 |
+| Graph edges (exact / strong) | 40,684 (37,329 / 3,355) | 89,612 (88,502 / 1,110) |
+| — calls / references / uses_type / imports | 14,331 / 15,259 / 9,959 / 1,135 | 30,497 / 36,964 / 19,146 / 3,005 |
 
 The unresolved imports by name are `std`, `builtin` and named modules no
 build.zig maps literally (TigerBeetle's `vsr` passes through a struct
@@ -125,6 +125,38 @@ names containing an identity separator — no name. On the two
 repositories this turned 69 and 172 edges into Candidates. Twenty
 soundness mutations, these four included, are each killed by the tests.
 
+**Second audit.** A pre-merge audit repeated the measurement (the
+counts above, the same commits) and checked a new sample: 144 edges drawn
+by strata (seed `20261028`; exact calls, references, uses_type and
+imports, strong, cross-file, through an alias, with a receiver; 72 of
+each repository), each traced by hand through the declarations to the
+target: no false `exact` or `strong` edge. Every strong edge rests on a
+build.zig module mapping; the thirteen mappings behind them (TigerBeetle's
+`stdx`, twelve Ghostty `pkg/` modules) were each checked against the
+build.zig and build.zig.zon that declare them. A new adversarial review,
+checking each shape with Zig 0.17.0 (a target's body made a
+`@compileError`: the build fails exactly when the reference reaches it),
+found what `TestCompleteness_MembersPastAnotherFilesMemberStayAttributable`
+and `TestReview2_CompletenessAndNoFalseExact` now pin:
+
+- calls the index ruled out as any repository declaration's caller —
+  `get_callers` read complete while they exist: through a value of
+  another file (`a.global.run()`, a field of it), a namespace constant of
+  another file Ark cannot denote, a named module no build.zig maps
+  literally (TigerBeetle's `vsr`: `src/vsr.zig::fatal` showed 8 callers
+  and nothing unattributed; 67 calls are now unattributed), `root`, a
+  re-export chain past the alias depth. A member past another file's
+  member, or of a named module other than std and builtin, now names its
+  target only if declared (`ReferenceDraft.TentativeIdentity`): resolved
+  as before when declared (the graphs of both repositories are unchanged),
+  attributable to every declaration of its name when not;
+- an exact edge to one of two unnamed alternatives sharing an identity
+  (`if (c) struct { run: *const fn () void } else struct { pub fn run }`):
+  an alias to a shared identity is capped at Candidate (one Ghostty edge,
+  inside such a struct, became one too);
+- `@"u0"`, `@"f80"`, `@"c_char"` declarations taken for the unquoted
+  primitive.
+
 **False negatives seen.** Method calls on values whose type needs
 inference (a capture's, an `anytype` parameter's, a call result of a
 function stating no container type), members through a field of another
@@ -140,6 +172,20 @@ the whole repository (every language, `docs/scripts/ark-mcp-timing.py`,
 three runs) is in [performance](../performance.md#zig).
 
 ## Remaining work
+
+Found by the second audit and not fixed (each a wrong edge or a false
+"complete" in a rare shape; see the audit report):
+
+- A named module whose name ends in `.zig`: Zig looks the import table up
+  first, so `@import("helper.zig")` is that module, not the file beside
+  the importer; Ark resolves it Exact to the file.
+- Named modules are mapped for the whole repository, not per module: a
+  module importing `util` through a computed mapping resolves Strong to
+  another module's literal `util`.
+- An `@import` whose case differs from the file's (accepted on a
+  case-insensitive file system) and an import of a named module no
+  build.zig maps are not attributed to the file they import: the file's
+  importers can read complete.
 
 - Field types of another file's structs (`x.field.method()` across files):
   a field identity is `T.field`, which no member path computes.

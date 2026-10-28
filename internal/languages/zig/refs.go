@@ -375,7 +375,7 @@ func (x *extractor) emitPath(n *ts.Node, kind reference.ReferenceKind, c ctx, de
 	switch x.typ(head) {
 	case "identifier":
 		name := identifierName(x.text(head))
-		if name == "" || name == "_" {
+		if name == "" || name == "_" || x.primitive(head) {
 			return
 		}
 		ds, unknown := lookup(c.s, name)
@@ -490,13 +490,17 @@ func (x *extractor) emitMembers(v val, members []*ts.Node, kind reference.Refere
 				var mod func(*language.ReferenceDraft)
 				if v.spec {
 					mod = x.unproven(call, mn)
+				} else if v.tent || x.alternativeAlias[t] {
+					mod = x.tentative(mn)
 				}
 				// Through std, builtin or root, which no repository file is,
 				// only the last member says what the path is used for.
 				if i == len(members)-1 || !reservedPath(ident) {
 					x.emit(m, k, mn, c, ident, mod)
 				}
-				v = val{ns: []string{ident}, spec: v.spec}
+				// The member is that file's: a container, or a value whose
+				// members its type declares elsewhere.
+				v = val{ns: []string{ident}, spec: v.spec, tent: !reservedPath(ident) || unprovenModule(ident)}
 			}
 		case v.typ != "" && !v.errU:
 			t := v.typ
@@ -561,6 +565,18 @@ func (x *extractor) unproven(call bool, member *ts.Node) func(*language.Referenc
 		} else {
 			d.Speculative = true
 		}
+	}
+}
+
+// tentative qualifies a member of a namespace not proven one (val.tent):
+// its identity names the target only if declared (TentativeIdentity).
+// Undeclared, it may be a member of the type of a value another file
+// declares, or of whatever file a build maps a module to: it is a member
+// (its receiver), attributable to every declaration of its name.
+func (x *extractor) tentative(member *ts.Node) func(*language.ReferenceDraft) {
+	return func(d *language.ReferenceDraft) {
+		d.IdentityInRepository = false
+		d.TentativeIdentity, d.ReceiverExpr = true, x.receiverText(member)
 	}
 }
 
