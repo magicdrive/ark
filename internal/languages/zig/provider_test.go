@@ -280,7 +280,7 @@ fn f(e: *eng.Engine, g: eng.Engine) void {
 		"src/a.zig:5 missing call": "unresolved",
 	})
 	ex := extract(t, "src/a.zig", files["src/a.zig"])
-	for _, l := range []string{"3 call run -> src/engine.zig::Engine::run ?", "4 call hook -> src/engine.zig::Engine::hook ?"} {
+	for _, l := range []string{"3 call run -> {zigimp}src/engine.zig::Engine::run ?", "4 call hook -> {zigimp}src/engine.zig::Engine::hook ?"} {
 		if !strings.Contains(strings.Join(refLines(ex), "\n"), l) {
 			t.Errorf("missing %q in\n  %s", l, strings.Join(refLines(ex), "\n  "))
 		}
@@ -538,7 +538,7 @@ pub fn main() void {
 }
 `)
 	equalLines(t, "references", refLines(ex), []string{
-		"1 import other.zig -> src/other.zig",
+		"1 import other.zig -> {zigimp}src/other.zig",
 		"4 call helper -> ?",
 		"5 value_reference Own -> src/a.zig::Own",
 		"5 call f -> src/a.zig::Own::f",
@@ -1136,7 +1136,7 @@ fn g() void { helper(); }
 `)
 	got := refLines(ex)
 	equalLines(t, "references", got, []string{
-		"3 import other.zig -> src/other.zig",
+		"3 import other.zig -> {zigimp}src/other.zig",
 		"4 call helper -> ?",
 		"6 call helper -> src/a.zig::helper",
 	})

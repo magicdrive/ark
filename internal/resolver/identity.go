@@ -434,17 +434,27 @@ func (r *Resolver) caseFoldedResolution(res Resolution, ref reference.Reference,
 		return res, false
 	}
 	file, rest, _ := strings.Cut(ref.NameQualified, "::")
+	// The leading path, or the paths an identity standing for one aliases
+	// (an import's own identity, which stands for the file it names).
+	paths := []string{file}
+	for _, t := range r.aliases[langQualified{ref.Language, file}] {
+		if !strings.HasPrefix(t, "{") && !strings.Contains(t, "::") {
+			paths = append(paths, t)
+		}
+	}
 	var found []symbol.Symbol
-	for _, other := range r.filesByFoldedPath(ref.Language, file) {
-		if other == file {
-			continue
+	for _, p := range paths {
+		for _, other := range r.filesByFoldedPath(ref.Language, p) {
+			if other == p {
+				continue
+			}
+			q := other
+			if rest != "" {
+				q += "::" + rest
+			}
+			d, _, _, _ := r.identityDecls(ref.Language, q)
+			found = append(found, d...)
 		}
-		q := other
-		if rest != "" {
-			q += "::" + rest
-		}
-		d, _, _, _ := r.identityDecls(ref.Language, q)
-		found = append(found, d...)
 	}
 	if len(found) == 0 {
 		return res, false

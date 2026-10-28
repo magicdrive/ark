@@ -268,3 +268,63 @@ func TestMCPZig_NamedModulesNeverReadComplete(t *testing.T) {
 		t.Errorf("context of main lacks core.run:\n%s", ctx)
 	}
 }
+
+// An open build (its builder given to code Ark does not read) may bind any
+// name in any module: no import is proven, no importer list complete; a
+// file's calls of its own functions stay edges.
+func TestMCPZig_OpenBuildNeverReadsComplete(t *testing.T) {
+	bin := buildArk(t)
+	proj := t.TempDir()
+	for name, src := range map[string]string{
+		"build.zig":           "const std = @import(\"std\");\nconst tools = @import(\"tools/configure.zig\");\npub fn build(b: *std.Build) void {\n    const core = b.createModule(.{ .root_source_file = b.path(\"lib/core.zig\") });\n    const m = b.createModule(.{ .root_source_file = b.path(\"src/main.zig\") });\n    m.addImport(\"core\", core);\n    tools.configure(b, m);\n}\n",
+		"tools/configure.zig": "pub fn configure(b: anytype, m: anytype) void {\n    _ = b;\n    _ = m;\n}\n",
+		"src/main.zig":        "const core = @import(\"core\");\nconst h = @import(\"helper.zig\");\npub fn main() void {\n    core.run();\n    h.which();\n}\n",
+		"src/helper.zig":      "pub fn which() void {\n    inner();\n}\nfn inner() void {}\n",
+		"lib/core.zig":        "pub fn run() void {}\n",
+	} {
+		p := filepath.Join(proj, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	c := startServer(t, proj, t.TempDir(), bin, "mcp-server", "--root", "./", "--no-cache")
+	c.handshake()
+
+	callers := func(sym, file string) (edges []zigEdge, unattributed int) {
+		text, isErr := c.tool("get_callers", map[string]any{"path": ".", "symbol": sym, "filePattern": file})
+		if isErr {
+			t.Fatalf("get_callers %s: %s", sym, text)
+		}
+		var out struct {
+			Edges        []zigEdge
+			Unattributed int
+		}
+		if err := json.Unmarshal([]byte(text), &out); err != nil {
+			t.Fatalf("get_callers %s: %v\n%s", sym, err, text)
+		}
+		return out.Edges, out.Unattributed
+	}
+	for _, q := range [][2]string{{"run", "lib/core.zig"}, {"which", "src/helper.zig"}} {
+		if e, u := callers(q[0], q[1]); len(e) != 0 || u == 0 {
+			t.Errorf("%s in %s: %d edges, %d unattributed; want no edge, the call unattributed", q[0], q[1], len(e), u)
+		}
+	}
+	if e, _ := callers("inner", "src/helper.zig"); len(e) != 1 || e[0].Confidence != "exact" {
+		t.Errorf("inner: callers %+v, want which (exact): the file's own call", e)
+	}
+	for _, file := range []string{"src/helper.zig", "lib/core.zig"} {
+		if _, u := callers(file, ""); u == 0 {
+			t.Errorf("importers of %s read complete while the build is open", file)
+		}
+	}
+	impact, _ := c.tool("analyze_change_impact", map[string]any{"path": ".", "symbol": "inner", "filePattern": "src/helper.zig", "format": "json"})
+	if !strings.Contains(impact, "src/helper.zig::which") {
+		t.Errorf("impact of inner misses which:\n%s", impact)
+	}
+	if ctx, isErr := c.tool("get_context", map[string]any{"path": ".", "symbol": "which", "filePattern": "src/helper.zig"}); isErr || !strings.Contains(ctx, "fn inner()") {
+		t.Errorf("context of which lacks inner:\n%s", ctx)
+	}
+}

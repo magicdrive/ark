@@ -122,7 +122,10 @@ func (x *extractor) builtinVal(n *ts.Node, s *scope, depth int) val {
 	case "@import":
 		if len(args) == 1 {
 			if spec, ok := x.stringLiteral(args[0]); ok && !strings.HasSuffix(spec, ".zon") { // ZON data: no namespace
-				if t, _, ok := importTarget(x.key, spec); ok {
+				if t, inRepo, ok := importTarget(x.key, spec); ok {
+					if !strings.HasPrefix(t, "{") && inRepo {
+						t = importIdent(t)
+					}
 					// A named module is whatever file the build gives it,
 					// root the root module's (std and builtin are the
 					// compiler's).

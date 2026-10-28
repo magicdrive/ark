@@ -72,8 +72,10 @@ import (
 //   - a binding on a module Ark cannot name may be any module's: every file
 //     sees it ({zigany}).
 //
-// A relative import's file states, for each directory of each importer and
-// what the importer wrote, file → {zigspec}dir::spec; a build states
+// A relative import has the importer's identity ({zigimp}file, the file's
+// own declarations keeping theirs): {zigimp}file → file, and, for each
+// directory of each importer and what the importer wrote, {zigimp}file →
+// {zigspec}dir::spec; a build states
 // {zigspec}dir::name → the module it binds under a name ending in .zig, and
 // {zigspec}dir → {zigunknown} (capped) for a module binding names Ark
 // cannot read, dir the module's root's. The file is then one of the
@@ -83,12 +85,12 @@ import (
 // through one is counted, besides its Candidates, as an unresolved one —
 // any same-named declaration, any file for an import.
 //
-// Bindings only code Ark does not evaluate makes — a function of another
-// file (a build helper, a dependency's build), a module a fetched package
-// provides — are unknown to it: an import they alone bind is not resolved,
-// and a name they would bind besides one a build.zig binds is the premise
-// of Strong. Exact for `@import("x.zig")` rests on the same premise: a
-// module name ending in .zig only such code binds is not seen.
+// What it states grounds a Strong (and the absence of a binding a relative
+// Exact) only for a closed build (closed.go): Ark follows every use of a
+// value reaching the graph. An open build — one that gives the builder or a
+// module to code Ark does not read (a helper file, a dependency's build), a
+// function pointer or a std function it does not list, or holds syntax Ark
+// does not read — leaves every module's names unknown, every file's.
 // std and builtin are the compiler's: never mapped; root is the root
 // module's file, which no syntax names.
 
@@ -137,6 +139,15 @@ const (
 
 func moduleIdentOf(root string) string { return "{zigmod}" + root }
 
+// importPrefix marks the identity of a relative import of a file:
+// {zigimp}path stands for the file (path) and for what a table of the
+// importer's modules binds under the spec — the file's own declarations
+// and references keep the file's identity, apart from what may stand for
+// it.
+const importPrefix = "{zigimp}"
+
+func importIdent(file string) string { return importPrefix + file }
+
 // A directory's identities fold case: a case-insensitive file system makes
 // `b.path("Src/main.zig")` the root of the files under src/ (two
 // directories apart in case alone, on a case-sensitive one, then share
@@ -179,11 +190,12 @@ func (x *extractor) importerAliases() {
 		}
 	}
 	for _, imp := range x.relativeImports {
+		add(importIdent(imp[0]), imp[0])
 		if strings.Contains(imp[1], "::") {
 			continue
 		}
 		for _, d := range dirs {
-			add(imp[0], specIdent(d)+"::"+imp[1])
+			add(importIdent(imp[0]), specIdent(d)+"::"+imp[1])
 		}
 	}
 }
@@ -390,7 +402,6 @@ func (x *extractor) readBuild(root *ts.Node) {
 		}
 	}
 	walk(root, 0)
-
 	facts := buildFacts{
 		owners: map[string]bool{}, entries: map[string][]string{}, capped: map[string]bool{},
 		dynamic: map[string]bool{}, regs: map[string][]string{}, unknownRegs: map[string]bool{}, lookups: map[string]bool{},
@@ -720,6 +731,14 @@ func (x *extractor) readBuild(root *ts.Node) {
 					}
 				}
 			}
+		}
+	}
+	// What the build may do that Ark does not follow opens it (closed.go):
+	// any module's names are unknown.
+	if why := e.openWhy(root); why != "" {
+		bind([]string{anyModule}, "", false, bval{})
+		if debugOpen != nil {
+			debugOpen(x.key, why)
 		}
 	}
 	for name := range e.lookups {

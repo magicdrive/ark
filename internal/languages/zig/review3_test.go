@@ -1,6 +1,8 @@
 package zig
 
 import (
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -26,6 +28,7 @@ type reviewCase struct {
 func runReview(t *testing.T, cases []reviewCase) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			dumpCase(t, c.files)
 			got := resolveRepo(t, c.files)
 			var keys []string
 			for k := range c.want {
@@ -184,4 +187,23 @@ func TestReview3_ModuleBindingsArkMustNotMiss(t *testing.T) {
 			"src/b.zig:3 helper call": "!strong",
 		}, nil},
 	})
+}
+
+// dumpCase writes a case's files under ARK_ZIG_DUMP_CASES/<test name>
+// (for checking them with the compiler); nothing when it is not set.
+func dumpCase(t *testing.T, files map[string]string) {
+	dir := os.Getenv("ARK_ZIG_DUMP_CASES")
+	if dir == "" {
+		return
+	}
+	root := filepath.Join(dir, filepath.FromSlash(strings.NewReplacer(" ", "_", "'", "").Replace(t.Name())))
+	for p, src := range files {
+		f := filepath.Join(root, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(f), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 }

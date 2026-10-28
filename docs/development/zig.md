@@ -104,16 +104,12 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    escapes and `@field` by a literal name in ordinary sources (decoded,
    observed).
 
-   **Open question (for the maintainers).** Five reviews did not converge:
-   build.zig is arbitrary Zig, and each round found another construct the
-   evaluator misreads. Two ways out, each a decision of what Strong and
-   relative Exact may rest on: keep the evaluator and state as the premise
-   that build code uses the constructs it reads (what it misreads is a
-   documented gap, found shapes fixed as they come); or read a build.zig
-   only if every statement of it is one the evaluator models, and treat
-   any other build.zig as binding anything (sound by construction; on
-   TigerBeetle and Ghostty most named-module Strong edges and every
-   relative Exact edge under those builds would become Candidates). Results through a binding are capped at
+   **Soundness first (the maintainers' decision, 2026-10-28).** Five
+   reviews did not converge — build.zig is arbitrary Zig, and each round
+   found another construct the evaluator misread — so what the evaluator
+   reads now grounds a Strong or an Exact only for a build whose every way
+   of reaching the graph Ark follows (decision 8); any other build binds
+   anything. Results through a binding are capped at
    Strong: build code Ark does not read is assumed not to rebind a name,
    and a fetched package's module of the name may be the one used. `std`
    and `builtin` are never mapped; `root` is unresolved (its calls stay
@@ -139,6 +135,102 @@ and how. The rules themselves are in `internal/languages/zig/provider.go`
    whose path names no file but differs from one in case alone
    (`ReferenceDraft.PathCaseFold`) resolves to that file as a Candidate:
    macOS's default file system opens it, a case-sensitive one does not.
+
+8. **Closed and open builds: Strong and Exact only on a proven graph.**
+   A resolution is Exact or Strong only if every way it could resolve
+   otherwise is excluded by what Ark proves; a way left unproven makes it
+   a Candidate (or leaves it Unresolved). For an import that means:
+
+   | | A relative import `@import("x.zig")` is Exact when | A named import `@import("name")` is Strong when |
+   |---|---|---|
+   | the file | it exists (or one apart in case only: a Candidate) | — |
+   | the importer's modules | every module that may hold the importer is one a closed build makes (its root's directory holds the importer) | the same |
+   | the table | no table of those binds `x.zig` | one module binds `name`, the same on every path |
+   | other modules | no module rooted elsewhere can hold the importer | no other binding of the name in those tables |
+   | unknown code | no build of the repository is open | the same |
+   | the target | the path names one file | the bound root is one file the index holds |
+
+   Strong, not Exact, for a binding: a fetched package's module of the name
+   (a dependency's `b.dependency`) or a build run otherwise may stand for it.
+
+   **Closed.** A build.zig is closed when Ark follows every way its code
+   may reach the build graph. Zig 0.17.0's std keeps the graph in no global
+   (neither `std.Build` nor the configurer has a container-level `var`):
+   code reaches it only through a value it is given — the build function's
+   `*std.Build` and what is derived from it (a module, an artifact, a step,
+   a path, a dependency: each reaches the builder through `owner`). The
+   world (`closed.go`) taints those values — a binding (a declaration, a
+   parameter, a capture, resolved by Zig's scopes; a name Ark cannot
+   resolve by the name) holding one, flow-insensitively, to a fixed point —
+   and decides each use of one:
+
+   | A graph value is | Closed when | Otherwise |
+   |---|---|---|
+   | given to a call | the callee is a function of the file (its parameters, by position, tainted and its body read), a method `buildEval` reads, a std.Build method Zig 0.17.0's source shows creates, roots, binds and registers no module (`neutralMethods`: their bodies call none of `Module.init`, `create`, `addImport`, `addAnonymousImport`, `addOptions`, a `createModule` or an `addModule`), a container's method (the container is tainted), a std function that only reads (`std.mem.eql`, ...) | open: another file's function (a build helper), a dependency's build code, an unknown method, any other std function, a function pointer |
+   | assigned | to a name; to a field std states holds no module, root or table (`neutralFields`: settings such as `link_libc`) of a graph value | open: another field, a field of a value of the file's types, a dereference, an index, a container-level `var` |
+   | given to a builtin | `@as`, `@call` (a call, above), one that returns no graph value (`@intFromPtr`, `@TypeOf`) | open: `@ptrCast`, `@fieldParentPtr`, `@field`, any other |
+   | in module options | Zig 0.17.0's `Module.CreateOptions` and artifacts' options' fields | open: another field (0.11's `.dependencies`, `.source_file`) |
+
+   Syntax outside the grammar's forms the world reads (`usingnamespace`,
+   `asm`, `async`/`await`/`suspend`/`resume`, an error or a missing node),
+   nesting past `maxDepth` and a taint that does not settle open the build
+   too: what Ark does not read is never taken as harmless. std code given
+   a graph value may call the methods of the file's types it is given by
+   convention (`format`, `hash`, `lessThan`): their parameters are tainted
+   then. Values holding no graph value (an option, a string, a target) are
+   free; a field std states holds none (`allocator`, `build_root`, `io`) is
+   one — unless a type of the file declares a field of the name.
+
+   **Open.** An open build may create a module rooted at any file
+   (`b.path("../x")`, a `cwd_relative` path, a dependency's path) and bind
+   any name in any module: every module's names are unknown (`{zigany}`
+   and `{zigspec}.` stand for what Ark does not see) — for every file of
+   the repository, not the build's directory alone. Its modules' bindings
+   Ark reads are still read (a Candidate among the unknown).
+
+   **Relative imports have the importer's identity.** `@import("x.zig")`
+   resolves through `{zigimp}<path>` — the alias `{zigimp}<path>` →
+   `<path>` (the file) and → `{zigspec}<dir>::x.zig` for the importer's
+   directories — and a member through it (`x.f`) through `{zigimp}<path>::f`.
+   The file's own declarations and its references to them keep the file's
+   identity: what a build may bind under `x.zig` concerns the importers,
+   never the file's scopes (a file's call of its own function stays Exact
+   in an open world).
+
+   **Trust boundary.**
+
+   | Case | Read as |
+   |---|---|
+   | one build.zig, its own functions | closed if every use above is |
+   | a helper file (`@import("build/x.zig")`), its functions | open when given a graph value (not read) |
+   | a dependency's build code (`@import("dep")`), its helpers | open when given a graph value |
+   | a dependency the build fetches (`b.dependency`) | its modules are what its build registers: Strong at most; one no build of the repository registers is unknown |
+   | build options, `builtin` | not evaluated: every branch is read (a Candidate when they bind apart; a branch never taken is read too) |
+   | comptime choices | every branch, as options |
+   | std.Build | Zig 0.17.0's source (`TestClosedTablesAgainstStd` checks the tables against a std tree); another version's API Ark does not list opens the build |
+   | `build.zig.zon` | not read: its packages are dependencies (above) |
+   | several build roots | each read alone; one open build opens every module |
+   | a consumer outside the repository, a command line (`zig build-exe --dep`) | outside the boundary: the graph is the repository's builds' |
+   | illegal behavior (Zig's undefined behavior) | outside the boundary |
+
+   **Completeness.** An open build's unknowns are open (`AliasDraft.Open`):
+   a resolution through one counts, besides its Candidates, as an
+   unresolved reference — a relative import as an import of any file
+   (`ReferenceDraft.MayBeAnyFile`). So while a build is open no file's
+   importers read complete (`unattributed` > 0 wherever an import may
+   name it), and a call through an import is attributable to every
+   declaration of its name; a file's own references are not touched. With
+   every build closed, a file's importer list is complete when every
+   import that may name it resolved to an edge: `MayBeAnyFile` is kept
+   (narrowing an unresolved named import to the roots of the closed
+   builds' modules would miss a fetched package's module).
+
+   Alternatives weighed: reading a build.zig when its every statement is
+   of a form the evaluator lists (the option as first stated) — syntax
+   coverage is not semantics: a statement of a listed form may still give
+   the builder to code Ark does not read; bounding an open build to its
+   directory — its paths may leave it; reading helper files (Ghostty's
+   `src/build/`) — a later step (each helper read as the build is).
 
 ## Evaluation on real projects
 
