@@ -155,6 +155,12 @@ smoke: build
 	@$(BUILD_DIR)/$(BINARY_NAME) --help >/dev/null
 	@echo "ok: $(BUILD_DIR)/$(BINARY_NAME) --version, --help"
 
+# Check install.sh (shellcheck must be installed)
+.PHONY: shellcheck
+shellcheck:
+	@sh -n install.sh
+	@shellcheck -s sh install.sh
+
 # Validate hephaestus.yaml (nothing is built or published)
 .PHONY: hephaestus-check
 hephaestus-check:
@@ -323,6 +329,7 @@ help:
 	@echo "  make fmt-check         - Fail on unformatted Go files (as CI)"
 	@echo "  make vulncheck         - Run govulncheck"
 	@echo "  make smoke             - Build ark and run --version and --help"
+	@echo "  make shellcheck        - Check install.sh with shellcheck"
 	@echo "  make hephaestus-check  - Validate hephaestus.yaml"
 	@echo "  make snapshot          - Build and verify the release archives (snapshot)"
 	@echo "  make homebrew-e2e      - Test the formula on the snapshot with Homebrew"

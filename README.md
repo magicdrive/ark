@@ -77,10 +77,14 @@ Details: [ARCHITECTURE.md](ARCHITECTURE.md),
 brew install magicdrive/tap/ark
 ```
 
-Or download a binary from [Releases](https://github.com/magicdrive/ark/releases),
-or run `go install github.com/magicdrive/ark@main` (not `@latest`, which
-resolves to the legacy v1 line — see
-[Getting started](docs/getting-started.md#go-toolchain)).
+Or, on macOS and Linux without Homebrew, the install script (into `~/.local/bin`; see
+[Installation](#installation) for its options and checks, the archives and building from
+source):
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/magicdrive/ark/main/install.sh
+sh install.sh
+```
 
 **2. Connect your agent** — in the repository root:
 
@@ -331,6 +335,80 @@ Details and known limitations: [SECURITY.md](SECURITY.md).
 - **`ark skill`** — generate task guidance for agents that use skills.
 
 See the [CLI reference](docs/cli.md).
+
+## Installation
+
+| Way | Platforms | Update |
+|---|---|---|
+| Homebrew: `brew install magicdrive/tap/ark` | macOS, Linux | `brew upgrade ark` |
+| The install script (below) | macOS, Linux (amd64, arm64) | `sh install.sh --upgrade` |
+| An archive from [Releases](https://github.com/magicdrive/ark/releases), checked against `ark_checksums.txt` | macOS (amd64, arm64), Linux and Windows (386, amd64, arm64) | download the new one |
+| From source: `git clone https://github.com/magicdrive/ark.git && cd ark && make build` (Go of `go.mod`; the binary is `build/ark`) | any | pull and build again |
+
+### Install script (macOS and Linux, amd64 and arm64)
+
+Download the script, read it if you like, then run it with `sh`:
+
+```sh
+curl -fsSLO https://raw.githubusercontent.com/magicdrive/ark/main/install.sh
+sh install.sh                                  # the latest release, into ~/.local/bin
+"$HOME/.local/bin/ark" --version             # prints: ark version vX.Y.Z
+```
+
+```sh
+sh install.sh                                  # install the latest release
+sh install.sh --version v6.7.2                 # install a given release (older ones too)
+sh install.sh --upgrade                        # switch to the latest stable release
+sh install.sh --upgrade --version v6.7.2       # switch to a given release (also a downgrade)
+sh install.sh --dir "$HOME/.local/bin"         # choose the directory (this is the default)
+sh install.sh --help
+```
+
+- **Where**: `$HOME/.local/bin/ark` by default; `--dir DIR` installs `DIR/ark` and creates
+  `DIR` if needed (spaces in `DIR` are fine). It never uses `sudo` and never changes `PATH` or
+  shell start-up files: if the script says the directory is not in `PATH`, add it, e.g.
+  `export PATH="$HOME/.local/bin:$PATH"` in `~/.profile`. For a system directory such as
+  `/usr/local/bin`, run it as a user who can write there (it does not ask for `sudo` itself).
+- **Versions**: without `--version` it installs the latest stable release (pre-releases are not
+  picked). `--version` takes a release tag, `v6.7.2` or `6.7.2`, newer or older than the
+  installed one; a version that does not exist is an error, never another version. `--upgrade`
+  is the same run, named for what you mean. Running it again with the installed version changes
+  nothing. Every ark release can be installed (v0.0.2 and later).
+- **Updating**: run `sh install.sh --upgrade` again (with the same `--dir` if you used one).
+- **Checks**: the archive must match the SHA-256 listed in the release's checksum file
+  (`ark_checksums.txt`); a missing or malformed checksum file stops the install. Only the
+  `ark` binary is taken out of the archive, after its entries have been checked (no absolute
+  paths, `..`, links or devices). The new binary must run and report the version asked for
+  before it replaces the old one in a single rename: a failed or interrupted run leaves the
+  installed `ark` as it was.
+- **Security**: every request starts at github.com, over https, and redirects (GitHub sends the
+  downloads to its asset host) are followed only to https. The checksum file comes from the same GitHub release as the archive, so it catches a
+  broken or altered download, but not a release that was itself replaced on GitHub. For a
+  stronger check, verify the archive's build provenance with the
+  [GitHub CLI](https://cli.github.com/) before you trust it:
+  `gh attestation verify ark_<version>_<os>_<arch>.tar.gz -R magicdrive/ark`
+  (releases from v6.7.1 on have these attestations).
+  The command above runs the script from the `main` branch; to run a fixed script, download it
+  from a release tag instead (`https://raw.githubusercontent.com/magicdrive/ark/<tag>/install.sh`;
+  the tags from v6.9.0 on have it). Piping it straight into `sh` (`curl ... | sh`) also works, but then you
+  run what you have not seen.
+- **Homebrew**: the script refuses Homebrew's directories (its prefix, e.g. `/opt/homebrew`, or
+  `/usr/local` on an Intel Mac) and does not replace a symbolic link such as one Homebrew made.
+  Keep one way of installing: with Homebrew, upgrade with `brew upgrade ark`; the script warns
+  if another `ark` comes first in `PATH`.
+- **Uninstall**: delete the file: `rm "$HOME/.local/bin/ark"` (or `DIR/ark`).
+- **Needs**: a POSIX `sh`, `curl` (or GNU Wget 1.17+; BusyBox wget is refused because it does
+  not check certificates, and wget2 is not supported), `tar`, `gzip`, and `sha256sum`, `shasum`
+  or `openssl`. A proxy set in `https_proxy` is used. `INSTALLER_TIMEOUT` (seconds, default 60)
+  is how long it waits for a connection or more data.
+- **Windows**: the script does not run on Windows (Git Bash, MSYS2 and Cygwin are refused). Use
+  the `ark_<version>_windows_<arch>.tar.gz` of [Releases](https://github.com/magicdrive/ark/releases) (it holds `ark.exe`). Inside WSL, the Linux instructions apply.
+- **Troubleshooting**: *not writable* — choose a directory of your own with `--dir`;
+  *not in PATH* — see above; *does not run in DIR (noexec)* — choose a directory on another file
+  system; *SHA-256 mismatch* or *rejected* — nothing was installed; try again later and report it
+  if it persists; *release not found* — check the version on the
+  [Releases page](https://github.com/magicdrive/ark/releases); *inside the Homebrew prefix* —
+  use `brew upgrade ark`, or another `--dir`.
 
 ## Documentation
 

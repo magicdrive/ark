@@ -64,7 +64,16 @@ MCP サーバー  ──────►  コーディングエージェント
 brew install magicdrive/tap/ark
 ```
 
-[Releases](https://github.com/magicdrive/ark/releases) からバイナリを入手するか、`go install github.com/magicdrive/ark@main` でも導入できます（`@latest` は旧 v1 系に解決されるので使わないでください。理由は[導入ガイド](docs/getting-started.md#go-toolchain)を参照）。
+Homebrew を使わない macOS と Linux（amd64、arm64）では、インストールスクリプトも使えます。ダウンロードして、必要なら中身を確認してから `sh` で実行します。
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/magicdrive/ark/main/install.sh
+sh install.sh                                  # 最新の安定版を ~/.local/bin に
+sh install.sh --version v6.7.2                 # 版を指定（古い版も可）
+sh install.sh --upgrade                        # 最新の安定版に更新
+```
+
+アーカイブはリリースの `ark_checksums.txt` の SHA-256 で検証してから展開し、取り出すのは `ark` だけです。`sudo` は使わず、`PATH` も変更しません。Homebrew の管理するディレクトリには入れません（Homebrew の ark は `brew upgrade ark` で更新してください）。Windows では動きません（[Releases](https://github.com/magicdrive/ark/releases) のアーカイブを使ってください。WSL の中では Linux と同じ手順）。オプション、検証、注意点の詳細と、ソースからのビルドは [README の Installation](README.md#installation)（英語）を参照してください。
 
 **2. エージェントに接続する** — リポジトリのルートで実行します。
 
