@@ -170,15 +170,26 @@ jobs:
             sudo apt-get update && sudo apt-get install -y zsh
           fi
 
+      # As in the unit job, for the shard that runs internal/installer: the
+      # same shells and downloaders, so that it runs the same tests (ci-gate
+      # compares them).
+      - name: Install busybox and wget (installer tests)
+        run: |
+          if cut -d' ' -f1 "$RUNNER_TEMP/packages" | grep -qx 'github.com/magicdrive/ark/internal/installer'; then
+            sudo apt-get update && sudo apt-get install -y busybox wget
+            {
+              echo "ARK_INSTALLER_SHELLS=sh bash bash-nonposix busybox"
+              echo "ARK_INSTALLER_BUSYBOX=required"
+              echo "ARK_INSTALLER_DOWNLOADERS=curl wget"
+            } >> "$GITHUB_ENV"
+          fi
+
       - name: Run tests with race detector
         # The descriptor-anchored file access tests (internal/fsroot,
         # internal/accesspolicy) need symlinks: make their absence a failure,
-        # not a skip. The install.sh tests run with every shell and downloader
-        # in the unit job; one shell and curl are enough under -race.
+        # not a skip.
         env:
           ARK_REQUIRE_SYMLINKS: "1"
-          ARK_INSTALLER_SHELLS: sh
-          ARK_INSTALLER_DOWNLOADERS: curl
         run: |
           set +e
           python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/race.json"
