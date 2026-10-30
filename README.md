@@ -409,6 +409,7 @@ sh install.sh --help
   if it persists; *release not found* — check the version on the
   [Releases page](https://github.com/magicdrive/ark/releases); *inside the Homebrew prefix* —
   use `brew upgrade ark`, or another `--dir`.
+
 ## Documentation
 
 | Document | Contents |

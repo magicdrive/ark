@@ -34,7 +34,7 @@ With `TAG` the release tag and `VERSION` = `TAG` without the leading `v`:
 Every ark release so far (v0.0.2 to v6.8.0) meets it: installing v0.0.2, v1.0.0, v4.0.0 and v6.7.0 from github.com with the script was checked, and `TestRealReleases` installs v6.5.0 and the latest release.
 
 Changing any of these in `hephaestus.yaml` or in the binary breaks the installer. CI checks
-them on every pull request: the `snapshot` job installs the archives it has just built with
+them on every pull request: the `release-snapshot` job installs the archives it has just built with
 `install.sh` (`TestDistArchives`).
 
 ## Tests
