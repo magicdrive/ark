@@ -102,6 +102,20 @@ jobs:
         # zsh; without zsh those subtests are skipped.
         run: sudo apt-get update && sudo apt-get install -y zsh
 
+      # The install.sh tests (internal/installer) run the script with each shell
+      # and downloader named here, and with the BusyBox tools; one that is
+      # missing fails them instead of skipping it.
+      - name: Install busybox and wget (installer tests)
+        run: |
+          sudo apt-get install -y busybox wget
+          {
+            # /bin/sh is dash on Ubuntu
+            echo "ARK_INSTALLER_SHELLS=sh bash bash-nonposix busybox"
+            echo "ARK_INSTALLER_BUSYBOX=required"
+            echo "ARK_INSTALLER_DOWNLOADERS=curl wget"
+          } >> "$GITHUB_ENV"
+          curl --version | head -1; wget --version | head -1
+
       - name: Run tests
         run: |
           set +e
@@ -159,9 +173,12 @@ jobs:
       - name: Run tests with race detector
         # The descriptor-anchored file access tests (internal/fsroot,
         # internal/accesspolicy) need symlinks: make their absence a failure,
-        # not a skip.
+        # not a skip. The install.sh tests run with every shell and downloader
+        # in the unit job; one shell and curl are enough under -race.
         env:
           ARK_REQUIRE_SYMLINKS: "1"
+          ARK_INSTALLER_SHELLS: sh
+          ARK_INSTALLER_DOWNLOADERS: curl
         run: |
           set +e
           python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/race.json"
@@ -343,6 +360,18 @@ jobs:
           cat "$RUNNER_TEMP/packages"
           [ -s "$RUNNER_TEMP/packages" ]
 
+      # The install.sh tests on macOS, in the shard that runs them: every
+      # shell and downloader named here must be there.
+      - name: Install wget (installer tests)
+        run: |
+          if cut -d' ' -f1 "$RUNNER_TEMP/packages" | grep -qx 'github.com/magicdrive/ark/internal/installer'; then
+            command -v wget >/dev/null || brew install wget
+            {
+              echo "ARK_INSTALLER_SHELLS=sh dash bash bash-nonposix ksh"
+              echo "ARK_INSTALLER_DOWNLOADERS=curl wget"
+            } >> "$GITHUB_ENV"
+          fi
+
       - name: Run tests with race detector
         shell: bash
         run: |
@@ -420,6 +449,11 @@ jobs:
       - name: Run shellcheck
         run: shellcheck .github/release/*.sh .github/ci/*.sh .github/ts-oracle/run.sh .github/renovate-check/run.sh
 
+      - name: Run shellcheck (install.sh)
+        run: |
+          shellcheck --version | head -2
+          make shellcheck
+
       - name: Test the pinned Renovate install
         run: make renovate-check-test
 
@@ -465,6 +499,15 @@ jobs:
 
       - name: Verify the snapshot as a release is verified
         run: .github/release/verify-dist.sh dist --snapshot
+
+      # install.sh installs this machine's archive from the snapshot, served
+      # as one release by a fake github.com (docs/installer.md)
+      - name: install.sh with the snapshot archives
+        env:
+          ARK_INSTALLER_DIST: ${{ github.workspace }}/dist
+          ARK_INSTALLER_SHELLS: sh
+          ARK_INSTALLER_DOWNLOADERS: curl
+        run: go test -count=1 -v -run '^TestDistArchives$' ./internal/installer/
 
       - name: Upload the snapshot archives
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
