@@ -1,0 +1,32 @@
+title = "TOML Example"
+
+[owner]
+name = "Tom"
+dob = 1979-05-27T07:32:00-08:00
+
+[database]
+enabled = true
+ports = [8000, 8001]
+temp_targets = { cpu = 79.5, case = 72.0 }
+
+[servers.alpha]
+ip = "10.0.0.1"
+
+[servers."beta/gamma"]
+ip = "10.0.0.2"
+
+[[products]]
+name = "Hammer"
+sku = 738594937
+
+[[products]]
+
+[[products]]
+name = "Nail"
+color = "gray"
+
+[text]
+poem = """
+Roses are red
+Violets are blue"""
+site.url = "https://example.com"

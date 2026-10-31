@@ -1,0 +1,7 @@
+[package]
+name = "inherit"
+workspace = "../.."
+
+[dependencies]
+serde = { workspace = true }
+core-lib.workspace = true
