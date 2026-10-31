@@ -13,7 +13,7 @@ Levels build on each other:
 
 | Level | What the tests certify |
 |---|---|
-| `parse` | The parser parses the language (Tree-sitter; HTML: golang.org/x/net/html; CSS: Ark's CSS Syntax Level 3; YAML: go.yaml.in/yaml/v3) |
+| `parse` | The parser parses the language (Tree-sitter; HTML: golang.org/x/net/html; CSS: Ark's CSS Syntax Level 3; YAML: go.yaml.in/yaml/v3; TOML: go-toml/v2 and BurntSushi/toml; XML: encoding/xml; Markdown: goldmark) |
 | `symbols` | Declarations are extracted with correct names, kinds and ranges |
 | `references` | Calls, constructions, type uses and imports are extracted |
 | `resolution` | References are resolved with the confidence rules of [the resolution model](resolution-model.md) |
@@ -34,11 +34,14 @@ Levels build on each other:
 | Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Zig | `.zig` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | YAML (GitHub Actions) | `.yaml`, `.yml` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| TOML (Cargo, pyproject) | `.toml` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| XML (Maven POM) | `.xml` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Markdown | `.md`, `.markdown` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript, and `get_context` still works for PHP, Terraform,
-Rust, HTML, CSS, Python, Zig and YAML, but those results are not covered by the tests the level names.
+Rust, HTML, CSS, Python, Zig, YAML, TOML, XML and Markdown, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -54,7 +57,7 @@ All languages share these rules:
   tree only if it parses cleanly.
 - Directories whose name starts with `.`, and `vendor` and `node_modules`,
   are not indexed — except `.github` (at any depth), of which only the YAML
-  files are: the workflows and actions GitHub runs, and its other
+  and Markdown files are: the workflows and actions GitHub runs, and its other
   configuration (scripts there are not indexed). A directory below
   `.github` given as the indexed `path` (`.github/actions/x`) is indexed as
   any directory, every language included.
@@ -603,6 +606,175 @@ Searching: `search_code` with `kind` `workflow`, `job`, `step`, `trigger`,
 (`actions/checkout`, without its `@ref`) or a job's id (its `needs`; the
 `contains` relations are named by the part's identity); `get_callers` /
 `get_callees` / `analyze_change_impact` on a workflow, job, step or action.
+
+## TOML, Cargo and pyproject
+
+TOML files are read by go-toml/v2's parser, with BurntSushi/toml's decoder
+checking dates, escapes and code points (TOML 1.0, and the TOML 1.1
+additions both libraries accept). Two layers are kept apart: the document
+layer states what any TOML file holds, the manifest layer what a Cargo
+manifest (`Cargo.toml`) or a `pyproject.toml` means.
+
+**Any TOML file.** The file itself (kind `document`), its tables (kind
+`table`: a `[header]` table, a table a header implies or dotted keys define,
+an inline table, an element of an array of tables) and its other keys
+(kind `key`), by their JSON Pointer: Name `/server/tls`, qualified name
+`config/app.toml#/server/tls` (`~` and `/` in a key are `~0` and `~1`). An
+element of an array of tables is named by its `name` key
+(`Cargo.toml#/bin/cli`; the second of one name `/bin/cli#2`), else by its
+place among the unnamed ones (`/bin/#1`). Values and array elements are no
+declarations. A file `contains` its top tables and keys, a table its
+entries, an array of tables its elements. Declarations stop at 6 levels,
+and at 5000 per file (the shallower first).
+
+**Cargo.** The `[package]` table is the package (kind `package`, named by
+its `name`); every entry of `[dependencies]`, `[dev-dependencies]`,
+`[build-dependencies]`, `[target.<cfg>.*-dependencies]` and
+`[workspace.dependencies]` a dependency (kind `dependency`, named by its key;
+`package = "..."` names the crate). The package `depends_on` each of its
+dependencies; a dependency `depends_on` what it names: with `path`, the
+package of the manifest in that directory (Exact when the repository holds
+it; a path leaving the repository is outside it); with `workspace = true`,
+the workspace's entry when the root is this manifest or the one
+`package.workspace` names — otherwise unresolved (the root is the nearest
+ancestor with `[workspace]`, which one file cannot see); else a crate of
+crates.io, another registry or git, outside the repository. A workspace
+`contains` the package of each literal member (a glob member is
+unresolved). A feature `references` the features and dependencies it
+enables (`"x"`, `"dep:x"`, `"x/f"`, `"x?/f"`).
+
+**pyproject.** The `[project]` table is the package (named by its `name`).
+Every PEP 508 requirement of `project.dependencies`,
+`project.optional-dependencies.<extra>`, `dependency-groups.<group>` and
+`build-system.requires` is a dependency named by its distribution name, at
+`<array>/<normalized name>` (`py/pyproject.toml#/build-system/requires/setuptools`);
+the package `depends_on` it, and it on the PyPI distribution, outside the
+repository. Versions and markers are not evaluated. `[tool.*]` settings are
+tables and keys.
+
+Every file is `IdentityOnly`: no name match reaches a TOML declaration, and
+a Cargo dependency `regex` is never a Python requirement `regex`.
+
+**Diagnostics.** `toml_syntax_error` (error: the rest of the file is not
+read), `toml_invalid` (error: an impossible date, an invalid escape),
+`toml_duplicate_key`, `toml_table_redefined`, `toml_not_checked` (values
+nested over 64 deep or a key of over 8 parts: dates and escapes are not
+checked), `toml_too_large` (a file over 4 MiB: only the file is declared),
+`toml_key_too_long`, `toml_truncated`, `pyproject_invalid_requirement`.
+
+**Limits.** No version requirement, `cfg()` expression, environment marker
+or glob is evaluated; Poetry and uv settings, `[patch]`, `[replace]` and
+`default-members` are plain keys; `.cargo/config.toml` is not indexed (a
+hidden directory).
+
+## XML and Maven POM
+
+XML files (`.xml`) are read by Go's `encoding/xml`, strictly. Nothing
+outside the file is read: no DTD, external entity or URL, and no entity is
+expanded — in a document with a DOCTYPE an entity reference stays as
+written (`xml_entity_not_expanded`), a DOCTYPE naming an external DTD or
+entity is reported (`xml_external_entity`), and a document in another
+encoding than UTF-8 is not read (`xml_unsupported_encoding`). Files over
+4 MiB, nesting deeper than 256 and more than 200000 elements and
+attributes are diagnostics.
+
+**Any XML file.**
+
+| Kind | Qualified name | What |
+|---|---|---|
+| `document` | `docs/book.xml` | the file itself |
+| `element` | `docs/book.xml#/b:book/b:chapter[2]/b:para` (named `/b:book/b:chapter[2]/b:para`) | each element, by its path from the root: the n-th sibling of a name (n ≥ 2) is `[n]`; a step is the namespace's label and the local name |
+| `attribute` | `pom.xml#/project/@xsi:schemaLocation` | each attribute of a declared element (an unprefixed one is in no namespace) |
+| `namespace` | `pom.xml#/project/@xmlns` | each namespace declaration, its URI the signature |
+| `anchor` | `docs/book.xml#top` (named `#top`) | each `xml:id`; an `id` in no namespace too, which no reference reaches beyond Candidate |
+
+Elements are the same by namespace URI and local name, not by prefix: a
+namespace's label is the first prefix the document binds it to, none when
+only a default declaration binds it, and a second namespace that would
+share a label is `label~2`. A POM's elements read `/project/artifactId`.
+Inserting a sibling of another name keeps every identity; inserting one of
+the same name before others renumbers those after it. Text, CDATA,
+comments and processing instructions declare nothing. At most 5000
+declarations a file — elements breadth first, at most 3000, then their
+attributes — and 20000 references (`xml_truncated`).
+
+Relations: `contains` from the document to its root and from an element to
+its child elements and attributes; `references` (`id_reference`) from a
+fragment `href="#x"` to the ID x (`xlink:href` Exact, a plain `href` at
+most Strong; an ID declared twice is ambiguous); `links` from an XInclude
+`<xi:include href>` and an `<?xml-stylesheet href?>` that is a plain
+relative path, Exact, to the file's declaration in any language. Other
+IDREF attributes are no references: without a schema, which Ark does not
+read, an attribute's name does not make it one.
+
+**Maven POM.** A `<project>` in the POM namespace (4.0.0, 4.1.0), or in no
+namespace in a file named `pom.xml`:
+
+| Kind | Qualified name | What |
+|---|---|---|
+| `package` | `core/pom.xml::com.example:core` (named `com.example:core`) | the project; a groupId or version it does not write is its parent's; the version and packaging are the signature |
+| `dependency` | `core/pom.xml::dependencies::com.google.guava:guava` | each dependency, managed dependency (`dependencyManagement`), plugin (`plugins`; groupId `org.apache.maven.plugins` by default), managed plugin (`pluginManagement`) and build extension (`extensions`); a repeat `#2`; a profile's `…::profile:<id>::dependencies::…`; version, type, classifier and scope in the signature |
+
+The project `depends_on` its dependencies, plugins and extensions and
+`contains` its managed and profile ones. A dependency `depends_on` the
+project of the repository with its coordinates — Strong: coordinates do
+not exclude another version or a repository's artifact — or lies outside
+the repository; coordinates with a property the file does not define are a
+dynamic name (`${project.*}` and the file's own `<properties>` are
+expanded). The parent is `extends` (inheritance), at most Strong: the POM
+at `<relativePath>` (default `../pom.xml`) when it is the project of the
+parent's coordinates, else the repository's project of those coordinates,
+else outside the repository (an empty `<relativePath/>` names the
+coordinates only). Each module (`<module>`, Maven 4 `<subproject>`) `links`
+the module's `pom.xml`, Exact; one the repository does not have is
+Unresolved. Nothing is fetched.
+
+## Markdown
+
+Markdown files (`.md`, `.markdown`, also under `.github`) are read by
+github.com/yuin/goldmark: CommonMark 0.31.2 with the GitHub Flavored
+Markdown extensions GitHub renders (tables, strikethrough, extended
+autolinks, task lists) and footnotes. A file's YAML front matter is no
+Markdown. Nothing of a document is run or fetched.
+
+| Kind | Qualified name | What |
+|---|---|---|
+| `document` | `docs/design.md` | the file itself: the target of a link to it from any document |
+| `section` | `docs/design.md#architecture` | each heading (ATX `#` or setext `===` / `---`, H1–H6), named by its text, identified by GitHub's anchor of it (lower case, punctuation and emoji removed, spaces as `-`; a repeated heading `#usage-1`, `#usage-2`); it spans the heading and what follows up to the next heading of its level or a higher one (`h2` is the signature) |
+| `code_block` | `docs/design.md#architecture::go` | each fenced code block with a language, named by it; its content is never read |
+| `anchor` | `docs/design.md#legacy` | each `id` (and `<a name>`) of raw HTML |
+
+A document `contains` its top sections, a section its subsections. Links,
+images, reference links (`[text][label]`: an undefined label is text, as
+CommonMark says) and autolinks are references of the section around them:
+
+- `#x` and `other.md#x` are `references` edges to that section or anchor
+  (Exact); a missing anchor is unresolved;
+- a relative path (`../ops/runbook.md`, `img/logo.png`, `site/index.html`,
+  `config/app.yaml`) `links` to that repository file's own declaration —
+  a Markdown, HTML or YAML document, a stylesheet, a script, an image
+  (Exact; `/docs/x.md`, from the repository's root, Strong); a missing file
+  is unresolved; a Go file, a `LICENSE` or a directory, which no provider
+  declares as a file, is unresolved too;
+- a path that leaves the repository is unresolved;
+- a web URL is outside the repository, named by its scheme, host and path
+  only (no credentials, query or fragment).
+
+Every name is a section's, a file's or a URL's own: a section `Usage` is no
+other file's, and no code's. Find a README's headings with `get_symbols`,
+a section with `find_symbol` (`kind: section`), a document's links with
+`find_references` (`kind: resource_link`, `id_reference`), the documents
+linking to one with `get_callers`, and the broken links in the unresolved
+references `get_context` and `analyze_change_impact` report.
+
+Bounds: a file over 4 MiB declares itself only; 5000 declarations and
+20000 references a file; input whose parsing would take time growing with
+its square (hundreds of block quotes opened on one line, thousands of
+unmatched emphasis delimiters in one paragraph, over a thousand
+consecutive link reference definitions) is partly read as text, with a
+`markdown_degenerate` warning. A file that is no UTF-8 text is reported
+(`markdown_invalid_utf8`). Not read: links in raw HTML (`<a href>`,
+`<img src>`), GitHub alerts, MDX.
 
 ## JavaScript
 

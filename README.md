@@ -14,9 +14,9 @@ code it needs to read before editing — and get an answer that states how
 certain it is.
 
 Ark is a single static binary. It analyzes Go, TypeScript, TSX, PHP,
-Terraform, Rust, Java, Zig, JavaScript, Python and YAML — including GitHub
-Actions workflows and actions — without running any code from the
-repository.
+Terraform, Rust, Java, Zig, JavaScript, Python, YAML (including GitHub
+Actions workflows and actions), TOML (Cargo, pyproject), XML (Maven POM) and
+Markdown without running any code from the repository.
 
 ## Why Ark
 
@@ -257,6 +257,9 @@ highest stage Ark's tests cover:
 | Python | graph | Scopes (LEGB), imports and relative imports, package re-exports, `self` / `cls` / `super()`, inheritance; no type inference for locals, star imports or dynamic attributes |
 | Zig | graph | Lexical scopes, relative `@import`, containers and `@This()`, re-exports, generic type factories, receivers of declared types and declared result types, named modules by the importing module's import table as a build.zig states it — strong only when every build.zig of the repository is closed (Ark can follow all of its code: no dependency, build helper file or ZON import, nothing it does not model) and the binding is the only one; otherwise every import is a candidate. No comptime evaluation, `std`, or modules only other build code binds; see [Zig](docs/language-support.md#zig) |
 | YAML, GitHub Actions | graph | Any YAML file's keys by JSON Pointer and its anchors and aliases; GitHub Actions workflows (triggers, jobs, steps, settings), composite and other actions, with `contains`, `needs` (`depends_on`) and `uses` (`calls`: a local reusable workflow exact, a local action strong; remote actions outside the repository). Expressions (`${{ }}`) are never evaluated; see [YAML and GitHub Actions](docs/language-support.md#yaml-and-github-actions) |
+| TOML, Cargo, pyproject | graph | Any TOML file's tables and keys by JSON Pointer; a Cargo manifest's package, dependencies (path dependencies to the repository's manifests exact; crates.io, registries and git outside the repository), workspace members and features; a pyproject.toml's project and PEP 508 requirements (PyPI outside the repository), with `contains` and `depends_on`. Nothing is evaluated; see [TOML, Cargo and pyproject](docs/language-support.md#toml-cargo-and-pyproject) |
+| XML, Maven POM | graph | Any XML file's elements by namespace-aware path, attributes, namespaces and IDs, with `contains`, fragment `id_reference` and XInclude links; a Maven POM's project, parent (`extends`, strong), modules (`links`, exact) and dependencies and plugins (`depends_on`: a project of the repository strong, others outside it). No DTD, external entity or URL is read and no entity expanded; see [XML and Maven POM](docs/language-support.md#xml-and-maven-pom) |
+| Markdown | graph | Documents, sections by GitHub's heading anchors, fenced code blocks by language and HTML ids, with `contains` and links: to anchors of the same or another document (`references`), to repository files of any language by path (`links`), web URLs outside the repository; a missing file or anchor is unresolved. Code blocks are never read as code; see [Markdown](docs/language-support.md#markdown) |
 | JavaScript | references | Declarations, class members, ES modules and CommonJS (TypeScript's extractor), scope-aware; not certified for graph or context quality |
 
 Graph tools answer for every language, but results above a language's

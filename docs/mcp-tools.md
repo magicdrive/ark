@@ -68,7 +68,9 @@ from them) are masked only where they hold a secret of its own form — a PEM
 block, a known token format — since a name can be data (a YAML key, a step
 name); a masked declaration is still selected by its `symbolId`. The text
 of `list_files` (paths) is not masked; that of `get_repository_map` and
-`search_code` is masked as names are. `ark mcp-server --mask-secrets off` turns
+`search_code` is masked as names are, and in the text of `get_context` and
+`analyze_change_impact` the paths and names are masked as names are while
+the sources are masked as content. `ark mcp-server --mask-secrets off` turns
 masking off for the server and logs a warning; a request cannot change it
 (the `maskSecrets` argument of `get_file_content` and `get_files_arklite` is
 accepted and has no effect). A value that only names another value is kept

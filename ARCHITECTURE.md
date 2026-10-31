@@ -393,6 +393,107 @@ Danger: "the action `actions/checkout` is the repository's
 or "the step's `if:` is false here" — a remote reference, the workspace a
 checkout makes, and an expression only GitHub evaluates decide them.
 
+**A manifest is a document first** (TOML, Cargo, pyproject). The TOML
+provider keeps two layers: `languages/toml/tomldoc` reads the document with
+go-toml/v2's parser — never a reader of Ark's own — and builds the tree
+TOML's table rules define (strict where BurntSushi/toml is lenient), with
+each table's bytes widened to what it holds, and BurntSushi/toml's decoder
+checks dates and escapes; `languages/toml/manifest` reads a `Cargo.toml` or
+`pyproject.toml` from that tree. Every file is `IdentityOnly`; tables and
+keys are JSON Pointers (`<file>#/a/b`), and a declaration of meaning is the
+table or key it is written as (`<file>#/package`, a dependency
+`<file>#/dependencies/serde`), so a path dependency's target identity
+(`crates/core/Cargo.toml#/package`) is computed from the path alone, with
+`IdentityInRepository`: Exact when that manifest declares a package,
+Unresolved otherwise, outside for a path leaving the repository. What one
+file cannot fix — a workspace root no file names, a glob member — carries
+an identity no declaration has (Unresolved, never outside, never a
+namesake); crates and PyPI distributions are outside the repository under
+separate prefixes (`cargo:`, `pypi:`). Values never become names except a
+package's name, a dependency's key and a requirement's name (one-line
+names only); URLs lose their credentials before they reach an identity.
+Bounds: 4 MiB, 6 levels, 5000 declarations (the shallower first), 20000
+references, 1000 diagnostics; the decoder only checks documents nesting at
+most 64 deep with keys of at most 8 parts (it is quadratic in both).
+Authority: `languages/toml/provider.go`, `languages/toml/tomldoc/tomldoc.go`,
+`languages/toml/manifest/manifest.go` (headers). Tests: `TestGraph_Fixture`,
+`TestGraph_NonEdgesAreAccountedFor`, `TestScenario_*`, `TestParse_Problems`,
+`TestIdentity_StableUnderInsertion`, `TestBounds_*`, `FuzzExtractTOML`,
+`FuzzParse`, the opt-in `TestTOMLTestSuite` (toml-test) and
+`TestRealRepositories` (both decoders as oracles).
+Danger: "`serde = { workspace = true }` is the serde of the nearest
+`Cargo.toml` above" (Cargo also needs that manifest to list this one as a
+member), "`crates/*` names the directories under crates" (Ark expands no
+glob), "the requirement `regex` is the crate `regex`", "an element of an
+array of tables is its index".
+
+**XML without its DTD** (XML, Maven POM). `languages/xml/xmldoc` reads a
+file with `encoding/xml` strictly, token by token, and checks what the
+library leaves to its caller — matching end tags (recovering at the
+nearest open element of the name), namespace prefixes, duplicate
+attributes, one root — and finds the bytes of each attribute.
+`languages/xml/maven` reads a POM from those elements. Every file is
+`IdentityOnly`. Elements are XPath-like paths (`<file>#/a/b[2]`), the same
+by namespace URI and local name (a namespace's label is the first prefix
+the document binds it to; `label~2` for a second namespace of one label);
+attributes `…/@name`; `xml:id` an anchor `<file>#id`, an `id` in no
+namespace one capped at Candidate (`SymbolDraft.ConfidenceCap`: no schema
+says it is an ID). A POM's project is `<file>::<g>:<a>` with an alias
+`maven:<g>:<a>` (Strong); a dependency `depends_on` that identity; a parent
+names `<relativePath file>::<g>:<a>`, which a fallback alias
+(`AliasDraft.Fallback`) leaves to the coordinates when the POM at the path
+is another project; a module is path evidence (`FileIdentity`) to its
+`pom.xml`. Nothing outside the file is read — no DTD, external entity or
+URL, no `CharsetReader` — and no entity is expanded: in a document with a
+DOCTYPE every entity reference the source spells is given its own spelling
+as its replacement, which the decoder never scans again. Bounds (4 MiB,
+nesting 256, 200000 nodes, 5000 declarations of which 3000 elements
+breadth first, 20000 references, 1000 diagnostics) are diagnostics.
+Authority: `languages/xml/provider.go`, `languages/xml/xmldoc/xmldoc.go`,
+`languages/xml/maven/maven.go` (headers). Tests: `TestGraph_Fixture`,
+`TestGraph_NonEdgesAreAccountedFor`, `TestGraph_JavaUnaffected`,
+`TestNamespaces`, `TestIdentityStability`, `TestSecurity`,
+`TestSecurity_Hostile`, `TestBounds`, `TestPOM`, `TestPOM_Parent`,
+`FuzzExtractXML`, and the opt-in `TestRealFiles`.
+Danger: "a DOCTYPE's entities can be expanded safely with a depth limit",
+"`ref` / `idref` attributes are IDREFs", "a dependency's coordinates are
+the repository's module that has them" (Strong at most: another version or
+a repository artifact may be the one built), "`../pom.xml` is the parent"
+(only if its coordinates are the parent's).
+
+**A document's structure, located in its bytes** (Markdown). The Markdown
+provider reads a file with github.com/yuin/goldmark — CommonMark 0.31.2
+with the GFM extensions and footnotes, never a reader of Ark's own — whose
+blocks and texts are offsets into the source; it records where a link ends
+by wrapping goldmark's link parser (goldmark records starts only). Every
+file is `IdentityOnly`. The file is a `document`, each heading a `section`
+identified by GitHub's anchor (`<file>#<anchor>`, github-slugger's rule:
+`languages/markdown/slug.go`), each fenced code block with a language a `code_block`, each raw
+HTML id an `anchor`. A document `contains` its top sections, a section its
+subsections. A link is an id reference to an anchor (`#x`, `b.md#x`:
+`IdentityInRepository`, so a missing anchor is Unresolved, never outside),
+path evidence (`FileIdentity`) to any repository file's own declaration
+(Exact; from the root, Strong), or a resource outside the repository named
+by its scheme, host and path only. A code block is text: never run, never
+read as another language (its declarations would enter that language's
+name space). goldmark's time grows with the square of some inputs and it
+cannot be interrupted, so a guard bounds the input from its text alone
+before it reads it — rewriting bytes in place, never moving one — and
+reports what it rewrote (`markdown_degenerate`); its budgets lie far above
+every measured document.
+Authority: `languages/markdown/provider.go`, `languages/markdown/parse.go`,
+`languages/markdown/slug.go`, `languages/markdown/dest.go`,
+`languages/markdown/guard.go` (headers). Tests: `TestGraph_Fixture`,
+`TestGraph_NonEdgesAreAccountedFor`, `TestScenario_*`,
+`TestSlug_GitHubRule`, `TestSlug_Duplicates`, `TestLinks_Destinations`,
+`TestSections_Hierarchy`, `TestGuard_*`, `TestPerformance_Linear`,
+`FuzzExtractMarkdown`, and the opt-in `TestSelf_ArkDocuments`,
+`TestCorpus_Measure`.
+Danger: "the heading `Usage` is the README's usage section", "`#Usage`
+matches `#usage`" or "a link to a missing file is outside the repository" —
+an anchor is GitHub's slug of one file's heading, fragments are matched as
+written, and a path names the repository's file or nothing.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -777,7 +878,16 @@ value by the name assigned to it, `JWT_SECRET=…`) — a name can be data, a YA
 for byte; unknown keys and unknown tools are masked. The text of
 `get_repository_map` and `search_code` is masked as names are, and is
 refused with the rest when the configuration fails; only `list_files`'s
-paths are not masked. Masking is on unless the server is started with
+paths are not masked. The text of `get_context` and
+`analyze_change_impact` is masked whole but for the paths and names it
+holds, which are masked as names are: the handler says where they are
+(`CallToolResult.identifiers`, found by formatting the result again with
+each identifier replaced by a private-use marker of as many runes, and used
+only when filling them in gives the text exactly), and the sanitizer masks
+the text with each replaced by one marker, then puts each back masked by
+the token rules (`mcp/text_identifiers.go`); anything that does not fit
+masks the text whole. Tests: `TestMaskingPaths_*`,
+`TestMaskAroundIdentifiers`, `FuzzMaskAroundIdentifiers`. Masking is on unless the server is started with
 `--mask-secrets off` (with a warning); a request cannot turn it off
 (`mcp/masking.go`, `TestFileContent_SecurityOverridesStillIgnored`).
 Tests: `TestSanitize_*` (`TestSanitize_DeclarationNamesByTokenRulesOnly`), `TestMCPYAML_NamesNeverLeakSecrets`,
@@ -819,9 +929,14 @@ and the assignment rules, each step finding spans of the text the earlier
 steps left. `Policy.Mask` replaces them; `Policy.Find` reports them, mapped
 back to the original text — so `ark secrets-scan` finds exactly what masking
 masks, never by a second detector. Without configuration the policy is
-`secrets.Recommended()`, byte for byte v6.1.0's masking
-(`TestRecommended_MatchesV61`, `FuzzRecommended_MatchesV61` against the frozen
-oracle `secrets/internal/v61`). The configuration (`.ark-secrets-rules.toml`
+`secrets.Recommended()`, byte for byte v6.1.0's masking with its recorded
+amendments (`secrets/internal/v61` `Amendments`: each a rule ID, version,
+v6.1.0's expression and its replacement, and the triggers every match
+holds — 6.11.0 masks a Slack token whole), and byte for byte v6.1.0's own
+where no amendment's trigger is (`TestRecommended_MatchesV61`,
+`FuzzRecommended_MatchesV61`, `TestRecommended_AmendmentsOnly`). Danger:
+editing v6.1.0's own expressions in the oracle — the test would compare
+the policy with itself. The configuration (`.ark-secrets-rules.toml`
 or `ark-secrets-rules.toml` at the root) is read by `internal/secretpolicy`
 from the pinned root without following a symlink, for the dump once per run,
 for the MCP server per request and compiled only when its bytes change
