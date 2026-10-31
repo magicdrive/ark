@@ -1,0 +1,5 @@
+<doc>
+  <sec xml:id="dup">one</sec>
+  <sec xml:id="dup">two</sec>
+  <a xlink:href="#dup" xmlns:xlink="http://www.w3.org/1999/xlink"/>
+</doc>
