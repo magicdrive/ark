@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 
 	bstoml "github.com/BurntSushi/toml"
 	gotoml "github.com/pelletier/go-toml/v2"
@@ -173,4 +174,55 @@ func pep508(s string) string {
 		i++
 	}
 	return strings.TrimRight(s[:i], "._-")
+}
+
+// TestCorpus is an opt-in run over every .toml file under the directories
+// ARK_TOML_CORPUS lists, read only: no extraction fails, every symbol's
+// range lies within its file; the time, the slowest file and the
+// diagnostics by code are logged.
+func TestCorpus(t *testing.T) {
+	roots := os.Getenv("ARK_TOML_CORPUS")
+	if roots == "" {
+		t.Skip("ARK_TOML_CORPUS is not set")
+	}
+	p := NewProvider()
+	var files, bytes, syms int
+	var total, slowest time.Duration
+	var slowFile string
+	codes := map[string]int{}
+	for _, root := range filepath.SplitList(roots) {
+		filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+			if err != nil || info.IsDir() || filepath.Ext(path) != ".toml" || !info.Mode().IsRegular() {
+				return nil
+			}
+			src, err := os.ReadFile(path)
+			if err != nil {
+				return nil
+			}
+			start := time.Now()
+			ex, err := p.Extract(context.Background(), source.FileID(filepath.Base(path)), src)
+			d := time.Since(start)
+			if err != nil {
+				t.Errorf("%s: %v", path, err)
+				return nil
+			}
+			total += d
+			if d > slowest {
+				slowest, slowFile = d, path
+			}
+			files++
+			bytes += len(src)
+			syms += len(ex.Symbols)
+			for _, s := range ex.Symbols {
+				if int(s.EndByte) > len(src) || s.StartByte > s.EndByte {
+					t.Errorf("%s: %s out of range", path, s.Qualified)
+				}
+			}
+			for _, dg := range ex.Diagnostics {
+				codes[dg.Code]++
+			}
+			return nil
+		})
+	}
+	t.Logf("%d files, %d bytes, %d symbols in %v; slowest %v (%s); diagnostics %v", files, bytes, syms, total, slowest, slowFile, codes)
 }
