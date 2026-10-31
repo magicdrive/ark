@@ -10,6 +10,7 @@ import (
 
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/symbol"
 )
 
 func extract(t testing.TB, file, src string) language.Extraction {
@@ -545,4 +546,20 @@ func TestManifest_ExcludeKeepsLiteralMembers(t *testing.T) {
 		"a a/Cargo.toml#/package",
 		"b/* Cargo.toml#/workspace/members/b~1*",
 	})
+}
+
+func TestMapHints(t *testing.T) {
+	p := NewProvider()
+	for kind, want := range map[symbol.SymbolKind]language.MapRole{
+		symbol.KindDocument: language.MapRoleBuilt, symbol.KindPackage: language.MapRoleBuilt,
+		symbol.KindDependency: language.MapRoleComposed, symbol.KindTable: language.MapRoleDetail, symbol.KindKey: language.MapRoleDetail,
+	} {
+		if got := p.MapRole(kind, ""); got != want {
+			t.Errorf("%s: %v, want %v", kind, got, want)
+		}
+	}
+	var _ language.Accompanying = p
+	if _, ok := any(p).(language.HiddenDirReader); ok {
+		t.Error("the provider reads hidden directories")
+	}
 }
