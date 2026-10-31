@@ -24,7 +24,9 @@ path is resolved against that root.
 Graph tools build an index of the directory given as their `path` argument —
 usually the root, `.`. The index contains every file whose extension a
 language provider handles (`get_language_support`), except files under
-directories named `vendor` or `node_modules`, or whose name starts with `.`.
+directories named `vendor` or `node_modules`, or whose name starts with `.`
+— but `.github`, of which the YAML files (GitHub Actions workflows and
+actions, and GitHub's other configuration) are indexed.
 
 - Files and directories excluded by `.arkignore` are not indexed (nor read
   by any tool;

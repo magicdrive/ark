@@ -13,7 +13,7 @@ Levels build on each other:
 
 | Level | What the tests certify |
 |---|---|
-| `parse` | The parser parses the language (Tree-sitter; HTML: golang.org/x/net/html; CSS: Ark's CSS Syntax Level 3) |
+| `parse` | The parser parses the language (Tree-sitter; HTML: golang.org/x/net/html; CSS: Ark's CSS Syntax Level 3; YAML: go.yaml.in/yaml/v3) |
 | `symbols` | Declarations are extracted with correct names, kinds and ranges |
 | `references` | Calls, constructions, type uses and imports are extracted |
 | `resolution` | References are resolved with the confidence rules of [the resolution model](resolution-model.md) |
@@ -33,11 +33,12 @@ Levels build on each other:
 | CSS | `.css` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Python | `.py`, `.pyw` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | Zig | `.zig` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| YAML (GitHub Actions) | `.yaml`, `.yml` | `graph` | ✓ | ✓ | ✓ | ✓ | ✓ | |
 | JavaScript | `.js`, `.mjs`, `.cjs`, `.jsx` | `references` | ✓ | ✓ | ✓ | | | |
 
 An unchecked cell means *not certified*, not *disabled*. Graph tools still
 answer for JavaScript, and `get_context` still works for PHP, Terraform,
-Rust, HTML, CSS, Python and Zig, but those results are not covered by the tests the level names.
+Rust, HTML, CSS, Python, Zig and YAML, but those results are not covered by the tests the level names.
 Treat them as best-effort.
 
 Every language is analyzed statically: Ark never runs the language's
@@ -52,7 +53,11 @@ All languages share these rules:
   rejects some valid code; Ark retries alternative parse routes and keeps a
   tree only if it parses cleanly.
 - Directories whose name starts with `.`, and `vendor` and `node_modules`,
-  are not indexed.
+  are not indexed — except `.github` (at any depth), of which only the YAML
+  files are: the workflows and actions GitHub runs, and its other
+  configuration (scripts there are not indexed). A directory below
+  `.github` given as the indexed `path` (`.github/actions/x`) is indexed as
+  any directory, every language included.
 
 ## Go
 
@@ -497,6 +502,107 @@ edge (`linked_from`). `var()` forms no edge (Candidate).
 `ark syntax` prints no syntax tree for CSS (there is no Tree-sitter grammar,
 so `--lang css` always fails there); `ark symbol`, `get_symbols` and the
 other tools work as for every language.
+
+## YAML and GitHub Actions
+
+YAML files are read by go.yaml.in/yaml/v3 (YAML 1.2 as the library reads it;
+`%YAML 1.2` documents included). Two layers are kept apart: the document
+layer states what any YAML file holds, the GitHub Actions layer what a
+workflow or an action means.
+
+**Any YAML file.** The file itself (kind `document`, `config/app.yaml`), the
+keys of its mappings that a path of mappings reaches from a document's root,
+at most three deep (kind `key`), identified by their JSON Pointer —
+`config/app.yaml#/server/tls`, `config/app.yaml#1/second` in the second
+document (`/` in a key is `~1`, `~` is `~0`) — and named by it
+(`/server/tls`, so a key never shares a bare name with a declaration of
+code), and every anchor (kind `anchor`, named `&defaults`,
+`config/app.yaml#&defaults`; a second definition of the name
+`…#&defaults#2`). Scalar values, keys below a sequence, the second of a
+duplicate key, and a key that is no one-line name (more than 256 bytes, a
+line break, a control, zero-width or bidirectional formatting character: a
+block of text, which would reach the output as an identifier) are no
+declarations. Each alias (`*defaults`, also as a merge key's value) is a
+`references` edge to the anchor it names, from the innermost declaration
+around it (Exact: the document fixes which definition an alias names).
+
+**GitHub Actions.** A file directly in a `.github/workflows` directory is a
+workflow; an `action.yml` / `action.yaml` with `runs` is an action's
+metadata.
+
+| Kind | Qualified name | What |
+|---|---|---|
+| `workflow` | `.github/workflows/ci.yml` | the workflow file (its `name:` is the signature) |
+| `trigger` | `.github/workflows/ci.yml::on:push` | each event of `on` (a name, a list or a mapping of events; an event named twice is one) — `::on:`, which no job id holds, so no step of a job named `on` shares it |
+| `job` | `.github/workflows/ci.yml::build` | each job (`runs-on` or `uses` is the signature) |
+| `step` | `.github/workflows/ci.yml::build::Checkout` | each step, by its `id`, else `name`, else `uses` without its `@ref` (so an update of the ref keeps the identity; credentials of a `docker://` reference left out), else `run`, else `step`; the second step of one key in a job is `…#2` (the next number no other step's key holds) |
+| `action` | `.github/actions/setup` | an action, by its directory (`.` at the root); a composite action's steps are `.github/actions/setup::<step>` |
+| `key` | `.github/workflows/ci.yml#/jobs/build/permissions` (named `/jobs/build/permissions`) | the settings: a workflow's `permissions`, `concurrency`, `env`, `defaults`; a job's `if`, `permissions`, `strategy`, `concurrency`, `environment`, `outputs`, `env`, `defaults`, `container`, `services`, `with`, `secrets`; an action's `inputs` (and each input), `outputs` (and each output), `runs` |
+
+| Relation | Edge | Confidence |
+|---|---|---|
+| a workflow contains its triggers and jobs, a job and a composite action their steps | `contains` (`contained_by` in reverse) | Exact |
+| `needs` (a name or a list) names a job of the workflow | `depends_on` (`depended_on_by`) | Exact (job ids are case-insensitive, as GitHub reads them); a job no workflow declares is Unresolved |
+| a job's `uses: ./.github/workflows/x.yml` | `calls` to the workflow (`called_by`) | Exact: path evidence of the file at the caller's commit; a path outside `.github/workflows` itself (a subdirectory, another directory) is `actions_invalid_uses`, as GitHub refuses it |
+| a step's `uses: ./path` | `calls` to the action of the directory | Strong: the path is relative to the runner's workspace, which a checkout to another path or of another repository changes |
+| `uses: owner/repo[/path]@ref`, `docker://image`, `owner/repo/.github/workflows/x.yml@ref` | none | outside the repository (`outsideRepository`) |
+| `uses: ${{ … }}` | none | Unresolved (a dynamic name) |
+
+Identities of paths use the separator of the index's file IDs (`\` on
+Windows), so a local reusable workflow and a local action resolve there as
+elsewhere. A workflow under another directory's `.github/workflows` (a
+repository checked out inside another) names that directory's paths with
+`./`; an
+action outside any `.github` directory names the repository root's.
+Content reached through an alias (`steps: *common`, `needs: *deps`,
+`runs-on: *runner`) is read as GitHub reads it, as the job's own, and is
+located at the alias; the job references the anchor too. Two steps an alias
+repeats that use one action are two references, each of its own step.
+
+**Never run or evaluated.** Expressions (`${{ … }}`) are kept as text and
+never evaluated; `run` scripts are text; no action, reusable workflow or
+image is fetched. A step's `name` and `id`, a job's id, a key and a `uses`
+value are names; script text and `with` / `env` values never enter a name
+or a signature. Names leave the MCP server masked by the token rules (a
+`ghp_…` in a step name or a key is masked; see
+[MCP tools](mcp-tools.md)).
+
+**Diagnostics.** `yaml_syntax` (error: the document is not read; the
+documents after it are), `yaml_encoding` (error: a UTF-16 or UTF-32 file),
+`yaml_duplicate_key`, `yaml_too_large` (a file over 4 MiB: only the file is
+declared), `yaml_truncated` (more than 5000 declarations, 20000 references
+or 1000 diagnostics in a file), and for GitHub Actions `actions_needs_cycle`
+(jobs whose `needs` lead back to them), `actions_invalid_uses` (a `uses`
+GitHub does not accept: no reference is stated), `actions_merge_key` (a
+merge key: no GitHub Actions syntax, not merged),
+`actions_multiple_documents`, `actions_not_mapping`, `actions_invalid_job_id`
+(a job id GitHub does not accept: `^[A-Za-z_][A-Za-z0-9_-]*$`; the job is not
+read),
+`actions_duplicate_job_id` and `actions_duplicate_step_id` (ids are
+case-insensitive), `actions_truncated` (past the bounds above; content an
+alias repeats counts each time it is read).
+
+**Not implemented:** expression evaluation (`if:` conditions,
+`${{ matrix.* }}`, `needs.<job>.outputs`, `steps.<id>.outputs` are text);
+the inputs a job's `with:` passes to a reusable workflow's `workflow_call`
+inputs; which of `action.yml` and `action.yaml` the runner reads when a
+directory has both (two candidates); remote actions and workflows, also of
+the repository itself at another ref; Dependabot, issue templates and other
+YAML schemas beyond keys; keys deeper than three levels or below
+sequences (Kubernetes `containers`, OpenAPI parameters). Whether a file is a
+workflow is decided from its path below the indexed directory: index the
+repository root (`.`), not `.github`, for workflows to be read as such.
+Job and step names are names like any other: a job `release` and a Go
+function `release` make a bare `release` ambiguous (use `filePattern` or
+`symbolId`).
+
+`ark syntax` prints no syntax tree for YAML (no Tree-sitter grammar);
+`ark symbol`, `get_symbols` and the other tools work as for every language.
+Searching: `search_code` with `kind` `workflow`, `job`, `step`, `trigger`,
+`action` or `key`; `find_references` with an action's name
+(`actions/checkout`, without its `@ref`) or a job's id (its `needs`; the
+`contains` relations are named by the part's identity); `get_callers` /
+`get_callees` / `analyze_change_impact` on a workflow, job, step or action.
 
 ## JavaScript
 
