@@ -110,3 +110,25 @@ func TestSlackToken_OtherFormatsUnchanged(t *testing.T) {
 		}
 	}
 }
+
+// A word glued to a token by "-" is not the token's: an assignment after it
+// is masked as v6.1.0 masked it (the independent audit's cases).
+func TestSlackToken_GluedAssignmentStillMasked(t *testing.T) {
+	p := secrets.Recommended()
+	for _, in := range []string{
+		"xox" + "b-1234567890-password=hunterC1",
+		"xox" + "b-1-password=hunterC2",
+		"xox" + "b-1234567890-api_key: hunterC3",
+		"xox" + "p-1-2-3-secret=hunterC4",
+		"xap" + "p-1-A0123ABCDEF-1234567890123-0a1b-token=hunterC5",
+		"xox" + "e-1-My0xLTEyMy0xLTEyMy0x-password=hunterC6",
+		"xwf" + "p-Ab0Ab0Ab0Ab0-password=hunterC7",
+	} {
+		// Assignments are masked in text, not in names (Mode.Tokens).
+		for _, mode := range []secrets.Mode{{}, {Compact: true}} {
+			if got := p.Mask(in, mode); strings.Contains(got, "hunterC") {
+				t.Errorf("%+v: Mask(%q) = %q: the assigned value is shown", mode, in, got)
+			}
+		}
+	}
+}

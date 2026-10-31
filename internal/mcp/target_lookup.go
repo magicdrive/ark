@@ -232,7 +232,21 @@ func sortTargetCandidates(s []symbol.Symbol) {
 
 // ambiguousTargetResult formats a deterministic, actionable ambiguity error.
 // Candidates are evidence, not a ranking: no candidate is marked "likely".
+// Their paths and qualified names are identifiers (CallToolResult.identifiers),
+// masked as names are where the tool's text is.
 func ambiguousTargetResult(name string, cands []symbol.Symbol) *CallToolResult {
+	text := formatAmbiguity(name, cands, func(s string) string { return s })
+	var m identifierMarks
+	return &CallToolResult{
+		Content:     []Content{{Type: "text", Text: text}},
+		IsError:     true,
+		identifiers: m.spans(formatAmbiguity(name, cands, m.mark), text),
+	}
+}
+
+// formatAmbiguity is the text of an ambiguity error, each candidate's path
+// and qualified name written as id returns it.
+func formatAmbiguity(name string, cands []symbol.Symbol, id func(string) string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Ambiguous symbol %q — %d matches found. "+
 		"Narrow with filePattern, retry with one of the qualified names below, "+
@@ -242,15 +256,12 @@ func ambiguousTargetResult(name string, cands []symbol.Symbol) *CallToolResult {
 		shown = shown[:maxAmbiguousCandidates]
 	}
 	for _, s := range shown {
-		fmt.Fprintf(&b, "  %s  (%s)  %s:%d  symbolId=%s\n", s.Qualified, s.Kind, s.Location.File, s.Location.Range.Start.Line, s.ID)
+		fmt.Fprintf(&b, "  %s  (%s)  %s:%d  symbolId=%s\n", id(s.Qualified), s.Kind, id(string(s.Location.File)), s.Location.Range.Start.Line, s.ID)
 	}
 	if rest := len(cands) - len(shown); rest > 0 {
 		fmt.Fprintf(&b, "  ... and %d more\n", rest)
 	}
-	return &CallToolResult{
-		Content: []Content{{Type: "text", Text: b.String()}},
-		IsError: true,
-	}
+	return b.String()
 }
 
 // symbolIDProperty is the optional input schema property of the tools that

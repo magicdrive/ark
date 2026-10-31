@@ -29,16 +29,17 @@ var Amendments = []Amendment{
 		Rule:    "slack-token",
 		Index:   20,
 		Was:     `xox[baprs]-([0-9a-zA-Z]{10,48})?`,
-		Now: `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9A-Za-z]{10,}|(?:[0-9]+-)+[0-9A-Za-z]+)(?:-[0-9A-Za-z]+)*)?` +
-			`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
-			`|xoxe-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
+		Now: `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9]+-)+(?:[0-9A-Za-z]{20,}|[0-9A-Fa-f]{10,}|[0-9]+)|[0-9A-Za-z]{10,})?` +
+			`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Fa-f]+` +
+			`|xoxe-[0-9]+-[0-9A-Za-z]{20,}` +
 			`|xoxo-[0-9]+-[0-9]+-[0-9]+-[0-9A-Fa-f]+` +
-			`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]+)*`,
+			`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]{20,})*`,
 		Triggers: []string{"xox", "xapp-", "xwfp-"},
 		Why: "v6.1.0 masked a Slack token only to its first \"-\" and at most 48 characters: " +
 			"xox" + "b-123456789012-1234567890123-<secret> kept its secret section. The token is " +
-			"masked whole, and the app-level, refresh, legacy and workflow tokens too. A text " +
-			"glued to a token by \"-\" (xox" + "b-1-password=x) is the token's, as v6.1.0's 48 characters were.",
+			"masked whole, and the app-level, refresh, legacy and workflow tokens too. A word " +
+			"glued to a token by \"-\" (xox" + "b-1234567890-password=x) is not the token's: a token's " +
+			"last section is long, hex or numeric, so what v6.1.0 masked after it is still masked.",
 	},
 }
 

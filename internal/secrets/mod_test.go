@@ -211,11 +211,11 @@ func TestDefaultPatterns_CompleteCoverage(t *testing.T) {
 		{"glpat", `gl` + `pat-abcdefghijklmnopqrstuvwx`, `glpat-[0-9a-zA-Z\-\_]{20}`},
 
 		// Slack
-		{"xoxb", `xox` + `b-1234567890abcdefg`, `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9A-Za-z]{10,}|(?:[0-9]+-)+[0-9A-Za-z]+)(?:-[0-9A-Za-z]+)*)?` +
-			`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
-			`|xoxe-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
+		{"xoxb", `xox` + `b-1234567890abcdefg`, `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9]+-)+(?:[0-9A-Za-z]{20,}|[0-9A-Fa-f]{10,}|[0-9]+)|[0-9A-Za-z]{10,})?` +
+			`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Fa-f]+` +
+			`|xoxe-[0-9]+-[0-9A-Za-z]{20,}` +
 			`|xoxo-[0-9]+-[0-9]+-[0-9]+-[0-9A-Fa-f]+` +
-			`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]+)*`},
+			`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]{20,})*`},
 
 		// Stripe
 		{"sk_live", `sk_` + `live_abcdefghijklmnopqrstuvwxyzABCDEF12`, `sk_live_[0-9a-zA-Z]{24}`},

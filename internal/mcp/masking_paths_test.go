@@ -231,3 +231,25 @@ func FuzzMaskAroundIdentifiers(f *testing.F) {
 		}
 	})
 }
+
+// An ambiguity error of get_context and analyze_change_impact lists its
+// candidates' paths as the text does: an assignment-like path is kept, so a
+// client can retry with it; a token in a path is masked.
+func TestMaskingPaths_AmbiguityKeepsPaths(t *testing.T) {
+	h, _ := pathsTree(t, map[string]string{
+		"auth/token-dup.go": "package auth\n\nfunc Dup() {}\n",
+		"auth/xox" + "b-123456789012-1234567890123-" + slackPathSecret + "-dup.go": "package auth\n\nfunc Dup() {}\n",
+	})
+	for _, tool := range []string{"get_context", "analyze_change_impact"} {
+		text, isErr := callText(t, h, tool, map[string]interface{}{"path": ".", "symbol": "Dup"})
+		if !isErr || !strings.Contains(text, "Ambiguous symbol") {
+			t.Fatalf("%s: want an ambiguity error, got:\n%s", tool, text)
+		}
+		if !strings.Contains(text, "auth/token-dup.go:3") || !strings.Contains(text, "auth/*****MASKED*****-dup.go:3") {
+			t.Errorf("%s: a candidate's path is not as written:\n%s", tool, text)
+		}
+		if strings.Contains(text, slackPathSecret) || strings.IndexFunc(text, isMarkerRune) >= 0 {
+			t.Errorf("%s: leaks a token or a marker:\n%q", tool, text)
+		}
+	}
+}

@@ -757,8 +757,9 @@ CommonMark says) and autolinks are references of the section around them:
   is unresolved; a Go file, a `LICENSE` or a directory, which no provider
   declares as a file, is unresolved too;
 - a path that leaves the repository is unresolved;
-- a web URL is outside the repository, named by its scheme, host and path
-  only (no credentials, query or fragment).
+- a web URL is outside the repository, named by its scheme and host
+  only (no credentials, path, query or fragment: a webhook's path is its
+  secret).
 
 Every name is a section's, a file's or a URL's own: a section `Usage` is no
 other file's, and no code's. Find a README's headings with `get_symbols`,

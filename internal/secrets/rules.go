@@ -47,15 +47,18 @@ const (
 // slackToken matches a Slack token whole (docs.slack.dev, "Token types" and
 // "Using token rotation"): a bot, user or legacy token (xoxb-, xoxp-, xoxa-,
 // xoxr-, xoxs-), rotated or not (xoxe.xoxb-, xoxe.xoxp-), as v6.1.0 did —
-// its bare prefix included — but through every section after the first; an
-// app-level token (xapp-1-…, xoxe.xapp-1-…), a refresh token (xoxe-1-…), a
-// legacy xoxo- token and a workflow token (xwfp-) only in a token's shape,
-// so prose ("xapp-style", "xoxo-gossip") stays as written.
-const slackToken = `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9A-Za-z]{10,}|(?:[0-9]+-)+[0-9A-Za-z]+)(?:-[0-9A-Za-z]+)*)?` +
-	`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
-	`|xoxe-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
+// its bare prefix included — but through its numeric sections and its secret
+// (a long, hex or numeric last section); an app-level token (xapp-1-…,
+// xoxe.xapp-1-…), a refresh token (xoxe-1-…), a legacy xoxo- token and a
+// workflow token (xwfp-) only in a token's shape, so prose ("xapp-style",
+// "xoxo-gossip") stays as written. A word glued on by "-"
+// (xoxb-1234567890-password=x) is not the token's: the assignment after it is
+// still masked, as v6.1.0 masked it.
+const slackToken = `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9]+-)+(?:[0-9A-Za-z]{20,}|[0-9A-Fa-f]{10,}|[0-9]+)|[0-9A-Za-z]{10,})?` +
+	`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Fa-f]+` +
+	`|xoxe-[0-9]+-[0-9A-Za-z]{20,}` +
 	`|xoxo-[0-9]+-[0-9]+-[0-9]+-[0-9A-Fa-f]+` +
-	`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]+)*`
+	`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]{20,})*`
 
 // builtinPattern is one regular expression of a built-in pattern rule. A rule
 // may have several; they run in this order, which is v6.1.0's.

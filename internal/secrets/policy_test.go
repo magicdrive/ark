@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -58,6 +59,25 @@ func checkPristine(t *testing.T, what, s string) {
 	for _, m := range modes {
 		if got, want := p.Mask(s, m.mode), m.pristine(s); got != want {
 			t.Errorf("%s (%s): no amendment applies, yet Recommended().Mask differs from v6.1.0\n got %q\nwant %q", what, m.name, clip(got), clip(want))
+		}
+	}
+}
+
+// wordRE is a word worth hiding: a value, a key, a token's section.
+var wordRE = regexp.MustCompile(`[0-9A-Za-z]{6,}`)
+
+// checkNoLessMasked holds where an amendment applies: no word that v6.1.0 as
+// it shipped hid is shown by the recommended policy — an amended rule's longer
+// match never takes away what a later rule masked after it.
+func checkNoLessMasked(t *testing.T, what, s string) {
+	t.Helper()
+	p := secrets.Recommended()
+	for _, m := range modes {
+		got, was := p.Mask(s, m.mode), m.pristine(s)
+		for _, w := range wordRE.FindAllString(s, -1) {
+			if w != "MASKED" && !strings.Contains(was, w) && strings.Contains(got, w) {
+				t.Errorf("%s (%s): v6.1.0 hid %q, Recommended().Mask shows it\n got %q\n was %q", what, m.name, w, clip(got), clip(was))
+			}
 		}
 	}
 }
@@ -172,12 +192,16 @@ func FuzzRecommended_MatchesV61(f *testing.F) {
 		"key: <<-EOT\n  s\n  EOT\n", `export TOKEN="a"b`, "-----BEGIN EC PRIVATE KEY-----\nx\n-----END EC PRIVATE KEY-----",
 		"xox" + "b-123456789012-1234567890123-SXpfKtHF4vUCsMehGAkWvj7F", "SLACK=xox" + "p-111-222-333-d6bc768406e5c2e6958cfc399b438004 x",
 		"xox" + "e.xap" + "p-1-A0123ABCDEF-1234567890123-0a1b xox" + "e-1-AbC xap" + "p-style xox" + "o-gossip", "xoxb-␤password: x",
+		"xox" + "b-1234567890-password=hunterC1",
+		"xox" + "p-1-2-3-secret=hunterC4",
+		"xap" + "p-1-A01-123-ab-token=hunterC5",
 	} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		checkRecommended(t, "fuzz", s)
 		checkPristine(t, "fuzz", s)
+		checkNoLessMasked(t, "fuzz", s)
 	})
 }
 
@@ -196,6 +220,7 @@ func TestRecommended_AmendmentsOnly(t *testing.T) {
 	for path, s := range fixtureTexts(t) {
 		for i, line := range strings.Split(s, "\n") {
 			checkPristine(t, fmt.Sprintf("%s:%d", path, i+1), line)
+			checkNoLessMasked(t, fmt.Sprintf("%s:%d", path, i+1), line)
 		}
 	}
 }
