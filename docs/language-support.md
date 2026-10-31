@@ -636,8 +636,11 @@ dependencies; a dependency `depends_on` what it names: with `path`, the
 package of the manifest in that directory (Exact when the repository holds
 it; a path leaving the repository is outside it); with `workspace = true`,
 the workspace's entry when the root is this manifest or the one
-`package.workspace` names — otherwise unresolved (the root is the nearest
-ancestor with `[workspace]`, which one file cannot see); else a crate of
+`package.workspace` names (Exact), otherwise the entry of an ancestor
+directory's manifest that declares it (Strong; Candidates when several
+ancestors do, as one file cannot see which is the nearest with
+`[workspace]`; unresolved, never outside the repository, when none does);
+else a crate of
 crates.io, another registry or git, outside the repository. A workspace
 `contains` the package of each literal member (a glob member is
 unresolved). A feature `references` the features and dependencies it
@@ -661,6 +664,7 @@ read), `toml_invalid` (error: an impossible date, an invalid escape),
 nested over 64 deep or a key of over 8 parts: dates and escapes are not
 checked), `toml_too_large` (a file over 4 MiB: only the file is declared),
 `toml_key_too_long`, `toml_truncated`, `pyproject_invalid_requirement`.
+A leading UTF-8 byte order mark is skipped.
 
 **Limits.** No version requirement, `cfg()` expression, environment marker
 or glob is evaluated; Poetry and uv settings, `[patch]`, `[replace]` and
@@ -686,7 +690,7 @@ attributes are diagnostics.
 | `element` | `docs/book.xml#/b:book/b:chapter[2]/b:para` (named `/b:book/b:chapter[2]/b:para`) | each element, by its path from the root: the n-th sibling of a name (n ≥ 2) is `[n]`; a step is the namespace's label and the local name |
 | `attribute` | `pom.xml#/project/@xsi:schemaLocation` | each attribute of a declared element (an unprefixed one is in no namespace) |
 | `namespace` | `pom.xml#/project/@xmlns` | each namespace declaration, its URI the signature |
-| `anchor` | `docs/book.xml#top` (named `#top`) | each `xml:id`; an `id` in no namespace too, which no reference reaches beyond Candidate |
+| `anchor` | `docs/book.xml#top` (named `#top`) | each `xml:id` (a repeated one is reported, `xml_duplicate_id`); an `id` in no namespace too, which no reference reaches beyond Candidate |
 
 Elements are the same by namespace URI and local name, not by prefix: a
 namespace's label is the first prefix the document binds it to, none when
@@ -741,7 +745,7 @@ Markdown. Nothing of a document is run or fetched.
 |---|---|---|
 | `document` | `docs/design.md` | the file itself: the target of a link to it from any document |
 | `section` | `docs/design.md#architecture` | each heading (ATX `#` or setext `===` / `---`, H1–H6), named by its text, identified by GitHub's anchor of it (lower case, punctuation and emoji removed, spaces as `-`; a repeated heading `#usage-1`, `#usage-2`); it spans the heading and what follows up to the next heading of its level or a higher one (`h2` is the signature) |
-| `code_block` | `docs/design.md#architecture::go` | each fenced code block with a language, named by it; its content is never read |
+| `code_block` | `docs/design.md#architecture::go` | each fenced code block with a language, named by it (the next of that language in the section `::go[2]`); its content is never read |
 | `anchor` | `docs/design.md#legacy` | each `id` (and `<a name>`) of raw HTML |
 
 A document `contains` its top sections, a section its subsections. Links,
@@ -749,7 +753,8 @@ images, reference links (`[text][label]`: an undefined label is text, as
 CommonMark says) and autolinks are references of the section around them:
 
 - `#x` and `other.md#x` are `references` edges to that section or anchor
-  (Exact); a missing anchor is unresolved;
+  (Exact; `/docs/x.md#x`, from the repository's root, Strong); a missing
+  anchor is unresolved;
 - a relative path (`../ops/runbook.md`, `img/logo.png`, `site/index.html`,
   `config/app.yaml`) `links` to that repository file's own declaration —
   a Markdown, HTML or YAML document, a stylesheet, a script, an image
@@ -768,12 +773,20 @@ a section with `find_symbol` (`kind: section`), a document's links with
 linking to one with `get_callers`, and the broken links in the unresolved
 references `get_context` and `analyze_change_impact` report.
 
+A heading or a raw HTML `id` whose text Ark's recommended secret rules
+match (`## password = …`) declares no section or anchor — a name is shown
+as written — and a link to it is unresolved. A leading UTF-8 byte order
+mark is skipped.
+
 Bounds: a file over 4 MiB declares itself only; 5000 declarations and
-20000 references a file; input whose parsing would take time growing with
-its square (hundreds of block quotes opened on one line, thousands of
-unmatched emphasis delimiters in one paragraph, over a thousand
-consecutive link reference definitions) is partly read as text, with a
-`markdown_degenerate` warning. A file that is no UTF-8 text is reported
+20000 references a file; input whose parsing would take time or memory
+growing faster than its size is partly read as text, with a
+`markdown_degenerate` warning: hundreds of block quotes, list items or
+footnote definitions opened on one line, a list or block quote marker past
+column 128, thousands of unmatched emphasis delimiters in one paragraph,
+over a thousand consecutive link reference definitions or a paragraph of
+them over 2000 lines, a table over 128 columns, and over 131072 cells
+goldmark would add to a file's table rows that lack some. A file that is no UTF-8 text is reported
 (`markdown_invalid_utf8`). Not read: links in raw HTML (`<a href>`,
 `<img src>`), GitHub alerts, MDX.
 
