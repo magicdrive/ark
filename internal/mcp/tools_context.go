@@ -129,6 +129,7 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 	}
 
 	var text string
+	var spans []identifierSpan
 	if format == "json" {
 		b, err := arkctx.FormatJSON(result)
 		if err != nil {
@@ -137,9 +138,11 @@ func (h *ToolsHandler) getContext(args map[string]interface{}) (*CallToolResult,
 		text = string(b)
 	} else {
 		text = arkctx.Format(result)
+		spans = contextTextSpans(result, text)
 	}
 
 	return &CallToolResult{
-		Content: []Content{{Type: "text", Text: text}},
+		Content:     []Content{{Type: "text", Text: text}},
+		identifiers: spans,
 	}, nil
 }

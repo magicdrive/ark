@@ -44,6 +44,19 @@ const (
 	RuleGenericAssignment = "generic-assignment"
 )
 
+// slackToken matches a Slack token whole (docs.slack.dev, "Token types" and
+// "Using token rotation"): a bot, user or legacy token (xoxb-, xoxp-, xoxa-,
+// xoxr-, xoxs-), rotated or not (xoxe.xoxb-, xoxe.xoxp-), as v6.1.0 did —
+// its bare prefix included — but through every section after the first; an
+// app-level token (xapp-1-…, xoxe.xapp-1-…), a refresh token (xoxe-1-…), a
+// legacy xoxo- token and a workflow token (xwfp-) only in a token's shape,
+// so prose ("xapp-style", "xoxo-gossip") stays as written.
+const slackToken = `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9A-Za-z]{10,}|(?:[0-9]+-)+[0-9A-Za-z]+)(?:-[0-9A-Za-z]+)*)?` +
+	`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
+	`|xoxe-[0-9]+-[0-9A-Za-z]+(?:-[0-9A-Za-z]+)*` +
+	`|xoxo-[0-9]+-[0-9]+-[0-9]+-[0-9A-Fa-f]+` +
+	`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]+)*`
+
 // builtinPattern is one regular expression of a built-in pattern rule. A rule
 // may have several; they run in this order, which is v6.1.0's.
 type builtinPattern struct {
@@ -77,8 +90,11 @@ var builtinPatterns = []builtinPattern{
 	{"github-token", regexp.MustCompile(`ghu_[A-Za-z0-9_]{36,255}`)},
 	{"github-token", regexp.MustCompile(`ghs_[A-Za-z0-9_]{36,255}`)},
 	{"gitlab-token", regexp.MustCompile(`glpat-[0-9a-zA-Z\-\_]{20}`)},
-	// Slack
-	{"slack-token", regexp.MustCompile(`xox[baprs]-([0-9a-zA-Z]{10,48})?`)},
+	// Slack: the whole token, every "-"-separated section of it (the last
+	// one is the secret). v6.1.0's expression stopped at the first "-" and
+	// at 48 characters; this one masks everything it masked and more, and
+	// only where a token's prefix is (secrets/internal/v61 Amendments).
+	{"slack-token", regexp.MustCompile(slackToken)},
 	// Stripe
 	{"stripe-live-key", regexp.MustCompile(`sk_live_[0-9a-zA-Z]{24}`)},
 	{"stripe-live-key", regexp.MustCompile(`pk_live_[0-9a-zA-Z]{24}`)},
@@ -128,7 +144,7 @@ var builtinRules = func() []Rule {
 		"azure-hex-key":           "Three 32-digit hex groups joined by hyphens (Azure keys)",
 		"github-token":            "GitHub token (ghp_, ghu_, ghs_)",
 		"gitlab-token":            "GitLab personal access token (glpat-)",
-		"slack-token":             "Slack token (xoxb-, xoxa-, xoxp-, xoxr-, xoxs-)",
+		"slack-token":             "Slack token, whole (xoxb-, xoxp-, xoxa-, xoxr-, xoxs-, xoxe.…, xapp-, xoxe-, xoxo-, xwfp-)",
 		"stripe-live-key":         "Stripe live secret or publishable key (sk_live_, pk_live_)",
 		"sendgrid-api-key":        "SendGrid API key (SG.…)",
 		"google-oauth-token":      "Google OAuth access token (ya29.…)",

@@ -111,6 +111,11 @@ type CallToolResult struct {
 	// known from the file the request read (fileMaskSyntax); masking uses it
 	// to keep references (sanitizeToolResult). Never serialized.
 	maskSyntax secrets.Syntax
+
+	// identifiers are where the text of its one Content holds paths and
+	// declaration names (text_identifiers.go): masking masks them by the
+	// token rules alone (sanitizeToolResult). Never serialized.
+	identifiers []identifierSpan
 }
 
 type Content struct {

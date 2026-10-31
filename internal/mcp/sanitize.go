@@ -37,6 +37,9 @@ import (
 //     identifierTextTools, whose text is built only from paths, declaration
 //     names, kinds and counts: of the tools whose text holds declaration
 //     names (nameTextTools) only what is a secret by its own form is masked.
+//     The text of get_context and analyze_change_impact is masked whole but
+//     for the paths and names it says it holds (identifierSpanTools,
+//     text_identifiers.go), masked as names are.
 //
 // Unknown keys and unknown tools are masked: a new field or tool is protected
 // until it is reviewed. If a JSON result cannot be re-encoded, the whole text
@@ -113,12 +116,25 @@ func sanitizeToolResultWith(tool string, r *CallToolResult, p *secrets.Policy) *
 			continue
 		}
 		text := r.Content[i].Text
+		if len(r.identifiers) > 0 && len(r.Content) == 1 && identifierSpanTools[tool] && !isJSONText(text) {
+			r.Content[i].Text = maskAroundIdentifiers(text, r.identifiers, secrets.Mode{Syntax: r.maskSyntax}, p)
+			continue
+		}
 		if nameTextTools[tool] && !isJSONText(text) {
 			text = p.Mask(text, secrets.Mode{Syntax: r.maskSyntax, Tokens: true})
 		}
 		r.Content[i].Text = sanitizeTextIn(text, identifierTextTools[tool], r.maskSyntax, p)
 	}
 	return r
+}
+
+// identifierSpanTools are the tools whose text result may say where its
+// paths and declaration names are (CallToolResult.identifiers): the text is
+// masked whole but for them, which are masked as JSON masks a name — by
+// what is a secret by its own form (maskAroundIdentifiers).
+var identifierSpanTools = map[string]bool{
+	"get_context":           true,
+	"analyze_change_impact": true,
 }
 
 // compactTextTools are the tools whose text is in a compact format, whose
