@@ -193,7 +193,7 @@ func (e *extractor) run() {
 	count := map[string]int{} // code blocks per container and language
 	taken := map[string]bool{}
 	for _, c := range d.codes {
-		if c.lang == "" || !declname.IsName(c.lang) {
+		if c.lang == "" || !declname.IsName(c.lang) || secret(c.lang) {
 			continue
 		}
 		parent := e.container(c.start)
@@ -326,7 +326,7 @@ func (e *extractor) link(l link) {
 			return
 		}
 		name := path.Base(d.path)
-		if !declname.IsName(name) || !declname.IsName(d.path) {
+		if !declname.IsName(name) || !declname.IsName(d.path) || secret(d.path) {
 			return
 		}
 		r := language.ReferenceDraft{
@@ -342,7 +342,7 @@ func (e *extractor) link(l link) {
 		e.ref(r, sp)
 	case destOutside:
 		// No repository file: recorded, with no identity to resolve.
-		if declname.IsName(d.path) {
+		if declname.IsName(d.path) && !secret(d.path) {
 			e.ref(language.ReferenceDraft{Name: d.path, Kind: string(reference.KindResourceLink), Container: container}, sp)
 		}
 	case destExternal:
@@ -358,7 +358,7 @@ func (e *extractor) link(l link) {
 // ("/b.md#x"), caps it at Strong as a path link from the root is.
 func (e *extractor) idRef(file, frag, container string, sp span, fromRoot bool) {
 	q := file + "#" + frag
-	if !declname.IsName(frag) || !declname.IsName(q) {
+	if !declname.IsName(frag) || !declname.IsName(q) || secret(q) {
 		return
 	}
 	r := language.ReferenceDraft{
@@ -371,14 +371,30 @@ func (e *extractor) idRef(file, frag, container string, sp span, fromRoot bool) 
 	e.ref(r, sp)
 }
 
-// secret reports whether text holds what Ark's recommended secret policy
-// masks in a text ("password = …", a known token format as written,
-// before an anchor lowers its case). A heading or an HTML id that does is
-// declared as no section or anchor: the index shows a declaration's name
-// and qualified name as they are (the MCP server masks names by a token's
-// form only), and a fragment that names it is unresolved.
+// secret reports whether text holds a secret by Ark's recommended secret
+// policy: a known token format as written (before an anchor lowers its
+// case), or a value the policy masks after an "=" or a ":" ("password =
+// …", "api_key: …"). A heading, an HTML id, a code block's language or a
+// linked file name that does declares or references nothing: the index
+// shows names as they are (the MCP server masks names by a token's form
+// only), and a fragment that names such a heading is unresolved. A value
+// after a "-" (the policy's reading of "password-stdin" in a text) is a
+// word of a heading, not a secret.
 func secret(text string) bool {
-	return len(secrets.Recommended().Find(text, secrets.Mode{})) > 0
+	p := secrets.Recommended()
+	if len(p.Find(text, secrets.Mode{Tokens: true})) > 0 {
+		return true
+	}
+	for _, f := range p.Find(text, secrets.Mode{}) {
+		i := f.Start
+		for i > 0 && strings.IndexByte(" \t\"'`", text[i-1]) >= 0 {
+			i--
+		}
+		if i > 0 && (text[i-1] == '=' || text[i-1] == ':') {
+			return true
+		}
+	}
+	return false
 }
 
 // filePath spells a slash-separated repository path as the index's file

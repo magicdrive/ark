@@ -26,20 +26,21 @@ func TestPerformance_Linear(t *testing.T) {
 		t.Skip("timing")
 	}
 	shapes := map[string]func(n int) string{
-		"one huge line":       func(n int) string { return strings.Repeat("word [l](a.md) `c` *e* ", n/24) },
-		"many headings":       func(n int) string { return strings.Repeat("## heading\n\ntext\n\n", n/20) },
-		"repeated headings":   func(n int) string { return strings.Repeat("# same\n", n/7) },
-		"many links":          func(n int) string { return strings.Repeat("[x](#y) ![i](i.png) <https://e.x/p>\n", n/38) },
-		"deep block quotes":   func(n int) string { return strings.Repeat("> ", n/4) + "# deep [l](a.md)\n" },
-		"deep lists":          func(n int) string { return nestedList(n / 216) }, // about 216 bytes a line: n bytes, under the 4 MiB bound
-		"open brackets":       func(n int) string { return strings.Repeat("[", n) },
-		"brackets and parens": func(n int) string { return strings.Repeat("[a](", n/4) },
-		"emphasis":            func(n int) string { return strings.Repeat("*a _b ", n/6) },
-		"definitions":         func(n int) string { return refDefs(n / 16) },
-		"html ids":            func(n int) string { return strings.Repeat("<a id=\"x\"></a>\n", n/16) },
-		"code fences":         func(n int) string { return strings.Repeat("```go\nx\n```\n", n/12) },
-		"footnotes on a line": func(n int) string { return strings.Repeat("[^a]: ", n/6) + "x\n" },
-		"wide table":          func(n int) string { return wideTable(n / 6) },
+		"one huge line":         func(n int) string { return strings.Repeat("word [l](a.md) `c` *e* ", n/24) },
+		"many headings":         func(n int) string { return strings.Repeat("## heading\n\ntext\n\n", n/20) },
+		"repeated headings":     func(n int) string { return strings.Repeat("# same\n", n/7) },
+		"many links":            func(n int) string { return strings.Repeat("[x](#y) ![i](i.png) <https://e.x/p>\n", n/38) },
+		"deep block quotes":     func(n int) string { return strings.Repeat("> ", n/4) + "# deep [l](a.md)\n" },
+		"deep lists":            func(n int) string { return nestedList(n / 216) }, // about 216 bytes a line: n bytes, under the 4 MiB bound
+		"open brackets":         func(n int) string { return strings.Repeat("[", n) },
+		"brackets and parens":   func(n int) string { return strings.Repeat("[a](", n/4) },
+		"emphasis":              func(n int) string { return strings.Repeat("*a _b ", n/6) },
+		"definitions":           func(n int) string { return refDefs(n / 16) },
+		"html ids":              func(n int) string { return strings.Repeat("<a id=\"x\"></a>\n", n/16) },
+		"code fences":           func(n int) string { return strings.Repeat("```go\nx\n```\n", n/12) },
+		"footnotes on a line":   func(n int) string { return strings.Repeat("[^a]: ", n/6) + "x\n" },
+		"wide table":            func(n int) string { return wideTable(n / 6) },
+		"escaped pipes in code": func(n int) string { return "|a|\n|-|\n" + strings.Repeat("|`\\|`|\n", n/7) },
 		"short table rows": func(n int) string {
 			return wideTable(maxTableColumns)[:4*maxTableColumns+4] + strings.Repeat("a\n", n/2)
 		},
@@ -73,6 +74,12 @@ func TestPerformance_Linear(t *testing.T) {
 		gen := shapes[name]
 		small, large := []byte(gen(n)), []byte(gen(4*n))
 		ts, tl := best(small), best(large)
+		if tl > 10*ts && tl > 200*time.Millisecond {
+			// Measured again once: a busy machine (go test ./... runs
+			// packages in parallel) slows one measurement; a cost growing
+			// faster than the input is slow in both.
+			ts, tl = min(ts, best(small)), best(large)
+		}
 		t.Logf("%-20s %7d bytes %8v   %7d bytes %8v   x%.1f", name, len(small), ts, len(large), tl, float64(tl)/float64(ts))
 		if tl > 10*ts && tl > 200*time.Millisecond {
 			t.Errorf("%s: %v for %d bytes, %v for %d: not linear", name, ts, len(small), tl, len(large))

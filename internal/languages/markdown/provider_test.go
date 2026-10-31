@@ -467,3 +467,39 @@ func TestSecrets_HeadingsAndIDs(t *testing.T) {
 	}
 	equalLines(t, "anchors", anchors, []string{`anchor a.md#kept "kept" parent=a.md#setup sig= @10:1-10:14`})
 }
+
+// A heading whose words the secret policy reads as an assignment after a
+// "-" ("--password-stdin", "Pass-Through") is a heading (docker/cli's
+// login.md, runc's terminals.md): only a value after "=" or ":", or a
+// token, is a secret. A code block's language and a linked file name that
+// hold a secret declare and reference nothing.
+func TestSecrets_WordsAndOtherNames(t *testing.T) {
+	src := "# Provide a password using STDIN (--password-stdin)\n\n<a name=\"password-stdin\"></a>\n\n## Pass-Through\n\n## --secret-add\n\n## Token-source behavior\n\n" +
+		"```password=hunter4secret\nx\n```\n\n```go\nx\n```\n\n[x](img/password=hunter10secret.png) [y](img/logo.png) [z](#pass-through)\n"
+	x := extract(t, "a.md", src)
+	equalLines(t, "sections", sections(x), []string{
+		`section a.md#provide-a-password-using-stdin---password-stdin "Provide a password using STDIN (--password-stdin)" parent=a.md sig=h1 @1:1-19:74`,
+		`section a.md#pass-through "Pass-Through" parent=a.md#provide-a-password-using-stdin---password-stdin sig=h2 @5:1-5:16`,
+		`section a.md#--secret-add "--secret-add" parent=a.md#provide-a-password-using-stdin---password-stdin sig=h2 @7:1-7:16`,
+		`section a.md#token-source-behavior "Token-source behavior" parent=a.md#provide-a-password-using-stdin---password-stdin sig=h2 @9:1-19:74`,
+	})
+	all := strings.Join(symbolLines(x), "\n")
+	for _, want := range []string{`anchor a.md#password-stdin`, `code_block a.md#token-source-behavior::go "go"`} {
+		if !strings.Contains(all, want) {
+			t.Errorf("no %s in:\n%s", want, all)
+		}
+	}
+	for _, s := range x.Symbols {
+		if strings.Contains(s.Name, "hunter") || strings.Contains(s.Qualified, "hunter") {
+			t.Errorf("%s %q (%s) shows a secret", s.Kind, s.Name, s.Qualified)
+		}
+	}
+	for _, r := range x.References {
+		if strings.Contains(r.Name, "hunter") || strings.Contains(r.NameQualified, "hunter") {
+			t.Errorf("reference %q (%s) shows a secret", r.Name, r.NameQualified)
+		}
+	}
+	equalLines(t, "links", refsOf(x, "resource_link"), []string{
+		`resource_link "logo.png" -> img/logo.png [file repo kinds=asset] in a.md#token-source-behavior @19:38-19:55`,
+	})
+}

@@ -74,12 +74,14 @@ func newMarkdown() goldmark.Markdown {
 	}
 	// GFM's extensions (extension.GFM) but its tables, read through the
 	// cost guard's tableGuard (guard.go): the guard has already rewritten
-	// what it bounds, so it rewrites nothing more here.
+	// what it bounds, so it rewrites nothing more here. Not goldmark's table
+	// AST transformer: it only splits a code span at an escaped "|" for
+	// rendering, nothing Ark reads, and it scans the whole document's
+	// escapes for each such cell (quadratic: a 1 MiB file took minutes).
 	p := parser.NewParser(
 		parser.WithBlockParsers(parser.DefaultBlockParsers()...),
 		parser.WithInlineParsers(inline...),
 		parser.WithParagraphTransformers(paragraphTransformers()...),
-		parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
 	)
 	return goldmark.New(goldmark.WithParser(p), goldmark.WithExtensions(extension.Linkify, extension.Strikethrough, extension.TaskList, extension.Footnote))
 }

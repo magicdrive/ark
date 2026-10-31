@@ -639,7 +639,9 @@ the workspace's entry when the root is this manifest or the one
 `package.workspace` names (Exact), otherwise the entry of an ancestor
 directory's manifest that declares it (Strong; Candidates when several
 ancestors do, as one file cannot see which is the nearest with
-`[workspace]`; unresolved, never outside the repository, when none does);
+`[workspace]`; unresolved, never outside the repository, when none does —
+an ancestor's entry is Strong also when a nearer `[workspace]` lacks the
+key, a manifest Cargo rejects);
 else a crate of
 crates.io, another registry or git, outside the repository. A workspace
 `contains` the package of each literal member (a glob member is
@@ -773,9 +775,12 @@ a section with `find_symbol` (`kind: section`), a document's links with
 linking to one with `get_callers`, and the broken links in the unresolved
 references `get_context` and `analyze_change_impact` report.
 
-A heading or a raw HTML `id` whose text Ark's recommended secret rules
-match (`## password = …`) declares no section or anchor — a name is shown
-as written — and a link to it is unresolved. A leading UTF-8 byte order
+A heading, a raw HTML `id`, a code block's language or a linked file name
+that holds a secret by Ark's recommended rules — a token, or a value after
+`=` or `:` (`## password = …`) — declares or references nothing, as a name
+is shown as written; a link to such a heading is unresolved. A word after a
+`-` (`--password-stdin`) is no secret here. A fragment spelled as an
+anchor (`#password--x`) is a reference's name as written. A leading UTF-8 byte order
 mark is skipped.
 
 Bounds: a file over 4 MiB declares itself only; 5000 declarations and
