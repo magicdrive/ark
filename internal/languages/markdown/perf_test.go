@@ -31,7 +31,7 @@ func TestPerformance_Linear(t *testing.T) {
 		"repeated headings":   func(n int) string { return strings.Repeat("# same\n", n/7) },
 		"many links":          func(n int) string { return strings.Repeat("[x](#y) ![i](i.png) <https://e.x/p>\n", n/38) },
 		"deep block quotes":   func(n int) string { return strings.Repeat("> ", n/4) + "# deep [l](a.md)\n" },
-		"deep lists":          func(n int) string { return nestedList(n / 8) },
+		"deep lists":          func(n int) string { return nestedList(n / 216) }, // about 216 bytes a line: n bytes, under the 4 MiB bound
 		"open brackets":       func(n int) string { return strings.Repeat("[", n) },
 		"brackets and parens": func(n int) string { return strings.Repeat("[a](", n/4) },
 		"emphasis":            func(n int) string { return strings.Repeat("*a _b ", n/6) },
@@ -58,6 +58,9 @@ func TestPerformance_Linear(t *testing.T) {
 		"capped lists": func(n int) string { return strings.Repeat(outline(maxIndent/4)+"\n", n/2466) },
 	}
 	n := 1 << 18
+	if raceEnabled {
+		n = 1 << 15
+	}
 	if v, err := strconv.Atoi(os.Getenv("ARK_MD_PERF_N")); err == nil {
 		n = v
 	}
