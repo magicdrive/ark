@@ -304,18 +304,12 @@ func (r *reader) members(ws *tomldoc.Node) {
 	if m == nil || m.VKind != tomldoc.Array {
 		return
 	}
-	excluded := map[string]bool{}
-	if ex := ws.Get("exclude"); ex != nil {
-		for _, s := range ex.Strs {
-			excluded[path.Clean(s.Value)] = true
-		}
-	}
+	// exclude names no literal member out: Cargo applies it to what a glob
+	// or a path dependency would add, never to a member written as is.
 	wsID := r.id(ws)
 	for _, s := range m.Strs {
 		x := Ref{Name: s.Value, Kind: string(reference.KindContains), Container: wsID, Span: s.Span, TargetKinds: string(symbol.KindPackage)}
 		switch p, ok := r.repoPath(s.Value); {
-		case excluded[path.Clean(s.Value)]:
-			continue
 		case strings.ContainsAny(s.Value, "*?["):
 			// A glob names the directories it matches: Ark expands none,
 			// so the member is unresolved — never one of them guessed.

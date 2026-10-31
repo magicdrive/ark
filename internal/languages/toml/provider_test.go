@@ -487,3 +487,62 @@ func TestExtract_Canceled(t *testing.T) {
 		t.Error("a canceled extraction succeeded")
 	}
 }
+
+// TestBounds_ManifestDeclarationsByDepth: a requirement (3 parts deep) is
+// kept before the deeper keys of [tool] past maxSymbols, though the
+// manifest layer states it after them.
+func TestBounds_ManifestDeclarationsByDepth(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("[project]\nname = \"p\"\ndependencies = [\"req\"]\n")
+	for i := 0; i < maxSymbols; i++ {
+		fmt.Fprintf(&b, "[tool.x.y.t%d]\nk = 1\n", i)
+	}
+	ex := extract(t, "pyproject.toml", b.String())
+	if got := symbolLines(ex, "dependency"); len(got) != 1 {
+		t.Errorf("dependencies %v", got)
+	}
+}
+
+// TestBounds_NoReferenceToALeftOutDeclaration: past maxSymbols, the
+// references of the file to its own declarations left out are left out
+// too — not unresolved.
+func TestBounds_NoReferenceToALeftOutDeclaration(t *testing.T) {
+	var b strings.Builder
+	b.WriteString("[package]\nname = \"p\"\n[dependencies]\n")
+	for i := 0; i < maxSymbols; i++ {
+		fmt.Fprintf(&b, "d%d = \"1\"\n", i)
+	}
+	ex := extract(t, "Cargo.toml", b.String())
+	declared := map[string]bool{}
+	for _, s := range ex.Symbols {
+		declared[s.Qualified] = true
+	}
+	n := 0
+	for _, r := range ex.References {
+		if strings.HasPrefix(r.NameQualified, "Cargo.toml#") {
+			n++
+			if !declared[r.NameQualified] {
+				t.Fatalf("%s -> %s: no declaration", r.Container, r.NameQualified)
+			}
+		}
+	}
+	if n < maxSymbols-10 {
+		t.Errorf("only %d references within the file", n)
+	}
+}
+
+// TestManifest_ExcludeKeepsLiteralMembers: exclude never removes a member
+// written as is (Cargo applies it to globs and path dependencies).
+func TestManifest_ExcludeKeepsLiteralMembers(t *testing.T) {
+	ex := extract(t, "Cargo.toml", "[workspace]\nmembers = [\"a\", \"b/*\"]\nexclude = [\"a\", \"b\"]\n")
+	var got []string
+	for _, r := range ex.References {
+		if r.Kind == "contains" && r.Name != r.NameQualified {
+			got = append(got, r.Name+" "+r.NameQualified)
+		}
+	}
+	equalLines(t, "members", got, []string{
+		"a a/Cargo.toml#/package",
+		"b/* Cargo.toml#/workspace/members/b~1*",
+	})
+}
