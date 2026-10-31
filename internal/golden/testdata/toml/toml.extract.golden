@@ -166,7 +166,7 @@ ref crates/app/Cargo.toml#/dependencies/core/path kind=contains container="crate
 ref crates/app/Cargo.toml#/dependencies/core/package kind=contains container="crates/app/Cargo.toml#/dependencies/core" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/core/package" identity_in_repository=true call=false @crates/app/Cargo.toml:7:28-7:35
 ref crates/app/Cargo.toml#/dependencies/serde kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
 ref serde kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
-ref serde kind=depends_on container="crates/app/Cargo.toml#/dependencies/serde" receiver="" name_qualified="cargo:workspace-root/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
+ref serde kind=depends_on container="crates/app/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/app/Cargo.toml#workspace-root/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
 ref crates/app/Cargo.toml#/dependencies/serde/workspace kind=contains container="crates/app/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde/workspace" identity_in_repository=true call=false @crates/app/Cargo.toml:8:11-8:20
 ref crates/app/Cargo.toml#/dependencies/regex kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/regex" identity_in_repository=true call=false @crates/app/Cargo.toml:9:1-9:6
 ref regex kind=depends_on container="crates/app/Cargo.toml#/dependencies/regex" receiver="" name_qualified="cargo:crates.io/regex" call=false @crates/app/Cargo.toml:9:1-9:6
@@ -226,6 +226,9 @@ ref crates/app/Cargo.toml#/bin/#1 kind=contains container="crates/app/Cargo.toml
 ref crates/app/Cargo.toml#/bin/#1/path kind=contains container="crates/app/Cargo.toml#/bin/#1" receiver="" name_qualified="crates/app/Cargo.toml#/bin/#1/path" identity_in_repository=true call=false @crates/app/Cargo.toml:38:1-38:5
 ## imports
 ## identity_only
+## aliases
+alias crates/app/Cargo.toml#workspace-root/dependencies/serde -> crates/Cargo.toml#/workspace/dependencies/serde cap=strong @crates/app/Cargo.toml:8:1-8:1
+alias crates/app/Cargo.toml#workspace-root/dependencies/serde -> Cargo.toml#/workspace/dependencies/serde cap=strong @crates/app/Cargo.toml:8:1-8:1
 ## diagnostics
 
 # file: crates/core/Cargo.toml
@@ -285,11 +288,14 @@ ref crates/tool/Cargo.toml#/package/name kind=contains container="crates/tool/Ca
 ref crates/tool/Cargo.toml#/package/version kind=contains container="crates/tool/Cargo.toml#/package" receiver="" name_qualified="crates/tool/Cargo.toml#/package/version" identity_in_repository=true call=false @crates/tool/Cargo.toml:2:9-2:16
 ref crates/tool/Cargo.toml#/dependencies kind=contains container="crates/tool/Cargo.toml" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies" identity_in_repository=true call=false @crates/tool/Cargo.toml:4:2-4:14
 ref crates/tool/Cargo.toml#/dependencies/serde kind=contains container="crates/tool/Cargo.toml#/dependencies" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
-ref serde kind=depends_on container="crates/tool/Cargo.toml#/dependencies/serde" receiver="" name_qualified="cargo:workspace-root/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
+ref serde kind=depends_on container="crates/tool/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/tool/Cargo.toml#workspace-root/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
 ref serde kind=depends_on container="crates/tool/Cargo.toml#/package" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
 ref crates/tool/Cargo.toml#/dependencies/serde/workspace kind=contains container="crates/tool/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies/serde/workspace" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:7-5:16
 ## imports
 ## identity_only
+## aliases
+alias crates/tool/Cargo.toml#workspace-root/dependencies/serde -> crates/Cargo.toml#/workspace/dependencies/serde cap=strong @crates/tool/Cargo.toml:5:1-5:1
+alias crates/tool/Cargo.toml#workspace-root/dependencies/serde -> Cargo.toml#/workspace/dependencies/serde cap=strong @crates/tool/Cargo.toml:5:1-5:1
 ## diagnostics
 
 # file: py/pyproject.toml

@@ -351,3 +351,37 @@ func sameShape(n *Node, v any, at string) string {
 	}
 	return ""
 }
+
+// TestBOM: a UTF-8 byte order mark that starts the file is no syntax error:
+// the document is read as without it, at the source's offsets, and the
+// decoder's check passes on the same input.
+func TestBOM(t *testing.T) {
+	src := []byte("\xef\xbb\xbf[a]\r\nx = 1\r\n")
+	d := Parse(src)
+	if len(d.Problems) != 0 || !d.Complete {
+		t.Fatalf("problems %+v, complete %v", d.Problems, d.Complete)
+	}
+	a := d.Root.Get("a")
+	if a == nil || a.Get("x") == nil {
+		t.Fatalf("tree: %+v", d.Root.Children)
+	}
+	if got := string(src[a.Span.Start:a.Span.End]); !strings.HasPrefix(got, "[a]") {
+		t.Errorf("[a] at %v: %q", a.Span, got)
+	}
+	if x := a.Get("x"); string(src[x.KeySpan.Start:x.KeySpan.End]) != "x" {
+		t.Errorf("x at %v", x.KeySpan)
+	}
+	var m map[string]any
+	if _, err := bstoml.Decode(string(src), &m); err != nil {
+		t.Errorf("BurntSushi/toml rejects the document: %v", err)
+	}
+	// A mark anywhere else is no whitespace: still an error.
+	if d := Parse([]byte("a = 1\n\xef\xbb\xbfb = 2\n")); d.Complete {
+		t.Errorf("a mark inside the document read as whitespace")
+	}
+	// An error after the mark is at its offset in the source.
+	d = Parse([]byte("\xef\xbb\xbfa = \n"))
+	if len(d.Problems) == 0 || d.Problems[0].Start < 3 {
+		t.Errorf("problems %+v", d.Problems)
+	}
+}

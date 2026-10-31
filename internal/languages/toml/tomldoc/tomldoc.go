@@ -8,7 +8,8 @@
 // (TOML's table rules), where a table header and an array begin and end, and
 // a problem per duplicate (the decoder stops at the first one).
 //
-// Positions are byte offsets into the source. go-toml reads TOML 1.1 (the
+// Positions are byte offsets into the source. A UTF-8 byte order mark that
+// starts the file is read as three spaces (offsets kept). go-toml reads TOML 1.1 (the
 // versions differ in \e and \xHH escapes, times without seconds, and inline
 // tables over several lines or with a trailing comma), as does BurntSushi/toml,
 // and so does tomldoc:
@@ -195,9 +196,15 @@ func Parse(src []byte) *Doc {
 		d.problem(CodeTooLarge, 0, 0, false, fmt.Sprintf("the file is larger than %d bytes: its structure is not read", MaxBytes))
 		return d
 	}
-	b := &builder{d: d, cur: d.Root, src: src}
+	// A UTF-8 byte order mark is no TOML token: the parser reads a copy
+	// with it as three spaces, so every offset stays the source's.
+	text := src
+	if len(src) >= 3 && src[0] == 0xEF && src[1] == 0xBB && src[2] == 0xBF {
+		text = append([]byte("   "), src[3:]...)
+	}
+	b := &builder{d: d, cur: d.Root, src: text}
 	var p unstable.Parser
-	p.Reset(src)
+	p.Reset(text)
 	for p.NextExpression() {
 		b.expression(p.Expression())
 	}
@@ -208,7 +215,7 @@ func Parse(src []byte) *Doc {
 		var pe *unstable.ParserError
 		msg := err.Error()
 		if errors.As(err, &pe) {
-			off = offsetOf(src, pe.Highlight)
+			off = offsetOf(text, pe.Highlight)
 			msg = pe.Message
 		}
 		end := off
@@ -228,7 +235,7 @@ func Parse(src []byte) *Doc {
 		// pass. BurntSushi/toml's (go-toml's own takes time quadratic in
 		// the number of tables).
 		var m map[string]any
-		if _, err := bstoml.Decode(string(src), &m); err != nil {
+		if _, err := bstoml.Decode(string(text), &m); err != nil {
 			off, end := 0, 0
 			msg := err.Error()
 			var pe bstoml.ParseError

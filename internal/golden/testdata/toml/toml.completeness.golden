@@ -3,8 +3,6 @@ symbol Cargo.toml#/workspace unattributed_in=0 unattributed_out=0 unresolved=1 o
   no_candidate ../elsewhere kind=contains receiver="" reason=outside_repository @Cargo.toml:3:87-3:101
 symbol Cargo.toml#/workspace/dependencies/serde unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
   no_candidate serde kind=depends_on receiver="" reason=outside_repository @Cargo.toml:8:1-8:6
-symbol crates/app/Cargo.toml#/dependencies/serde unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
-  no_candidate serde kind=depends_on receiver="" reason=unresolved @crates/app/Cargo.toml:8:1-8:6
 symbol crates/app/Cargo.toml#/dependencies/regex unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
   no_candidate regex kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:9:1-9:6
 symbol crates/app/Cargo.toml#/dependencies/json unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
@@ -28,8 +26,6 @@ symbol crates/app/Cargo.toml#/features/std unattributed_in=0 unattributed_out=1 
   candidate_callee crates/app/Cargo.toml#/dependencies/libc kind=value_reference confidence=candidate refs=1
 symbol crates/app/Cargo.toml#/features/fast unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
   no_candidate missing kind=value_reference receiver="" reason=unresolved @crates/app/Cargo.toml:31:9-31:18
-symbol crates/tool/Cargo.toml#/dependencies/serde unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
-  no_candidate serde kind=depends_on receiver="" reason=unresolved @crates/tool/Cargo.toml:5:1-5:6
 symbol py/pyproject.toml#/build-system/requires/setuptools unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
   no_candidate setuptools kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:2:13-2:29
 symbol py/pyproject.toml#/build-system/requires/wheel unattributed_in=0 unattributed_out=0 unresolved=0 outside=1

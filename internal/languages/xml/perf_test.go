@@ -22,6 +22,12 @@ func TestLinearTime(t *testing.T) {
 			sub := strings.Repeat("<a x='1'>", 200) + strings.Repeat("</a>", 200)
 			return "<r>" + strings.Repeat(sub, n/200) + "</r>"
 		},
+		"doctypes": func(n int) string {
+			// One DOCTYPE after another, before and inside the root: each is
+			// a diagnostic, and the rest of the file is scanned for entity
+			// references once (the first), not once per DOCTYPE.
+			return strings.Repeat("<!DOCTYPE a>", n/2) + "<r>" + strings.Repeat("<!DOCTYPE a>&e;", n/2) + "</r>"
+		},
 		"attributes": func(n int) string {
 			var b strings.Builder
 			b.WriteString("<r>\n")
@@ -56,4 +62,22 @@ func best(t *testing.T, src string) time.Duration {
 		}
 	}
 	return min
+}
+
+// TestDoctypesNearMaxBytes: a file of DOCTYPE declarations just under
+// xmldoc.MaxBytes is read in seconds (it took minutes when every DOCTYPE
+// scanned the rest of the file).
+func TestDoctypesNearMaxBytes(t *testing.T) {
+	if testing.Short() {
+		t.Skip("timing")
+	}
+	const decl = "<!DOCTYPE a>"
+	src := strings.Repeat(decl, (4<<20-16)/len(decl)) + "<r/>"
+	start := time.Now()
+	ex := extract(t, "d.xml", src)
+	d := time.Since(start)
+	t.Logf("%d bytes in %v, %d diagnostics", len(src), d, len(ex.Diagnostics))
+	if d > 5*time.Second {
+		t.Errorf("%d bytes of DOCTYPEs took %v", len(src), d)
+	}
 }

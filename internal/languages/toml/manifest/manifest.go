@@ -29,9 +29,12 @@
 //     repository: Cargo reads exactly that file; a path leaving the
 //     repository is outside it), with `workspace = true` the workspace's
 //     entry of its key (in this file when it is the workspace root, in
-//     package.workspace's manifest when that names it; else Unresolved: the
-//     root is the nearest ancestor manifest with [workspace], which one file
-//     cannot see), else a crate of a registry or a git repository, or a
+//     package.workspace's manifest when that names it; else the root is the
+//     nearest ancestor manifest with [workspace], which one file cannot
+//     see: the entry of the key in every ancestor directory's Cargo.toml,
+//     through aliases — one declared is the target at most Strong, several
+//     are Candidates, none leaves it Unresolved), else a crate of a
+//     registry or a git repository, or a
 //     Python distribution — outside the repository ("cargo:crates.io/<crate>",
 //     "cargo:registry:<name>/<crate>", "cargo:git:<url>#<crate>",
 //     "pypi:<name>"; the two ecosystems never share an identity);
@@ -85,11 +88,20 @@ type Ref struct {
 	InRepository, Local                                    bool
 }
 
+// Alias states that the identity Qualified (of this file, declared by no
+// one) names what Target names, at most with confidence Cap
+// (language.AliasDraft).
+type Alias struct {
+	Qualified, Target, Cap string
+	Span                   tomldoc.Span
+}
+
 // Result is what a manifest states.
 type Result struct {
 	Overrides map[*tomldoc.Node]Override
 	Decls     []Decl
 	Refs      []Ref
+	Aliases   []Alias
 	Problems  []tomldoc.Problem
 }
 
@@ -120,6 +132,46 @@ type reader struct {
 	d              *tomldoc.Doc
 	id             Identity
 	out            Result
+	inherited      map[string]bool // keys whose workspace entry the ancestors' aliases name
+}
+
+// maxAncestors bounds the directories above a manifest searched for the
+// workspace root of `workspace = true` (the nearest first).
+const maxAncestors = 32
+
+// WorkspaceRootPrefix starts the pointer of the identity, in a member's
+// own file, of the workspace entry `workspace = true` inherits when no file
+// names the root ("<file>#workspace-root/dependencies/<key>"): no JSON
+// Pointer starts so, so no declaration of the TOML layer carries it.
+const WorkspaceRootPrefix = "workspace-root/dependencies/"
+
+// inheritedEntry is the identity a `workspace = true` entry of key names
+// when no file names the workspace root: this file's own pseudo-identity,
+// which an alias per ancestor directory of the manifest — the nearest
+// first, as Cargo searches — reads as "<dir>/Cargo.toml#/workspace/
+// dependencies/<key>". The resolver follows them all: one declared is the
+// target, at most Strong (a manifest Ark does not index — a nearer root
+// under an ignored directory — may be the one Cargo reads); several are
+// Candidates; none leaves the reference Unresolved in the repository.
+func (r *reader) inheritedEntry(key string, at tomldoc.Span) string {
+	q := r.file + "#" + WorkspaceRootPrefix + pointer(key)
+	if r.inherited[key] {
+		return q
+	}
+	if r.inherited == nil {
+		r.inherited = map[string]bool{}
+	}
+	r.inherited[key] = true
+	for d, n := r.dir, 0; d != "." && n < maxAncestors; n++ {
+		parent := path.Dir(d)
+		if parent == d {
+			break // an absolute or odd path: no ancestor in the repository
+		}
+		d = parent
+		r.out.Aliases = append(r.out.Aliases, Alias{Qualified: q, Cap: "strong", Span: at,
+			Target: r.manifestIdentity(d, "Cargo.toml", "/workspace/dependencies/"+pointer(key))})
+	}
+	return q
 }
 
 // filePath spells a slash-separated repository path as the index's file
@@ -256,10 +308,11 @@ func (r *reader) dependency(e *tomldoc.Node, owner, wsDeps string) bool {
 			x.Local = strings.HasPrefix(wsDeps, r.file+"#")
 		} else {
 			// The root is the nearest ancestor manifest with [workspace]:
-			// in the repository, but which one file cannot see. An
-			// identity no declaration carries leaves it Unresolved —
+			// in the repository, but which one file cannot see — every
+			// ancestor's entry of the key, through aliases
+			// (inheritedEntry). None declared leaves it Unresolved —
 			// neither outside the repository nor any namesake guessed.
-			x.NameQualified = "cargo:workspace-root/dependencies/" + pointer(e.Key)
+			x.NameQualified = r.inheritedEntry(e.Key, at)
 		}
 	case hasPath:
 		source = "path " + pathVal

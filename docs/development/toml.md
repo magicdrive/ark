@@ -65,17 +65,34 @@ checked).
   alone, so the provider never reads the other manifest. It is an
   `IdentityInRepository` reference: Exact when that manifest declares a
   package, Unresolved when it does not (a virtual manifest, no file).
+  Exact holds even when the key (or `package = "..."`) is not the name
+  that manifest declares (`wrongname = { path = "../d" }`, `d` named
+  `dee`): one file cannot see the other's name, and the path alone fixes
+  which manifest Cargo reads — Cargo rejects the mismatch rather than look
+  for another package, so the text names exactly that package, right or
+  wrong, as an import path names its module whether or not it compiles.
   `FileIdentity` is not used: its target is a file's own declaration
   (a document), not a package. A path leaving the repository (or absolute,
   or with `\`) is outside it. Identities from paths are spelled with the
   file IDs' separator (Windows).
 - **What one file cannot fix stays open.** `workspace = true` names the
   workspace root's entry: the manifest itself when it has `[workspace]`, or
-  the one `package.workspace` names; otherwise the root is the nearest
-  ancestor manifest with `[workspace]`, which one file cannot see — the
-  reference carries an identity no declaration has
-  (`cargo:workspace-root/dependencies/<key>`, `IdentityInRepository`):
-  Unresolved, never outside the repository, never a namesake. A glob
+  the one `package.workspace` names (Exact); otherwise the root is the
+  nearest ancestor manifest with `[workspace]`, which one file cannot see.
+  The reference then names an identity of the member's own file that no
+  declaration carries (`<file>#workspace-root/dependencies/<key>`: no JSON
+  Pointer starts without `/`, `IdentityInRepository`), and the file states
+  an alias of it (`language.AliasDraft`, cap Strong) to the entry of the
+  key in every ancestor directory's manifest, nearest first, at most 32:
+  `<dir>/Cargo.toml#/workspace/dependencies/<key>`. The resolver follows
+  every alias: one declared entry is the target, Strong — an edge, so
+  changing the workspace's dependency reaches the members inheriting it —
+  never Exact (a manifest Ark does not index, under an ignored directory,
+  may be the nearer root); entries in two ancestors (nested workspaces)
+  are Candidates of each, counted as unattributed; none is Unresolved,
+  never outside the repository, never a namesake
+  (`TestGraph_InheritedWorkspaceDependency`). The resolver's `Lookup`
+  cannot state this search: its kind classes admit no dependency. A glob
   member (`crates/*`) is Unresolved the same way; `exclude` removes no
   literal member (Cargo applies it to globs and path dependencies).
   Feature values (`"dep:x"`, `"x/f"`, `"x?/f"`, `"x"`) reference the
@@ -126,6 +143,12 @@ checked).
   line 0.9 s; a distinct dotted key of 8 parts (the most still checked) on
   every line 1.9 s. `TestExtract_Linear` keeps every shape within 40x the
   time for 16x the input.
+- **Byte order mark.** A file starting with a UTF-8 byte order mark is
+  read with the mark as three spaces (a copy: offsets kept), by the parser
+  and by BurntSushi/toml's check alike; before, the whole file was a
+  syntax error and declared nothing (`TestBOM`, `TestExtract_BOM`).
+  go-toml's `Unmarshal` rejects the mark, so `FuzzParse` gives it the same
+  copy.
 - **Fuzzing.** `FuzzExtractTOML` (as a Cargo manifest, also with Windows
   file IDs, a pyproject.toml and data) and `FuzzParse` (against both
   decoders: no error ⇒ go-toml accepts; both accept ⇒ no error), 60–90 s
@@ -138,9 +161,11 @@ checked).
 
 ## Remaining work
 
-- The workspace root of `workspace = true` when no file names it: the
-  resolver's `Lookup` could state the ancestor manifests in order, if a
-  kind class admitted dependencies.
+- The workspace root of `workspace = true` when no file names it is the
+  entry of every ancestor (aliases), not the nearest ancestor with
+  `[workspace]` alone: two ancestors declaring the key leave Candidates
+  where Cargo reads one. Ordering them needs a search the resolver states
+  for dependencies (a `Lookup` kind class admitting them).
 - Poetry (`[tool.poetry.dependencies]`), uv workspaces
   (`[tool.uv.workspace]`), `[patch]` and `[replace]`, `default-members`,
   Python path requirements (`name @ file:...`).

@@ -18,7 +18,9 @@ measured, and how. The rules themselves are in the headers of
   matching end tags (`RawToken` does not check them; Ark reports a
   mismatch and recovers at the nearest open element of the name), namespace
   prefixes (an undeclared prefix is a diagnostic and a pseudo-namespace of
-  its own), duplicate attributes (by namespace URI and local name — the
+  its own — U+0000 and the prefix, which no declared URI can be: XML has no
+  way to spell U+0000, raw or as `&#0;`, so `xmlns:p="?x"` is not the
+  namespace of an undeclared `x:`), duplicate attributes (by namespace URI and local name — the
   library accepts them), one root element and no text outside it, the
   bytes of each attribute (a scan of the start tag: the library gives the
   tag's bytes only) and where an element ends.
@@ -46,7 +48,11 @@ costs, and reads nothing else.
   stays the text `&xxe;` (`xml_entity_not_expanded`, once per file).
   Without a DOCTYPE an undeclared entity is a well-formedness error, as XML
   defines it (`xml_syntax`). Predefined entities and character references
-  are replaced, as XML requires.
+  are replaced, as XML requires. Only the first DOCTYPE scans the rest of
+  the file for entity references; every later one (XML allows one) is an
+  `xml_syntax` diagnostic and nothing else — a scan per DOCTYPE made a file
+  of `<!DOCTYPE a>` repeated quadratic (480 KB in 5.1 s, 4.19 MB in 371 s;
+  now 4 MiB in 0.05 s, `TestDoctypesNearMaxBytes`).
 - **Bounds.** A file over 4 MiB is not read (`xml_too_large`); nesting
   deeper than 256 (`xml_too_deep`) and more than 200000 elements and
   attributes (`xml_too_many_nodes`) end the reading, keeping what was read;
@@ -108,7 +114,11 @@ costs, and reads nothing else.
   edge on that convention alone. A fragment `href="#x"` is an
   `id_reference`: XLink's `xlink:href` (a URI reference by definition)
   Exact, an `href` in no namespace at most Strong. An ID declared twice is
-  two anchors of one identity: Candidates. Other IDREF / IDREFS attributes
+  two anchors of one identity: Candidates. A second `xml:id` of one value
+  is also `xml_duplicate_id` (a warning: xml:id requires its values to be
+  unique in the document); a repeated `id` in no namespace is not — unlike
+  HTML's, nothing without a schema says such an `id` is unique
+  (`TestDuplicateXMLID`). Other IDREF / IDREFS attributes
   (`ref`, `idref`, `linkend`, …) are no references: only a schema says
   which attributes are IDREFs.
 - **Relative references.** An XInclude `<xi:include href>` and an
@@ -174,8 +184,10 @@ costs, and reads nothing else.
   180 s, then 2.55 million in 150 s after the last changes — its one
   finding, a harness that checked the file's own path as a name, is fixed
   and kept in `testdata/fuzz`) and
-  `TestLinearTime` (one long line, nesting to the bound, many attributes:
-  twice the input takes 1.5–1.7× the time).
+  `TestLinearTime` (one long line, nesting to the bound, many attributes,
+  repeated DOCTYPEs before and inside the root: twice the input takes
+  1.5–2× the time) and `TestDoctypesNearMaxBytes` (4 MiB of DOCTYPEs, under
+  5 s; measured 0.05 s).
 - **Real files** (`TestRealFiles`, opt-in `ARK_XML_REAL_DIRS`, read only):
   the 799 `.xml` files of the Go module cache and of Ark (5.0 MB): no
   failure, every range within its file and every identity a name, 164299

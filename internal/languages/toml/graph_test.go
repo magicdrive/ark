@@ -3,12 +3,15 @@ package toml
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/index"
 	"github.com/magicdrive/ark/internal/language"
+	"github.com/magicdrive/ark/internal/symbol"
 )
 
 const fixtureRepo = "testdata/repo"
@@ -67,11 +70,13 @@ func equalLines(t testing.TB, what string, got, want []string) {
 // packages; a package depends_on its dependencies (normal, dev, build,
 // target); a path dependency depends_on the package of the manifest in its
 // directory; workspace = true depends_on the workspace's entry where the
-// root is known (the manifest itself or package.workspace); a feature
+// root is known (the manifest itself or package.workspace: Exact), and
+// else the entry of the one ancestor manifest declaring it (Strong: a
+// manifest Ark does not index may be the root); a feature
 // references the features and dependencies it enables. Absent on purpose
 // (TestGraph_NonEdgesAreAccountedFor): registries, git, PyPI, a path or a
-// member leaving the repository, a glob member, a workspace root one file
-// cannot see, a feature naming nothing, and dep:libc — two dependencies
+// member leaving the repository, a glob member, a feature naming nothing,
+// and dep:libc — two dependencies
 // named libc (a Candidate).
 func TestGraph_Fixture(t *testing.T) {
 	idx := buildIndex(t, fixtureRepo)
@@ -153,6 +158,7 @@ func TestGraph_Fixture(t *testing.T) {
 		"crates/app/Cargo.toml#/dependencies/private -contains-> crates/app/Cargo.toml#/dependencies/private/branch exact",
 		"crates/app/Cargo.toml#/dependencies/private -contains-> crates/app/Cargo.toml#/dependencies/private/git exact",
 		"crates/app/Cargo.toml#/dependencies/serde -contains-> crates/app/Cargo.toml#/dependencies/serde/workspace exact",
+		"crates/app/Cargo.toml#/dependencies/serde -depends_on-> Cargo.toml#/workspace/dependencies/serde strong",
 		"crates/app/Cargo.toml#/dev-dependencies -contains-> crates/app/Cargo.toml#/dev-dependencies/tempfile exact",
 		"crates/app/Cargo.toml#/features -contains-> crates/app/Cargo.toml#/features/default exact",
 		"crates/app/Cargo.toml#/features -contains-> crates/app/Cargo.toml#/features/fast exact",
@@ -196,6 +202,7 @@ func TestGraph_Fixture(t *testing.T) {
 		"crates/tool/Cargo.toml -contains-> crates/tool/Cargo.toml#/package exact",
 		"crates/tool/Cargo.toml#/dependencies -contains-> crates/tool/Cargo.toml#/dependencies/serde exact",
 		"crates/tool/Cargo.toml#/dependencies/serde -contains-> crates/tool/Cargo.toml#/dependencies/serde/workspace exact",
+		"crates/tool/Cargo.toml#/dependencies/serde -depends_on-> Cargo.toml#/workspace/dependencies/serde strong",
 		"crates/tool/Cargo.toml#/package -contains-> crates/tool/Cargo.toml#/package/name exact",
 		"crates/tool/Cargo.toml#/package -contains-> crates/tool/Cargo.toml#/package/version exact",
 		"crates/tool/Cargo.toml#/package -depends_on-> crates/tool/Cargo.toml#/dependencies/serde exact",
@@ -238,8 +245,7 @@ func TestGraph_Fixture(t *testing.T) {
 // TestGraph_NonEdgesAreAccountedFor: every reference that is no edge is
 // reported for what it is — outside the repository (a crate of a registry
 // or git, a PyPI distribution, a path or member leaving the repository),
-// unresolved (a glob member, a workspace root no file names, a feature
-// naming nothing) or a Candidate — and none is attributed to a declaration
+// unresolved (a glob member, a feature naming nothing) or a Candidate — and none is attributed to a declaration
 // by its name.
 func TestGraph_NonEdgesAreAccountedFor(t *testing.T) {
 	idx := buildIndex(t, fixtureRepo)
@@ -254,11 +260,9 @@ func TestGraph_NonEdgesAreAccountedFor(t *testing.T) {
 		"crates/app/Cargo.toml#/dependencies/outside: outside depends_on outside_repository",
 		"crates/app/Cargo.toml#/dependencies/private: private depends_on outside_repository",
 		"crates/app/Cargo.toml#/dependencies/regex: regex depends_on outside_repository",
-		"crates/app/Cargo.toml#/dependencies/serde: serde depends_on unresolved",
 		"crates/app/Cargo.toml#/dev-dependencies/tempfile: tempfile depends_on outside_repository",
 		"crates/app/Cargo.toml#/features/fast: missing value_reference unresolved",
 		"crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc: libc depends_on outside_repository",
-		"crates/tool/Cargo.toml#/dependencies/serde: serde depends_on unresolved",
 		"py/pyproject.toml#/build-system/requires/setuptools: setuptools depends_on outside_repository",
 		"py/pyproject.toml#/build-system/requires/wheel: wheel depends_on outside_repository",
 		"py/pyproject.toml#/dependency-groups/test/coverage: coverage depends_on outside_repository",
@@ -296,5 +300,84 @@ func TestGraph_Parents(t *testing.T) {
 		if s.ParentQualified != "" && s.Parent == "" {
 			t.Errorf("%s: parent %s not placed", s.Qualified, s.ParentQualified)
 		}
+	}
+}
+
+// TestGraph_InheritedWorkspaceDependency: a member's `workspace = true`
+// without package.workspace inherits the entry of the nearest ancestor
+// manifest with [workspace], which one file cannot see. Changing the
+// workspace's entry reaches the members that inherit it: with one ancestor
+// declaring the entry it is their target (Strong, an edge); with two it is
+// a Candidate of each (no edge, unattributed); with none the reference is
+// Unresolved — never outside the repository, never a zero count.
+func TestGraph_InheritedWorkspaceDependency(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, text string) {
+		t.Helper()
+		p := filepath.Join(dir, filepath.FromSlash(rel))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// One workspace root: the usual layout.
+	write("one/Cargo.toml", "[workspace]\nmembers = [\"crates/a\"]\n\n[workspace.dependencies]\nserde = \"1\"\n")
+	write("one/crates/a/Cargo.toml", "[package]\nname = \"a\"\n\n[dependencies]\nserde = { workspace = true }\nlog = { workspace = true }\n")
+	// Two ancestors declare the entry: which one Cargo reads depends on
+	// which has [workspace] for the member, so both are Candidates.
+	write("two/Cargo.toml", "[workspace]\nmembers = [\"inner\"]\n\n[workspace.dependencies]\nserde = \"1\"\n")
+	write("two/inner/Cargo.toml", "[workspace]\nmembers = [\"b\"]\n\n[workspace.dependencies]\nserde = \"1.0.200\"\n")
+	write("two/inner/b/Cargo.toml", "[package]\nname = \"b\"\n\n[dependencies]\nserde.workspace = true\n")
+	idx := buildIndex(t, dir)
+	sym := func(q string) symbol.Symbol {
+		t.Helper()
+		for _, s := range idx.FindSymbols("") {
+			if s.Qualified == q {
+				return s
+			}
+		}
+		t.Fatalf("no symbol %s", q)
+		return symbol.Symbol{}
+	}
+	callers := func(q string) []string {
+		var out []string
+		for _, e := range idx.GetCallers(sym(q).ID) {
+			from, _ := idx.GetSymbol(e.To) // a caller edge points back to the caller
+			out = append(out, fmt.Sprintf("%s %s", from.Qualified, e.Confidence))
+		}
+		sort.Strings(out)
+		return out
+	}
+	q := func(p string) string { return filepath.FromSlash(p) }
+
+	root := q("one/Cargo.toml") + "#/workspace/dependencies/serde"
+	equalLines(t, "callers of "+root, callers(root), []string{
+		q("one/Cargo.toml") + "#/workspace/dependencies exact",
+		q("one/crates/a/Cargo.toml") + "#/dependencies/serde strong",
+	})
+
+	for _, ws := range []string{q("two/Cargo.toml"), q("two/inner/Cargo.toml")} {
+		target := ws + "#/workspace/dependencies/serde"
+		if in, _ := idx.Unattributed(sym(target).ID); in != 1 {
+			t.Errorf("%s: unattributed %d, want 1 (the member's Candidate reference)", target, in)
+		}
+		for _, c := range callers(target) {
+			if strings.Contains(c, "inner/b") || strings.Contains(c, `inner\b`) {
+				t.Errorf("%s: a Candidate is an edge: %s", target, c)
+			}
+		}
+	}
+	member := sym(q("two/inner/b/Cargo.toml") + "#/dependencies/serde")
+	if _, out := idx.Unattributed(member.ID); out != 1 {
+		t.Errorf("the member's inheritance: outgoing unattributed %d, want 1", out)
+	}
+
+	// log: no ancestor declares it — Unresolved in the repository.
+	logDep := sym(q("one/crates/a/Cargo.toml") + "#/dependencies/log")
+	got := idx.UnresolvedOutgoing(logDep.ID)
+	if got.Unresolved != 1 || got.OutsideRepository != 0 {
+		t.Errorf("log: %+v, want one unresolved reference", got)
 	}
 }

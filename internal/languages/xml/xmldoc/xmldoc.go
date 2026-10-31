@@ -87,10 +87,24 @@ type Problem struct {
 
 // Name is an element's or attribute's name: its prefix as written, its local
 // name and the namespace URI the prefix is bound to ("" for none; for a
-// prefix no declaration binds, "?" and the prefix).
+// prefix no declaration binds, UndeclaredURI of the prefix).
 type Name struct {
 	Prefix, Local, URI string
 }
+
+// undeclared starts the pseudo-namespace of a prefix no declaration binds.
+// It is U+0000, which no XML document can spell — neither as a character
+// nor as a character reference (&#0; is not a Char) — so no declared
+// namespace URI (an attribute value) is ever one of these.
+const undeclared = "\x00"
+
+// UndeclaredURI is the pseudo-namespace of the elements and attributes of
+// a prefix no declaration binds: one per prefix, equal to no declared URI.
+func UndeclaredURI(prefix string) string { return undeclared + prefix }
+
+// UndeclaredPrefix returns the prefix of a pseudo-namespace UndeclaredURI
+// made (false for a declared or empty URI).
+func UndeclaredPrefix(uri string) (string, bool) { return strings.CutPrefix(uri, undeclared) }
 
 // Attr is an attribute of an element, at the bytes of `name="value"`.
 type Attr struct {
@@ -396,7 +410,7 @@ func (p *parser) resolve(prefix, local string, element bool, start, end int) Nam
 	}
 	if prefix != "" {
 		p.doc.problem(CodeUndefinedPrefix, start, end, true, fmt.Sprintf("the namespace prefix %q is not declared", prefix))
-		nm.URI = "?" + prefix
+		nm.URI = UndeclaredURI(prefix)
 	}
 	return nm
 }
@@ -473,7 +487,14 @@ func (p *parser) directive(t xml.Directive, start, end int) {
 	if !strings.HasPrefix(text, "DOCTYPE") {
 		return
 	}
-	if p.doc.Doctype || len(p.stack) > 0 || p.rootDone {
+	if p.doc.Doctype {
+		// The first DOCTYPE already gave every entity reference of the rest
+		// of the file its own spelling: scanning the rest again for each
+		// further one would read the file once per DOCTYPE (quadratic).
+		p.doc.problem(CodeSyntax, start, end, true, "a DOCTYPE declaration is allowed once, before the root element")
+		return
+	}
+	if len(p.stack) > 0 || p.rootDone {
 		p.doc.problem(CodeSyntax, start, end, true, "a DOCTYPE declaration is allowed once, before the root element")
 	}
 	p.doc.Doctype = true

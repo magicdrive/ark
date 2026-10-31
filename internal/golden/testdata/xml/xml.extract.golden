@@ -256,6 +256,7 @@ ref docs/ids.xml#/doc/a/@xmlns:xlink kind=contains container="docs/ids.xml#/doc/
 ## imports
 ## identity_only
 ## diagnostics
+diag warning code=xml_duplicate_id "the xml:id \"dup\" is not unique in the document: a reference to it has more than one target" @docs/ids.xml:3:8-3:20
 
 # file: javaapp/pom.xml
 ## symbols

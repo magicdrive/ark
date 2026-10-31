@@ -87,6 +87,7 @@ func (*Provider) Extract(ctx context.Context, file source.FileID, src []byte) (l
 		Symbols:      e.symbols,
 		References:   e.refs,
 		Diagnostics:  e.diags,
+		Aliases:      e.aliases,
 		IdentityOnly: true,
 	}, nil
 }
@@ -108,6 +109,7 @@ type extractor struct {
 	lines    lines
 	symbols  []language.SymbolDraft
 	refs     []language.ReferenceDraft
+	aliases  []language.AliasDraft
 	diags    []language.Diagnostic
 	full     bool
 	diagsCut bool
@@ -190,12 +192,23 @@ func (e *extractor) run() {
 		e.ref(language.ReferenceDraft{Name: d.qualified, Kind: string(reference.KindContains), Container: parent,
 			NameQualified: d.qualified, IdentityInRepository: true, TargetKinds: string(d.kind)}, d.at)
 	}
+	aliased := map[string]bool{}
 	for _, r := range m.Refs {
 		if !declared[r.Container] || r.Local && r.NameQualified != "" && !declared[r.NameQualified] {
 			continue
 		}
-		e.ref(language.ReferenceDraft{Name: r.Name, Kind: r.Kind, Container: r.Container, NameQualified: r.NameQualified,
-			IdentityInRepository: r.InRepository, ConfidenceCap: r.Cap, TargetKinds: r.TargetKinds}, r.Span)
+		if e.ref(language.ReferenceDraft{Name: r.Name, Kind: r.Kind, Container: r.Container, NameQualified: r.NameQualified,
+			IdentityInRepository: r.InRepository, ConfidenceCap: r.Cap, TargetKinds: r.TargetKinds}, r.Span) {
+			aliased[r.NameQualified] = true
+		}
+	}
+	// The aliases of the references stated (a reference left out leaves
+	// its aliases unread).
+	for _, a := range m.Aliases {
+		if aliased[a.Qualified] && declname.IsName(a.Qualified) && declname.IsName(a.Target) {
+			e.aliases = append(e.aliases, language.AliasDraft{Qualified: a.Qualified, Target: a.Target,
+				Location: e.loc(a.Span.Start, a.Span.Start), ConfidenceCap: a.Cap})
+		}
 	}
 }
 
@@ -318,13 +331,15 @@ func (e *extractor) symbol(name, qualified string, kind symbol.SymbolKind, sp to
 	})
 }
 
-func (e *extractor) ref(r language.ReferenceDraft, sp tomldoc.Span) {
+// ref states r; false when a bound leaves it out.
+func (e *extractor) ref(r language.ReferenceDraft, sp tomldoc.Span) bool {
 	if len(e.refs) >= maxRefs {
 		e.truncated(sp)
-		return
+		return false
 	}
 	r.Location = e.loc(sp.Start, sp.End)
 	e.refs = append(e.refs, r)
+	return true
 }
 
 func (e *extractor) truncated(sp tomldoc.Span) {

@@ -179,7 +179,7 @@ func TestScenario_CargoPackageAndDependencies(t *testing.T) {
 	equalLines(t, "references", refLines(ex), []string{
 		"depends_on crates/app/Cargo.toml#/dependencies/core -> core-lib [crates/core/Cargo.toml#/package] in-repo @7:1",
 		"depends_on crates/app/Cargo.toml#/package -> core [crates/app/Cargo.toml#/dependencies/core] in-repo @7:1",
-		"depends_on crates/app/Cargo.toml#/dependencies/serde -> serde [cargo:workspace-root/dependencies/serde] in-repo @8:1",
+		"depends_on crates/app/Cargo.toml#/dependencies/serde -> serde [crates/app/Cargo.toml#workspace-root/dependencies/serde] in-repo @8:1",
 		"depends_on crates/app/Cargo.toml#/package -> serde [crates/app/Cargo.toml#/dependencies/serde] in-repo @8:1",
 		"depends_on crates/app/Cargo.toml#/dependencies/regex -> regex [cargo:crates.io/regex] @9:1",
 		"depends_on crates/app/Cargo.toml#/package -> regex [crates/app/Cargo.toml#/dependencies/regex] in-repo @9:1",
@@ -562,4 +562,57 @@ func TestMapHints(t *testing.T) {
 	if _, ok := any(p).(language.HiddenDirReader); ok {
 		t.Error("the provider reads hidden directories")
 	}
+}
+
+// TestExtract_BOM: a file starting with a UTF-8 byte order mark states its
+// declarations, at the source's positions.
+func TestExtract_BOM(t *testing.T) {
+	ex := extract(t, "Cargo.toml", "\xef\xbb\xbf[package]\r\nname = \"x\"\r\n")
+	if len(ex.Diagnostics) != 0 {
+		t.Errorf("diagnostics: %+v", ex.Diagnostics)
+	}
+	equalLines(t, "symbols", symbolLines(ex, "package"), []string{"package x @1:4-2:11 <Cargo.toml> package x"})
+}
+
+// TestManifest_PathDependencyName: a path dependency names the package of
+// the manifest at the path, whatever its key says the name is (one file
+// cannot see the other's name; Cargo rejects a mismatch rather than read
+// another package): no cap.
+func TestManifest_PathDependencyName(t *testing.T) {
+	ex := extract(t, "crates/a/Cargo.toml", "[package]\nname = \"a\"\n[dependencies]\nwrongname = { path = \"../d\" }\n")
+	equalLines(t, "references", refLines(ex), []string{
+		"depends_on crates/a/Cargo.toml#/dependencies/wrongname -> wrongname [crates/d/Cargo.toml#/package] in-repo @4:1",
+		"depends_on crates/a/Cargo.toml#/package -> wrongname [crates/a/Cargo.toml#/dependencies/wrongname] in-repo @4:1",
+	})
+}
+
+// TestManifest_InheritedWorkspaceAliases: workspace = true without a
+// known root names the member's own pseudo-identity of the key, which an
+// alias per ancestor directory (nearest first, cap Strong) reads as that
+// directory's workspace entry; one key inherited twice states its aliases
+// once; a root manifest has no ancestor in the repository.
+func TestManifest_InheritedWorkspaceAliases(t *testing.T) {
+	ex := extract(t, "a/b/c/Cargo.toml", "[package]\nname = \"c\"\n[dependencies]\nserde.workspace = true\n[dev-dependencies]\nserde.workspace = true\n")
+	var got []string
+	for _, a := range ex.Aliases {
+		got = append(got, fmt.Sprintf("%s -> %s cap=%s", a.Qualified, a.Target, a.ConfidenceCap))
+	}
+	equalLines(t, "aliases", got, []string{
+		"a/b/c/Cargo.toml#workspace-root/dependencies/serde -> a/b/Cargo.toml#/workspace/dependencies/serde cap=strong",
+		"a/b/c/Cargo.toml#workspace-root/dependencies/serde -> a/Cargo.toml#/workspace/dependencies/serde cap=strong",
+		"a/b/c/Cargo.toml#workspace-root/dependencies/serde -> Cargo.toml#/workspace/dependencies/serde cap=strong",
+	})
+	if ex := extract(t, "Cargo.toml", "[package]\nname = \"r\"\n[dependencies]\nserde.workspace = true\n"); len(ex.Aliases) != 0 {
+		t.Errorf("a root manifest's aliases: %+v", ex.Aliases)
+	}
+	// Windows file IDs: the targets are spelled with the file's separator.
+	ex = extract(t, `a\b\Cargo.toml`, "[package]\nname = \"b\"\n[dependencies]\nlog = { workspace = true }\n")
+	got = nil
+	for _, a := range ex.Aliases {
+		got = append(got, a.Qualified+" -> "+a.Target)
+	}
+	equalLines(t, "windows aliases", got, []string{
+		`a\b\Cargo.toml#workspace-root/dependencies/log -> a\Cargo.toml#/workspace/dependencies/log`,
+		`a\b\Cargo.toml#workspace-root/dependencies/log -> Cargo.toml#/workspace/dependencies/log`,
+	})
 }

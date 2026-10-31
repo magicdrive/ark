@@ -12,13 +12,15 @@ import (
 // verdict agrees with the decoders: a document Parse reads without an
 // error go-toml accepts (BurntSushi/toml accepts some TOML forbids), and
 // one both accept Parse reads without an error (what nests too deep for
-// the decoder to check aside).
+// the decoder to check aside). A leading byte order mark is read as
+// whitespace (go-toml is given it so).
 func FuzzParse(f *testing.F) {
 	for _, s := range []string{
 		"a = 1\n[b.c]\nd = [1, {e = 2}]\n[[f]]\ng.h = \"\"\"\nx\"\"\"\n",
 		"a.b = 1\n[a]\n", "[a.b.c]\n[a]\nb.d = 1\n", "a = {b = {}, b.c = 1}\n",
 		"[[a]]\n[a]\n", "x = {a = 1,\n b = 2,}\n", "d = 1985-06-18 17:04:07+12:60\n",
 		"'é' = 1\r\n\"\\u0000\" = 2\n", "[a]\nb.c = 1\n[a.b.d]\n",
+		"\xef\xbb\xbf[a]\r\nx = 1\r\n",
 	} {
 		f.Add([]byte(s))
 	}
@@ -49,8 +51,15 @@ func FuzzParse(f *testing.F) {
 				stack = append(stack, c)
 			}
 		}
+		// go-toml rejects a leading UTF-8 byte order mark, which Parse
+		// (as BurntSushi/toml) reads as no token: it is given the text
+		// Parse reads, the mark as three spaces.
+		text := src
+		if len(src) >= 3 && src[0] == 0xEF && src[1] == 0xBB && src[2] == 0xBF {
+			text = append([]byte("   "), src[3:]...)
+		}
 		var m map[string]any
-		goErr := gotoml.Unmarshal(src, &m)
+		goErr := gotoml.Unmarshal(text, &m)
 		if !hasErr && checked && goErr != nil {
 			t.Fatalf("Parse reads %q without an error, go-toml rejects it: %v", src, goErr)
 		}

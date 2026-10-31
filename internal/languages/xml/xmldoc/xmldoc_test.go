@@ -91,7 +91,7 @@ func TestNamespaceResolution(t *testing.T) {
 	if a.Name.URI != "u" || b.Name.URI != "w" || b.Attrs[1].Name.URI != "w" || b.Attrs[2].Name.URI != "" || b.Attrs[3].Name.URI != NamespaceXML {
 		t.Errorf("a %+v b %+v", a.Name, b)
 	}
-	if c.Name.URI != "?q" || strings.Join(codes(d), ",") != CodeUndefinedPrefix {
+	if c.Name.URI != UndeclaredURI("q") || strings.Join(codes(d), ",") != CodeUndefinedPrefix {
 		t.Errorf("c %+v, problems %v", c.Name, codes(d))
 	}
 	if len(d.Declarations) != 3 || d.Declarations[2].Prefix != "p" || d.Declarations[2].URI != "w" {
@@ -125,5 +125,47 @@ func TestStopped(t *testing.T) {
 	}
 	if d.Root.Span.End > len(d.Src) {
 		t.Errorf("span %v", d.Root.Span)
+	}
+}
+
+// TestUndeclaredURIUnspellable: the pseudo-namespace of an undeclared
+// prefix starts with U+0000, which no attribute value can hold (neither
+// raw nor as &#0;), so no declaration binds a prefix to one; and a
+// declared "?x" is not the pseudo-namespace of x.
+func TestUndeclaredURIUnspellable(t *testing.T) {
+	for _, src := range []string{"<r xmlns:p=\"\x00x\"/>", `<r xmlns:p="&#0;x"/>`, `<r xmlns:p="&#x0;x"/>`} {
+		d := Parse([]byte(src))
+		if len(d.Declarations) != 0 && d.Root != nil && !d.Stopped {
+			t.Errorf("%q: read as a declaration %+v", src, d.Declarations)
+		}
+	}
+	d := Parse([]byte(`<r xmlns:p="?x"><p:e/><x:e/></r>`))
+	if len(d.Root.Children) != 2 {
+		t.Fatalf("children: %+v", d.Root.Children)
+	}
+	p, x := d.Root.Children[0], d.Root.Children[1]
+	if p.Name.URI != "?x" || x.Name.URI == p.Name.URI || x.Index != 1 {
+		t.Errorf("p:e %+v, x:e %+v", p.Name, x.Name)
+	}
+	if prefix, ok := UndeclaredPrefix(x.Name.URI); !ok || prefix != "x" {
+		t.Errorf("UndeclaredPrefix(%q) = %q, %v", x.Name.URI, prefix, ok)
+	}
+	if _, ok := UndeclaredPrefix(p.Name.URI); ok {
+		t.Errorf("a declared URI read as undeclared")
+	}
+}
+
+// TestRepeatedDoctype: every DOCTYPE after the first is a diagnostic and
+// changes nothing of the reading (entity references stay as written).
+func TestRepeatedDoctype(t *testing.T) {
+	d := Parse([]byte(`<!DOCTYPE a><!DOCTYPE b><r><!DOCTYPE c>&e;</r>`))
+	n := 0
+	for _, p := range d.Problems {
+		if p.Code == CodeSyntax {
+			n++
+		}
+	}
+	if n != 2 || !d.Doctype || !d.Entities || d.Root == nil || d.Root.Text != "&e;" || d.Stopped {
+		t.Errorf("syntax problems %d, doc %+v, root %+v", n, d, d.Root)
 	}
 }

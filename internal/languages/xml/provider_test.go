@@ -658,3 +658,32 @@ func TestWindowsPaths(t *testing.T) {
 		`a\pom.xml::g:c resource_link -> a\m\n\pom.xml file in`,
 	})
 }
+
+// TestDuplicateXMLID: a second xml:id of one value is xml_duplicate_id
+// (a warning); both stay anchors. A repeated plain id is not reported.
+func TestDuplicateXMLID(t *testing.T) {
+	ex := extract(t, "d.xml", `<r><a xml:id="x"/><b xml:id="x"/><c xml:id="x"/><d id="y"/><e id="y"/><f xml:id="z"/><g id="z"/></r>`)
+	var got []string
+	for _, d := range ex.Diagnostics {
+		got = append(got, d.Code+" "+string(d.Severity))
+	}
+	equalLines(t, "diagnostics", got, []string{CodeDuplicateID + " warning", CodeDuplicateID + " warning"})
+	n := 0
+	for _, s := range ex.Symbols {
+		if s.Qualified == "d.xml#x" {
+			n++
+		}
+	}
+	if n != 3 {
+		t.Errorf("anchors d.xml#x: %d, want 3", n)
+	}
+}
+
+// TestUndeclaredPrefixIsNoURI: the pseudo-namespace of an undeclared
+// prefix x is not the namespace a declaration binds to the URI "?x".
+func TestUndeclaredPrefixIsNoURI(t *testing.T) {
+	ex := extract(t, "n.xml", `<r xmlns:p="?x"><p:e/><x:e/></r>`)
+	equalLines(t, "elements", symbolLines(ex, symbol.KindElement), []string{
+		"element n.xml#/r", "element n.xml#/r/p:e", "element n.xml#/r/x:e",
+	})
+}

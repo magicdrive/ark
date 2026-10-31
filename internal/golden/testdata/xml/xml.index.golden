@@ -502,3 +502,4 @@ edge pom.xml::com.example:parent -depends_on-> pom.xml::plugins::org.apache.mave
 edge pom.xml::com.example:parent -links-> app/pom.xml confidence=exact evidence=[qualified_identity:the file "app/pom.xml" is declared]
 edge pom.xml::com.example:parent -links-> core/pom.xml confidence=exact evidence=[qualified_identity:the file "core/pom.xml" is declared]
 ## diagnostics
+diag warning code=xml_duplicate_id "the xml:id \"dup\" is not unique in the document: a reference to it has more than one target" @docs/ids.xml:3:8-3:20

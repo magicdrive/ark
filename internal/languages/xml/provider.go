@@ -13,7 +13,9 @@
 //   - the IDs of its elements: an xml:id (XML's own ID attribute) is an
 //     anchor "<FileID>#<id>" named "#<id>"; an attribute "id" in no
 //     namespace is one too, at most a Candidate target (without a schema
-//     the attribute is an ID only by convention);
+//     the attribute is an ID only by convention); a second xml:id of one
+//     value is xml_duplicate_id (a plain id is not: nothing says it is
+//     unique);
 //   - its elements, by an XPath-like path from the root:
 //     "<FileID>#/project/dependencies/dependency[2]" (below);
 //   - their attributes, "<FileID>#/project/@id" (a namespace declaration
@@ -86,6 +88,12 @@ const (
 // CodeTruncated reports a file whose declarations or references go past
 // the provider's bounds.
 const CodeTruncated = "xml_truncated"
+
+// CodeDuplicateID reports a second xml:id of one value in a document
+// (xml:id requires its values to be unique). Both stay anchors, so a
+// reference to the value has two targets and is a Candidate. An id in no
+// namespace is not reported: without a schema nothing says it is unique.
+const CodeDuplicateID = "xml_duplicate_id"
 
 // The namespaces of the relations read.
 const (
@@ -195,8 +203,8 @@ func (e *extractor) label() {
 			return
 		}
 		l := want[uri]
-		if uri != "" && uri[0] == '?' {
-			l = uri[1:] // an undeclared prefix, as written
+		if prefix, ok := xmldoc.UndeclaredPrefix(uri); ok {
+			l = prefix // an undeclared prefix, as written
 		}
 		lbl := l
 		for n := 2; taken[lbl]; n++ {
@@ -225,6 +233,7 @@ func (e *extractor) step(n xmldoc.Name) string {
 
 // ids states the anchors of the document's IDs.
 func (e *extractor) ids() {
+	xmlIDs := map[string]bool{} // xml:id values of the document
 	e.d.Walk(func(n *xmldoc.Node) bool {
 		seen := map[string]bool{}
 		for i := range n.Attrs {
@@ -237,6 +246,13 @@ func (e *extractor) ids() {
 				continue
 			}
 			seen[v] = true
+			if a.Name.URI == xmldoc.NamespaceXML {
+				if xmlIDs[v] {
+					e.problem(xmldoc.Problem{Code: CodeDuplicateID, Start: a.Span.Start, End: a.Span.End,
+						Message: fmt.Sprintf("the xml:id %q is not unique in the document: a reference to it has more than one target", v)})
+				}
+				xmlIDs[v] = true
+			}
 			sig := "xml:id"
 			cap := ""
 			if a.Name.URI == "" {
