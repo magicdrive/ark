@@ -106,6 +106,7 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 	}
 
 	var text string
+	var spans []identifierSpan
 	if format == "json" {
 		b, err := impact.FormatJSON(result)
 		if err != nil {
@@ -114,9 +115,11 @@ func (h *ToolsHandler) analyzeChangeImpact(args map[string]interface{}) (*CallTo
 		text = string(b)
 	} else {
 		text = impact.Format(result)
+		spans = impactTextSpans(result, text)
 	}
 
 	return &CallToolResult{
-		Content: []Content{{Type: "text", Text: text}},
+		Content:     []Content{{Type: "text", Text: text}},
+		identifiers: spans,
 	}, nil
 }
