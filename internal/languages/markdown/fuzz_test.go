@@ -12,8 +12,8 @@ import (
 // every range lies within the source and is ordered, a symbol's bytes are
 // its location's, every name is a name (declname.IsName), every parent and
 // container is a declaration of the file, every qualified name is unique
-// within its kind but for code blocks (whose repeats the index numbers),
-// and a second extraction is the same.
+// within its kind but for anchors (an id may repeat; the index numbers its
+// repeats), and a second extraction is the same.
 func FuzzExtractMarkdown(f *testing.F) {
 	for _, s := range []string{
 		"# A\n\ntext [l](b.md#x) ![i](i.png) <https://x.y/z?q#f>\n\n## B\n```go\nx\n```\n",
@@ -23,6 +23,8 @@ func FuzzExtractMarkdown(f *testing.F) {
 		"[x]: /root.md\n[x]\n[^1]\n\n[^1]: n\n| a | b |\n|---|---|\n| [c](c.md) | ~~d~~ |\n",
 		"# \xff\x00\n[\xff](\xfe.md)\n``` \xff\n```\n",
 		"![a ![b](b.png)](c.png) [a [b](b.md)](c.md) [`](x.md)`](y.md)\n",
+		"\xef\xbb\xbf# T\n```go\n```\n```go\n```\n## password = hunter2secretvalue\n[x](/b.md#t)\n",
+		"|a|b|c|\n|-|-|-|\nx\n[d]: /u \"t\nt\"\n" + "\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t\t- a\n",
 	} {
 		f.Add([]byte(s))
 	}
@@ -44,7 +46,7 @@ func FuzzExtractMarkdown(f *testing.F) {
 					t.Fatalf("%s: symbol %s location %v is not its bytes' [%d,%d)", file, s.Qualified, s.Location.Range, s.StartByte, s.EndByte)
 				}
 				key := string(s.Kind) + " " + s.Qualified
-				if seen[key] && s.Kind != "code_block" && s.Kind != "anchor" {
+				if seen[key] && s.Kind != "anchor" {
 					t.Fatalf("%s: %s declared twice", file, key)
 				}
 				seen[key] = true

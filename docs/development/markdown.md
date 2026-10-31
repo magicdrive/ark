@@ -48,8 +48,9 @@ measured, and how. The rules themselves are in the headers of
   level or a higher one (trailing blank lines excluded); a heading inside a
   container block spans itself (its container ends what follows it). Each
   fenced code block with a language is a `code_block` named by the info
-  string's first word, `<container>::<language>` (repeats are told apart
-  by the index's ordinal); each raw HTML `id` (and `<a name>`) is an
+  string's first word, `<container>::<language>`; the n-th block of a
+  language in one container is `<container>::<language>[n]` (the first
+  keeps its name, as XML's `[n]` steps do); each raw HTML `id` (and `<a name>`) is an
   `anchor`, `<file>#<id>`, since a fragment names it as it names a heading.
   Paragraphs, lists, tables and blocks without a language are no symbols:
   they would be noise in every listing, and nothing links to them.
@@ -75,8 +76,9 @@ measured, and how. The rules themselves are in the headers of
     document, a stylesheet, a script, an asset (whose node the index makes
     for the link); `b.md#x` an `id_reference` to that Markdown file's anchor
     (a fragment of an HTML file is not stated: that is the HTML name space);
-  - `/a.md`: from the repository's root, as GitHub reads it, capped at
-    Strong (the index's root may be another directory);
+  - `/a.md`, `/a.md#x`: from the repository's root, as GitHub reads it,
+    capped at Strong (the index's root may be another directory), the
+    fragment's `id_reference` as the path's `resource_link`;
   - a path that leaves the root: a `resource_link` without identity,
     unresolved;
   - `https://host/p`, `//host/p`: a `resource_link` outside the repository,
@@ -94,6 +96,20 @@ measured, and how. The rules themselves are in the headers of
   format character): a heading whose text is none is named by its anchor,
   and declares nothing when that is none either; a link whose name would be
   none states nothing.
+- **Secrets.** The index shows a declaration's name and qualified name as
+  they are, and the MCP server masks names by a token's form only: a
+  heading `## password = hunter2…` would be named so, its anchor
+  `#password--hunter2…`, and a heading's anchor lowers a token's case
+  (`AKIA…` is `akia…`, which no rule matches). So a heading whose text —
+  before the anchor rule, and its name — or an HTML id whose value holds
+  what Ark's recommended secret policy masks in a text
+  (`secrets.Recommended().Find`, the content mode: assignments of a
+  secret's name, token formats, PEM blocks) declares no section or anchor:
+  its text is the document's, a link in it the section's around it, and a
+  fragment that names it is unresolved. The policy errs on the side of
+  masking: a heading `Token: rotate` (an assignment's shape) is no section
+  either. Reference names are not checked: a fragment is the file's text
+  as written, and a file's text is masked where it is shown.
 - **Code blocks are text.** Their content is never run, and not read as
   another language: a provider reads one file as its own language, and an
   embedded reading (as HTML does for inline scripts) would put the block's
@@ -114,34 +130,86 @@ measured, and how. The rules themselves are in the headers of
 ## The cost guard
 
 goldmark cannot be interrupted, and some inputs no author writes take it
-time that grows with their square (v1.8.6, measured on 16 KiB and 64 KiB,
-then 256 KiB; ×4 the input taking ×13–×33 the time):
+time (or memory) that grows faster than they do (v1.8.6; the first rows
+measured on 16 KiB and 64 KiB, then 256 KiB, ×4 the input taking ×13–×33
+the time; the last five by the v6.11 audit, in the `ark symbol` CLI):
 
-| Input | 64 KiB | |
-|---|---|---|
-| `> > > …` on one line (also `> - `, `1. > `, `* - + `) | 1.0–2.8 s | block parsing |
-| `*a*a…`, `_a_a…` (unmatched emphasis) | 0.4–2.1 s | inline |
-| `~~a~~a…`, ``` ``a``a… ``` | 0.1–0.4 s | inline |
-| `[a]([a](…` | 0.9–1.9 s | inline (link destinations) |
-| 64000 link reference definitions in one paragraph (450 KB) | 9.8 s | block (definitions) |
-| `[x]` on each of 16000 lines | 0.4 s | inline |
+| Input | Size | Time | |
+|---|---|---|---|
+| `> > > …` on one line (also `> - `, `1. > `, `* - + `) | 64 KiB | 1.0–2.8 s | block parsing |
+| `*a*a…`, `_a_a…` (unmatched emphasis) | 64 KiB | 0.4–2.1 s | inline |
+| `~~a~~a…`, ``` ``a``a… ``` | 64 KiB | 0.1–0.4 s | inline |
+| `[a]([a](…` | 64 KiB | 0.9–1.9 s | inline (link destinations) |
+| 64000 link reference definitions in one paragraph | 450 KB | 9.8 s | block (definitions) |
+| `[x]` on each of 16000 lines | 64 KiB | 0.4 s | inline |
+| a table of N columns whose N rows have one cell (`\|a\|a…`, `\|-\|-…`, `a`…), N = 4000 / 8000 | 24 / 48 KB | 5.8 s, 3.4 GB / 32 s, 15.9 GB | goldmark adds every missing cell |
+| 999 definitions, each title 200 lines | 414 KB | 55 s | definitions × the paragraph's lines |
+| `- a` indented 2i columns (tabs), i up to 4000 | 4 MB | 84 s | depth³ |
+| `[^a]: ` 32000 times on one line | 192 KB | 1.2 s (×4 for ×2) | footnote definitions nested on one line |
+| `\xef\xbb\xbf# Title` | | | the first heading is text |
+
+The cost is goldmark's own: a definition's label and title are found
+line by line from the paragraph's end (`text.blockReader.Value`), and each
+definition taken out moves the lines after it; every open container is
+asked to continue on each line, its indentation computed from the line's
+start, and the parser keeps a record per line and container until a blank
+line (`parser.parseBlocks`); a table row that lacks cells gets as many as
+the delimiter row has columns, the header row too.
 
 A time limit would make the result depend on the machine, so the guard
 (`guard.go`) bounds the input from its text alone, before goldmark reads
 it, rewriting bytes in place (never moving one, so every position stays the
 file's):
 
-- on one line, the block quote or list item marker after the 32nd is read
-  as `\`: the rest of the line is a paragraph's text (its links still
-  links);
-- in a paragraph, of the lines that start with `[`, every 1000th is read as
-  a blank line (a file with more than 1000 consecutive definitions loses
-  one in a thousand);
-- a block-only parse (no inline parsing, no definitions: linear) finds the
-  blocks whose inline content goldmark reads; a block costs its delimiters
-  (`*_~`` ` ``[]()<`) times its length; when the file's blocks cost more
-  than 2×10⁸ — the definitions then read, since they are no inline content
-  — the costliest blocks' delimiters are read as spaces until they do not.
+- on one line, the block quote, list item or footnote definition marker
+  (`[^label]:`, up to the first `]:`) after the 32nd, or past column 128 (a tab to the next multiple of 4, a marker's bytes
+  counted), is read as `\`: the rest of the line is a paragraph's text
+  (its links still links). Containers nest no deeper than their markers'
+  columns allow — a nested list item is indented to its parent's content,
+  a block quote's content follows its `>` — so the column bounds the
+  nesting a document builds line by line (at most 64 lists of 2 columns,
+  32 of 4), with spaces, tabs and block quotes alike. 128 columns lie far
+  past a written outline; a lower bound would not pay: goldmark's time per
+  byte is then about the same (each line is shorter, and there are more),
+  4 MiB of 64 nested lists repeated taking 4.7 s (and 32 levels, the bound
+  at 64 columns, 3.8 s) — a flat list of 4 MiB (`- a` on every line)
+  takes 3.2 s and 1.2 GB;
+- in a paragraph, a line is read as a blank line when it is the 1000th
+  that starts with `[` since the paragraph's start or the last such
+  rewrite (a file with more than 1000 consecutive definitions loses one in
+  a thousand), or — when the first line since then starts with `[`, the
+  one way goldmark reads definitions there — the 2000th line since then (a
+  definition whose title spans many lines; 1000 definitions with their
+  titles on the next line still fit). goldmark's reading of the document
+  then reads two paragraphs; the guard's own parse makes the lines after
+  it a paragraph of its own (`definitionSplitter`, a paragraph transformer
+  that runs before the definitions');
+- a table's delimiter row with more than 128 columns, or whose table would
+  make goldmark add more missing cells (to its header and its rows) than
+  what is left of the file's 131072, is no delimiter row: its first byte
+  that is no space is read as `\`, and the table is a paragraph.
+  `tableGuard` wraps goldmark's table transformer, in the guard's parse
+  and in goldmark's reading of the document alike: it reads the lines
+  goldmark's transformer will — after the paragraph's definitions are
+  taken out — as goldmark reads them (`isTableDelim`, `parseDelimiter`,
+  `parseRow`; `TestTableGuard_ReadsAsGoldmark` compares the two on 1540
+  cases), so no cell is made before the bound applies, in the guard's own
+  parse either. A paragraph's rows are read once: after one of its tables
+  is rewritten for its cells, every later one is. A table's cells that a
+  row has are bounded by its bytes, so the cells goldmark makes are then
+  linear in the file;
+- one parse without inline content (linear: its definitions and tables
+  bounded as above) finds the blocks whose inline content goldmark reads;
+  a block costs its delimiters (`*_~`` ` ``[]()<`) times its length; when
+  the file's blocks cost more than 2×10⁸ — the definitions taken out, since
+  they are no inline content — the costliest blocks' delimiters are read as
+  spaces until they do not.
+
+Before them, a byte order mark that starts the file is read as three line
+breaks: blank lines before the first block, which CommonMark ignores, so
+the first heading is one and no line gains indentation (as spaces, a
+`  - a` after it would be an indented code block); front matter after it
+is skipped as without it.
 
 Each rewrite is reported (`markdown_degenerate`, a warning, once per kind,
 at the first). The budgets lie far above written documents: over the 5636
@@ -149,8 +217,28 @@ Markdown files of the Go module cache (below), the guard rewrote nothing,
 the costliest file (aws-sdk-go-v2's CHANGELOG.md, 1.3 MB) costs 6.5×10⁶ —
 a thirtieth of the budget — and the costliest block 2.4×10⁶. With the
 guard, every shape above, at 256 KiB and 1 MiB, takes time linear in its
-size (`TestPerformance_Linear`, ×3.4–×4.3 for ×4 the input), the slowest
-1 MiB shape 0.33 s.
+size (`TestPerformance_Linear`: ×2.4–×4.2 for ×4 the input, the slowest
+1 MiB shape — lists nested by tabs — 0.83 s), and every shape at the
+bound of 4 MiB takes 0.05–4.7 s (table below).
+
+| 4 MiB input | Time | Max RSS |
+|---|---|---|
+| a table of 699050 columns, rows of one cell (`table_wide`) | 0.52 s | 231 MB |
+| 128 columns, 2 M rows of one cell (`table128_short_rows`) | 1.49 s | 814 MB |
+| 128 columns, full rows (a dense table, no rewrite) | 1.76 s | 1055 MB |
+| 128-column tables after a definition, repeated | 0.97 s | 591 MB |
+| definitions, each title 2000 lines (`defs_title_long`) | 1.61 s | 974 MB |
+| definitions on every line | 0.53 s | 255 MB |
+| `[^a]: ` on one line / 21 a line / nested by indentation | 0.03 / 0.55 / 0.47 s | 23 / 176 / 123 MB |
+| `- a` indented 2i columns by tabs / spaces (`list_tab_deep`) | 3.30 / 1.67 s | 80 / 45 MB |
+| 64 nested lists (the bound) repeated / then indented lines | 4.64 / 4.52 s | 1395 / 891 MB |
+| block quotes and lists, tabs and spaces mixed | 0.05 s | 34 MB |
+| for comparison: `- a` on every line (a flat list) | 3.18 s | 1053 MB |
+| for comparison: prose with links and code spans | 0.59 s | 208 MB |
+
+(`ark symbol <file>`, darwin/amd64, the audit's inputs at their sizes all
+in 3.2 s at most: `table4000.md`, 24 KB, from 6.56 s and 5.0 GB to
+0.02 s and 17 MB; `listtab4000.md`, 4 MB, from 84 s to 3.14 s.)
 
 Other bounds: a file over 4 MiB declares itself only
 (`markdown_too_large`); a file states at most 5000 declarations and 20000
@@ -182,6 +270,20 @@ and read all the same.
   order, Windows separators): all killed. One survived its first run (an
   anchor a heading took before its repeat — "a-1", "a", "a" — is skipped);
   `TestSlug_Duplicates` now pins it.
+  The v6.11 audit's fixes (the table, definition and indentation bounds,
+  the byte order mark, secrets in headings and ids, root fragments capped
+  at Strong, code blocks' ordinals): 12 mutants, one of each decision —
+  all killed; two survived their first run (a header row with fewer
+  cells than the delimiter row, whose table the budget then missed, and
+  the header row's own missing cells), which `TestGuard_TablePadding` now
+  pins.
+- **CommonMark.** goldmark's reading of the document is assembled from
+  GFM's extensions with tables behind `tableGuard`: on the 652 examples of
+  the specification (goldmark's `_test/spec.json`) and five more (tables,
+  footnotes, a byte order mark), its HTML is the same as that of
+  `extension.GFM` and `extension.Footnote` but for front matter (two
+  examples, by design) and the byte order mark; goldmark's own `TestSpec`
+  passes all 652.
 
 ## Remaining work
 

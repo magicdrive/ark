@@ -56,6 +56,7 @@ type doc struct {
 	links    []link
 	codes    []codeBlock
 	ids      []htmlID
+	tables   tableGuardState // what tableGuard rewrote in this reading
 }
 
 // md is goldmark's CommonMark parser with the GFM extensions and footnotes,
@@ -71,12 +72,16 @@ func newMarkdown() goldmark.Markdown {
 			inline[i].Value = &linkEnds{ip}
 		}
 	}
+	// GFM's extensions (extension.GFM) but its tables, read through the
+	// cost guard's tableGuard (guard.go): the guard has already rewritten
+	// what it bounds, so it rewrites nothing more here.
 	p := parser.NewParser(
 		parser.WithBlockParsers(parser.DefaultBlockParsers()...),
 		parser.WithInlineParsers(inline...),
-		parser.WithParagraphTransformers(parser.DefaultParagraphTransformers()...),
+		parser.WithParagraphTransformers(paragraphTransformers()...),
+		parser.WithASTTransformers(util.Prioritized(extension.NewTableASTTransformer(), 0)),
 	)
-	return goldmark.New(goldmark.WithParser(p), goldmark.WithExtensions(extension.GFM, extension.Footnote))
+	return goldmark.New(goldmark.WithParser(p), goldmark.WithExtensions(extension.Linkify, extension.Strikethrough, extension.TaskList, extension.Footnote))
 }
 
 var endsKey = parser.NewContextKey()
@@ -113,6 +118,9 @@ func parse(src []byte) *doc {
 	root := md.Parser().Parse(text.NewReader(src), parser.WithContext(pc))
 	ends, _ := pc.Get(endsKey).(map[ast.Node]int)
 	d := &doc{}
+	if st, ok := pc.Get(tableGuardKey).(*tableGuardState); ok {
+		d.tables = *st
+	}
 	_ = ast.Walk(root, func(n ast.Node, entering bool) (ast.WalkStatus, error) {
 		if !entering {
 			return ast.WalkContinue, nil

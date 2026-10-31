@@ -160,6 +160,7 @@ func TestLinks_Destinations(t *testing.T) {
 		{"sub/my%20doc.md", `resource_link "my doc.md" -> d/sub/my doc.md [file repo]`},
 		{"<sub/my doc.md>", `resource_link "my doc.md" -> d/sub/my doc.md [file repo]`},
 		{"/docs/x.md", `resource_link "x.md" -> docs/x.md [file repo cap=strong]`},
+		{"/docs/x.md#sec-1", `id_reference "sec-1" -> docs/x.md#sec-1 [repo cap=strong kinds=section,anchor]`},
 		{"page.html#id", `resource_link "page.html" -> d/page.html [file repo]`},
 		{"img/a.SVG", `resource_link "a.SVG" -> d/img/a.SVG [file repo kinds=asset]`},
 		{"styles.css", `resource_link "styles.css" -> d/styles.css [file repo]`},
@@ -397,4 +398,72 @@ func TestFrontMatter(t *testing.T) {
 	if y := extract(t, "b.md", "---\n# Not front matter\n"); len(sections(y)) != 1 {
 		t.Errorf("an unclosed front matter is Markdown: %v", sections(y))
 	}
+}
+
+// TestCodeBlocks_Repeats: the n-th code block of a language in one section
+// is "<section>::<language>[n]", the first keeping its name; another
+// language, or another section, counts apart.
+func TestCodeBlocks_Repeats(t *testing.T) {
+	src := "# Foo\n\n```go\na\n```\n\n```go\nb\n```\n\n```py\nc\n```\n\n```go\nd\n```\n\n## Bar\n\n```go\ne\n```\n"
+	x := extract(t, "x.md", src)
+	var got []string
+	for _, l := range symbolLines(x) {
+		if strings.HasPrefix(l, "code_block ") {
+			got = append(got, l)
+		}
+	}
+	equalLines(t, "code blocks", got, []string{
+		`code_block x.md#foo::go "go" parent=x.md#foo sig= @3:1-5:4`,
+		`code_block x.md#foo::go[2] "go" parent=x.md#foo sig= @7:1-9:4`,
+		`code_block x.md#foo::py "py" parent=x.md#foo sig= @11:1-13:4`,
+		`code_block x.md#foo::go[3] "go" parent=x.md#foo sig= @15:1-17:4`,
+		`code_block x.md#bar::go "go" parent=x.md#bar sig= @21:1-23:4`,
+	})
+}
+
+// TestCodeBlocks_RepeatsAreUnique: a language spelled as another's ordinal
+// ("go[2]") takes no other block's name.
+func TestCodeBlocks_RepeatsAreUnique(t *testing.T) {
+	x := extract(t, "x.md", "```go[2]\n```\n```go\n```\n```go\n```\n```go\n```\n```go[2]\n```\n")
+	var got []string
+	for _, s := range x.Symbols {
+		if s.Kind == symbol.KindCodeBlock {
+			got = append(got, s.Qualified+" "+s.Name)
+		}
+	}
+	equalLines(t, "code blocks", got, []string{"x.md::go[2] go[2]", "x.md::go go", "x.md::go[3] go", "x.md::go[4] go", "x.md::go[2][2] go[2]"})
+}
+
+// TestSecrets_HeadingsAndIDs: a heading or an HTML id whose text holds what
+// Ark's recommended secret policy masks — an assignment of a secret's
+// name, a token format before an anchor lowers its case — declares no
+// section or anchor: no declaration's name or qualified name holds it, its
+// text is the document's (a link in it is contained by the section
+// around); the other headings, their anchors' repeats included, are as
+// before.
+func TestSecrets_HeadingsAndIDs(t *testing.T) {
+	src := "# Setup\n\n## password = hunter2secretvalue\n\n[in](in.md)\n\n## aws AK" + "IAIOSFODNN7EXAMPLE\n\n<div id=\"api_key=hunter3secretvalue\"></div>\n<a id=\"kept\"></a>\n\n## Password reset\n\n# Setup\n\n[a](#password--hunter2secretvalue) [b](#aws-akiaiosfodnn7example)\n"
+	x := extract(t, "a.md", src)
+	for _, s := range x.Symbols {
+		for _, leak := range []string{"hunter2", "hunter3", "AKIA", "akia"} {
+			if strings.Contains(s.Name, leak) || strings.Contains(s.Qualified, leak) {
+				t.Errorf("%s %q (%s) shows a secret", s.Kind, s.Name, s.Qualified)
+			}
+		}
+	}
+	equalLines(t, "sections", sections(x), []string{
+		`section a.md#setup "Setup" parent=a.md sig=h1 @1:1-12:18`,
+		`section a.md#password-reset "Password reset" parent=a.md#setup sig=h2 @12:1-12:18`,
+		`section a.md#setup-1 "Setup" parent=a.md sig=h1 @14:1-16:66`,
+	})
+	equalLines(t, "links", refsOf(x, "resource_link"), []string{
+		`resource_link "in.md" -> in.md [file repo] in a.md#setup @5:1-5:12`,
+	})
+	var anchors []string
+	for _, l := range symbolLines(x) {
+		if strings.HasPrefix(l, "anchor ") {
+			anchors = append(anchors, l)
+		}
+	}
+	equalLines(t, "anchors", anchors, []string{`anchor a.md#kept "kept" parent=a.md#setup sig= @10:1-10:14`})
 }

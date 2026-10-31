@@ -14,7 +14,10 @@ import (
 
 // TestPerformance_Linear: extraction time grows linearly with the input —
 // a huge line, many headings, many links, deep block quotes and lists,
-// unbalanced brackets and emphasis delimiters, many reference definitions:
+// lists nested line by line (spaces, tabs, block quotes), unbalanced
+// brackets and emphasis delimiters, many reference definitions and
+// definitions whose titles span many lines, wide tables and tables whose
+// rows lack cells:
 // four times the input takes well under sixteen times as long (a quadratic
 // cost would take sixteen). Each shape is measured at n and 4n, best of
 // three.
@@ -35,6 +38,24 @@ func TestPerformance_Linear(t *testing.T) {
 		"definitions":         func(n int) string { return refDefs(n / 16) },
 		"html ids":            func(n int) string { return strings.Repeat("<a id=\"x\"></a>\n", n/16) },
 		"code fences":         func(n int) string { return strings.Repeat("```go\nx\n```\n", n/12) },
+		"footnotes on a line": func(n int) string { return strings.Repeat("[^a]: ", n/6) + "x\n" },
+		"wide table":          func(n int) string { return wideTable(n / 6) },
+		"short table rows": func(n int) string {
+			return wideTable(maxTableColumns)[:4*maxTableColumns+4] + strings.Repeat("a\n", n/2)
+		},
+		"tables in defs": func(n int) string {
+			return strings.Repeat("[d]: d.md\n"+wideTable(maxTableColumns)[:4*maxTableColumns+4]+strings.Repeat("a\n", 500)+"\n", n/1530)
+		},
+		"definition titles": func(n int) string { return strings.Repeat("[d]: /u \""+strings.Repeat("t\n", 200)+"\"\n", n/410) },
+		"unclosed titles":   func(n int) string { return strings.Repeat("[d]: /u \"\nt\nt\n", n/16) },
+		"lists by tabs": func(n int) string {
+			return stairs(n, func(i int) string { return strings.Repeat("\t", i/2) + strings.Repeat("  ", i%2) + "- a\n" })
+		},
+		"lists by spaces": func(n int) string { return stairs(n, func(i int) string { return strings.Repeat(" ", 2*i) + "- a\n" }) },
+		"quotes and lists": func(n int) string {
+			return stairs(n, func(i int) string { return strings.Repeat("> ", min(i, 20)) + strings.Repeat("\t", i/2) + "1. a\n" })
+		},
+		"capped lists": func(n int) string { return strings.Repeat(outline(maxIndent/4)+"\n", n/2466) },
 	}
 	n := 1 << 18
 	if v, err := strconv.Atoi(os.Getenv("ARK_MD_PERF_N")); err == nil {
@@ -82,6 +103,22 @@ func refDefs(n int) string {
 		b.WriteString("[r")
 		b.WriteString(strings.Repeat("x", i%7))
 		b.WriteString("]: a.md\n[r]\n")
+	}
+	return b.String()
+}
+
+// wideTable is a table of cols columns whose rows have one cell each: the
+// cells goldmark adds grow with cols times its rows.
+func wideTable(cols int) string {
+	return "|" + strings.Repeat("a|", cols) + "\n|" + strings.Repeat("-|", cols) + "\n" + strings.Repeat("a\n", cols)
+}
+
+// stairs is line(0), line(1), … up to n bytes: lines nested one level more
+// each (their size, and so the depth, grows with the square root of n).
+func stairs(n int, line func(i int) string) string {
+	var b strings.Builder
+	for i := 0; b.Len() < n; i++ {
+		b.WriteString(line(i))
 	}
 	return b.String()
 }

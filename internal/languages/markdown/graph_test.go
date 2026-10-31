@@ -3,7 +3,10 @@ package markdown
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 
 	"github.com/magicdrive/ark/internal/index"
@@ -115,4 +118,39 @@ func TestGraph_NonEdgesAreAccountedFor(t *testing.T) {
 			t.Errorf("%s: unattributed %d in, %d out", s.Qualified, in, out)
 		}
 	}
+}
+
+// TestGraph_RootAnchorsAndSecrets: a fragment of a file named from the
+// repository's root ("/docs/b.md#x") reaches its section at Strong at
+// most, as a path from the root does; a fragment that names a heading
+// whose text holds a secret — declared as no section — is unresolved.
+func TestGraph_RootAnchorsAndSecrets(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, src string) {
+		p := filepath.Join(dir, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(src), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("docs/a.md", "# A\n\n[root](/docs/b.md#sec-1) [secret](b.md#password--hunter2secretvalue)\n")
+	write("docs/c.md", "# C\n\n[rel](b.md#sec-1)\n")
+	write("docs/b.md", "# B\n\n## Sec 1\n\n## password = hunter2secretvalue\n")
+	idx := buildIndex(t, dir)
+	var edges []string
+	for _, l := range edgeLines(idx) {
+		if !strings.Contains(l, "-contains->") {
+			edges = append(edges, l)
+		}
+	}
+	sep := string(filepath.Separator)
+	equalLines(t, "edges", edges, []string{
+		"docs" + sep + "a.md#a -references-> docs" + sep + "b.md#sec-1 strong",
+		"docs" + sep + "c.md#c -references-> docs" + sep + "b.md#sec-1 exact",
+	})
+	equalLines(t, "unresolved", unresolvedLines(idx), []string{
+		"docs" + sep + "a.md#a: password--hunter2secretvalue id_reference unresolved",
+	})
 }

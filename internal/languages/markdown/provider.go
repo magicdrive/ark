@@ -17,7 +17,8 @@
 //     itself. A document contains its sections, a section the sections
 //     under it (reference.KindContains);
 //   - a code block for each fenced code block whose info string names a
-//     language, named by it ("<container>::<language>"); its content is
+//     language, named by it ("<container>::<language>", the n-th of a
+//     language in one container "<container>::<language>[n]"); its content is
 //     never read as code, and a block without a language, an indented code
 //     block or a paragraph declares nothing;
 //   - an anchor for each id (and <a name>) of raw HTML, "<FileID>#<id>":
@@ -46,6 +47,12 @@
 // a text that is none names nothing (a heading's anchor stands in for its
 // text when the anchor is a name).
 //
+// Secrets. A heading or an HTML id whose text holds what Ark's recommended
+// secret policy masks (internal/secrets: "password = …", a token format)
+// declares nothing — no name or qualified name shows it; a fragment that
+// names it is unresolved. A link from the repository's root ("/b.md",
+// "/b.md#x") is capped at Strong.
+//
 // Bounds. A file over maxBytes declares itself only (markdown_too_large);
 // a file states at most maxSymbols declarations and maxRefs references
 // (markdown_truncated past them); the cost guard (guard.go) bounds the
@@ -67,6 +74,7 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/internal/declname"
 	"github.com/magicdrive/ark/internal/reference"
+	"github.com/magicdrive/ark/internal/secrets"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
@@ -174,26 +182,40 @@ func (e *extractor) run() {
 		})
 	}
 	g := guard(e.src)
+	d := parse(g.src)
+	g.tables.merge(d.tables)
 	for _, p := range g.problems() {
 		e.diags = append(e.diags, language.Diagnostic{
 			Severity: language.SeverityWarning, Code: CodeDegenerate, Message: p.message, Location: e.loc(p.start, p.end),
 		})
 	}
-	d := parse(g.src)
 	e.headings(d.headings)
+	count := map[string]int{} // code blocks per container and language
+	taken := map[string]bool{}
 	for _, c := range d.codes {
 		if c.lang == "" || !declname.IsName(c.lang) {
 			continue
 		}
 		parent := e.container(c.start)
-		q := parent + "::" + c.lang
+		base := parent + "::" + c.lang
+		// The n-th block of a language in a container is
+		// "…::<language>[n]" (the first keeps its name; an ordinal a
+		// language named "go[2]" took is skipped).
+		n, q := count[base]+1, base
+		for n > 1 && taken[base+"["+strconv.Itoa(n)+"]"] || n == 1 && taken[base] {
+			n++
+		}
+		if n > 1 {
+			q = base + "[" + strconv.Itoa(n) + "]"
+		}
+		count[base], taken[q] = n, true
 		if declname.IsName(q) {
 			e.symbol(c.lang, q, symbol.KindCodeBlock, span{c.start, c.end}, parent, "")
 		}
 	}
 	for _, id := range d.ids {
 		q := doc + "#" + id.id
-		if !declname.IsName(id.id) || !declname.IsName(q) {
+		if !declname.IsName(id.id) || !declname.IsName(q) || secret(id.id) {
 			continue
 		}
 		e.symbol(id.id, q, symbol.KindAnchor, span{id.start, id.end}, e.container(id.start), "")
@@ -238,7 +260,7 @@ func (e *extractor) headings(hs []heading) {
 		if !declname.IsName(name) {
 			name = anchor
 		}
-		if !declname.IsName(name) || !declname.IsName(q) {
+		if !declname.IsName(name) || !declname.IsName(q) || secret(h.text) || secret(name) {
 			continue
 		}
 		parent, pq := -1, doc
@@ -296,11 +318,11 @@ func (e *extractor) link(l link) {
 	d := readDest(e.slash, l.dest)
 	switch d.kind {
 	case destAnchor:
-		e.idRef(string(e.file), d.frag, container, sp)
+		e.idRef(string(e.file), d.frag, container, sp, false)
 	case destFile:
 		ext := strings.ToLower(path.Ext(d.path))
 		if d.frag != "" && (ext == ".md" || ext == ".markdown") {
-			e.idRef(e.filePath(d.path), d.frag, container, sp)
+			e.idRef(e.filePath(d.path), d.frag, container, sp, d.fromRoot)
 			return
 		}
 		name := path.Base(d.path)
@@ -332,16 +354,31 @@ func (e *extractor) link(l link) {
 }
 
 // idRef states a reference to the anchor frag of the Markdown file whose
-// FileID is file.
-func (e *extractor) idRef(file, frag, container string, sp span) {
+// FileID is file; fromRoot, a file named from the repository's root
+// ("/b.md#x"), caps it at Strong as a path link from the root is.
+func (e *extractor) idRef(file, frag, container string, sp span, fromRoot bool) {
 	q := file + "#" + frag
 	if !declname.IsName(frag) || !declname.IsName(q) {
 		return
 	}
-	e.ref(language.ReferenceDraft{
+	r := language.ReferenceDraft{
 		Name: frag, Kind: string(reference.KindIDReference), Container: container,
 		NameQualified: q, IdentityInRepository: true, TargetKinds: anchorKinds,
-	}, sp)
+	}
+	if fromRoot {
+		r.ConfidenceCap = "strong"
+	}
+	e.ref(r, sp)
+}
+
+// secret reports whether text holds what Ark's recommended secret policy
+// masks in a text ("password = …", a known token format as written,
+// before an anchor lowers its case). A heading or an HTML id that does is
+// declared as no section or anchor: the index shows a declaration's name
+// and qualified name as they are (the MCP server masks names by a token's
+// form only), and a fragment that names it is unresolved.
+func secret(text string) bool {
+	return len(secrets.Recommended().Find(text, secrets.Mode{})) > 0
 }
 
 // filePath spells a slash-separated repository path as the index's file
