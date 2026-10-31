@@ -1,7 +1,13 @@
 ## stats
-files=7 symbols=34 references=36 relations=18 skipped=0
+files=8 symbols=39 references=40 relations=22 skipped=0
 lang rust=7
+lang toml=1
 ## symbols
+symbol Cargo.toml kind=document lang=toml qualified="Cargo.toml" receiver="" exported=true @Cargo.toml:1:1-5:1
+symbol golden kind=package lang=toml qualified="Cargo.toml#/package" receiver="" exported=true @Cargo.toml:1:1-4:17
+symbol /package/name kind=key lang=toml qualified="Cargo.toml#/package/name" receiver="" exported=true @Cargo.toml:2:1-2:16
+symbol /package/version kind=key lang=toml qualified="Cargo.toml#/package/version" receiver="" exported=true @Cargo.toml:3:1-3:18
+symbol /package/edition kind=key lang=toml qualified="Cargo.toml#/package/edition" receiver="" exported=true @Cargo.toml:4:1-4:17
 symbol main kind=function lang=rust qualified="{scripts/gen.rs}::main" receiver="" exported=false @scripts/gen.rs:1:1-3:2
 symbol helper kind=function lang=rust qualified="{scripts/gen.rs}::helper" receiver="" exported=false @scripts/gen.rs:5:1-5:15
 symbol usage kind=function lang=rust qualified="src/bin/cli.rs/crate::usage" receiver="" exported=false @src/bin/cli.rs:3:1-3:14
@@ -37,6 +43,10 @@ symbol send kind=method lang=rust qualified="<crate::net::client::Client as crat
 symbol fixture kind=function lang=rust qualified="tests/it.rs/crate::fixture" receiver="" exported=false @tests/it.rs:1:1-1:26
 symbol connects kind=function lang=rust qualified="tests/it.rs/crate::connects" receiver="" exported=false @tests/it.rs:4:1-7:2
 ## references
+ref Cargo.toml#/package kind=contains container="Cargo.toml" receiver="" name_qualified="Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:1:2-1:9
+ref Cargo.toml#/package/name kind=contains container="Cargo.toml#/package" receiver="" name_qualified="Cargo.toml#/package/name" identity_in_repository=true call=false @Cargo.toml:2:1-2:5
+ref Cargo.toml#/package/version kind=contains container="Cargo.toml#/package" receiver="" name_qualified="Cargo.toml#/package/version" identity_in_repository=true call=false @Cargo.toml:3:1-3:8
+ref Cargo.toml#/package/edition kind=contains container="Cargo.toml#/package" receiver="" name_qualified="Cargo.toml#/package/edition" identity_in_repository=true call=false @Cargo.toml:4:1-4:8
 ref helper kind=call container="{scripts/gen.rs}::main" receiver="" call=true @scripts/gen.rs:2:5-2:11
 ref connect kind=import container="" receiver="golden" call=false @src/bin/cli.rs:1:5-1:20
 ref usage kind=call container="src/bin/cli.rs/crate::main" receiver="" name_qualified="src/bin/cli.rs/crate::usage" identity_in_repository=true call=true @src/bin/cli.rs:6:5-6:10
@@ -77,6 +87,10 @@ ref connect kind=call container="tests/it.rs/crate::connects" receiver="golden" 
 edge <crate::net::client::Client as crate::net::Transport> -implements-> crate::net::Transport confidence=exact evidence=[qualified_identity:"crate::net::Transport" is declared at src/net/mod.rs]
 edge <crate::net::client::Client as crate::net::Transport> -uses_type-> crate::net::client::Client confidence=exact evidence=[qualified_identity:"crate::net::client::Client" is declared at src/net/client.rs]
 edge <crate::net::client::Client as crate::net::Transport>::send -calls-> crate::net::client::Client::send confidence=exact evidence=[qualified_identity:"crate::net::client::Client::send" is declared at src/net/client.rs]
+edge Cargo.toml -contains-> Cargo.toml#/package confidence=exact evidence=[qualified_identity:"Cargo.toml#/package" is declared at Cargo.toml]
+edge Cargo.toml#/package -contains-> Cargo.toml#/package/edition confidence=exact evidence=[qualified_identity:"Cargo.toml#/package/edition" is declared at Cargo.toml]
+edge Cargo.toml#/package -contains-> Cargo.toml#/package/name confidence=exact evidence=[qualified_identity:"Cargo.toml#/package/name" is declared at Cargo.toml]
+edge Cargo.toml#/package -contains-> Cargo.toml#/package/version confidence=exact evidence=[qualified_identity:"Cargo.toml#/package/version" is declared at Cargo.toml]
 edge crate::connect -calls-> crate::check! confidence=exact evidence=[qualified_identity:"crate::check!" is declared at src/lib.rs]
 edge crate::connect -calls-> crate::net::client::Client::new confidence=exact evidence=[qualified_identity:"crate::net::client::Client::new" is declared at src/net/client.rs]
 edge crate::connect -calls-> crate::net::client::Config::default_for confidence=exact evidence=[qualified_identity:"crate::net::client::Config::default_for" is declared at src/net/client.rs]

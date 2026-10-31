@@ -30,8 +30,8 @@
 //     stylesheet, a script, an asset —, "b.md#x" an id reference to that
 //     Markdown file's anchor x; a path that leaves the repository a
 //     resource link without identity (unresolved); a URL with an authority
-//     a resource link outside the repository, named by its scheme, host and
-//     path only.
+//     a resource link outside the repository, named by its scheme and host
+//     only (a webhook's path is its secret).
 //
 // Identity. Every file is IdentityOnly: a reference reaches a declaration
 // only by its qualified identity, never by a name match — a section

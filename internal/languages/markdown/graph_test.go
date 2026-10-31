@@ -104,7 +104,7 @@ func TestGraph_NonEdgesAreAccountedFor(t *testing.T) {
 		"README.md#example-project: ../outside.md resource_link unresolved",
 		"README.md#example-project: docs resource_link unresolved",
 		"README.md#example-project: gone.md resource_link unresolved",
-		"README.md#example-project: https://example.com/path resource_link outside_repository",
+		"README.md#example-project: https://example.com resource_link outside_repository",
 		"README.md#example-project: main.go resource_link unresolved",
 		"README.md#example-project: missing.png resource_link unresolved",
 		"README.md#example-project: nowhere id_reference unresolved",

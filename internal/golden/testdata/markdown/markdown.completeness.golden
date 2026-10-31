@@ -1,0 +1,10 @@
+symbol README.md#example-project unattributed_in=0 unattributed_out=0 unresolved=6 outside=1
+  no_candidate nowhere kind=id_reference receiver="" reason=unresolved @README.md:4:58-4:77
+  no_candidate missing.png kind=resource_link receiver="" reason=unresolved @README.md:6:23-6:56
+  no_candidate gone.md kind=resource_link receiver="" reason=unresolved @README.md:9:3-9:28
+  no_candidate ../outside.md kind=resource_link receiver="" reason=unresolved @README.md:9:37-9:61
+  no_candidate main.go kind=resource_link receiver="" reason=unresolved @README.md:10:5-10:27
+  no_candidate docs kind=resource_link receiver="" reason=unresolved @README.md:10:33-10:56
+  no_candidate https://example.com kind=resource_link receiver="" reason=outside_repository @README.md:11:1-11:56
+symbol docs/adr/0001-markdown.md#context unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate removed kind=id_reference receiver="" reason=unresolved @docs/adr/0001-markdown.md:6:21-6:56

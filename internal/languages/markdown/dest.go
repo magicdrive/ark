@@ -21,7 +21,7 @@ import (
 //   - a path from the root ("/docs/a.md"): GitHub reads it from the
 //     repository's root, which Ark takes to be the index's root;
 //   - a URL with an authority ("https://host/p", "//host/p"): a resource
-//     outside the repository, named by its scheme, host and path only;
+//     outside the repository, named by its scheme and host only;
 //   - anything else (mailto:, javascript:, another scheme; a path that
 //     leaves the repository; an escaped slash, a backslash, an invalid
 //     escape) names nothing Ark represents.
@@ -40,7 +40,7 @@ type dest struct {
 	path     string // destFile: the file's path from the root, slash-separated; destOutside: the path as written
 	frag     string // destAnchor, destFile: the anchor (percent-escapes decoded)
 	fromRoot bool   // destFile: written from the root ("/a.md")
-	url      string // destExternal: scheme://host/path
+	url      string // destExternal: scheme://host
 }
 
 // readDest reads the destination v of a link written in file (its path
@@ -121,9 +121,9 @@ func fragment(f string) (string, bool) {
 	return d, true
 }
 
-// external names a URL outside the repository by its scheme, host and path
-// alone: credentials, the query and the fragment — where a token may be —
-// are no part of the name. A URL without an authority (mailto:, tel:,
+// external names a URL outside the repository by its scheme and host
+// alone: credentials, the path, the query and the fragment — where a token
+// may be (a webhook's path is its secret) — are no part of the name. A URL without an authority (mailto:, tel:,
 // javascript:, data:) names nothing.
 func external(v string) dest {
 	if strings.HasPrefix(v, "//") {
@@ -138,10 +138,7 @@ func external(v string) dest {
 	if scheme == "" || strings.ContainsAny(host, "@ ") {
 		return dest{}
 	}
-	name := scheme + "://" + host + u.EscapedPath()
-	if !declname.IsName(name) {
-		name = scheme + "://" + host
-	}
+	name := scheme + "://" + host
 	if !declname.IsName(name) {
 		return dest{}
 	}

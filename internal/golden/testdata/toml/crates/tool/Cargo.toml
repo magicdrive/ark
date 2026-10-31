@@ -1,0 +1,5 @@
+package.name = "tool"
+package.version = "0.1.0"
+
+[dependencies]
+serde.workspace = true

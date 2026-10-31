@@ -1,0 +1,369 @@
+# file: Cargo.toml
+## symbols
+symbol Cargo.toml kind=document qualified="Cargo.toml" parent="" receiver="" exported=true @Cargo.toml:1:1-10:1
+symbol /workspace kind=table qualified="Cargo.toml#/workspace" parent="Cargo.toml" receiver="" exported=true @Cargo.toml:2:1-9:36
+symbol /workspace/members kind=key qualified="Cargo.toml#/workspace/members" parent="Cargo.toml#/workspace" receiver="" exported=true @Cargo.toml:3:1-3:102
+symbol /workspace/exclude kind=key qualified="Cargo.toml#/workspace/exclude" parent="Cargo.toml#/workspace" receiver="" exported=true @Cargo.toml:4:1-4:25
+symbol /workspace/resolver kind=key qualified="Cargo.toml#/workspace/resolver" parent="Cargo.toml#/workspace" receiver="" exported=true @Cargo.toml:5:1-5:15
+symbol /workspace/dependencies kind=table qualified="Cargo.toml#/workspace/dependencies" parent="Cargo.toml#/workspace" receiver="" exported=true @Cargo.toml:7:1-9:36
+symbol serde kind=dependency qualified="Cargo.toml#/workspace/dependencies/serde" parent="Cargo.toml#/workspace/dependencies" receiver="" exported=true @Cargo.toml:8:1-8:51
+symbol /workspace/dependencies/serde/version kind=key qualified="Cargo.toml#/workspace/dependencies/serde/version" parent="Cargo.toml#/workspace/dependencies/serde" receiver="" exported=true @Cargo.toml:8:11-8:26
+symbol /workspace/dependencies/serde/features kind=key qualified="Cargo.toml#/workspace/dependencies/serde/features" parent="Cargo.toml#/workspace/dependencies/serde" receiver="" exported=true @Cargo.toml:8:28-8:49
+symbol core-lib kind=dependency qualified="Cargo.toml#/workspace/dependencies/core-lib" parent="Cargo.toml#/workspace/dependencies" receiver="" exported=true @Cargo.toml:9:1-9:36
+symbol /workspace/dependencies/core-lib/path kind=key qualified="Cargo.toml#/workspace/dependencies/core-lib/path" parent="Cargo.toml#/workspace/dependencies/core-lib" receiver="" exported=true @Cargo.toml:9:14-9:34
+## references
+ref Cargo.toml#/workspace kind=contains container="Cargo.toml" receiver="" name_qualified="Cargo.toml#/workspace" identity_in_repository=true call=false @Cargo.toml:2:2-2:11
+ref Cargo.toml#/workspace/members kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="Cargo.toml#/workspace/members" identity_in_repository=true call=false @Cargo.toml:3:1-3:8
+ref crates/app kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="crates/app/Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:3:12-3:24
+ref crates/core kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="crates/core/Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:3:26-3:39
+ref crates/tool kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="crates/tool/Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:3:41-3:54
+ref crates/inherit kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="crates/inherit/Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:3:56-3:72
+ref plugins/* kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="Cargo.toml#/workspace/members/plugins~1*" identity_in_repository=true call=false @Cargo.toml:3:74-3:85
+ref ../elsewhere kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="cargo:path:../elsewhere" call=false @Cargo.toml:3:87-3:101
+ref Cargo.toml#/workspace/exclude kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="Cargo.toml#/workspace/exclude" identity_in_repository=true call=false @Cargo.toml:4:1-4:8
+ref Cargo.toml#/workspace/resolver kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="Cargo.toml#/workspace/resolver" identity_in_repository=true call=false @Cargo.toml:5:1-5:9
+ref Cargo.toml#/workspace/dependencies kind=contains container="Cargo.toml#/workspace" receiver="" name_qualified="Cargo.toml#/workspace/dependencies" identity_in_repository=true call=false @Cargo.toml:7:12-7:24
+ref Cargo.toml#/workspace/dependencies/serde kind=contains container="Cargo.toml#/workspace/dependencies" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/serde" identity_in_repository=true call=false @Cargo.toml:8:1-8:6
+ref serde kind=depends_on container="Cargo.toml#/workspace/dependencies/serde" receiver="" name_qualified="cargo:crates.io/serde" call=false @Cargo.toml:8:1-8:6
+ref Cargo.toml#/workspace/dependencies/serde/version kind=contains container="Cargo.toml#/workspace/dependencies/serde" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/serde/version" identity_in_repository=true call=false @Cargo.toml:8:11-8:18
+ref Cargo.toml#/workspace/dependencies/serde/features kind=contains container="Cargo.toml#/workspace/dependencies/serde" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/serde/features" identity_in_repository=true call=false @Cargo.toml:8:28-8:36
+ref Cargo.toml#/workspace/dependencies/core-lib kind=contains container="Cargo.toml#/workspace/dependencies" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/core-lib" identity_in_repository=true call=false @Cargo.toml:9:1-9:9
+ref core-lib kind=depends_on container="Cargo.toml#/workspace/dependencies/core-lib" receiver="" name_qualified="crates/core/Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:9:1-9:9
+ref Cargo.toml#/workspace/dependencies/core-lib/path kind=contains container="Cargo.toml#/workspace/dependencies/core-lib" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/core-lib/path" identity_in_repository=true call=false @Cargo.toml:9:14-9:18
+## imports
+## identity_only
+## diagnostics
+
+# file: config/app.toml
+## symbols
+symbol app.toml kind=document qualified="config/app.toml" parent="" receiver="" exported=true @config/app.toml:1:1-33:1
+symbol /title kind=key qualified="config/app.toml#/title" parent="config/app.toml" receiver="" exported=true @config/app.toml:1:1-1:23
+symbol /owner kind=table qualified="config/app.toml#/owner" parent="config/app.toml" receiver="" exported=true @config/app.toml:3:1-5:32
+symbol /owner/name kind=key qualified="config/app.toml#/owner/name" parent="config/app.toml#/owner" receiver="" exported=true @config/app.toml:4:1-4:13
+symbol /owner/dob kind=key qualified="config/app.toml#/owner/dob" parent="config/app.toml#/owner" receiver="" exported=true @config/app.toml:5:1-5:32
+symbol /database kind=table qualified="config/app.toml#/database" parent="config/app.toml" receiver="" exported=true @config/app.toml:7:1-10:43
+symbol /database/enabled kind=key qualified="config/app.toml#/database/enabled" parent="config/app.toml#/database" receiver="" exported=true @config/app.toml:8:1-8:15
+symbol /database/ports kind=key qualified="config/app.toml#/database/ports" parent="config/app.toml#/database" receiver="" exported=true @config/app.toml:9:1-9:21
+symbol /database/temp_targets kind=table qualified="config/app.toml#/database/temp_targets" parent="config/app.toml#/database" receiver="" exported=true @config/app.toml:10:1-10:43
+symbol /database/temp_targets/cpu kind=key qualified="config/app.toml#/database/temp_targets/cpu" parent="config/app.toml#/database/temp_targets" receiver="" exported=true @config/app.toml:10:18-10:28
+symbol /database/temp_targets/case kind=key qualified="config/app.toml#/database/temp_targets/case" parent="config/app.toml#/database/temp_targets" receiver="" exported=true @config/app.toml:10:30-10:41
+symbol /servers kind=table qualified="config/app.toml#/servers" parent="config/app.toml" receiver="" exported=true @config/app.toml:12:1-16:16
+symbol /servers/alpha kind=table qualified="config/app.toml#/servers/alpha" parent="config/app.toml#/servers" receiver="" exported=true @config/app.toml:12:1-13:16
+symbol /servers/alpha/ip kind=key qualified="config/app.toml#/servers/alpha/ip" parent="config/app.toml#/servers/alpha" receiver="" exported=true @config/app.toml:13:1-13:16
+symbol /servers/beta~1gamma kind=table qualified="config/app.toml#/servers/beta~1gamma" parent="config/app.toml#/servers" receiver="" exported=true @config/app.toml:15:1-16:16
+symbol /servers/beta~1gamma/ip kind=key qualified="config/app.toml#/servers/beta~1gamma/ip" parent="config/app.toml#/servers/beta~1gamma" receiver="" exported=true @config/app.toml:16:1-16:16
+symbol /products kind=key qualified="config/app.toml#/products" parent="config/app.toml" receiver="" exported=true @config/app.toml:18:1-26:15
+symbol /products/Hammer kind=table qualified="config/app.toml#/products/Hammer" parent="config/app.toml#/products" receiver="" exported=true @config/app.toml:18:1-20:16
+symbol /products/Hammer/name kind=key qualified="config/app.toml#/products/Hammer/name" parent="config/app.toml#/products/Hammer" receiver="" exported=true @config/app.toml:19:1-19:16
+symbol /products/Hammer/sku kind=key qualified="config/app.toml#/products/Hammer/sku" parent="config/app.toml#/products/Hammer" receiver="" exported=true @config/app.toml:20:1-20:16
+symbol /products/#1 kind=table qualified="config/app.toml#/products/#1" parent="config/app.toml#/products" receiver="" exported=true @config/app.toml:22:1-22:13
+symbol /products/Nail kind=table qualified="config/app.toml#/products/Nail" parent="config/app.toml#/products" receiver="" exported=true @config/app.toml:24:1-26:15
+symbol /products/Nail/name kind=key qualified="config/app.toml#/products/Nail/name" parent="config/app.toml#/products/Nail" receiver="" exported=true @config/app.toml:25:1-25:14
+symbol /products/Nail/color kind=key qualified="config/app.toml#/products/Nail/color" parent="config/app.toml#/products/Nail" receiver="" exported=true @config/app.toml:26:1-26:15
+symbol /text kind=table qualified="config/app.toml#/text" parent="config/app.toml" receiver="" exported=true @config/app.toml:28:1-32:33
+symbol /text/poem kind=key qualified="config/app.toml#/text/poem" parent="config/app.toml#/text" receiver="" exported=true @config/app.toml:29:1-31:20
+symbol /text/site kind=table qualified="config/app.toml#/text/site" parent="config/app.toml#/text" receiver="" exported=true @config/app.toml:32:1-32:33
+symbol /text/site/url kind=key qualified="config/app.toml#/text/site/url" parent="config/app.toml#/text/site" receiver="" exported=true @config/app.toml:32:1-32:33
+## references
+ref config/app.toml#/title kind=contains container="config/app.toml" receiver="" name_qualified="config/app.toml#/title" identity_in_repository=true call=false @config/app.toml:1:1-1:6
+ref config/app.toml#/owner kind=contains container="config/app.toml" receiver="" name_qualified="config/app.toml#/owner" identity_in_repository=true call=false @config/app.toml:3:2-3:7
+ref config/app.toml#/owner/name kind=contains container="config/app.toml#/owner" receiver="" name_qualified="config/app.toml#/owner/name" identity_in_repository=true call=false @config/app.toml:4:1-4:5
+ref config/app.toml#/owner/dob kind=contains container="config/app.toml#/owner" receiver="" name_qualified="config/app.toml#/owner/dob" identity_in_repository=true call=false @config/app.toml:5:1-5:4
+ref config/app.toml#/database kind=contains container="config/app.toml" receiver="" name_qualified="config/app.toml#/database" identity_in_repository=true call=false @config/app.toml:7:2-7:10
+ref config/app.toml#/database/enabled kind=contains container="config/app.toml#/database" receiver="" name_qualified="config/app.toml#/database/enabled" identity_in_repository=true call=false @config/app.toml:8:1-8:8
+ref config/app.toml#/database/ports kind=contains container="config/app.toml#/database" receiver="" name_qualified="config/app.toml#/database/ports" identity_in_repository=true call=false @config/app.toml:9:1-9:6
+ref config/app.toml#/database/temp_targets kind=contains container="config/app.toml#/database" receiver="" name_qualified="config/app.toml#/database/temp_targets" identity_in_repository=true call=false @config/app.toml:10:1-10:13
+ref config/app.toml#/database/temp_targets/cpu kind=contains container="config/app.toml#/database/temp_targets" receiver="" name_qualified="config/app.toml#/database/temp_targets/cpu" identity_in_repository=true call=false @config/app.toml:10:18-10:21
+ref config/app.toml#/database/temp_targets/case kind=contains container="config/app.toml#/database/temp_targets" receiver="" name_qualified="config/app.toml#/database/temp_targets/case" identity_in_repository=true call=false @config/app.toml:10:30-10:34
+ref config/app.toml#/servers kind=contains container="config/app.toml" receiver="" name_qualified="config/app.toml#/servers" identity_in_repository=true call=false @config/app.toml:12:2-12:9
+ref config/app.toml#/servers/alpha kind=contains container="config/app.toml#/servers" receiver="" name_qualified="config/app.toml#/servers/alpha" identity_in_repository=true call=false @config/app.toml:12:10-12:15
+ref config/app.toml#/servers/alpha/ip kind=contains container="config/app.toml#/servers/alpha" receiver="" name_qualified="config/app.toml#/servers/alpha/ip" identity_in_repository=true call=false @config/app.toml:13:1-13:3
+ref config/app.toml#/servers/beta~1gamma kind=contains container="config/app.toml#/servers" receiver="" name_qualified="config/app.toml#/servers/beta~1gamma" identity_in_repository=true call=false @config/app.toml:15:10-15:22
+ref config/app.toml#/servers/beta~1gamma/ip kind=contains container="config/app.toml#/servers/beta~1gamma" receiver="" name_qualified="config/app.toml#/servers/beta~1gamma/ip" identity_in_repository=true call=false @config/app.toml:16:1-16:3
+ref config/app.toml#/products/Hammer kind=contains container="config/app.toml#/products" receiver="" name_qualified="config/app.toml#/products/Hammer" identity_in_repository=true call=false @config/app.toml:18:1-18:13
+ref config/app.toml#/products kind=contains container="config/app.toml" receiver="" name_qualified="config/app.toml#/products" identity_in_repository=true call=false @config/app.toml:18:3-18:11
+ref config/app.toml#/products/Hammer/name kind=contains container="config/app.toml#/products/Hammer" receiver="" name_qualified="config/app.toml#/products/Hammer/name" identity_in_repository=true call=false @config/app.toml:19:1-19:5
+ref config/app.toml#/products/Hammer/sku kind=contains container="config/app.toml#/products/Hammer" receiver="" name_qualified="config/app.toml#/products/Hammer/sku" identity_in_repository=true call=false @config/app.toml:20:1-20:4
+ref config/app.toml#/products/#1 kind=contains container="config/app.toml#/products" receiver="" name_qualified="config/app.toml#/products/#1" identity_in_repository=true call=false @config/app.toml:22:1-22:13
+ref config/app.toml#/products/Nail kind=contains container="config/app.toml#/products" receiver="" name_qualified="config/app.toml#/products/Nail" identity_in_repository=true call=false @config/app.toml:24:1-24:13
+ref config/app.toml#/products/Nail/name kind=contains container="config/app.toml#/products/Nail" receiver="" name_qualified="config/app.toml#/products/Nail/name" identity_in_repository=true call=false @config/app.toml:25:1-25:5
+ref config/app.toml#/products/Nail/color kind=contains container="config/app.toml#/products/Nail" receiver="" name_qualified="config/app.toml#/products/Nail/color" identity_in_repository=true call=false @config/app.toml:26:1-26:6
+ref config/app.toml#/text kind=contains container="config/app.toml" receiver="" name_qualified="config/app.toml#/text" identity_in_repository=true call=false @config/app.toml:28:2-28:6
+ref config/app.toml#/text/poem kind=contains container="config/app.toml#/text" receiver="" name_qualified="config/app.toml#/text/poem" identity_in_repository=true call=false @config/app.toml:29:1-29:5
+ref config/app.toml#/text/site kind=contains container="config/app.toml#/text" receiver="" name_qualified="config/app.toml#/text/site" identity_in_repository=true call=false @config/app.toml:32:1-32:5
+ref config/app.toml#/text/site/url kind=contains container="config/app.toml#/text/site" receiver="" name_qualified="config/app.toml#/text/site/url" identity_in_repository=true call=false @config/app.toml:32:6-32:9
+## imports
+## identity_only
+## diagnostics
+
+# file: config/broken.toml
+## symbols
+symbol broken.toml kind=document qualified="config/broken.toml" parent="" receiver="" exported=true @config/broken.toml:1:1-4:1
+symbol /a kind=key qualified="config/broken.toml#/a" parent="config/broken.toml" receiver="" exported=true @config/broken.toml:1:1-1:6
+## references
+ref config/broken.toml#/a kind=contains container="config/broken.toml" receiver="" name_qualified="config/broken.toml#/a" identity_in_repository=true call=false @config/broken.toml:1:1-1:2
+## imports
+## identity_only
+## diagnostics
+diag error code=toml_syntax_error "invalid TOML: expected ']' to close table name: the rest of the file is not read" @config/broken.toml:2:8-3:1
+
+# file: crates/app/Cargo.toml
+## symbols
+symbol Cargo.toml kind=document qualified="crates/app/Cargo.toml" parent="" receiver="" exported=true @crates/app/Cargo.toml:1:1-39:1
+symbol app kind=package qualified="crates/app/Cargo.toml#/package" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:1:1-4:17
+symbol /package/name kind=key qualified="crates/app/Cargo.toml#/package/name" parent="crates/app/Cargo.toml#/package" receiver="" exported=true @crates/app/Cargo.toml:2:1-2:13
+symbol /package/version kind=key qualified="crates/app/Cargo.toml#/package/version" parent="crates/app/Cargo.toml#/package" receiver="" exported=true @crates/app/Cargo.toml:3:1-3:18
+symbol /package/edition kind=key qualified="crates/app/Cargo.toml#/package/edition" parent="crates/app/Cargo.toml#/package" receiver="" exported=true @crates/app/Cargo.toml:4:1-4:17
+symbol /dependencies kind=table qualified="crates/app/Cargo.toml#/dependencies" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:6:1-17:22
+symbol core kind=dependency qualified="crates/app/Cargo.toml#/dependencies/core" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:7:1-7:50
+symbol /dependencies/core/path kind=key qualified="crates/app/Cargo.toml#/dependencies/core/path" parent="crates/app/Cargo.toml#/dependencies/core" receiver="" exported=true @crates/app/Cargo.toml:7:10-7:26
+symbol /dependencies/core/package kind=key qualified="crates/app/Cargo.toml#/dependencies/core/package" parent="crates/app/Cargo.toml#/dependencies/core" receiver="" exported=true @crates/app/Cargo.toml:7:28-7:48
+symbol serde kind=dependency qualified="crates/app/Cargo.toml#/dependencies/serde" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:8:1-8:29
+symbol /dependencies/serde/workspace kind=key qualified="crates/app/Cargo.toml#/dependencies/serde/workspace" parent="crates/app/Cargo.toml#/dependencies/serde" receiver="" exported=true @crates/app/Cargo.toml:8:11-8:27
+symbol regex kind=dependency qualified="crates/app/Cargo.toml#/dependencies/regex" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:9:1-9:12
+symbol json kind=dependency qualified="crates/app/Cargo.toml#/dependencies/json" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:10:1-10:49
+symbol /dependencies/json/package kind=key qualified="crates/app/Cargo.toml#/dependencies/json/package" parent="crates/app/Cargo.toml#/dependencies/json" receiver="" exported=true @crates/app/Cargo.toml:10:10-10:32
+symbol /dependencies/json/version kind=key qualified="crates/app/Cargo.toml#/dependencies/json/version" parent="crates/app/Cargo.toml#/dependencies/json" receiver="" exported=true @crates/app/Cargo.toml:10:34-10:47
+symbol private kind=dependency qualified="crates/app/Cargo.toml#/dependencies/private" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:11:1-11:95
+symbol /dependencies/private/git kind=key qualified="crates/app/Cargo.toml#/dependencies/private/git" parent="crates/app/Cargo.toml#/dependencies/private" receiver="" exported=true @crates/app/Cargo.toml:11:13-11:76
+symbol /dependencies/private/branch kind=key qualified="crates/app/Cargo.toml#/dependencies/private/branch" parent="crates/app/Cargo.toml#/dependencies/private" receiver="" exported=true @crates/app/Cargo.toml:11:78-11:93
+symbol outside kind=dependency qualified="crates/app/Cargo.toml#/dependencies/outside" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:12:1-12:40
+symbol /dependencies/outside/path kind=key qualified="crates/app/Cargo.toml#/dependencies/outside/path" parent="crates/app/Cargo.toml#/dependencies/outside" receiver="" exported=true @crates/app/Cargo.toml:12:13-12:38
+symbol libc kind=dependency qualified="crates/app/Cargo.toml#/dependencies/libc" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:13:1-13:44
+symbol /dependencies/libc/version kind=key qualified="crates/app/Cargo.toml#/dependencies/libc/version" parent="crates/app/Cargo.toml#/dependencies/libc" receiver="" exported=true @crates/app/Cargo.toml:13:10-13:25
+symbol /dependencies/libc/optional kind=key qualified="crates/app/Cargo.toml#/dependencies/libc/optional" parent="crates/app/Cargo.toml#/dependencies/libc" receiver="" exported=true @crates/app/Cargo.toml:13:27-13:42
+symbol log kind=dependency qualified="crates/app/Cargo.toml#/dependencies/log" parent="crates/app/Cargo.toml#/dependencies" receiver="" exported=true @crates/app/Cargo.toml:15:1-17:22
+symbol /dependencies/log/version kind=key qualified="crates/app/Cargo.toml#/dependencies/log/version" parent="crates/app/Cargo.toml#/dependencies/log" receiver="" exported=true @crates/app/Cargo.toml:16:1-16:16
+symbol /dependencies/log/registry kind=key qualified="crates/app/Cargo.toml#/dependencies/log/registry" parent="crates/app/Cargo.toml#/dependencies/log" receiver="" exported=true @crates/app/Cargo.toml:17:1-17:22
+symbol /dev-dependencies kind=table qualified="crates/app/Cargo.toml#/dev-dependencies" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:19:1-20:15
+symbol tempfile kind=dependency qualified="crates/app/Cargo.toml#/dev-dependencies/tempfile" parent="crates/app/Cargo.toml#/dev-dependencies" receiver="" exported=true @crates/app/Cargo.toml:20:1-20:15
+symbol /build-dependencies kind=table qualified="crates/app/Cargo.toml#/build-dependencies" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:22:1-23:9
+symbol cc kind=dependency qualified="crates/app/Cargo.toml#/build-dependencies/cc" parent="crates/app/Cargo.toml#/build-dependencies" receiver="" exported=true @crates/app/Cargo.toml:23:1-23:9
+symbol /target kind=table qualified="crates/app/Cargo.toml#/target" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:25:1-26:13
+symbol /target/cfg(unix) kind=table qualified="crates/app/Cargo.toml#/target/cfg(unix)" parent="crates/app/Cargo.toml#/target" receiver="" exported=true @crates/app/Cargo.toml:25:1-26:13
+symbol /target/cfg(unix)/dependencies kind=table qualified="crates/app/Cargo.toml#/target/cfg(unix)/dependencies" parent="crates/app/Cargo.toml#/target/cfg(unix)" receiver="" exported=true @crates/app/Cargo.toml:25:1-26:13
+symbol libc kind=dependency qualified="crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc" parent="crates/app/Cargo.toml#/target/cfg(unix)/dependencies" receiver="" exported=true @crates/app/Cargo.toml:26:1-26:13
+symbol /features kind=table qualified="crates/app/Cargo.toml#/features" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:28:1-31:19
+symbol /features/default kind=key qualified="crates/app/Cargo.toml#/features/default" parent="crates/app/Cargo.toml#/features" receiver="" exported=true @crates/app/Cargo.toml:29:1-29:18
+symbol /features/std kind=key qualified="crates/app/Cargo.toml#/features/std" parent="crates/app/Cargo.toml#/features" receiver="" exported=true @crates/app/Cargo.toml:30:1-30:46
+symbol /features/fast kind=key qualified="crates/app/Cargo.toml#/features/fast" parent="crates/app/Cargo.toml#/features" receiver="" exported=true @crates/app/Cargo.toml:31:1-31:19
+symbol /bin kind=key qualified="crates/app/Cargo.toml#/bin" parent="crates/app/Cargo.toml" receiver="" exported=true @crates/app/Cargo.toml:33:1-38:22
+symbol /bin/app-cli kind=table qualified="crates/app/Cargo.toml#/bin/app-cli" parent="crates/app/Cargo.toml#/bin" receiver="" exported=true @crates/app/Cargo.toml:33:1-35:21
+symbol /bin/app-cli/name kind=key qualified="crates/app/Cargo.toml#/bin/app-cli/name" parent="crates/app/Cargo.toml#/bin/app-cli" receiver="" exported=true @crates/app/Cargo.toml:34:1-34:17
+symbol /bin/app-cli/path kind=key qualified="crates/app/Cargo.toml#/bin/app-cli/path" parent="crates/app/Cargo.toml#/bin/app-cli" receiver="" exported=true @crates/app/Cargo.toml:35:1-35:21
+symbol /bin/#1 kind=table qualified="crates/app/Cargo.toml#/bin/#1" parent="crates/app/Cargo.toml#/bin" receiver="" exported=true @crates/app/Cargo.toml:37:1-38:22
+symbol /bin/#1/path kind=key qualified="crates/app/Cargo.toml#/bin/#1/path" parent="crates/app/Cargo.toml#/bin/#1" receiver="" exported=true @crates/app/Cargo.toml:38:1-38:22
+## references
+ref crates/app/Cargo.toml#/package kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/package" identity_in_repository=true call=false @crates/app/Cargo.toml:1:2-1:9
+ref crates/app/Cargo.toml#/package/name kind=contains container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/package/name" identity_in_repository=true call=false @crates/app/Cargo.toml:2:1-2:5
+ref crates/app/Cargo.toml#/package/version kind=contains container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/package/version" identity_in_repository=true call=false @crates/app/Cargo.toml:3:1-3:8
+ref crates/app/Cargo.toml#/package/edition kind=contains container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/package/edition" identity_in_repository=true call=false @crates/app/Cargo.toml:4:1-4:8
+ref crates/app/Cargo.toml#/dependencies kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies" identity_in_repository=true call=false @crates/app/Cargo.toml:6:2-6:14
+ref core kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/core" identity_in_repository=true call=false @crates/app/Cargo.toml:7:1-7:5
+ref core-lib kind=depends_on container="crates/app/Cargo.toml#/dependencies/core" receiver="" name_qualified="crates/core/Cargo.toml#/package" identity_in_repository=true call=false @crates/app/Cargo.toml:7:1-7:5
+ref crates/app/Cargo.toml#/dependencies/core kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/core" identity_in_repository=true call=false @crates/app/Cargo.toml:7:1-7:5
+ref crates/app/Cargo.toml#/dependencies/core/path kind=contains container="crates/app/Cargo.toml#/dependencies/core" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/core/path" identity_in_repository=true call=false @crates/app/Cargo.toml:7:10-7:14
+ref crates/app/Cargo.toml#/dependencies/core/package kind=contains container="crates/app/Cargo.toml#/dependencies/core" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/core/package" identity_in_repository=true call=false @crates/app/Cargo.toml:7:28-7:35
+ref crates/app/Cargo.toml#/dependencies/serde kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
+ref serde kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
+ref serde kind=depends_on container="crates/app/Cargo.toml#/dependencies/serde" receiver="" name_qualified="cargo:workspace-root/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:8:1-8:6
+ref crates/app/Cargo.toml#/dependencies/serde/workspace kind=contains container="crates/app/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde/workspace" identity_in_repository=true call=false @crates/app/Cargo.toml:8:11-8:20
+ref crates/app/Cargo.toml#/dependencies/regex kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/regex" identity_in_repository=true call=false @crates/app/Cargo.toml:9:1-9:6
+ref regex kind=depends_on container="crates/app/Cargo.toml#/dependencies/regex" receiver="" name_qualified="cargo:crates.io/regex" call=false @crates/app/Cargo.toml:9:1-9:6
+ref regex kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/regex" identity_in_repository=true call=false @crates/app/Cargo.toml:9:1-9:6
+ref crates/app/Cargo.toml#/dependencies/json kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/json" identity_in_repository=true call=false @crates/app/Cargo.toml:10:1-10:5
+ref json kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/json" identity_in_repository=true call=false @crates/app/Cargo.toml:10:1-10:5
+ref serde_json kind=depends_on container="crates/app/Cargo.toml#/dependencies/json" receiver="" name_qualified="cargo:crates.io/serde_json" call=false @crates/app/Cargo.toml:10:1-10:5
+ref crates/app/Cargo.toml#/dependencies/json/package kind=contains container="crates/app/Cargo.toml#/dependencies/json" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/json/package" identity_in_repository=true call=false @crates/app/Cargo.toml:10:10-10:17
+ref crates/app/Cargo.toml#/dependencies/json/version kind=contains container="crates/app/Cargo.toml#/dependencies/json" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/json/version" identity_in_repository=true call=false @crates/app/Cargo.toml:10:34-10:41
+ref crates/app/Cargo.toml#/dependencies/private kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/private" identity_in_repository=true call=false @crates/app/Cargo.toml:11:1-11:8
+ref private kind=depends_on container="crates/app/Cargo.toml#/dependencies/private" receiver="" name_qualified="cargo:git:https://example.com/org/private.git#private" call=false @crates/app/Cargo.toml:11:1-11:8
+ref private kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/private" identity_in_repository=true call=false @crates/app/Cargo.toml:11:1-11:8
+ref crates/app/Cargo.toml#/dependencies/private/git kind=contains container="crates/app/Cargo.toml#/dependencies/private" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/private/git" identity_in_repository=true call=false @crates/app/Cargo.toml:11:13-11:16
+ref crates/app/Cargo.toml#/dependencies/private/branch kind=contains container="crates/app/Cargo.toml#/dependencies/private" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/private/branch" identity_in_repository=true call=false @crates/app/Cargo.toml:11:78-11:84
+ref crates/app/Cargo.toml#/dependencies/outside kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/outside" identity_in_repository=true call=false @crates/app/Cargo.toml:12:1-12:8
+ref outside kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/outside" identity_in_repository=true call=false @crates/app/Cargo.toml:12:1-12:8
+ref outside kind=depends_on container="crates/app/Cargo.toml#/dependencies/outside" receiver="" name_qualified="cargo:path:outside" call=false @crates/app/Cargo.toml:12:1-12:8
+ref crates/app/Cargo.toml#/dependencies/outside/path kind=contains container="crates/app/Cargo.toml#/dependencies/outside" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/outside/path" identity_in_repository=true call=false @crates/app/Cargo.toml:12:13-12:17
+ref crates/app/Cargo.toml#/dependencies/libc kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/libc" identity_in_repository=true call=false @crates/app/Cargo.toml:13:1-13:5
+ref libc kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/libc" identity_in_repository=true call=false @crates/app/Cargo.toml:13:1-13:5
+ref libc kind=depends_on container="crates/app/Cargo.toml#/dependencies/libc" receiver="" name_qualified="cargo:crates.io/libc" call=false @crates/app/Cargo.toml:13:1-13:5
+ref crates/app/Cargo.toml#/dependencies/libc/version kind=contains container="crates/app/Cargo.toml#/dependencies/libc" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/libc/version" identity_in_repository=true call=false @crates/app/Cargo.toml:13:10-13:17
+ref crates/app/Cargo.toml#/dependencies/libc/optional kind=contains container="crates/app/Cargo.toml#/dependencies/libc" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/libc/optional" identity_in_repository=true call=false @crates/app/Cargo.toml:13:27-13:35
+ref crates/app/Cargo.toml#/dependencies/log kind=contains container="crates/app/Cargo.toml#/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/log" identity_in_repository=true call=false @crates/app/Cargo.toml:15:15-15:18
+ref log kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/log" identity_in_repository=true call=false @crates/app/Cargo.toml:15:15-15:18
+ref log kind=depends_on container="crates/app/Cargo.toml#/dependencies/log" receiver="" name_qualified="cargo:registry:internal/log" call=false @crates/app/Cargo.toml:15:15-15:18
+ref crates/app/Cargo.toml#/dependencies/log/version kind=contains container="crates/app/Cargo.toml#/dependencies/log" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/log/version" identity_in_repository=true call=false @crates/app/Cargo.toml:16:1-16:8
+ref crates/app/Cargo.toml#/dependencies/log/registry kind=contains container="crates/app/Cargo.toml#/dependencies/log" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/log/registry" identity_in_repository=true call=false @crates/app/Cargo.toml:17:1-17:9
+ref crates/app/Cargo.toml#/dev-dependencies kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/dev-dependencies" identity_in_repository=true call=false @crates/app/Cargo.toml:19:2-19:18
+ref crates/app/Cargo.toml#/dev-dependencies/tempfile kind=contains container="crates/app/Cargo.toml#/dev-dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/dev-dependencies/tempfile" identity_in_repository=true call=false @crates/app/Cargo.toml:20:1-20:9
+ref tempfile kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/dev-dependencies/tempfile" identity_in_repository=true call=false @crates/app/Cargo.toml:20:1-20:9
+ref tempfile kind=depends_on container="crates/app/Cargo.toml#/dev-dependencies/tempfile" receiver="" name_qualified="cargo:crates.io/tempfile" call=false @crates/app/Cargo.toml:20:1-20:9
+ref crates/app/Cargo.toml#/build-dependencies kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/build-dependencies" identity_in_repository=true call=false @crates/app/Cargo.toml:22:2-22:20
+ref cc kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/build-dependencies/cc" identity_in_repository=true call=false @crates/app/Cargo.toml:23:1-23:3
+ref cc kind=depends_on container="crates/app/Cargo.toml#/build-dependencies/cc" receiver="" name_qualified="cargo:crates.io/cc" call=false @crates/app/Cargo.toml:23:1-23:3
+ref crates/app/Cargo.toml#/build-dependencies/cc kind=contains container="crates/app/Cargo.toml#/build-dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/build-dependencies/cc" identity_in_repository=true call=false @crates/app/Cargo.toml:23:1-23:3
+ref crates/app/Cargo.toml#/target kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/target" identity_in_repository=true call=false @crates/app/Cargo.toml:25:2-25:8
+ref crates/app/Cargo.toml#/target/cfg(unix) kind=contains container="crates/app/Cargo.toml#/target" receiver="" name_qualified="crates/app/Cargo.toml#/target/cfg(unix)" identity_in_repository=true call=false @crates/app/Cargo.toml:25:9-25:20
+ref crates/app/Cargo.toml#/target/cfg(unix)/dependencies kind=contains container="crates/app/Cargo.toml#/target/cfg(unix)" receiver="" name_qualified="crates/app/Cargo.toml#/target/cfg(unix)/dependencies" identity_in_repository=true call=false @crates/app/Cargo.toml:25:21-25:33
+ref crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc kind=contains container="crates/app/Cargo.toml#/target/cfg(unix)/dependencies" receiver="" name_qualified="crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc" identity_in_repository=true call=false @crates/app/Cargo.toml:26:1-26:5
+ref libc kind=depends_on container="crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc" receiver="" name_qualified="cargo:crates.io/libc" call=false @crates/app/Cargo.toml:26:1-26:5
+ref libc kind=depends_on container="crates/app/Cargo.toml#/package" receiver="" name_qualified="crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc" identity_in_repository=true call=false @crates/app/Cargo.toml:26:1-26:5
+ref crates/app/Cargo.toml#/features kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/features" identity_in_repository=true call=false @crates/app/Cargo.toml:28:2-28:10
+ref crates/app/Cargo.toml#/features/default kind=contains container="crates/app/Cargo.toml#/features" receiver="" name_qualified="crates/app/Cargo.toml#/features/default" identity_in_repository=true call=false @crates/app/Cargo.toml:29:1-29:8
+ref std kind=value_reference container="crates/app/Cargo.toml#/features/default" receiver="" name_qualified="crates/app/Cargo.toml#/features/std" identity_in_repository=true call=false @crates/app/Cargo.toml:29:12-29:17
+ref crates/app/Cargo.toml#/features/std kind=contains container="crates/app/Cargo.toml#/features" receiver="" name_qualified="crates/app/Cargo.toml#/features/std" identity_in_repository=true call=false @crates/app/Cargo.toml:30:1-30:4
+ref dep:libc kind=value_reference container="crates/app/Cargo.toml#/features/std" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/libc" identity_in_repository=true call=false @crates/app/Cargo.toml:30:8-30:18
+ref regex/std kind=value_reference container="crates/app/Cargo.toml#/features/std" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/regex" identity_in_repository=true call=false @crates/app/Cargo.toml:30:20-30:31
+ref serde?/std kind=value_reference container="crates/app/Cargo.toml#/features/std" receiver="" name_qualified="crates/app/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/app/Cargo.toml:30:33-30:45
+ref crates/app/Cargo.toml#/features/fast kind=contains container="crates/app/Cargo.toml#/features" receiver="" name_qualified="crates/app/Cargo.toml#/features/fast" identity_in_repository=true call=false @crates/app/Cargo.toml:31:1-31:5
+ref missing kind=value_reference container="crates/app/Cargo.toml#/features/fast" receiver="" call=false @crates/app/Cargo.toml:31:9-31:18
+ref crates/app/Cargo.toml#/bin/app-cli kind=contains container="crates/app/Cargo.toml#/bin" receiver="" name_qualified="crates/app/Cargo.toml#/bin/app-cli" identity_in_repository=true call=false @crates/app/Cargo.toml:33:1-33:8
+ref crates/app/Cargo.toml#/bin kind=contains container="crates/app/Cargo.toml" receiver="" name_qualified="crates/app/Cargo.toml#/bin" identity_in_repository=true call=false @crates/app/Cargo.toml:33:3-33:6
+ref crates/app/Cargo.toml#/bin/app-cli/name kind=contains container="crates/app/Cargo.toml#/bin/app-cli" receiver="" name_qualified="crates/app/Cargo.toml#/bin/app-cli/name" identity_in_repository=true call=false @crates/app/Cargo.toml:34:1-34:5
+ref crates/app/Cargo.toml#/bin/app-cli/path kind=contains container="crates/app/Cargo.toml#/bin/app-cli" receiver="" name_qualified="crates/app/Cargo.toml#/bin/app-cli/path" identity_in_repository=true call=false @crates/app/Cargo.toml:35:1-35:5
+ref crates/app/Cargo.toml#/bin/#1 kind=contains container="crates/app/Cargo.toml#/bin" receiver="" name_qualified="crates/app/Cargo.toml#/bin/#1" identity_in_repository=true call=false @crates/app/Cargo.toml:37:1-37:8
+ref crates/app/Cargo.toml#/bin/#1/path kind=contains container="crates/app/Cargo.toml#/bin/#1" receiver="" name_qualified="crates/app/Cargo.toml#/bin/#1/path" identity_in_repository=true call=false @crates/app/Cargo.toml:38:1-38:5
+## imports
+## identity_only
+## diagnostics
+
+# file: crates/core/Cargo.toml
+## symbols
+symbol Cargo.toml kind=document qualified="crates/core/Cargo.toml" parent="" receiver="" exported=true @crates/core/Cargo.toml:1:1-4:1
+symbol core-lib kind=package qualified="crates/core/Cargo.toml#/package" parent="crates/core/Cargo.toml" receiver="" exported=true @crates/core/Cargo.toml:1:1-3:18
+symbol /package/name kind=key qualified="crates/core/Cargo.toml#/package/name" parent="crates/core/Cargo.toml#/package" receiver="" exported=true @crates/core/Cargo.toml:2:1-2:18
+symbol /package/version kind=key qualified="crates/core/Cargo.toml#/package/version" parent="crates/core/Cargo.toml#/package" receiver="" exported=true @crates/core/Cargo.toml:3:1-3:18
+## references
+ref crates/core/Cargo.toml#/package kind=contains container="crates/core/Cargo.toml" receiver="" name_qualified="crates/core/Cargo.toml#/package" identity_in_repository=true call=false @crates/core/Cargo.toml:1:2-1:9
+ref crates/core/Cargo.toml#/package/name kind=contains container="crates/core/Cargo.toml#/package" receiver="" name_qualified="crates/core/Cargo.toml#/package/name" identity_in_repository=true call=false @crates/core/Cargo.toml:2:1-2:5
+ref crates/core/Cargo.toml#/package/version kind=contains container="crates/core/Cargo.toml#/package" receiver="" name_qualified="crates/core/Cargo.toml#/package/version" identity_in_repository=true call=false @crates/core/Cargo.toml:3:1-3:8
+## imports
+## identity_only
+## diagnostics
+
+# file: crates/inherit/Cargo.toml
+## symbols
+symbol Cargo.toml kind=document qualified="crates/inherit/Cargo.toml" parent="" receiver="" exported=true @crates/inherit/Cargo.toml:1:1-8:1
+symbol inherit kind=package qualified="crates/inherit/Cargo.toml#/package" parent="crates/inherit/Cargo.toml" receiver="" exported=true @crates/inherit/Cargo.toml:1:1-3:20
+symbol /package/name kind=key qualified="crates/inherit/Cargo.toml#/package/name" parent="crates/inherit/Cargo.toml#/package" receiver="" exported=true @crates/inherit/Cargo.toml:2:1-2:17
+symbol /package/workspace kind=key qualified="crates/inherit/Cargo.toml#/package/workspace" parent="crates/inherit/Cargo.toml#/package" receiver="" exported=true @crates/inherit/Cargo.toml:3:1-3:20
+symbol /dependencies kind=table qualified="crates/inherit/Cargo.toml#/dependencies" parent="crates/inherit/Cargo.toml" receiver="" exported=true @crates/inherit/Cargo.toml:5:1-7:26
+symbol serde kind=dependency qualified="crates/inherit/Cargo.toml#/dependencies/serde" parent="crates/inherit/Cargo.toml#/dependencies" receiver="" exported=true @crates/inherit/Cargo.toml:6:1-6:29
+symbol /dependencies/serde/workspace kind=key qualified="crates/inherit/Cargo.toml#/dependencies/serde/workspace" parent="crates/inherit/Cargo.toml#/dependencies/serde" receiver="" exported=true @crates/inherit/Cargo.toml:6:11-6:27
+symbol core-lib kind=dependency qualified="crates/inherit/Cargo.toml#/dependencies/core-lib" parent="crates/inherit/Cargo.toml#/dependencies" receiver="" exported=true @crates/inherit/Cargo.toml:7:1-7:26
+symbol /dependencies/core-lib/workspace kind=key qualified="crates/inherit/Cargo.toml#/dependencies/core-lib/workspace" parent="crates/inherit/Cargo.toml#/dependencies/core-lib" receiver="" exported=true @crates/inherit/Cargo.toml:7:1-7:26
+## references
+ref crates/inherit/Cargo.toml#/package kind=contains container="crates/inherit/Cargo.toml" receiver="" name_qualified="crates/inherit/Cargo.toml#/package" identity_in_repository=true call=false @crates/inherit/Cargo.toml:1:2-1:9
+ref crates/inherit/Cargo.toml#/package/name kind=contains container="crates/inherit/Cargo.toml#/package" receiver="" name_qualified="crates/inherit/Cargo.toml#/package/name" identity_in_repository=true call=false @crates/inherit/Cargo.toml:2:1-2:5
+ref crates/inherit/Cargo.toml#/package/workspace kind=contains container="crates/inherit/Cargo.toml#/package" receiver="" name_qualified="crates/inherit/Cargo.toml#/package/workspace" identity_in_repository=true call=false @crates/inherit/Cargo.toml:3:1-3:10
+ref crates/inherit/Cargo.toml#/dependencies kind=contains container="crates/inherit/Cargo.toml" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies" identity_in_repository=true call=false @crates/inherit/Cargo.toml:5:2-5:14
+ref crates/inherit/Cargo.toml#/dependencies/serde kind=contains container="crates/inherit/Cargo.toml#/dependencies" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/inherit/Cargo.toml:6:1-6:6
+ref serde kind=depends_on container="crates/inherit/Cargo.toml#/dependencies/serde" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/serde" identity_in_repository=true call=false @crates/inherit/Cargo.toml:6:1-6:6
+ref serde kind=depends_on container="crates/inherit/Cargo.toml#/package" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/inherit/Cargo.toml:6:1-6:6
+ref crates/inherit/Cargo.toml#/dependencies/serde/workspace kind=contains container="crates/inherit/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies/serde/workspace" identity_in_repository=true call=false @crates/inherit/Cargo.toml:6:11-6:20
+ref core-lib kind=depends_on container="crates/inherit/Cargo.toml#/dependencies/core-lib" receiver="" name_qualified="Cargo.toml#/workspace/dependencies/core-lib" identity_in_repository=true call=false @crates/inherit/Cargo.toml:7:1-7:9
+ref core-lib kind=depends_on container="crates/inherit/Cargo.toml#/package" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies/core-lib" identity_in_repository=true call=false @crates/inherit/Cargo.toml:7:1-7:9
+ref crates/inherit/Cargo.toml#/dependencies/core-lib kind=contains container="crates/inherit/Cargo.toml#/dependencies" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies/core-lib" identity_in_repository=true call=false @crates/inherit/Cargo.toml:7:1-7:9
+ref crates/inherit/Cargo.toml#/dependencies/core-lib/workspace kind=contains container="crates/inherit/Cargo.toml#/dependencies/core-lib" receiver="" name_qualified="crates/inherit/Cargo.toml#/dependencies/core-lib/workspace" identity_in_repository=true call=false @crates/inherit/Cargo.toml:7:10-7:19
+## imports
+## identity_only
+## diagnostics
+
+# file: crates/tool/Cargo.toml
+## symbols
+symbol Cargo.toml kind=document qualified="crates/tool/Cargo.toml" parent="" receiver="" exported=true @crates/tool/Cargo.toml:1:1-6:1
+symbol tool kind=package qualified="crates/tool/Cargo.toml#/package" parent="crates/tool/Cargo.toml" receiver="" exported=true @crates/tool/Cargo.toml:1:1-2:26
+symbol /package/name kind=key qualified="crates/tool/Cargo.toml#/package/name" parent="crates/tool/Cargo.toml#/package" receiver="" exported=true @crates/tool/Cargo.toml:1:1-1:22
+symbol /package/version kind=key qualified="crates/tool/Cargo.toml#/package/version" parent="crates/tool/Cargo.toml#/package" receiver="" exported=true @crates/tool/Cargo.toml:2:1-2:26
+symbol /dependencies kind=table qualified="crates/tool/Cargo.toml#/dependencies" parent="crates/tool/Cargo.toml" receiver="" exported=true @crates/tool/Cargo.toml:4:1-5:23
+symbol serde kind=dependency qualified="crates/tool/Cargo.toml#/dependencies/serde" parent="crates/tool/Cargo.toml#/dependencies" receiver="" exported=true @crates/tool/Cargo.toml:5:1-5:23
+symbol /dependencies/serde/workspace kind=key qualified="crates/tool/Cargo.toml#/dependencies/serde/workspace" parent="crates/tool/Cargo.toml#/dependencies/serde" receiver="" exported=true @crates/tool/Cargo.toml:5:1-5:23
+## references
+ref crates/tool/Cargo.toml#/package kind=contains container="crates/tool/Cargo.toml" receiver="" name_qualified="crates/tool/Cargo.toml#/package" identity_in_repository=true call=false @crates/tool/Cargo.toml:1:1-1:8
+ref crates/tool/Cargo.toml#/package/name kind=contains container="crates/tool/Cargo.toml#/package" receiver="" name_qualified="crates/tool/Cargo.toml#/package/name" identity_in_repository=true call=false @crates/tool/Cargo.toml:1:9-1:13
+ref crates/tool/Cargo.toml#/package/version kind=contains container="crates/tool/Cargo.toml#/package" receiver="" name_qualified="crates/tool/Cargo.toml#/package/version" identity_in_repository=true call=false @crates/tool/Cargo.toml:2:9-2:16
+ref crates/tool/Cargo.toml#/dependencies kind=contains container="crates/tool/Cargo.toml" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies" identity_in_repository=true call=false @crates/tool/Cargo.toml:4:2-4:14
+ref crates/tool/Cargo.toml#/dependencies/serde kind=contains container="crates/tool/Cargo.toml#/dependencies" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
+ref serde kind=depends_on container="crates/tool/Cargo.toml#/dependencies/serde" receiver="" name_qualified="cargo:workspace-root/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
+ref serde kind=depends_on container="crates/tool/Cargo.toml#/package" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies/serde" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:1-5:6
+ref crates/tool/Cargo.toml#/dependencies/serde/workspace kind=contains container="crates/tool/Cargo.toml#/dependencies/serde" receiver="" name_qualified="crates/tool/Cargo.toml#/dependencies/serde/workspace" identity_in_repository=true call=false @crates/tool/Cargo.toml:5:7-5:16
+## imports
+## identity_only
+## diagnostics
+
+# file: py/pyproject.toml
+## symbols
+symbol pyproject.toml kind=document qualified="py/pyproject.toml" parent="" receiver="" exported=true @py/pyproject.toml:1:1-27:1
+symbol /build-system kind=table qualified="py/pyproject.toml#/build-system" parent="py/pyproject.toml" receiver="" exported=true @py/pyproject.toml:1:1-3:40
+symbol /build-system/requires kind=key qualified="py/pyproject.toml#/build-system/requires" parent="py/pyproject.toml#/build-system" receiver="" exported=true @py/pyproject.toml:2:1-2:39
+symbol setuptools kind=dependency qualified="py/pyproject.toml#/build-system/requires/setuptools" parent="py/pyproject.toml#/build-system/requires" receiver="" exported=true @py/pyproject.toml:2:13-2:29
+symbol wheel kind=dependency qualified="py/pyproject.toml#/build-system/requires/wheel" parent="py/pyproject.toml#/build-system/requires" receiver="" exported=true @py/pyproject.toml:2:31-2:38
+symbol /build-system/build-backend kind=key qualified="py/pyproject.toml#/build-system/build-backend" parent="py/pyproject.toml#/build-system" receiver="" exported=true @py/pyproject.toml:3:1-3:40
+symbol sample-pkg kind=package qualified="py/pyproject.toml#/project" parent="py/pyproject.toml" receiver="" exported=true @py/pyproject.toml:5:1-17:28
+symbol /project/name kind=key qualified="py/pyproject.toml#/project/name" parent="py/pyproject.toml#/project" receiver="" exported=true @py/pyproject.toml:6:1-6:20
+symbol /project/version kind=key qualified="py/pyproject.toml#/project/version" parent="py/pyproject.toml#/project" receiver="" exported=true @py/pyproject.toml:7:1-7:18
+symbol /project/requires-python kind=key qualified="py/pyproject.toml#/project/requires-python" parent="py/pyproject.toml#/project" receiver="" exported=true @py/pyproject.toml:8:1-8:26
+symbol /project/dependencies kind=key qualified="py/pyproject.toml#/project/dependencies" parent="py/pyproject.toml#/project" receiver="" exported=true @py/pyproject.toml:9:1-14:2
+symbol requests kind=dependency qualified="py/pyproject.toml#/project/dependencies/requests" parent="py/pyproject.toml#/project/dependencies" receiver="" exported=true @py/pyproject.toml:10:3-10:19
+symbol Regex kind=dependency qualified="py/pyproject.toml#/project/dependencies/regex" parent="py/pyproject.toml#/project/dependencies" receiver="" exported=true @py/pyproject.toml:11:3-11:34
+symbol regex kind=dependency qualified="py/pyproject.toml#/project/dependencies/regex#2" parent="py/pyproject.toml#/project/dependencies" receiver="" exported=true @py/pyproject.toml:12:3-12:16
+symbol /project/optional-dependencies kind=table qualified="py/pyproject.toml#/project/optional-dependencies" parent="py/pyproject.toml#/project" receiver="" exported=true @py/pyproject.toml:16:1-17:28
+symbol /project/optional-dependencies/dev kind=key qualified="py/pyproject.toml#/project/optional-dependencies/dev" parent="py/pyproject.toml#/project/optional-dependencies" receiver="" exported=true @py/pyproject.toml:17:1-17:28
+symbol pytest kind=dependency qualified="py/pyproject.toml#/project/optional-dependencies/dev/pytest" parent="py/pyproject.toml#/project/optional-dependencies/dev" receiver="" exported=true @py/pyproject.toml:17:8-17:19
+symbol ruff kind=dependency qualified="py/pyproject.toml#/project/optional-dependencies/dev/ruff" parent="py/pyproject.toml#/project/optional-dependencies/dev" receiver="" exported=true @py/pyproject.toml:17:21-17:27
+symbol /dependency-groups kind=table qualified="py/pyproject.toml#/dependency-groups" parent="py/pyproject.toml" receiver="" exported=true @py/pyproject.toml:19:1-20:53
+symbol /dependency-groups/test kind=key qualified="py/pyproject.toml#/dependency-groups/test" parent="py/pyproject.toml#/dependency-groups" receiver="" exported=true @py/pyproject.toml:20:1-20:53
+symbol coverage kind=dependency qualified="py/pyproject.toml#/dependency-groups/test/coverage" parent="py/pyproject.toml#/dependency-groups/test" receiver="" exported=true @py/pyproject.toml:20:9-20:25
+symbol /tool kind=table qualified="py/pyproject.toml#/tool" parent="py/pyproject.toml" receiver="" exported=true @py/pyproject.toml:22:1-26:20
+symbol /tool/ruff kind=table qualified="py/pyproject.toml#/tool/ruff" parent="py/pyproject.toml#/tool" receiver="" exported=true @py/pyproject.toml:22:1-26:20
+symbol /tool/ruff/line-length kind=key qualified="py/pyproject.toml#/tool/ruff/line-length" parent="py/pyproject.toml#/tool/ruff" receiver="" exported=true @py/pyproject.toml:23:1-23:18
+symbol /tool/ruff/lint kind=table qualified="py/pyproject.toml#/tool/ruff/lint" parent="py/pyproject.toml#/tool/ruff" receiver="" exported=true @py/pyproject.toml:25:1-26:20
+symbol /tool/ruff/lint/select kind=key qualified="py/pyproject.toml#/tool/ruff/lint/select" parent="py/pyproject.toml#/tool/ruff/lint" receiver="" exported=true @py/pyproject.toml:26:1-26:20
+## references
+ref py/pyproject.toml#/build-system kind=contains container="py/pyproject.toml" receiver="" name_qualified="py/pyproject.toml#/build-system" identity_in_repository=true call=false @py/pyproject.toml:1:2-1:14
+ref py/pyproject.toml#/build-system/requires kind=contains container="py/pyproject.toml#/build-system" receiver="" name_qualified="py/pyproject.toml#/build-system/requires" identity_in_repository=true call=false @py/pyproject.toml:2:1-2:9
+ref py/pyproject.toml#/build-system/requires/setuptools kind=contains container="py/pyproject.toml#/build-system/requires" receiver="" name_qualified="py/pyproject.toml#/build-system/requires/setuptools" identity_in_repository=true call=false @py/pyproject.toml:2:13-2:29
+ref setuptools kind=depends_on container="py/pyproject.toml#/build-system/requires/setuptools" receiver="" name_qualified="pypi:setuptools" call=false @py/pyproject.toml:2:13-2:29
+ref setuptools kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/build-system/requires/setuptools" identity_in_repository=true call=false @py/pyproject.toml:2:13-2:29
+ref py/pyproject.toml#/build-system/requires/wheel kind=contains container="py/pyproject.toml#/build-system/requires" receiver="" name_qualified="py/pyproject.toml#/build-system/requires/wheel" identity_in_repository=true call=false @py/pyproject.toml:2:31-2:38
+ref wheel kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/build-system/requires/wheel" identity_in_repository=true call=false @py/pyproject.toml:2:31-2:38
+ref wheel kind=depends_on container="py/pyproject.toml#/build-system/requires/wheel" receiver="" name_qualified="pypi:wheel" call=false @py/pyproject.toml:2:31-2:38
+ref py/pyproject.toml#/build-system/build-backend kind=contains container="py/pyproject.toml#/build-system" receiver="" name_qualified="py/pyproject.toml#/build-system/build-backend" identity_in_repository=true call=false @py/pyproject.toml:3:1-3:14
+ref py/pyproject.toml#/project kind=contains container="py/pyproject.toml" receiver="" name_qualified="py/pyproject.toml#/project" identity_in_repository=true call=false @py/pyproject.toml:5:2-5:9
+ref py/pyproject.toml#/project/name kind=contains container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/name" identity_in_repository=true call=false @py/pyproject.toml:6:1-6:5
+ref py/pyproject.toml#/project/version kind=contains container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/version" identity_in_repository=true call=false @py/pyproject.toml:7:1-7:8
+ref py/pyproject.toml#/project/requires-python kind=contains container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/requires-python" identity_in_repository=true call=false @py/pyproject.toml:8:1-8:16
+ref py/pyproject.toml#/project/dependencies kind=contains container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/dependencies" identity_in_repository=true call=false @py/pyproject.toml:9:1-9:13
+ref py/pyproject.toml#/project/dependencies/requests kind=contains container="py/pyproject.toml#/project/dependencies" receiver="" name_qualified="py/pyproject.toml#/project/dependencies/requests" identity_in_repository=true call=false @py/pyproject.toml:10:3-10:19
+ref requests kind=depends_on container="py/pyproject.toml#/project/dependencies/requests" receiver="" name_qualified="pypi:requests" call=false @py/pyproject.toml:10:3-10:19
+ref requests kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/dependencies/requests" identity_in_repository=true call=false @py/pyproject.toml:10:3-10:19
+ref Regex kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/dependencies/regex" identity_in_repository=true call=false @py/pyproject.toml:11:3-11:34
+ref Regex kind=depends_on container="py/pyproject.toml#/project/dependencies/regex" receiver="" name_qualified="pypi:regex" call=false @py/pyproject.toml:11:3-11:34
+ref py/pyproject.toml#/project/dependencies/regex kind=contains container="py/pyproject.toml#/project/dependencies" receiver="" name_qualified="py/pyproject.toml#/project/dependencies/regex" identity_in_repository=true call=false @py/pyproject.toml:11:3-11:34
+ref py/pyproject.toml#/project/dependencies/regex#2 kind=contains container="py/pyproject.toml#/project/dependencies" receiver="" name_qualified="py/pyproject.toml#/project/dependencies/regex#2" identity_in_repository=true call=false @py/pyproject.toml:12:3-12:16
+ref regex kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/dependencies/regex#2" identity_in_repository=true call=false @py/pyproject.toml:12:3-12:16
+ref regex kind=depends_on container="py/pyproject.toml#/project/dependencies/regex#2" receiver="" name_qualified="pypi:regex" call=false @py/pyproject.toml:12:3-12:16
+ref py/pyproject.toml#/project/optional-dependencies kind=contains container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/optional-dependencies" identity_in_repository=true call=false @py/pyproject.toml:16:10-16:31
+ref py/pyproject.toml#/project/optional-dependencies/dev kind=contains container="py/pyproject.toml#/project/optional-dependencies" receiver="" name_qualified="py/pyproject.toml#/project/optional-dependencies/dev" identity_in_repository=true call=false @py/pyproject.toml:17:1-17:4
+ref py/pyproject.toml#/project/optional-dependencies/dev/pytest kind=contains container="py/pyproject.toml#/project/optional-dependencies/dev" receiver="" name_qualified="py/pyproject.toml#/project/optional-dependencies/dev/pytest" identity_in_repository=true call=false @py/pyproject.toml:17:8-17:19
+ref pytest kind=depends_on container="py/pyproject.toml#/project/optional-dependencies/dev/pytest" receiver="" name_qualified="pypi:pytest" call=false @py/pyproject.toml:17:8-17:19
+ref pytest kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/optional-dependencies/dev/pytest" identity_in_repository=true call=false @py/pyproject.toml:17:8-17:19
+ref py/pyproject.toml#/project/optional-dependencies/dev/ruff kind=contains container="py/pyproject.toml#/project/optional-dependencies/dev" receiver="" name_qualified="py/pyproject.toml#/project/optional-dependencies/dev/ruff" identity_in_repository=true call=false @py/pyproject.toml:17:21-17:27
+ref ruff kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/project/optional-dependencies/dev/ruff" identity_in_repository=true call=false @py/pyproject.toml:17:21-17:27
+ref ruff kind=depends_on container="py/pyproject.toml#/project/optional-dependencies/dev/ruff" receiver="" name_qualified="pypi:ruff" call=false @py/pyproject.toml:17:21-17:27
+ref py/pyproject.toml#/dependency-groups kind=contains container="py/pyproject.toml" receiver="" name_qualified="py/pyproject.toml#/dependency-groups" identity_in_repository=true call=false @py/pyproject.toml:19:2-19:19
+ref py/pyproject.toml#/dependency-groups/test kind=contains container="py/pyproject.toml#/dependency-groups" receiver="" name_qualified="py/pyproject.toml#/dependency-groups/test" identity_in_repository=true call=false @py/pyproject.toml:20:1-20:5
+ref coverage kind=depends_on container="py/pyproject.toml#/dependency-groups/test/coverage" receiver="" name_qualified="pypi:coverage" call=false @py/pyproject.toml:20:9-20:25
+ref coverage kind=depends_on container="py/pyproject.toml#/project" receiver="" name_qualified="py/pyproject.toml#/dependency-groups/test/coverage" identity_in_repository=true call=false @py/pyproject.toml:20:9-20:25
+ref py/pyproject.toml#/dependency-groups/test/coverage kind=contains container="py/pyproject.toml#/dependency-groups/test" receiver="" name_qualified="py/pyproject.toml#/dependency-groups/test/coverage" identity_in_repository=true call=false @py/pyproject.toml:20:9-20:25
+ref py/pyproject.toml#/tool kind=contains container="py/pyproject.toml" receiver="" name_qualified="py/pyproject.toml#/tool" identity_in_repository=true call=false @py/pyproject.toml:22:2-22:6
+ref py/pyproject.toml#/tool/ruff kind=contains container="py/pyproject.toml#/tool" receiver="" name_qualified="py/pyproject.toml#/tool/ruff" identity_in_repository=true call=false @py/pyproject.toml:22:7-22:11
+ref py/pyproject.toml#/tool/ruff/line-length kind=contains container="py/pyproject.toml#/tool/ruff" receiver="" name_qualified="py/pyproject.toml#/tool/ruff/line-length" identity_in_repository=true call=false @py/pyproject.toml:23:1-23:12
+ref py/pyproject.toml#/tool/ruff/lint kind=contains container="py/pyproject.toml#/tool/ruff" receiver="" name_qualified="py/pyproject.toml#/tool/ruff/lint" identity_in_repository=true call=false @py/pyproject.toml:25:12-25:16
+ref py/pyproject.toml#/tool/ruff/lint/select kind=contains container="py/pyproject.toml#/tool/ruff/lint" receiver="" name_qualified="py/pyproject.toml#/tool/ruff/lint/select" identity_in_repository=true call=false @py/pyproject.toml:26:1-26:7
+## imports
+## identity_only
+## diagnostics
+diag warning code=pyproject_invalid_requirement "a requirement that does not start with a distribution name (PEP 508) declares nothing" @py/pyproject.toml:13:3-13:12
+

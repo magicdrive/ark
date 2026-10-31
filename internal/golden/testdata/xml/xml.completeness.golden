@@ -1,0 +1,35 @@
+symbol app/pom.xml::dependencies::${vendor.group}:vendor-lib unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate ${vendor.group}:vendor-lib kind=depends_on receiver="" reason=dynamic_name @app/pom.xml:19:19-19:29
+symbol app/pom.xml::profile:it::dependencies::org.testcontainers:testcontainers unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate org.testcontainers:testcontainers kind=depends_on receiver="" reason=outside_repository @app/pom.xml:28:23-28:37
+symbol core/pom.xml::dependencies::com.google.guava:guava unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate com.google.guava:guava kind=depends_on receiver="" reason=outside_repository @core/pom.xml:16:19-16:24
+symbol core/pom.xml::dependencies::org.junit.jupiter:junit-jupiter unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate org.junit.jupiter:junit-jupiter kind=depends_on receiver="" reason=outside_repository @core/pom.xml:21:19-21:32
+symbol docs/book.xml unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate book.xsl kind=resource_link receiver="" reason=unresolved @docs/book.xml:2:1-2:51
+symbol docs/book.xml#intro unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller docs/book.xml#/b:book/b:chapter/b:para/b:ref/@href kind=id_reference confidence=candidate refs=1
+symbol docs/book.xml#/b:book/b:chapter/b:para/b:ref/@href unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  candidate_callee docs/book.xml#intro kind=id_reference confidence=candidate refs=1
+symbol docs/book.xml#/b:book/b:chapter/b:para[2]/b:link/@xlink:href unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate #nowhere kind=id_reference receiver="" reason=unresolved @docs/book.xml:7:37-7:45
+symbol docs/ids.xml#dup unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller docs/ids.xml#/doc/a/@xlink:href kind=id_reference confidence=candidate refs=1
+symbol docs/ids.xml#dup unattributed_in=1 unattributed_out=0 unresolved=0 outside=0
+  candidate_caller docs/ids.xml#/doc/a/@xlink:href kind=id_reference confidence=candidate refs=1
+symbol docs/ids.xml#/doc/a/@xlink:href unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  candidate_callee docs/ids.xml#dup kind=id_reference confidence=candidate refs=1
+  candidate_callee docs/ids.xml#dup kind=id_reference confidence=candidate refs=1
+symbol com.example.App.artifactId unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @javaapp/src/main/java/com/example/App.java:4:5-4:11
+symbol com.example.App.project unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate String kind=type_use receiver="" reason=outside_repository @javaapp/src/main/java/com/example/App.java:5:5-5:11
+symbol other/pom.xml::com.example.other:other unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate org.springframework.boot:spring-boot-starter-parent kind=inheritance receiver="" reason=outside_repository @other/pom.xml:3:3-8:12
+symbol pom.xml::com.example:parent unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate missing kind=resource_link receiver="" reason=unresolved @pom.xml:16:13-16:20
+symbol pom.xml::dependencyManagement::org.springframework.boot:spring-boot-dependencies unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate org.springframework.boot:spring-boot-dependencies kind=depends_on receiver="" reason=outside_repository @pom.xml:27:21-27:45
+symbol pom.xml::plugins::org.apache.maven.plugins:maven-compiler-plugin unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate org.apache.maven.plugins:maven-compiler-plugin kind=depends_on receiver="" reason=outside_repository @pom.xml:37:21-37:42
