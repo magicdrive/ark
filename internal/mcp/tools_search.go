@@ -25,7 +25,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"kind": map[string]interface{}{
 						"type":        "string",
-						"description": "Symbol kind filter: function, method, class, struct, interface, type, constant, variable, ...; Terraform: resource (managed and ephemeral), data_source, module (a module call), output, variable (var.* and local.*), configuration (provider, terraform, check); Rust: impl (an impl block), macro (a macro_rules! macro); HTML: document (a file), element (an element with an id); CSS: stylesheet, keyframes, font_face, property_registration, custom_property, css_class (a CSS Modules class); JavaScript: script (a file); asset (an image, a font or a media file web documents link to)",
+						"description": "Symbol kind filter: function, method, class, struct, interface, type, constant, variable, ...; Terraform: resource (managed and ephemeral), data_source, module (a module call), output, variable (var.* and local.*), configuration (provider, terraform, check); Rust: impl (an impl block), macro (a macro_rules! macro); HTML: document (a file), element (an element with an id); CSS: stylesheet, keyframes, font_face, property_registration, custom_property, css_class (a CSS Modules class); JavaScript: script (a file); YAML: document (a file), key (a mapping key, by its JSON Pointer path), anchor; GitHub Actions: workflow (a workflow file), trigger (an event of on), job, step, action (an action, by its directory); asset (an image, a font or a media file web documents link to)",
 					},
 					"namePattern": map[string]interface{}{
 						"type":        "string",
@@ -45,7 +45,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"language": map[string]interface{}{
 						"type":        "string",
-						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig (get_language_support lists them)",
+						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml (get_language_support lists them)",
 					},
 					"filePattern": map[string]interface{}{
 						"type":        "string",

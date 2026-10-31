@@ -16,6 +16,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages/yaml"
 	"github.com/magicdrive/ark/internal/languages/zig"
 	"github.com/magicdrive/ark/internal/source"
 )
@@ -172,6 +173,18 @@ func fixtures() []providerFixture {
 			// A url() broken by a space drops its declaration; the rule after it stays.
 			broken:  conformance.Case{Name: "broken", File: "broken.css", Source: []byte(".a { background: url(bad url); }\n@keyframes good { }\n")},
 			dynamic: conformance.Case{Name: "dynamic", File: "dyn.css", Source: []byte(".a { animation-name: var(--name); }\n")},
+		},
+		{
+			name:     "yaml",
+			provider: yaml.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "workflow", File: ".github/workflows/ci.yml", Source: []byte("name: CI\non:\n  push:\n    branches: [main]\npermissions:\n  contents: read\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: make lint\n  test:\n    needs: lint\n    strategy:\n      matrix:\n        os: [ubuntu-latest, macos-latest]\n    runs-on: ${{ matrix.os }}\n    steps:\n      - uses: ./.github/actions/setup\n  release:\n    needs: [lint, test]\n    uses: ./.github/workflows/release.yml\n")},
+				{Name: "action", File: ".github/actions/setup/action.yml", Source: []byte("name: Setup\ninputs:\n  version:\n    required: false\nruns:\n  using: composite\n  steps:\n    - uses: actions/setup-go@v5\n      with:\n        go-version: ${{ inputs.version }}\n    - run: echo done\n      shell: bash\n")},
+				{Name: "data", File: "config/app.yaml", Source: []byte("# settings\ndefaults: &defaults\n  adapter: postgres\ndevelopment:\n  <<: *defaults\n  database: dev\n---\nsecond: doc\n")},
+			},
+			// A document's syntax error loses that document; the next one is read.
+			broken:  conformance.Case{Name: "broken", File: "broken.yaml", Source: []byte("bad: [\n---\ngood: 1\n")},
+			dynamic: conformance.Case{Name: "dynamic", File: ".github/workflows/dyn.yml", Source: []byte("on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: ${{ matrix.action }}\n")},
 		},
 	}
 }

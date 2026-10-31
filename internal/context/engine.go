@@ -209,6 +209,8 @@ func reasonForEdge(k index.EdgeKind) string {
 		return "depends_on"
 	case index.EdgeLinks:
 		return "links"
+	case index.EdgeContains:
+		return "contains"
 	default:
 		return "direct callee"
 	}

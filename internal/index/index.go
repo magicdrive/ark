@@ -36,6 +36,10 @@ const (
 	// EdgeLinks: From links to the file To by its path (an HTML document
 	// linking another). A resource relation, forward-only like the above.
 	EdgeLinks EdgeKind = "links"
+	// EdgeContains: To is a part of From's own structure (a GitHub Actions
+	// workflow's job, a job's step). A structural relation, forward-only
+	// like the above.
+	EdgeContains EdgeKind = "contains"
 )
 
 // GraphEdge is a directed relationship between two symbols with confidence.
@@ -170,9 +174,17 @@ func New(ctx context.Context, root string, providers []language.Provider) (*Repo
 // SkipDirName reports whether a directory is never indexed: hidden
 // directories, vendor and node_modules. Every surface that scans a repository
 // for symbols must use this one rule so they all see the same files.
+//
+// A hidden directory of indexedHiddenDirs is entered, and in it only the files
+// of a provider that reads it (language.HiddenDirReader) are indexed.
 func SkipDirName(name string) bool {
-	return strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules"
+	return strings.HasPrefix(name, ".") && !indexedHiddenDirs[name] || name == "vendor" || name == "node_modules"
 }
+
+// indexedHiddenDirs are the hidden directories the index enters: .github holds
+// the workflows and actions GitHub runs (and scripts, which are not read: no
+// provider reads .github for them).
+var indexedHiddenDirs = map[string]bool{".github": true}
 
 // GetSymbol returns a symbol by its ID.
 func (idx *RepositoryIndex) GetSymbol(id symbol.SymbolID) (symbol.Symbol, bool) {

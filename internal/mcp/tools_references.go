@@ -32,7 +32,7 @@ func ReferenceToolDefinitions() []Tool {
 					},
 					"kind": map[string]interface{}{
 						"type":        "string",
-						"description": "Filter by reference kind: call, type_use, import, construction, read, write, value_reference, depends_on, id_reference, resource_link, unknown",
+						"description": "Filter by reference kind: call, type_use, import, construction, read, write, value_reference, depends_on, id_reference, resource_link, contains, unknown",
 					},
 					"maxResults": map[string]interface{}{
 						"type":        "integer",
@@ -155,8 +155,8 @@ func (h *ToolsHandler) findReferences(args map[string]interface{}) (*CallToolRes
 			if kindFilter != "" && ref.Kind != kindFilter {
 				continue
 			}
-			rid := reference.NewReferenceID(lang, fileID,
-				reference.ReferenceKind(ref.Kind), ref.Name, ref.Location)
+			rid := reference.NewReferenceIDIn(lang, fileID,
+				reference.ReferenceKind(ref.Kind), ref.Name, ref.Container, ref.Location)
 			results = append(results, referenceResult{
 				ID:           rid,
 				Name:         ref.Name,

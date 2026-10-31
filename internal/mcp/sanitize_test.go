@@ -184,3 +184,44 @@ func TestSanitize_ResourcesAndErrors(t *testing.T) {
 		t.Errorf("resource: %+v", res.Contents[0])
 	}
 }
+
+// A declaration name is masked only by what is a secret by its own form (a
+// token format), never by an assignment rule; a path, an ID or a kind never
+// is; and the text of search_code is masked as names are.
+func TestSanitize_DeclarationNamesByTokenRulesOnly(t *testing.T) {
+	in := `{"name": "tokens/` + fakeGitHub + `", "qualified": "cfg.yaml#/password: hunter2", "kind": "key",` +
+		` "file": "dir/` + fakeAWSKey + `.yaml", "symbolId": "c58fa84d28632b1a", "evidence": "\"` + fakeAWSKey + `\" is declared"}`
+	out := sanitizeText(in, false)
+	var got map[string]string
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(got["name"], fakeGitHub) || strings.Contains(got["evidence"], fakeAWSKey) {
+		t.Errorf("a token in a name or evidence left: %v", got)
+	}
+	if got["qualified"] != "cfg.yaml#/password: hunter2" || got["kind"] != "key" || got["symbolId"] != "c58fa84d28632b1a" ||
+		got["file"] != "dir/"+fakeAWSKey+".yaml" {
+		t.Errorf("an identifier altered beyond its tokens: %v", got)
+	}
+	r := sanitizeToolResult("search_code", &CallToolResult{Content: []Content{{Type: "text", Text: "cfg.yaml:2  key  cfg.yaml#/" + fakeGitHub + " [exported]\n"}}})
+	if strings.Contains(r.Content[0].Text, fakeGitHub) || !strings.Contains(r.Content[0].Text, "cfg.yaml:2  key") {
+		t.Errorf("search_code text: %q", r.Content[0].Text)
+	}
+	r = sanitizeToolResult("list_files", &CallToolResult{Content: []Content{{Type: "text", Text: "dir/" + fakeAWSKey + ".yaml\n"}}})
+	if !strings.Contains(r.Content[0].Text, fakeAWSKey) {
+		t.Errorf("list_files paths altered: %q", r.Content[0].Text)
+	}
+}
+
+// A pattern that finds a value by the name assigned to it (JWT_SECRET=…)
+// does not apply to a name: rotate_JWT_SECRET is an identifier.
+func TestSanitize_AssignmentPatternsSpareNames(t *testing.T) {
+	in := `{"name": "App\\JWT_SECRET_Holder::get", "qualified": ".github/workflows/r.yml::rotate_JWT_SECRET::x"}`
+	if out := sanitizeText(in, false); out != in {
+		t.Errorf("a name masked: %s", out)
+	}
+	r := sanitizeToolResult("search_code", &CallToolResult{Content: []Content{{Type: "text", Text: "r.yml:3  step  r.yml::rotate_JWT_SECRET::x [exported]\n"}}})
+	if !strings.Contains(r.Content[0].Text, "rotate_JWT_SECRET::x [exported]") {
+		t.Errorf("search_code text: %q", r.Content[0].Text)
+	}
+}

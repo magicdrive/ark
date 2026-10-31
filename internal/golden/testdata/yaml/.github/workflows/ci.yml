@@ -1,0 +1,70 @@
+# The repository's CI.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.27"
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: ./.github/actions/lint
+      - run: echo "${{ secrets.TOKEN }}" > /dev/null
+
+  test:
+    needs: lint
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - id: setup
+        uses: ./.github/actions/setup
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go test ./...
+      - run: go vet ./...
+        shell: bash
+
+  build:
+    needs: [lint, test]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      artifact: ${{ steps.pack.outputs.name }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: pack
+        uses: docker://alpine:3.20
+      - uses: ${{ matrix.action }}
+      - uses: not-a-reference
+
+  release:
+    needs: [build, missing]
+    if: github.ref == 'refs/heads/main'
+    uses: ./.github/workflows/reusable.yml
+    with:
+      version: "1.0"
+    secrets: inherit
+
+  remote:
+    uses: octo-org/shared/.github/workflows/deploy.yml@v2

@@ -95,7 +95,7 @@ func TestLanguageClassification_ToolsAgree(t *testing.T) {
 	if stats.LanguageStats["terraform"] != 2 || stats.SupportedLanguageStats["terraform"] != 2 {
 		t.Errorf("get_project_stats: terraform counted %d / %d, want 2 (.tf, .tfvars; not .tf.json)", stats.LanguageStats["terraform"], stats.SupportedLanguageStats["terraform"])
 	}
-	wantSupported := map[string]int{"terraform": 2, "go": 1, "javascript": 1}
+	wantSupported := map[string]int{"terraform": 2, "go": 1, "javascript": 1, "yaml": 1}
 	if len(stats.SupportedLanguageStats) != len(wantSupported) {
 		t.Errorf("supportedLanguageStats %v, want %v", stats.SupportedLanguageStats, wantSupported)
 	}

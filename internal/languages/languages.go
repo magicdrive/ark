@@ -28,6 +28,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
 	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages/yaml"
 	"github.com/magicdrive/ark/internal/languages/zig"
 )
 
@@ -106,6 +107,15 @@ func specList() []spec {
 		// and named modules (std, build.zig modules) and inferred receiver
 		// types are not resolved; see docs/language-support.md.
 		{zig.NewProvider(), grammars.ZigLanguage, language.SupportLevelGraph},
+		// YAML (.yaml / .yml): the documents' anchors and aliases, and the
+		// keys of their mappings by JSON Pointer; for GitHub Actions
+		// workflows and actions, triggers, jobs, steps and settings, with
+		// contains, needs (depends_on) and uses (calls) relations
+		// (go.yaml.in/yaml/v3; no Tree-sitter grammar). Graph, not
+		// ContextQualityCertified: no context-quality benchmark covers it,
+		// and expressions (${{ ... }}) are never evaluated; see
+		// docs/language-support.md.
+		{yaml.NewProvider(), nil, language.SupportLevelGraph},
 	}
 }
 

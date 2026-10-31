@@ -1,0 +1,20 @@
+symbol .github/actions/setup::actions/setup-go unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate actions/setup-go kind=call receiver="" reason=outside_repository @.github/actions/setup/action.yml:10:13-10:32
+symbol .github/workflows/anchors.yaml::first::actions/checkout unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate actions/checkout kind=call receiver="" reason=outside_repository @.github/workflows/anchors.yaml:6:15-6:34
+symbol .github/workflows/anchors.yaml::second::actions/checkout unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate actions/checkout kind=call receiver="" reason=outside_repository @.github/workflows/anchors.yaml:11:12-11:19
+symbol .github/workflows/ci.yml::lint::Checkout unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate actions/checkout kind=call receiver="" reason=outside_repository @.github/workflows/ci.yml:26:15-26:34
+symbol .github/workflows/ci.yml::test::Checkout unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate actions/checkout kind=call receiver="" reason=outside_repository @.github/workflows/ci.yml:38:15-38:34
+symbol .github/workflows/ci.yml::build::actions/checkout unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate actions/checkout kind=call receiver="" reason=outside_repository @.github/workflows/ci.yml:55:15-55:34
+symbol .github/workflows/ci.yml::build::pack unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate docker://alpine:3.20 kind=call receiver="" reason=outside_repository @.github/workflows/ci.yml:57:15-57:35
+symbol .github/workflows/ci.yml::build::${{ matrix.action }} unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate ${{ matrix.action }} kind=call receiver="" reason=dynamic_name @.github/workflows/ci.yml:58:15-58:35
+symbol .github/workflows/ci.yml::release unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate missing kind=depends_on receiver="" reason=unresolved @.github/workflows/ci.yml:62:20-62:27
+symbol .github/workflows/ci.yml::remote unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate octo-org/shared/.github/workflows/deploy.yml kind=call receiver="" reason=outside_repository @.github/workflows/ci.yml:70:11-70:58

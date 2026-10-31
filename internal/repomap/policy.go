@@ -156,3 +156,14 @@ func pickSymbols(entries []SymbolEntry, max int) []SymbolEntry {
 	}
 	return out
 }
+
+// accompanies reports whether a language's files accompany the code of a
+// unit rather than make it (language.Accompanying).
+func accompanies(lang string) bool {
+	p, ok := languages.Registry().Provider(language.Language(lang))
+	if !ok {
+		return false
+	}
+	a, ok := p.(language.Accompanying)
+	return ok && a.Accompanies()
+}

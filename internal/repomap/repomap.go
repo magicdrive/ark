@@ -125,7 +125,10 @@ func Build(idx *index.RepositoryIndex, root string, opts Options) *RepositoryMap
 			dir = ""
 		}
 		pkgFiles[dir] = append(pkgFiles[dir], fid)
-		if lang := fileLang(idx, fid); lang != "" && pkgLang[dir] == "" {
+		// The package's language is its first file's, unless that one
+		// accompanies the code (language.Accompanying: a YAML file beside
+		// a Go package) and another does not.
+		if lang := fileLang(idx, fid); lang != "" && (pkgLang[dir] == "" || accompanies(pkgLang[dir]) && !accompanies(lang)) {
 			pkgLang[dir] = lang
 		}
 	}

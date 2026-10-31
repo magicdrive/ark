@@ -144,9 +144,11 @@ func policyError(err error) *CallToolResult {
 }
 
 // identifiersOnly reports whether a result of tool goes out unmasked
-// whatever the policy: the plain text of an identifier tool (sanitize.go).
+// whatever the policy: the plain text of an identifier tool (sanitize.go)
+// that holds no declaration name — a name can be data the policy masks
+// (nameTextTools).
 func identifiersOnly(tool string, r *CallToolResult) bool {
-	if !identifierTextTools[tool] || compactTextTools[tool] {
+	if !identifierTextTools[tool] || compactTextTools[tool] || nameTextTools[tool] {
 		return false
 	}
 	for _, c := range r.Content {

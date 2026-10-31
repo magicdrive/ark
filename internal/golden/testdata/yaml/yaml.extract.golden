@@ -1,0 +1,186 @@
+# file: .github/actions/lint/action.yaml
+## symbols
+symbol lint kind=action qualified=".github/actions/lint" parent="" receiver="" exported=true @.github/actions/lint/action.yaml:1:1-5:1
+symbol /runs kind=key qualified=".github/actions/lint/action.yaml#/runs" parent=".github/actions/lint" receiver="" exported=true @.github/actions/lint/action.yaml:2:1-4:17
+## references
+## imports
+## identity_only
+## diagnostics
+
+# file: .github/actions/setup/action.yml
+## symbols
+symbol setup kind=action qualified=".github/actions/setup" parent="" receiver="" exported=true @.github/actions/setup/action.yml:1:1-16:1
+symbol /inputs kind=key qualified=".github/actions/setup/action.yml#/inputs" parent=".github/actions/setup" receiver="" exported=true @.github/actions/setup/action.yml:3:1-6:20
+symbol /inputs/go-version kind=key qualified=".github/actions/setup/action.yml#/inputs/go-version" parent=".github/actions/setup/action.yml#/inputs" receiver="" exported=true @.github/actions/setup/action.yml:4:3-6:20
+symbol /runs kind=key qualified=".github/actions/setup/action.yml#/runs" parent=".github/actions/setup" receiver="" exported=true @.github/actions/setup/action.yml:7:1-15:18
+symbol actions/setup-go kind=step qualified=".github/actions/setup::actions/setup-go" parent=".github/actions/setup" receiver="" exported=true @.github/actions/setup/action.yml:10:7-12:45
+symbol ./.github/actions/lint kind=step qualified=".github/actions/setup::./.github/actions/lint" parent=".github/actions/setup" receiver="" exported=true @.github/actions/setup/action.yml:13:7-13:35
+symbol run kind=step qualified=".github/actions/setup::run" parent=".github/actions/setup" receiver="" exported=true @.github/actions/setup/action.yml:14:7-15:18
+## references
+ref .github/actions/setup::actions/setup-go kind=contains container=".github/actions/setup" receiver="" name_qualified=".github/actions/setup::actions/setup-go" identity_in_repository=true call=false @.github/actions/setup/action.yml:10:7-10:11
+ref actions/setup-go kind=call container=".github/actions/setup::actions/setup-go" receiver="" name_qualified="remote:actions/setup-go@v5" call=true @.github/actions/setup/action.yml:10:13-10:32
+ref .github/actions/setup::./.github/actions/lint kind=contains container=".github/actions/setup" receiver="" name_qualified=".github/actions/setup::./.github/actions/lint" identity_in_repository=true call=false @.github/actions/setup/action.yml:13:7-13:11
+ref ./.github/actions/lint kind=call container=".github/actions/setup::./.github/actions/lint" receiver="" name_qualified=".github/actions/lint" identity_in_repository=true call=true @.github/actions/setup/action.yml:13:13-13:35
+ref .github/actions/setup::run kind=contains container=".github/actions/setup" receiver="" name_qualified=".github/actions/setup::run" identity_in_repository=true call=false @.github/actions/setup/action.yml:14:7-14:10
+## imports
+## identity_only
+## diagnostics
+
+# file: .github/workflows/anchors.yaml
+## symbols
+symbol anchors.yaml kind=workflow qualified=".github/workflows/anchors.yaml" parent="" receiver="" exported=true @.github/workflows/anchors.yaml:1:1-17:1
+symbol push kind=trigger qualified=".github/workflows/anchors.yaml::on:push" parent=".github/workflows/anchors.yaml" receiver="" exported=true @.github/workflows/anchors.yaml:1:6-1:10
+symbol first kind=job qualified=".github/workflows/anchors.yaml::first" parent=".github/workflows/anchors.yaml" receiver="" exported=true @.github/workflows/anchors.yaml:3:3-7:38
+symbol &runner kind=anchor qualified=".github/workflows/anchors.yaml#&runner" parent="" receiver="" exported=true @.github/workflows/anchors.yaml:4:14-4:35
+symbol &common kind=anchor qualified=".github/workflows/anchors.yaml#&common" parent="" receiver="" exported=true @.github/workflows/anchors.yaml:5:12-7:38
+symbol actions/checkout kind=step qualified=".github/workflows/anchors.yaml::first::actions/checkout" parent=".github/workflows/anchors.yaml::first" receiver="" exported=true @.github/workflows/anchors.yaml:6:9-6:34
+symbol ./.github/actions/setup kind=step qualified=".github/workflows/anchors.yaml::first::./.github/actions/setup" parent=".github/workflows/anchors.yaml::first" receiver="" exported=true @.github/workflows/anchors.yaml:7:9-7:38
+symbol second kind=job qualified=".github/workflows/anchors.yaml::second" parent=".github/workflows/anchors.yaml" receiver="" exported=true @.github/workflows/anchors.yaml:8:3-11:19
+symbol ./.github/actions/setup kind=step qualified=".github/workflows/anchors.yaml::second::./.github/actions/setup" parent=".github/workflows/anchors.yaml::second" receiver="" exported=true @.github/workflows/anchors.yaml:11:12-11:19
+symbol actions/checkout kind=step qualified=".github/workflows/anchors.yaml::second::actions/checkout" parent=".github/workflows/anchors.yaml::second" receiver="" exported=true @.github/workflows/anchors.yaml:11:12-11:19
+symbol third kind=job qualified=".github/workflows/anchors.yaml::third" parent=".github/workflows/anchors.yaml" receiver="" exported=true @.github/workflows/anchors.yaml:12:3-16:24
+symbol run kind=step qualified=".github/workflows/anchors.yaml::third::run" parent=".github/workflows/anchors.yaml::third" receiver="" exported=true @.github/workflows/anchors.yaml:16:9-16:24
+## references
+ref .github/workflows/anchors.yaml::on:push kind=contains container=".github/workflows/anchors.yaml" receiver="" name_qualified=".github/workflows/anchors.yaml::on:push" identity_in_repository=true call=false @.github/workflows/anchors.yaml:1:6-1:10
+ref .github/workflows/anchors.yaml::first kind=contains container=".github/workflows/anchors.yaml" receiver="" name_qualified=".github/workflows/anchors.yaml::first" identity_in_repository=true call=false @.github/workflows/anchors.yaml:3:3-3:8
+ref .github/workflows/anchors.yaml::first::actions/checkout kind=contains container=".github/workflows/anchors.yaml::first" receiver="" name_qualified=".github/workflows/anchors.yaml::first::actions/checkout" identity_in_repository=true call=false @.github/workflows/anchors.yaml:6:9-6:13
+ref actions/checkout kind=call container=".github/workflows/anchors.yaml::first::actions/checkout" receiver="" name_qualified="remote:actions/checkout@v4" call=true @.github/workflows/anchors.yaml:6:15-6:34
+ref .github/workflows/anchors.yaml::first::./.github/actions/setup kind=contains container=".github/workflows/anchors.yaml::first" receiver="" name_qualified=".github/workflows/anchors.yaml::first::./.github/actions/setup" identity_in_repository=true call=false @.github/workflows/anchors.yaml:7:9-7:13
+ref ./.github/actions/setup kind=call container=".github/workflows/anchors.yaml::first::./.github/actions/setup" receiver="" name_qualified=".github/actions/setup" identity_in_repository=true call=true @.github/workflows/anchors.yaml:7:15-7:38
+ref .github/workflows/anchors.yaml::second kind=contains container=".github/workflows/anchors.yaml" receiver="" name_qualified=".github/workflows/anchors.yaml::second" identity_in_repository=true call=false @.github/workflows/anchors.yaml:8:3-8:9
+ref runner kind=value_reference container=".github/workflows/anchors.yaml::second" receiver="" name_qualified=".github/workflows/anchors.yaml#&runner" identity_in_repository=true call=false @.github/workflows/anchors.yaml:9:14-9:21
+ref first kind=depends_on container=".github/workflows/anchors.yaml::second" receiver="" name_qualified=".github/workflows/anchors.yaml::first" identity_in_repository=true call=false @.github/workflows/anchors.yaml:10:13-10:18
+ref third kind=depends_on container=".github/workflows/anchors.yaml::second" receiver="" name_qualified=".github/workflows/anchors.yaml::third" identity_in_repository=true call=false @.github/workflows/anchors.yaml:10:20-10:25
+ref ./.github/actions/setup kind=call container=".github/workflows/anchors.yaml::second::./.github/actions/setup" receiver="" name_qualified=".github/actions/setup" identity_in_repository=true call=true @.github/workflows/anchors.yaml:11:12-11:19
+ref .github/workflows/anchors.yaml::second::./.github/actions/setup kind=contains container=".github/workflows/anchors.yaml::second" receiver="" name_qualified=".github/workflows/anchors.yaml::second::./.github/actions/setup" identity_in_repository=true call=false @.github/workflows/anchors.yaml:11:12-11:19
+ref .github/workflows/anchors.yaml::second::actions/checkout kind=contains container=".github/workflows/anchors.yaml::second" receiver="" name_qualified=".github/workflows/anchors.yaml::second::actions/checkout" identity_in_repository=true call=false @.github/workflows/anchors.yaml:11:12-11:19
+ref actions/checkout kind=call container=".github/workflows/anchors.yaml::second::actions/checkout" receiver="" name_qualified="remote:actions/checkout@v4" call=true @.github/workflows/anchors.yaml:11:12-11:19
+ref common kind=value_reference container=".github/workflows/anchors.yaml::second" receiver="" name_qualified=".github/workflows/anchors.yaml#&common" identity_in_repository=true call=false @.github/workflows/anchors.yaml:11:12-11:19
+ref .github/workflows/anchors.yaml::third kind=contains container=".github/workflows/anchors.yaml" receiver="" name_qualified=".github/workflows/anchors.yaml::third" identity_in_repository=true call=false @.github/workflows/anchors.yaml:12:3-12:8
+ref second kind=depends_on container=".github/workflows/anchors.yaml::third" receiver="" name_qualified=".github/workflows/anchors.yaml::second" identity_in_repository=true call=false @.github/workflows/anchors.yaml:13:12-13:18
+ref .github/workflows/anchors.yaml::third::run kind=contains container=".github/workflows/anchors.yaml::third" receiver="" name_qualified=".github/workflows/anchors.yaml::third::run" identity_in_repository=true call=false @.github/workflows/anchors.yaml:16:9-16:12
+## imports
+## identity_only
+## diagnostics
+diag warning code=actions_needs_cycle "the job \"second\" needs itself through its needs: GitHub does not run the workflow" @.github/workflows/anchors.yaml:8:3-8:9
+diag warning code=actions_needs_cycle "the job \"third\" needs itself through its needs: GitHub does not run the workflow" @.github/workflows/anchors.yaml:12:3-12:8
+
+# file: .github/workflows/ci.yml
+## symbols
+symbol ci.yml kind=workflow qualified=".github/workflows/ci.yml" parent="" receiver="" exported=true @.github/workflows/ci.yml:1:1-71:1
+symbol push kind=trigger qualified=".github/workflows/ci.yml::on:push" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:5:3-6:21
+symbol pull_request kind=trigger qualified=".github/workflows/ci.yml::on:pull_request" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:7:3-7:16
+symbol workflow_dispatch kind=trigger qualified=".github/workflows/ci.yml::on:workflow_dispatch" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:8:3-8:21
+symbol /permissions kind=key qualified=".github/workflows/ci.yml#/permissions" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:10:1-11:17
+symbol /concurrency kind=key qualified=".github/workflows/ci.yml#/concurrency" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:13:1-15:27
+symbol /env kind=key qualified=".github/workflows/ci.yml#/env" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:17:1-18:21
+symbol lint kind=job qualified=".github/workflows/ci.yml::lint" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:21:3-28:53
+symbol Checkout kind=step qualified=".github/workflows/ci.yml::lint::Checkout" parent=".github/workflows/ci.yml::lint" receiver="" exported=true @.github/workflows/ci.yml:25:9-26:34
+symbol ./.github/actions/lint kind=step qualified=".github/workflows/ci.yml::lint::./.github/actions/lint" parent=".github/workflows/ci.yml::lint" receiver="" exported=true @.github/workflows/ci.yml:27:9-27:37
+symbol run kind=step qualified=".github/workflows/ci.yml::lint::run" parent=".github/workflows/ci.yml::lint" receiver="" exported=true @.github/workflows/ci.yml:28:9-28:53
+symbol test kind=job qualified=".github/workflows/ci.yml::test" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:30:3-45:20
+symbol /jobs/test/strategy kind=key qualified=".github/workflows/ci.yml#/jobs/test/strategy" parent=".github/workflows/ci.yml::test" receiver="" exported=true @.github/workflows/ci.yml:33:5-35:42
+symbol Checkout kind=step qualified=".github/workflows/ci.yml::test::Checkout" parent=".github/workflows/ci.yml::test" receiver="" exported=true @.github/workflows/ci.yml:37:9-38:34
+symbol setup kind=step qualified=".github/workflows/ci.yml::test::setup" parent=".github/workflows/ci.yml::test" receiver="" exported=true @.github/workflows/ci.yml:39:9-42:44
+symbol run kind=step qualified=".github/workflows/ci.yml::test::run" parent=".github/workflows/ci.yml::test" receiver="" exported=true @.github/workflows/ci.yml:43:9-43:27
+symbol run kind=step qualified=".github/workflows/ci.yml::test::run#2" parent=".github/workflows/ci.yml::test" receiver="" exported=true @.github/workflows/ci.yml:44:9-45:20
+symbol build kind=job qualified=".github/workflows/ci.yml::build" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:47:3-59:30
+symbol /jobs/build/permissions kind=key qualified=".github/workflows/ci.yml#/jobs/build/permissions" parent=".github/workflows/ci.yml::build" receiver="" exported=true @.github/workflows/ci.yml:50:5-51:22
+symbol /jobs/build/outputs kind=key qualified=".github/workflows/ci.yml#/jobs/build/outputs" parent=".github/workflows/ci.yml::build" receiver="" exported=true @.github/workflows/ci.yml:52:5-53:47
+symbol actions/checkout kind=step qualified=".github/workflows/ci.yml::build::actions/checkout" parent=".github/workflows/ci.yml::build" receiver="" exported=true @.github/workflows/ci.yml:55:9-55:34
+symbol pack kind=step qualified=".github/workflows/ci.yml::build::pack" parent=".github/workflows/ci.yml::build" receiver="" exported=true @.github/workflows/ci.yml:56:9-57:35
+symbol ${{ matrix.action }} kind=step qualified=".github/workflows/ci.yml::build::${{ matrix.action }}" parent=".github/workflows/ci.yml::build" receiver="" exported=true @.github/workflows/ci.yml:58:9-58:35
+symbol not-a-reference kind=step qualified=".github/workflows/ci.yml::build::not-a-reference" parent=".github/workflows/ci.yml::build" receiver="" exported=true @.github/workflows/ci.yml:59:9-59:30
+symbol release kind=job qualified=".github/workflows/ci.yml::release" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:61:3-67:21
+symbol /jobs/release/if kind=key qualified=".github/workflows/ci.yml#/jobs/release/if" parent=".github/workflows/ci.yml::release" receiver="" exported=true @.github/workflows/ci.yml:63:5-63:40
+symbol /jobs/release/with kind=key qualified=".github/workflows/ci.yml#/jobs/release/with" parent=".github/workflows/ci.yml::release" receiver="" exported=true @.github/workflows/ci.yml:65:5-66:21
+symbol /jobs/release/secrets kind=key qualified=".github/workflows/ci.yml#/jobs/release/secrets" parent=".github/workflows/ci.yml::release" receiver="" exported=true @.github/workflows/ci.yml:67:5-67:21
+symbol remote kind=job qualified=".github/workflows/ci.yml::remote" parent=".github/workflows/ci.yml" receiver="" exported=true @.github/workflows/ci.yml:69:3-70:58
+## references
+ref .github/workflows/ci.yml::on:push kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::on:push" identity_in_repository=true call=false @.github/workflows/ci.yml:5:3-5:7
+ref .github/workflows/ci.yml::on:pull_request kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::on:pull_request" identity_in_repository=true call=false @.github/workflows/ci.yml:7:3-7:15
+ref .github/workflows/ci.yml::on:workflow_dispatch kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::on:workflow_dispatch" identity_in_repository=true call=false @.github/workflows/ci.yml:8:3-8:20
+ref .github/workflows/ci.yml::lint kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::lint" identity_in_repository=true call=false @.github/workflows/ci.yml:21:3-21:7
+ref .github/workflows/ci.yml::lint::Checkout kind=contains container=".github/workflows/ci.yml::lint" receiver="" name_qualified=".github/workflows/ci.yml::lint::Checkout" identity_in_repository=true call=false @.github/workflows/ci.yml:25:9-25:13
+ref actions/checkout kind=call container=".github/workflows/ci.yml::lint::Checkout" receiver="" name_qualified="remote:actions/checkout@v4" call=true @.github/workflows/ci.yml:26:15-26:34
+ref .github/workflows/ci.yml::lint::./.github/actions/lint kind=contains container=".github/workflows/ci.yml::lint" receiver="" name_qualified=".github/workflows/ci.yml::lint::./.github/actions/lint" identity_in_repository=true call=false @.github/workflows/ci.yml:27:9-27:13
+ref ./.github/actions/lint kind=call container=".github/workflows/ci.yml::lint::./.github/actions/lint" receiver="" name_qualified=".github/actions/lint" identity_in_repository=true call=true @.github/workflows/ci.yml:27:15-27:37
+ref .github/workflows/ci.yml::lint::run kind=contains container=".github/workflows/ci.yml::lint" receiver="" name_qualified=".github/workflows/ci.yml::lint::run" identity_in_repository=true call=false @.github/workflows/ci.yml:28:9-28:12
+ref .github/workflows/ci.yml::test kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::test" identity_in_repository=true call=false @.github/workflows/ci.yml:30:3-30:7
+ref lint kind=depends_on container=".github/workflows/ci.yml::test" receiver="" name_qualified=".github/workflows/ci.yml::lint" identity_in_repository=true call=false @.github/workflows/ci.yml:31:12-31:16
+ref .github/workflows/ci.yml::test::Checkout kind=contains container=".github/workflows/ci.yml::test" receiver="" name_qualified=".github/workflows/ci.yml::test::Checkout" identity_in_repository=true call=false @.github/workflows/ci.yml:37:9-37:13
+ref actions/checkout kind=call container=".github/workflows/ci.yml::test::Checkout" receiver="" name_qualified="remote:actions/checkout@v4" call=true @.github/workflows/ci.yml:38:15-38:34
+ref .github/workflows/ci.yml::test::setup kind=contains container=".github/workflows/ci.yml::test" receiver="" name_qualified=".github/workflows/ci.yml::test::setup" identity_in_repository=true call=false @.github/workflows/ci.yml:39:9-39:11
+ref ./.github/actions/setup kind=call container=".github/workflows/ci.yml::test::setup" receiver="" name_qualified=".github/actions/setup" identity_in_repository=true call=true @.github/workflows/ci.yml:40:15-40:38
+ref .github/workflows/ci.yml::test::run kind=contains container=".github/workflows/ci.yml::test" receiver="" name_qualified=".github/workflows/ci.yml::test::run" identity_in_repository=true call=false @.github/workflows/ci.yml:43:9-43:12
+ref .github/workflows/ci.yml::test::run#2 kind=contains container=".github/workflows/ci.yml::test" receiver="" name_qualified=".github/workflows/ci.yml::test::run#2" identity_in_repository=true call=false @.github/workflows/ci.yml:44:9-44:12
+ref .github/workflows/ci.yml::build kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::build" identity_in_repository=true call=false @.github/workflows/ci.yml:47:3-47:8
+ref lint kind=depends_on container=".github/workflows/ci.yml::build" receiver="" name_qualified=".github/workflows/ci.yml::lint" identity_in_repository=true call=false @.github/workflows/ci.yml:48:13-48:17
+ref test kind=depends_on container=".github/workflows/ci.yml::build" receiver="" name_qualified=".github/workflows/ci.yml::test" identity_in_repository=true call=false @.github/workflows/ci.yml:48:19-48:23
+ref .github/workflows/ci.yml::build::actions/checkout kind=contains container=".github/workflows/ci.yml::build" receiver="" name_qualified=".github/workflows/ci.yml::build::actions/checkout" identity_in_repository=true call=false @.github/workflows/ci.yml:55:9-55:13
+ref actions/checkout kind=call container=".github/workflows/ci.yml::build::actions/checkout" receiver="" name_qualified="remote:actions/checkout@v4" call=true @.github/workflows/ci.yml:55:15-55:34
+ref .github/workflows/ci.yml::build::pack kind=contains container=".github/workflows/ci.yml::build" receiver="" name_qualified=".github/workflows/ci.yml::build::pack" identity_in_repository=true call=false @.github/workflows/ci.yml:56:9-56:11
+ref docker://alpine:3.20 kind=call container=".github/workflows/ci.yml::build::pack" receiver="" name_qualified="remote:docker://alpine:3.20" call=true @.github/workflows/ci.yml:57:15-57:35
+ref .github/workflows/ci.yml::build::${{ matrix.action }} kind=contains container=".github/workflows/ci.yml::build" receiver="" name_qualified=".github/workflows/ci.yml::build::${{ matrix.action }}" identity_in_repository=true call=false @.github/workflows/ci.yml:58:9-58:13
+ref ${{ matrix.action }} kind=call container=".github/workflows/ci.yml::build::${{ matrix.action }}" receiver="" dynamic=true call=true @.github/workflows/ci.yml:58:15-58:35
+ref .github/workflows/ci.yml::build::not-a-reference kind=contains container=".github/workflows/ci.yml::build" receiver="" name_qualified=".github/workflows/ci.yml::build::not-a-reference" identity_in_repository=true call=false @.github/workflows/ci.yml:59:9-59:13
+ref .github/workflows/ci.yml::release kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::release" identity_in_repository=true call=false @.github/workflows/ci.yml:61:3-61:10
+ref build kind=depends_on container=".github/workflows/ci.yml::release" receiver="" name_qualified=".github/workflows/ci.yml::build" identity_in_repository=true call=false @.github/workflows/ci.yml:62:13-62:18
+ref missing kind=depends_on container=".github/workflows/ci.yml::release" receiver="" name_qualified=".github/workflows/ci.yml::missing" identity_in_repository=true call=false @.github/workflows/ci.yml:62:20-62:27
+ref ./.github/workflows/reusable.yml kind=call container=".github/workflows/ci.yml::release" receiver="" name_qualified=".github/workflows/reusable.yml" identity_in_repository=true call=true @.github/workflows/ci.yml:64:11-64:43
+ref .github/workflows/ci.yml::remote kind=contains container=".github/workflows/ci.yml" receiver="" name_qualified=".github/workflows/ci.yml::remote" identity_in_repository=true call=false @.github/workflows/ci.yml:69:3-69:9
+ref octo-org/shared/.github/workflows/deploy.yml kind=call container=".github/workflows/ci.yml::remote" receiver="" name_qualified="remote:octo-org/shared/.github/workflows/deploy.yml@v2" call=true @.github/workflows/ci.yml:70:11-70:58
+## imports
+## identity_only
+## diagnostics
+diag warning code=actions_invalid_uses "\"not-a-reference\" is no reference GitHub Actions accepts in uses" @.github/workflows/ci.yml:59:15-59:30
+
+# file: .github/workflows/reusable.yml
+## symbols
+symbol reusable.yml kind=workflow qualified=".github/workflows/reusable.yml" parent="" receiver="" exported=true @.github/workflows/reusable.yml:1:1-13:1
+symbol workflow_call kind=trigger qualified=".github/workflows/reusable.yml::on:workflow_call" parent=".github/workflows/reusable.yml" receiver="" exported=true @.github/workflows/reusable.yml:3:3-7:23
+symbol publish kind=job qualified=".github/workflows/reusable.yml::publish" parent=".github/workflows/reusable.yml" receiver="" exported=true @.github/workflows/reusable.yml:9:3-12:38
+symbol ./.github/actions/setup kind=step qualified=".github/workflows/reusable.yml::publish::./.github/actions/setup" parent=".github/workflows/reusable.yml::publish" receiver="" exported=true @.github/workflows/reusable.yml:12:9-12:38
+## references
+ref .github/workflows/reusable.yml::on:workflow_call kind=contains container=".github/workflows/reusable.yml" receiver="" name_qualified=".github/workflows/reusable.yml::on:workflow_call" identity_in_repository=true call=false @.github/workflows/reusable.yml:3:3-3:16
+ref .github/workflows/reusable.yml::publish kind=contains container=".github/workflows/reusable.yml" receiver="" name_qualified=".github/workflows/reusable.yml::publish" identity_in_repository=true call=false @.github/workflows/reusable.yml:9:3-9:10
+ref .github/workflows/reusable.yml::publish::./.github/actions/setup kind=contains container=".github/workflows/reusable.yml::publish" receiver="" name_qualified=".github/workflows/reusable.yml::publish::./.github/actions/setup" identity_in_repository=true call=false @.github/workflows/reusable.yml:12:9-12:13
+ref ./.github/actions/setup kind=call container=".github/workflows/reusable.yml::publish::./.github/actions/setup" receiver="" name_qualified=".github/actions/setup" identity_in_repository=true call=true @.github/workflows/reusable.yml:12:15-12:38
+## imports
+## identity_only
+## diagnostics
+
+# file: config/app.yaml
+## symbols
+symbol app.yaml kind=document qualified="config/app.yaml" parent="" receiver="" exported=true @config/app.yaml:1:1-15:1
+symbol /defaults kind=key qualified="config/app.yaml#/defaults" parent="config/app.yaml" receiver="" exported=true @config/app.yaml:2:1-4:18
+symbol &defaults kind=anchor qualified="config/app.yaml#&defaults" parent="" receiver="" exported=true @config/app.yaml:2:11-4:18
+symbol /defaults/adapter kind=key qualified="config/app.yaml#/defaults/adapter" parent="config/app.yaml#/defaults" receiver="" exported=true @config/app.yaml:3:3-3:20
+symbol /defaults/host kind=key qualified="config/app.yaml#/defaults/host" parent="config/app.yaml#/defaults" receiver="" exported=true @config/app.yaml:4:3-4:18
+symbol /development kind=key qualified="config/app.yaml#/development" parent="config/app.yaml" receiver="" exported=true @config/app.yaml:5:1-7:16
+symbol /development/database kind=key qualified="config/app.yaml#/development/database" parent="config/app.yaml#/development" receiver="" exported=true @config/app.yaml:6:3-6:16
+symbol /production kind=key qualified="config/app.yaml#/production" parent="config/app.yaml" receiver="" exported=true @config/app.yaml:8:1-12:16
+symbol /production/database kind=key qualified="config/app.yaml#/production/database" parent="config/app.yaml#/production" receiver="" exported=true @config/app.yaml:9:3-9:17
+symbol /production/pool kind=key qualified="config/app.yaml#/production/pool" parent="config/app.yaml#/production" receiver="" exported=true @config/app.yaml:10:3-12:16
+symbol /production/pool/size kind=key qualified="config/app.yaml#/production/pool/size" parent="config/app.yaml#/production/pool" receiver="" exported=true @config/app.yaml:11:5-11:12
+symbol /production/pool/timeout kind=key qualified="config/app.yaml#/production/pool/timeout" parent="config/app.yaml#/production/pool" receiver="" exported=true @config/app.yaml:12:5-12:16
+symbol /second kind=key qualified="config/app.yaml#1/second" parent="config/app.yaml" receiver="" exported=true @config/app.yaml:14:1-14:17
+## references
+ref defaults kind=value_reference container="config/app.yaml#/development" receiver="" name_qualified="config/app.yaml#&defaults" identity_in_repository=true call=false @config/app.yaml:7:7-7:16
+## imports
+## identity_only
+## diagnostics
+
+# file: config/broken.yml
+## symbols
+symbol broken.yml kind=document qualified="config/broken.yml" parent="" receiver="" exported=true @config/broken.yml:1:1-8:1
+symbol /ok kind=key qualified="config/broken.yml#/ok" parent="config/broken.yml" receiver="" exported=true @config/broken.yml:1:1-1:6
+symbol /after kind=key qualified="config/broken.yml#2/after" parent="config/broken.yml" receiver="" exported=true @config/broken.yml:5:1-5:17
+symbol /dup kind=key qualified="config/broken.yml#2/dup" parent="config/broken.yml" receiver="" exported=true @config/broken.yml:6:1-6:7
+## references
+## imports
+## identity_only
+## diagnostics
+diag error code=yaml_syntax "yaml: did not find expected node content" @config/broken.yml:3:1-4:1
+diag warning code=yaml_duplicate_key "the key \"dup\" is stated twice in one mapping" @config/broken.yml:7:1-7:4
+

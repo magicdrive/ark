@@ -288,7 +288,7 @@ func newFileIndex(lang, space string, fileID source.FileID, ex language.Extracti
 	for _, rd := range ex.References {
 		rk := reference.ReferenceKind(rd.Kind)
 		fileRefs = append(fileRefs, reference.Reference{
-			ID:           reference.NewReferenceID(lang, fileID, rk, rd.Name, rd.Location),
+			ID:           reference.NewReferenceIDIn(lang, fileID, rk, rd.Name, rd.Container, rd.Location),
 			Name:         rd.Name,
 			Kind:         rk,
 			Language:     lang,
@@ -808,7 +808,7 @@ func refKindRank(k reference.ReferenceKind) int {
 		reference.KindCall, reference.KindConstruction, reference.KindImplements,
 		reference.KindInheritance, reference.KindUsesTrait, reference.KindTypeUse,
 		reference.KindValueReference, reference.KindIDReference, reference.KindExplicitDependency,
-		reference.KindResourceLink, reference.KindImport,
+		reference.KindResourceLink, reference.KindContains, reference.KindImport,
 	} {
 		if k == r {
 			return i
@@ -902,6 +902,8 @@ func edgeKindFor(k reference.ReferenceKind) (EdgeKind, bool) {
 		return EdgeLinks, true
 	case reference.KindExplicitDependency:
 		return EdgeDependsOn, true
+	case reference.KindContains:
+		return EdgeContains, true
 	}
 	return "", false
 }

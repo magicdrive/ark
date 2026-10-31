@@ -1,0 +1,7 @@
+ok: 1
+---
+broken: [
+---
+after: the error
+dup: 1
+dup: 2

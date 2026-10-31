@@ -178,6 +178,10 @@ type compiledPattern struct {
 	re    *regexp.Regexp
 	group int
 	rule  int
+	// assignment marks a pattern that finds a value by the name assigned to
+	// it (JWT_SECRET=…), not by the value's own form: it does not apply to
+	// an identifier (Mode.Tokens).
+	assignment bool
 }
 
 // cuts returns the spans of s the pattern masks. A match of no length masks
@@ -230,7 +234,7 @@ func (p *Policy) run(content string, mode Mode, rec *spans) string {
 		}
 		line := doc.sub(start, end)
 		if !mode.Compact {
-			out.WriteString(p.maskLine(&line, &block, mode.Syntax, rec, &buf))
+			out.WriteString(p.maskLine(&line, &block, mode, rec, &buf))
 		} else {
 			// "␤" stands for a line break in Ark's compact formats.
 			seg := 0
@@ -240,12 +244,12 @@ func (p *Policy) run(content string, mode Mode, rec *spans) string {
 					break
 				}
 				part := line.sub(seg, seg+i)
-				out.WriteString(p.maskLine(&part, &block, mode.Syntax, rec, &buf))
+				out.WriteString(p.maskLine(&part, &block, mode, rec, &buf))
 				out.WriteString(lineBreakSymbol)
 				seg += i + len(lineBreakSymbol)
 			}
 			part := line.sub(seg, len(line.s))
-			out.WriteString(p.maskLine(&part, &block, mode.Syntax, rec, &buf))
+			out.WriteString(p.maskLine(&part, &block, mode, rec, &buf))
 		}
 		start = end + 1
 	}
@@ -254,8 +258,10 @@ func (p *Policy) run(content string, mode Mode, rec *spans) string {
 
 // maskLine masks one line (without its "\n"): a line of an open body whole,
 // any other by the pattern rules and then the assignment rules, noting a
-// body its last secret-like value opens.
-func (p *Policy) maskLine(line *ptext, b *valueBlock, syntax Syntax, rec *spans, buf *[]cut) string {
+// body its last secret-like value opens. In mode.Tokens only the pattern
+// rules apply.
+func (p *Policy) maskLine(line *ptext, b *valueBlock, mode Mode, rec *spans, buf *[]cut) string {
+	syntax := mode.Syntax
 	body, _ := strings.CutSuffix(line.s, "\r")
 	if b.open {
 		trimmed := strings.TrimLeft(body, " \t")
@@ -279,14 +285,17 @@ func (p *Policy) maskLine(line *ptext, b *valueBlock, syntax Syntax, rec *spans,
 		}
 		b.open = false
 	}
-	if p.assign != nil {
+	if p.assign != nil && !mode.Tokens {
 		b.opens(p.assign, body)
 	}
 	for _, pat := range p.patterns {
+		if mode.Tokens && pat.assignment {
+			continue
+		}
 		*buf = pat.cuts(line.s, (*buf)[:0])
 		line.apply(*buf, rec)
 	}
-	if p.assign != nil {
+	if p.assign != nil && !mode.Tokens {
 		*buf = p.assign.cuts(line.s, syntax, (*buf)[:0])
 		line.apply(*buf, rec)
 	}

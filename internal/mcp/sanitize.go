@@ -26,12 +26,17 @@ import (
 //
 //   - JSON: every string value is masked except values of identifierKeys —
 //     names, paths, IDs and Ark's own enumerations, which a client passes back
-//     in later calls and which masking must not alter. Keys, numbers, booleans,
-//     null, array and object structure and key order are never touched. A
-//     result in which nothing is masked is returned byte for byte.
+//     in later calls and which masking must not alter. Of a declaration name
+//     (declarationNameKeys) only what is a secret by its own form is masked
+//     (secrets.Mode.Tokens: a PEM block, a known token format): a name can be
+//     data (a YAML key, a step name), and its symbolId still selects it.
+//     Paths, IDs and enumerations are never altered. Keys, numbers, booleans, null, array and object structure and key order
+//     are never touched. A result in which nothing is masked is returned byte
+//     for byte.
 //   - Text: the whole text is masked, except the text of the tools in
 //     identifierTextTools, whose text is built only from paths, declaration
-//     names, kinds and counts.
+//     names, kinds and counts: of the tools whose text holds declaration
+//     names (nameTextTools) only what is a secret by its own form is masked.
 //
 // Unknown keys and unknown tools are masked: a new field or tool is protected
 // until it is reviewed. If a JSON result cannot be re-encoded, the whole text
@@ -64,6 +69,19 @@ var identifierKeys = map[string]bool{
 	"query": true,
 }
 
+// declarationNameKeys are the identifierKeys whose values are declaration
+// names — qualified or not, a receiver type, an edge's ends, the evidence
+// built from them — rather than paths, IDs or enumerations.
+var declarationNameKeys = map[string]bool{
+	"name": true, "qualifiedName": true, "qualified": true, "symbol": true, "from": true, "to": true,
+	"target": true, "target_name": true, "container": true, "evidence": true,
+	"Name": true, "Qualified": true, "From": true, "To": true, "Parent": true, "ParentQualified": true, "Receiver": true,
+}
+
+// nameTextTools are the identifierTextTools whose text holds declaration
+// names besides paths.
+var nameTextTools = map[string]bool{"get_repository_map": true, "search_code": true}
+
 // identifierTextTools are the tools whose text output contains only paths,
 // declaration names, kinds, counts and the client's own query: list_files
 // (paths), get_repository_map (package paths and declaration names) and
@@ -94,7 +112,11 @@ func sanitizeToolResultWith(tool string, r *CallToolResult, p *secrets.Policy) *
 			r.Content[i].Text = p.Mask(r.Content[i].Text, secrets.Mode{Syntax: r.maskSyntax, Compact: true})
 			continue
 		}
-		r.Content[i].Text = sanitizeTextIn(r.Content[i].Text, identifierTextTools[tool], r.maskSyntax, p)
+		text := r.Content[i].Text
+		if nameTextTools[tool] && !isJSONText(text) {
+			text = p.Mask(text, secrets.Mode{Syntax: r.maskSyntax, Tokens: true})
+		}
+		r.Content[i].Text = sanitizeTextIn(text, identifierTextTools[tool], r.maskSyntax, p)
 	}
 	return r
 }
@@ -266,8 +288,9 @@ func rewriteJSON(body string, syntax secrets.Syntax, p *secrets.Policy) ([]byte,
 			}
 			beginValue()
 			value := t
-			if f := top(); f == nil || !identifierKeys[f.key] {
-				if m := p.Mask(t, secrets.Mode{Syntax: syntax}); m != t {
+			if f := top(); f == nil || !identifierKeys[f.key] || declarationNameKeys[f.key] {
+				mode := secrets.Mode{Syntax: syntax, Tokens: f != nil && declarationNameKeys[f.key]}
+				if m := p.Mask(t, mode); m != t {
 					value, changed = m, true
 				}
 			}

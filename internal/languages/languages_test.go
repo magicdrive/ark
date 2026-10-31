@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css", "zig"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css", "zig", "yaml"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -25,7 +25,7 @@ func TestRegistry_CanonicalSet(t *testing.T) {
 
 // withoutGrammar are the languages whose provider parses without
 // Tree-sitter (HTML: golang.org/x/net/html; CSS: its own CSS Syntax Level 3).
-var withoutGrammar = map[language.Language]bool{"html": true, "css": true}
+var withoutGrammar = map[language.Language]bool{"html": true, "css": true, "yaml": true}
 
 // TestRegistry_DescriptorIntegrity verifies each descriptor is coherent: the
 // extensions match the provider's own Extensions(), and a grammar exists —
@@ -84,6 +84,7 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"html":       language.SupportLevelGraph,
 		"css":        language.SupportLevelGraph,
 		"zig":        language.SupportLevelGraph,
+		"yaml":       language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)
@@ -161,6 +162,22 @@ func TestRegistry_ZigExtensions(t *testing.T) {
 	for _, name := range []string{"build.zig.zon", "x.zon", "x.zig.bak", "zig"} {
 		if d, ok := reg.DetectByFilename(name); ok && d.Language == "zig" {
 			t.Errorf("%s: must not be indexed as zig", name)
+		}
+	}
+}
+
+// TestRegistry_YAMLExtensions pins the files YAML is indexed for: .yaml and
+// .yml, in any case; JSON (a YAML subset) and others are not.
+func TestRegistry_YAMLExtensions(t *testing.T) {
+	reg := languages.Registry()
+	for _, name := range []string{"a.yaml", "a.yml", ".github/workflows/CI.YML", "action.yaml"} {
+		if d, ok := reg.DetectByFilename(name); !ok || d.Language != "yaml" {
+			t.Errorf("%s: not detected as yaml", name)
+		}
+	}
+	for _, name := range []string{"a.json", "a.yaml.bak", "yaml", "a.yamlx"} {
+		if d, ok := reg.DetectByFilename(name); ok && d.Language == "yaml" {
+			t.Errorf("%s: must not be indexed as yaml", name)
 		}
 	}
 }
