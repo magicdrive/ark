@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<?xml-stylesheet type="text/xsl" href="book.xsl"?>
+<b:book xmlns:b="urn:example:book" xmlns:xi="http://www.w3.org/2001/XInclude" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <b:title xml:id="top">Book</b:title>
+  <chapter xmlns="urn:example:book" id="intro">
+    <para>See <link xlink:href="#top">the top</link> and <ref href="#intro"/>.</para>
+    <para>Missing <link xlink:href="#nowhere">link</link>.</para>
+  </chapter>
+  <xi:include href="chapter.xml"/>
+  <xi:include href="https://example.com/remote.xml"/>
+  <!-- a comment -->
+  <code><![CDATA[<not-an-element/>]]></code>
+</b:book>
