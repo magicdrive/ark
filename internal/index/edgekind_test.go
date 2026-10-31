@@ -78,7 +78,7 @@ func TestGraphBuilder_KindMapping(t *testing.T) {
 			sym("TExtends"), sym("TImpl"), sym("TTrait"),
 			sym("TRead"), sym("TUnknown"),
 			sym("TValue"), sym("TDepends"),
-			sym("TID"), sym("TLink"),
+			sym("TID"), sym("TLink"), sym("TPart"),
 		},
 		refs: []language.ReferenceDraft{
 			ref("TCall", "call"),
@@ -91,6 +91,7 @@ func TestGraphBuilder_KindMapping(t *testing.T) {
 			ref("TDepends", "depends_on"),
 			ref("TID", "id_reference"),
 			ref("TLink", "resource_link"),
+			ref("TPart", "contains"),
 			ref("TRead", "read"),              // not mapped → no edge
 			ref("TUnknown", "future_unknown"), // unknown → no edge
 		},
@@ -111,6 +112,8 @@ func TestGraphBuilder_KindMapping(t *testing.T) {
 		// Markup: an id reference is a reference, a link a links edge.
 		"TID":   index.EdgeReferences,
 		"TLink": index.EdgeLinks,
+		// Structure: a part of the container's own structure.
+		"TPart": index.EdgeContains,
 	}
 	for target, wantKind := range want {
 		if got := edgeKindTo(idx, target); got != wantKind {

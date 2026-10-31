@@ -14,8 +14,9 @@ code it needs to read before editing — and get an answer that states how
 certain it is.
 
 Ark is a single static binary. It analyzes Go, TypeScript, TSX, PHP,
-Terraform, Rust, Java, Zig, JavaScript and Python without running any code
-from the repository.
+Terraform, Rust, Java, Zig, JavaScript, Python and YAML — including GitHub
+Actions workflows and actions — without running any code from the
+repository.
 
 ## Why Ark
 
@@ -255,6 +256,7 @@ highest stage Ark's tests cover:
 | CSS | graph | `@keyframes`, `@font-face`, `@property`, custom properties and CSS Modules classes with their references within a stylesheet, `@import` by relative path, CSS Modules classes JavaScript and TypeScript imports use, `url()` of images and fonts; no selector matching |
 | Python | graph | Scopes (LEGB), imports and relative imports, package re-exports, `self` / `cls` / `super()`, inheritance; no type inference for locals, star imports or dynamic attributes |
 | Zig | graph | Lexical scopes, relative `@import`, containers and `@This()`, re-exports, generic type factories, receivers of declared types and declared result types, named modules by the importing module's import table as a build.zig states it — strong only when every build.zig of the repository is closed (Ark can follow all of its code: no dependency, build helper file or ZON import, nothing it does not model) and the binding is the only one; otherwise every import is a candidate. No comptime evaluation, `std`, or modules only other build code binds; see [Zig](docs/language-support.md#zig) |
+| YAML, GitHub Actions | graph | Any YAML file's keys by JSON Pointer and its anchors and aliases; GitHub Actions workflows (triggers, jobs, steps, settings), composite and other actions, with `contains`, `needs` (`depends_on`) and `uses` (`calls`: a local reusable workflow exact, a local action strong; remote actions outside the repository). Expressions (`${{ }}`) are never evaluated; see [YAML and GitHub Actions](docs/language-support.md#yaml-and-github-actions) |
 | JavaScript | references | Declarations, class members, ES modules and CommonJS (TypeScript's extractor), scope-aware; not certified for graph or context quality |
 
 Graph tools answer for every language, but results above a language's

@@ -62,10 +62,13 @@ model's tokenizer.
 **Secret masking.** By default every tool result, resource and error
 leaving the server has the secrets Ark's masking rules detect replaced by
 `*****MASKED*****` — source snippets, search lines, receiver expressions,
-messages. File paths, symbol names, IDs and Ark's own enumerations are never
-altered, so they can be passed back in later calls; text results of
-`list_files`, `get_repository_map` and `search_code` consist of such
-identifiers and are not masked. `ark mcp-server --mask-secrets off` turns
+messages. File paths, IDs and Ark's own enumerations are never altered, so
+they can be passed back in later calls; symbol names (and evidence built
+from them) are masked only where they hold a secret of its own form — a PEM
+block, a known token format — since a name can be data (a YAML key, a step
+name); a masked declaration is still selected by its `symbolId`. The text
+of `list_files` (paths) is not masked; that of `get_repository_map` and
+`search_code` is masked as names are. `ark mcp-server --mask-secrets off` turns
 masking off for the server and logs a warning; a request cannot change it
 (the `maskSecrets` argument of `get_file_content` and `get_files_arklite` is
 accepted and has no effect). A value that only names another value is kept
@@ -88,7 +91,7 @@ with `--secret-rule-overrides on`, and otherwise are left out and logged
 once. The file is read for every request and compiled when it changes, so
 an edit applies to the next call. If it cannot be compiled, every result
 with repository text in it is replaced by an error naming the file and the
-problem (identifier-only results still go out) until it is fixed.
+problem (the path-only text of `list_files` still goes out) until it is fixed.
 
 **Files excluded by `.arkignore`.** No tool or resource returns anything from
 a file the repository's `.arkignore` files exclude: a path naming one (or a
@@ -261,8 +264,8 @@ languages omit.
 | `filePattern` | string |  |  | File path substring filter (case-insensitive) |
 | `format` | string (`text`, `json`) |  | `text` |  |
 | `groupBy` | string |  |  | Count the matches instead of listing them, by one or two comma-separated keys: `kind`, `language`, `directory`, `file`, `resourceType` |
-| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro); HTML: `document` (a file), `element` (an element with an id); CSS: `stylesheet`, `keyframes`, `font_face`, `property_registration`, `custom_property`, `css_class` (a CSS Modules class); JavaScript: `script` (a file); `asset` (an image, a font or a media file web documents link to) |
-| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig |
+| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro); HTML: `document` (a file), `element` (an element with an id); CSS: `stylesheet`, `keyframes`, `font_face`, `property_registration`, `custom_property`, `css_class` (a CSS Modules class); JavaScript: `script` (a file); YAML: `document` (a file), `key` (a mapping key, by its JSON Pointer path), `anchor`; GitHub Actions: `workflow` (a workflow file), `trigger` (an event of `on`), `job`, `step`, `action` (an action, by its directory); `asset` (an image, a font or a media file web documents link to) |
+| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml |
 | `maxResults` | integer |  | `50` | Maximum number of matches listed (the total is always reported); with `groupBy`, of group lines (at most 1000) |
 | `namePattern` | string |  |  | Name substring filter (case-insensitive) |
 | `usesType` | string |  |  | Only symbols that reference a type whose name contains this string |
@@ -317,7 +320,7 @@ it with [`search_in_files`](#search_in_files), e.g. the regex
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `path` | string | yes |  | File path to analyze |
-| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig). Auto-detected if not specified. |
+| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml). Auto-detected if not specified. |
 
 Example:
 
@@ -377,8 +380,10 @@ reference may be a missing caller; otherwise `candidates` samples the possible
 callers (at most 10; `candidatesTotal` and `candidateRelationsTotal` count
 all). Each reverse edge reports what the reference is: `called_by` for a
 call or a construction, and otherwise `referenced_by` (a value; Terraform
-dependents; an HTML element's id), `depended_on_by` (Terraform `depends_on`),
-`linked_from` (an HTML document or a stylesheet linking it), `implemented_by`,
+dependents; an HTML element's id; a YAML anchor's aliases), `depended_on_by`
+(Terraform `depends_on`; GitHub Actions jobs whose `needs` names it),
+`linked_from` (an HTML document or a stylesheet linking it), `contained_by`
+(the GitHub Actions workflow or job it is a part of), `implemented_by`,
 `extended_by`, `trait_used_by`, `type_used_by` or `imported_by` — an
 implementation, a type use or an import is never shown as a call.
 `maxDepth` above 1 follows callers transitively.
@@ -391,7 +396,10 @@ refers to: `references` (an element by its id; a declaration of its inline
 styles), `links` (another document, a stylesheet, a script) and `calls` (a
 function or class of its inline scripts, from their top level); for a CSS
 stylesheet `references` (an animation name, a font
-family, a composed class) and `links` (an `@import`).
+family, a composed class) and `links` (an `@import`); for a GitHub Actions
+workflow, job or composite action `contains` (its triggers, jobs or steps),
+`depends_on` (the jobs a job's `needs` names) and `calls` (the reusable
+workflow or the action a `uses` names; a remote one is `outsideRepository`).
 
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
@@ -452,7 +460,7 @@ imports, constructions, reads, writes — whether or not it resolves.
 |---|---|---|---|---|
 | `name` | string | yes |  | Symbol name to search for (exact match) |
 | `path` | string | yes |  | File or directory path to search in |
-| `kind` | string |  |  | Filter by reference kind: call, type_use, import, construction, read, write, value_reference, depends_on, id_reference, resource_link, unknown |
+| `kind` | string |  |  | Filter by reference kind: call, type_use, import, construction, read, write, value_reference, depends_on, id_reference, resource_link, contains, unknown |
 | `maxResults` | integer |  | `100` | Maximum number of results |
 
 Example:

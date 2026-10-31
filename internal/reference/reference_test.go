@@ -90,3 +90,21 @@ func TestNewReferenceID_EveryIngredientCounts(t *testing.T) {
 		}
 	}
 }
+
+// The container tells two references of one kind and name at one place
+// apart (content a YAML alias repeats in two steps); none keeps the ID of
+// NewReferenceID.
+func TestNewReferenceIDIn_Container(t *testing.T) {
+	loc := source.Location{File: "w.yml", Range: source.Range{Start: source.Position{Line: 3, Column: 5}, End: source.Position{Line: 3, Column: 9}}}
+	a := NewReferenceIDIn("yaml", "w.yml", KindCall, "x", "w.yml::a::s", loc)
+	b := NewReferenceIDIn("yaml", "w.yml", KindCall, "x", "w.yml::b::s", loc)
+	if a == b {
+		t.Error("two containers give one ID")
+	}
+	if a != NewReferenceIDIn("yaml", "w.yml", KindCall, "x", "w.yml::a::s", loc) {
+		t.Error("not deterministic")
+	}
+	if NewReferenceIDIn("yaml", "w.yml", KindCall, "x", "", loc) != NewReferenceID("yaml", "w.yml", KindCall, "x", loc) {
+		t.Error("no container must give NewReferenceID's ID")
+	}
+}

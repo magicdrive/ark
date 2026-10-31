@@ -353,7 +353,8 @@ configuration `setup` wrote.
 
 The filter options do not narrow the code-intelligence index: graph tools
 index every file of a supported language under the requested `path`, skipping
-only directories whose name starts with `.`, `vendor` and `node_modules`
+only directories whose name starts with `.` (but `.github`, of which the
+YAML files are indexed), `vendor` and `node_modules`
 ([Operations](operations.md#what-the-index-covers)).
 
 `ark mcp-server --help` and `--version` print and exit.
@@ -506,7 +507,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |---|---|---|
-| `--lang <language>` | `go`, `typescript`, `tsx`, `javascript`, `python`, `php`, `terraform`, `rust` | detected from the extension |
+| `--lang <language>` | `go`, `typescript`, `tsx`, `javascript`, `python`, `php`, `terraform`, `rust`, `java`, `html`, `css`, `zig`, `yaml` (`ark syntax`: not `html`, `css` or `yaml`, which have no syntax tree) | detected from the extension |
 | `--format <text\|json>` | Output format | `text` |
 
 ## Shell completions

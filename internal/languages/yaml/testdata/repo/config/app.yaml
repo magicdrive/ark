@@ -1,0 +1,14 @@
+# Application settings.
+defaults: &defaults
+  adapter: postgres
+  host: localhost
+development:
+  database: dev
+  <<: *defaults
+production:
+  database: prod
+  pool:
+    size: 5
+    timeout: 10
+---
+second: document

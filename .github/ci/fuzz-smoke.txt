@@ -27,6 +27,7 @@
 3 ./internal/languages/typescript FuzzTypeArgParser
 3 ./internal/languages/terraform FuzzExtractTerraform
 3 ./internal/languages/css FuzzExtractCSS
+1 ./internal/languages/yaml FuzzExtractYAML
 3 ./internal/secretpolicy FuzzBuild
 3 ./internal/textenc FuzzDecode
 - ./internal/mcp FuzzRouteNotificationInvariant

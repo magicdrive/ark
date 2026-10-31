@@ -53,7 +53,10 @@ package cache
 // Java provider (java-1, its first version) states them. AliasDraft.Members
 // AliasDraft.ConfidenceCap / Open / Fallback / Absent, ReferenceDraft.TentativeIdentity /
 // PathCaseFold / MayBeAnyFile are optional the same way; only the Zig
-// provider (zig-1, its first version) states them.
+// provider (zig-1, its first version) states them. The reference kind
+// "contains" is a value of the existing Kind field; only the YAML provider
+// (yaml-1, its first version) states it, so no entry of another provider
+// changes.
 //
 // Asset files (internal/asset: images, fonts, media) have no extraction and
 // no entry: the index records their paths from the walk and makes a node for

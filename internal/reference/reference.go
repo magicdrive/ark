@@ -44,6 +44,11 @@ const (
 	// path (HTML: a href="page.html", iframe src): a resource relation, not
 	// a call or an import.
 	KindResourceLink ReferenceKind = "resource_link"
+	// KindContains names a declaration the enclosing one contains as a
+	// part of its own structure, by the language's rules (GitHub Actions: a
+	// workflow's jobs, a job's steps): a structural relation, not a call or a
+	// use.
+	KindContains     ReferenceKind = "contains"
 	KindConstruction ReferenceKind = "construction"
 	KindUnknown      ReferenceKind = "unknown"
 )
@@ -125,6 +130,22 @@ func NewReferenceID(lang string, file source.FileID, kind ReferenceKind, name st
 	raw := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d:%d-%d:%d",
 		lang, string(file), string(kind), name,
 		loc.Range.Start.Line, loc.Range.Start.Column, loc.Range.End.Line, loc.Range.End.Column)
+	sum := sha256.Sum256([]byte(raw))
+	return ReferenceID(hex.EncodeToString(sum[:8]))
+}
+
+// NewReferenceIDIn is NewReferenceID of a reference whose container (the
+// qualified name of the declaration it is in) is container: two references
+// of one kind and name at one place in different containers — content a YAML
+// alias repeats in two steps — are two references. An empty container gives
+// NewReferenceID's ID.
+func NewReferenceIDIn(lang string, file source.FileID, kind ReferenceKind, name, container string, loc source.Location) ReferenceID {
+	if container == "" {
+		return NewReferenceID(lang, file, kind, name, loc)
+	}
+	raw := fmt.Sprintf("%s\x00%s\x00%s\x00%s\x00%d:%d-%d:%d\x00%s",
+		lang, string(file), string(kind), name,
+		loc.Range.Start.Line, loc.Range.Start.Column, loc.Range.End.Line, loc.Range.End.Column, container)
 	sum := sha256.Sum256([]byte(raw))
 	return ReferenceID(hex.EncodeToString(sum[:8]))
 }

@@ -108,10 +108,15 @@ type Policy struct {
 
 // Mode is how a text is read: its syntax (from the file it was read from,
 // never from the text) and whether it is in a compact format, in which "␤"
-// stands for a line break.
+// stands for a line break. Tokens reads a text that is an identifier — a
+// name, a path — rather than content: only what is a secret by its own form
+// is masked there (PEM blocks and the pattern rules: a known token format,
+// AKIA…, ghp_…), never by an assignment around it, which an identifier has
+// none of.
 type Mode struct {
 	Syntax  Syntax
 	Compact bool
+	Tokens  bool
 }
 
 // SyntaxForFile returns the syntax of a file from its name: the name of the
@@ -219,7 +224,7 @@ func NewPolicy(spec Spec) (*Policy, error) {
 	// configuration's.
 	for _, bp := range builtinPatterns {
 		if i := index[bp.rule]; p.rules[i].Enabled {
-			p.patterns = append(p.patterns, compiledPattern{re: bp.re, rule: i})
+			p.patterns = append(p.patterns, compiledPattern{re: bp.re, rule: i, assignment: assignmentPatterns[bp.rule]})
 		}
 	}
 	for _, ps := range spec.Patterns {
@@ -366,3 +371,8 @@ func locate(content string, findings []Finding) {
 		findings[i].Column = findings[i].Start - lineStart + 1
 	}
 }
+
+// assignmentPatterns are the built-in pattern rules that find a value by the
+// name it is assigned to rather than by its own form; Mode.Tokens leaves
+// them out (an identifier such as rotate_JWT_SECRET is no assignment).
+var assignmentPatterns = map[string]bool{"jwt-secret-assignment": true, "gcp-private-key-id": true}

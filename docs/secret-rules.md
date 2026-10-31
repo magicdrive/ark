@@ -181,9 +181,9 @@ edit applies to the next request; it compiles it only when its bytes change,
 and a request masks everything with the one configuration it read. A
 configuration that cannot be read or compiled fails closed: every result with
 repository text in it — file contents, snippets, search lines, resources — is
-replaced by an error naming the file and the problem; results built only from
-identifiers (`list_files`, `get_repository_map`, `search_code` in text) still
-go out, and the message of a request that fails is withheld (it could hold a
+replaced by an error naming the file and the problem — also the text of
+`get_repository_map` and `search_code`, whose declaration names can be data;
+the path-only text of `list_files` still goes out, and the message of a request that fails is withheld (it could hold a
 value only the configuration's rules mask). The problem is logged once on
 standard error. A failing request's message is otherwise masked by the
 configuration that request read.

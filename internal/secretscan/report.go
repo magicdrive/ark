@@ -53,15 +53,15 @@ func credentialFile(rel string) bool {
 }
 
 // codeFile reports whether a file is source code of a language Ark analyzes
-// (Terraform, HTML and CSS aside: their assignments are configuration,
-// markup text and declarations, not a program's variables).
+// (Terraform, HTML, CSS and YAML aside: their assignments are configuration,
+// markup text, declarations and data, not a program's variables).
 func codeFile(rel string) bool {
 	d, ok := languages.Registry().DetectByFilename(rel)
 	if !ok {
 		return false
 	}
 	switch d.Language {
-	case "terraform", "html", "css":
+	case "terraform", "html", "css", "yaml":
 		return false
 	}
 	return true

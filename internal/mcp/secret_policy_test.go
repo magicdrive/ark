@@ -229,6 +229,10 @@ func TestSecretPolicy_BrokenConfigurationFailsClosed(t *testing.T) {
 			{"search_in_files", map[string]interface{}{"path": ".", "query": "acme"}},
 			{"get_files_arklite", map[string]interface{}{"paths": []interface{}{"app.env"}}},
 			{"search_code", map[string]interface{}{"path": ".", "namePattern": "Conf", "format": "json"}},
+			// Declaration names can be data (a YAML key): the text tools
+			// that show them are refused too.
+			{"get_repository_map", map[string]interface{}{"path": "."}},
+			{"search_code", map[string]interface{}{"path": ".", "namePattern": "Conf"}},
 		} {
 			text, isErr := callText(t, h, c.tool, c.args)
 			if !isErr || !strings.Contains(text, ".ark-secrets-rules.toml") || !strings.Contains(text, "pattern does not compile") {
@@ -246,8 +250,6 @@ func TestSecretPolicy_BrokenConfigurationFailsClosed(t *testing.T) {
 			want string
 		}{
 			{"list_files", map[string]interface{}{"path": "."}, "app.env"},
-			{"get_repository_map", map[string]interface{}{"path": "."}, "Conf"},
-			{"search_code", map[string]interface{}{"path": ".", "namePattern": "Conf"}, "Conf"},
 		} {
 			if text := mustText(t, h, c.tool, c.args); !strings.Contains(text, c.want) {
 				t.Errorf("%s: %q", c.tool, text)

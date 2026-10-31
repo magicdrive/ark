@@ -33,7 +33,7 @@ Provider ──► index builder ──► resolver ──► graph + completene
 | Provider (`internal/languages/<lang>`) | Everything language-specific. Parses one file, consults nothing else, and states what the language's own rules prove as **generic evidence** (`language.ReferenceDraft`: `ReceiverType`, `ReceiverChain`, `Speculative`, `NameQualified`, `ReceiverTypeQualified`, `IdentityInRepository`, `TentativeIdentity`, `ConfidenceCap`, `Dynamic`, `TargetKinds`; `SymbolDraft.MemberScope` / `MembersOutside` / `ConfidenceCap`; `Extraction.Aliases` (`AliasDraft.Members` / `ConfidenceCap`), `Extraction.TypeFacts`; bindings (`BindingDraft.Scope`), exports, module candidates (`ModuleCandidate.Unless`), `ModuleScoped`, `IdentityOnly`, `Package`, `PackageScoped`, `MembersShareNames`, `LexicalNesting`; the language's own search (`ReferenceDraft.Lookup` / `ReceiverLookup`, `ArgumentCount` / `ArgumentTypes`; `SymbolDraft.Parameters` / `ImplicitMembers` / `Overrides`; `Extraction.SourceRoot`); `language.Dialect` for a provider whose files share another language's name space). | Read other files or the repository; claim evidence it cannot prove (`""` means "not proven"). |
 | Resolver (`internal/resolver`) | Turning evidence into candidates + confidence. Language-neutral. | Encode one language's rules; guess past authoritative evidence. |
 | Index (`internal/index`) | Building the immutable `RepositoryIndex`: edges, completeness, candidate samples, fingerprint. | Create an edge the resolver did not make unique. |
-| Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
+| Context / impact / repomap | Selecting and ranking from graph edges and provider-stated declaration facts (repomap: `language.MapHinter` roles, declared types and member-scope units, `language.Accompanying` for a package's language; `repomap/policy.go`). | Look names up themselves (a second resolver without the evidence); branch on a language name. |
 | MCP (`internal/mcp`) | Target lookup, index reuse, path containment, serialization, output secret masking. | Pick one of several targets; reuse an index it has not proven current; return a result that has not passed the output sanitizer. |
 
 Composition: `internal/languages` is the one place that wires providers into
@@ -349,6 +349,50 @@ Danger: "the only `run` in the repository", "a named module is the file of
 its name" or "the branch for this target" — a value of an unproven type, a
 module the build maps, or a comptime condition decides what a Zig name is.
 
+**A document's structure apart from what it means** (YAML, GitHub Actions).
+The YAML provider keeps two layers: `languages/yaml/yamldoc` reads the
+stream with go.yaml.in/yaml/v3 — never a reader of Ark's own — split at
+its document markers (an error loses one document), maps the library's
+character positions (YAML 1.1 line breaks) to the bytes as stored and finds
+where a node ends; `languages/yaml/actions` reads a workflow
+(`.github/workflows/*.yml`) or an action (`action.yml` with `runs`) from
+those nodes. Every file is `IdentityOnly`. A data file states its keys by
+JSON Pointer (`<file>#/a/b`) and its anchors; an alias is a reference to
+the one anchor definition the document fixes. GitHub Actions identities are
+`::` paths (`<file>::<job>::<step>`; an action is its directory), so a job
+named `permissions` is never the setting `<file>#/jobs/x/permissions`.
+Relations carry only what the file states: `contains` (a generic reference
+kind, `reference.KindContains` → `EdgeContains`: a part of the container's
+own structure) for a workflow's triggers and jobs and a job's steps;
+`depends_on` for `needs` (the workflow's own job, Exact); a call for
+`uses` — a local reusable workflow is path evidence (`FileIdentity`, Exact:
+the file at the caller's commit), a local action an identity capped at
+Strong (the path is the runner's workspace's, which a checkout changes), a
+remote one or a docker image outside the repository, an expression Dynamic,
+an invalid one a diagnostic and no reference. Content an alias repeats is
+the job's own, located at the alias. No expression is evaluated, no script
+is read as code, nothing is fetched; script text and `with` / `env` values
+never enter a name; a text that is no one-line name (a block, a control
+character, over 256 bytes) declares nothing, and names reach the output
+masked by the token rules (§3, secrets). Keys are named by their pointer
+(`/a/b`), anchors `&name`, so no data key shares a bare name with code.
+Job and step ids are case-insensitive, as GitHub reads them. Aliases are
+never expanded, and what an alias repeats is read under the file's bounds
+(4 MiB, 5000 declarations, 20000 references and as many needs, 1000
+diagnostics), which are diagnostics.
+Authority: `languages/yaml/provider.go`, `languages/yaml/yamldoc/yamldoc.go`,
+`languages/yaml/actions/actions.go` (headers). Tests: `TestGraph_Fixture`,
+`TestGraph_NonEdgesAreAccountedFor`, `TestUses_EveryForm`,
+`TestNeeds_*`, `TestAnchors_StepsAndJobsThroughAliases`,
+`TestSteps_KeysAndNameCollisions`, `TestSpans_*`, `TestDocuments_*`,
+`TestMCPYAML_GitHubActionsScenarios`, `FuzzExtractYAML`, and the opt-in
+comparison with Ruby's Psych `TestRealRepositories`
+(`docs/scripts/oracle/actions-psych.rb`).
+Danger: "the action `actions/checkout` is the repository's
+`actions/checkout` directory", "`./x` is the action next to the workflow"
+or "the step's `if:` is false here" — a remote reference, the workspace a
+checkout makes, and an expression only GitHub evaluates decide them.
+
 ## 2. Confidence
 
 Confidence is an **ordered set of evidence classes, not a probability or a
@@ -599,10 +643,11 @@ improvement and is not.
    namesakes, mixing their sources, callees and callers; deriving an ID from
    a name instead of finding the declaration.
    A reference's `ReferenceID` is derived from (language, file, kind, name,
-   span) — its end included: references of one name and kind may start at
-   one position (Go `f(x).V.f()`, JavaScript `$(a).data().data()`), and an
-   ID two references shared would join one's resolution to the other
-   (`reference.NewReferenceID`). It is unique within an index — the builder
+   span, container) — its end included: references of one name and kind may
+   start at one position (Go `f(x).V.f()`, JavaScript `$(a).data().data()`),
+   and one place may hold references of two containers (content a YAML alias
+   repeats in two steps); an ID two references shared would join one's
+   resolution to the other (`reference.NewReferenceIDIn`). It is unique within an index — the builder
    leaves out a reference whose ID another already has (a provider stating
    one reference twice, or a hash collision) with a
    `reference_id_collision` warning — and the same
@@ -722,13 +767,20 @@ result, resource and error leaves through one sanitizer
 (`secrets/mod.go`) to repository text. Providers, the index, the resolver,
 the graph and the cache see the source as written, so masking never changes
 a symbol, an ID, a resolution or an edge. JSON results are rewritten token by
-token: keys, numbers, structure and order are kept; identifier values (paths,
-names, IDs, enumerations) are never masked, because clients pass them back;
-a result with nothing to mask is returned byte for byte; unknown keys and
-unknown tools are masked. Masking is on unless the server is started with
+token: keys, numbers, structure and order are kept; paths, IDs and
+enumerations are never masked, because clients pass them back; declaration
+names (and evidence built from them) are masked only by what is a secret by
+its own form (`secrets.Mode.Tokens`: PEM blocks and the pattern rules of a
+token's own form — never an assignment rule, nor a pattern that finds a
+value by the name assigned to it, `JWT_SECRET=…`) — a name can be data, a YAML key or a step name, and its
+`symbolId` still selects it; a result with nothing to mask is returned byte
+for byte; unknown keys and unknown tools are masked. The text of
+`get_repository_map` and `search_code` is masked as names are, and is
+refused with the rest when the configuration fails; only `list_files`'s
+paths are not masked. Masking is on unless the server is started with
 `--mask-secrets off` (with a warning); a request cannot turn it off
 (`mcp/masking.go`, `TestFileContent_SecurityOverridesStillIgnored`).
-Tests: `TestSanitize_*`,
+Tests: `TestSanitize_*` (`TestSanitize_DeclarationNamesByTokenRulesOnly`), `TestMCPYAML_NamesNeverLeakSecrets`,
 `TestMCPSecretMasking_NoDetectableSecretLeaves`,
 `TestMCPSecretMasking_IdentifiersAreNotMasked`,
 `TestMCPSecretMasking_HTTPConcurrent`, `TestMCPSecretMasking_Settings`.
@@ -973,6 +1025,19 @@ through a link in the repository, may lead outside.
 - The shared build runs detached from any requester's context: one caller
   giving up must not kill the build others wait for. Failed, panicked or
   stale builds are never published; query options are never part of the key.
+- **The index reads the files a provider claims, and `.github` only for
+  those that read it** — also an index whose root is `.github` itself; a
+  root below it, or under an ancestor of that name, is any directory. A hidden directory, `vendor` and `node_modules` are
+  never entered (`index.SkipDirName`), except `.github`, where GitHub keeps
+  the workflows and actions it runs: there only the files of a provider
+  implementing `language.HiddenDirReader` for it are read (the YAML
+  provider's), so a script in `.github` changes no other language's names.
+  The rule is the walk's, so the fingerprint, the MCP server's recorded
+  listing and every index-based tool see the same files. Tests:
+  `TestHiddenDirs_OnlyTheProvidersThatReadThem`,
+  `TestIndex_ReadsDotGithubYAMLOnly`.
+  Danger: entering `.github` for every provider — a Python helper there
+  would turn a repository-unique name into a Candidate elsewhere.
 - **A build extracts in parallel and ingests in walk order.** The walk
   reads every source and adds it to the fingerprint in order; extraction
   (cache lookup, parse, cache store) runs on a small worker pool, bounded

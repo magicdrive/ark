@@ -53,9 +53,10 @@ const (
 	KindImpl  SymbolKind = "impl"
 
 	// Declarations of markup (HTML). A document is a markup file itself (the
-	// target of a link to it); an element is an element that declares an
-	// identifier (an HTML id), the target of references to that identifier
-	// within its document.
+	// target of a link to it), or a data file itself (a YAML file that is no
+	// GitHub Actions workflow or action); an element is an element that
+	// declares an identifier (an HTML id), the target of references to that
+	// identifier within its document.
 	KindDocument SymbolKind = "document"
 	KindElement  SymbolKind = "element"
 
@@ -78,15 +79,33 @@ const (
 	// KindScript is a JavaScript file itself (the target of an HTML
 	// <script src>).
 	KindScript SymbolKind = "script"
+
+	// Declarations of data files (YAML). A key is a mapping key of a
+	// document, named by its JSON Pointer path; an anchor is a node an
+	// anchor (&name) names, the target of its aliases (*name).
+	KindKey    SymbolKind = "key"
+	KindAnchor SymbolKind = "anchor"
+
+	// Declarations of GitHub Actions. A workflow is a workflow file itself
+	// (.github/workflows/*.yml: the target of a reusable workflow call); a
+	// trigger an event of its `on`; a job one of its jobs; a step a step of
+	// a job or of a composite action; an action an action's metadata file
+	// (action.yml), declared by its directory (the target of a step's
+	// `uses: ./dir`).
+	KindWorkflow SymbolKind = "workflow"
+	KindTrigger  SymbolKind = "trigger"
+	KindJob      SymbolKind = "job"
+	KindStep     SymbolKind = "step"
+	KindAction   SymbolKind = "action"
 )
 
 // DeclaresFile reports whether a symbol of kind k declares the file it is in
-// itself (its Qualified is the file's path): an HTML document, a stylesheet,
-// a script, an asset. Path evidence of any language names these
-// (language.ReferenceDraft.FileIdentity).
+// itself (its Qualified is the file's path): an HTML or YAML document, a
+// stylesheet, a script, a GitHub Actions workflow, an asset. Path evidence of
+// any language names these (language.ReferenceDraft.FileIdentity).
 func DeclaresFile(k SymbolKind) bool {
 	switch k {
-	case KindDocument, KindStylesheet, KindScript, KindAsset:
+	case KindDocument, KindStylesheet, KindScript, KindWorkflow, KindAsset:
 		return true
 	}
 	return false

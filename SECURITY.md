@@ -52,11 +52,15 @@ The same rules mask the repository dump (`ark <dir>`).
   (`get_symbol`, `get_context`, `search_context`), file contents, search
   result lines, receiver expressions of references, signatures, messages —
   has each detected secret replaced by `*****MASKED*****`.
-- **What is not masked.** File paths, symbol names, symbol IDs, evidence
-  text built from them, and Ark's own enumerations (kinds, confidence
-  levels, ...) are returned as they are, so a client can pass them back. A
-  secret embedded in a file or directory name or an identifier is therefore
-  not masked. JSON keys, numbers and structure are never changed.
+- **What is not masked.** File paths, symbol IDs and Ark's own
+  enumerations (kinds, confidence levels, ...) are returned as they are, so
+  a client can pass them back; a secret embedded in a file or directory name
+  is therefore not masked. Symbol names, and evidence text built from them,
+  are masked only where they hold a secret of its own form (a PEM block, a
+  token format such as `ghp_…` or `AKIA…`): a name can be data — a YAML
+  mapping key, a GitHub Actions step name — and a masked declaration is
+  still selected by its `symbolId`. JSON keys, numbers and structure are
+  never changed.
 - **Recommended rules, adjustable.** The rules below are Ark's recommended
   default, each with a stable ID. A repository adjusts them with
   `.ark-secrets-rules.toml` (or `ark-secrets-rules.toml`) at its root: it
@@ -72,7 +76,7 @@ The same rules mask the repository dump (`ark <dir>`).
   that cannot be read or compiled is an error, never the recommended rules in
   its place: the dump and the scan fail, and the MCP server replaces every
   result with repository text in it by the error (fail closed) until it is
-  fixed; results built only from identifiers still go out, and a failing
+  fixed; only the path-only text of `list_files` still goes out, and a failing
   request's error message is withheld rather than masked by fewer rules. No
   error, log or scan output holds a configured pattern's text or a masked
   value.

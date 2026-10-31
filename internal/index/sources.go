@@ -85,6 +85,14 @@ func sourceStep(root string, providers []language.Provider, exclude Exclude, rea
 			extMap[ext] = p
 		}
 	}
+	// A root that is a hidden directory the index enters (an index of
+	// .github itself) is read as that directory is. Only the root's own
+	// name counts: a directory below .github, or a repository under one,
+	// is indexed as any directory is.
+	rootHidden := ""
+	if abs, err := filepath.Abs(root); err == nil && indexedHiddenDirs[filepath.Base(abs)] {
+		rootHidden = filepath.Base(abs)
+	}
 	return func(path string, d fs.DirEntry) error {
 		if d.IsDir() {
 			if SkipDirName(d.Name()) || (exclude != nil && path != root && exclude(path, d)) {
@@ -93,6 +101,17 @@ func sourceStep(root string, providers []language.Provider, exclude Exclude, rea
 			return nil
 		}
 		prov, ok := extMap[strings.ToLower(filepath.Ext(path))]
+		hidden := hiddenDirOf(root, path)
+		if hidden == "" {
+			hidden = rootHidden
+		}
+		if hidden != "" {
+			// In a hidden directory the index enters, only the files a
+			// provider reads there (SkipDirName).
+			if r, isReader := prov.(language.HiddenDirReader); !ok || !isReader || !r.ReadsHiddenDir(hidden) {
+				return nil
+			}
+		}
 		if !ok {
 			// An asset (internal/asset) is visited by its path alone, with
 			// a nil provider: never read. A symbolic link is none — where
@@ -111,6 +130,22 @@ func sourceStep(root string, providers []language.Provider, exclude Exclude, rea
 		visit(path, relPath, prov, src, err)
 		return nil
 	}
+}
+
+// hiddenDirOf returns the hidden directory below root that path lies in, ""
+// for none.
+func hiddenDirOf(root, path string) string {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for _, p := range parts[:len(parts)-1] {
+		if strings.HasPrefix(p, ".") && p != "." && p != ".." {
+			return p
+		}
+	}
+	return ""
 }
 
 // WalkEntry is one entry of a filepath.WalkDir walk: its path and directory

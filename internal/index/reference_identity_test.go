@@ -197,13 +197,15 @@ func TestReferenceIdentity_EditChangesOnlyItsFile(t *testing.T) {
 }
 
 // A reference whose ID another reference of the index already has — here a
-// provider stating one reference twice, with another container — is left out
-// with a reference_id_collision warning: the index keeps the first, and no
-// resolution or edge is joined to the second.
+// provider stating one reference twice, the second with other evidence (a
+// dynamic name) — is left out with a reference_id_collision warning: the
+// index keeps the first, and no resolution or count is joined to the second.
+// (Two references of one kind and name at one place in two containers have
+// two IDs: TestReferenceIdentity_ContainersTellReferencesApart.)
 func TestReferenceIdentity_CollisionIsLeftOut(t *testing.T) {
 	first := ref("TCall", "call")
 	second := ref("TCall", "call")
-	second.Container = "Other"
+	second.Dynamic = true
 	idx := buildFakeIndex(t, fakeProvider{
 		symbols: []language.SymbolDraft{sym("Caller"), sym("Other"), sym("TCall")},
 		refs:    []language.ReferenceDraft{first, second},
@@ -232,11 +234,44 @@ func TestReferenceIdentity_CollisionIsLeftOut(t *testing.T) {
 	if got := edgeKindTo(idx, "TCall"); got != index.EdgeCalls {
 		t.Errorf("edge Caller->TCall = %q, want %q", got, index.EdgeCalls)
 	}
-	others := idx.FindSymbolsByQualified("Other")
-	if len(others) != 1 {
-		t.Fatalf("Other: %d symbols", len(others))
+	callers := idx.FindSymbolsByQualified("Caller")
+	if len(callers) != 1 {
+		t.Fatalf("Caller: %d symbols", len(callers))
 	}
-	if es := idx.GetCallees(others[0].ID); len(es) != 0 {
-		t.Errorf("the left-out reference made edges from Other: %+v", es)
+	if un := idx.UnresolvedOutgoing(callers[0].ID); un.Total != 0 {
+		t.Errorf("the left-out reference was counted: %+v", un)
+	}
+}
+
+// Two references of one kind and name at one place in two containers — what
+// a YAML alias repeats in two steps — are two references: each is kept,
+// resolved and attributed to its own container, and nothing collides.
+func TestReferenceIdentity_ContainersTellReferencesApart(t *testing.T) {
+	first := ref("TCall", "call")
+	second := ref("TCall", "call")
+	second.Container = "Other"
+	idx := buildFakeIndex(t, fakeProvider{
+		symbols: []language.SymbolDraft{sym("Caller"), sym("Other"), sym("TCall")},
+		refs:    []language.ReferenceDraft{first, second},
+	})
+	for _, d := range idx.Diagnostics() {
+		if d.Code == language.DiagReferenceIDCollision {
+			t.Errorf("collision reported: %+v", d)
+		}
+	}
+	for _, from := range []string{"Caller", "Other"} {
+		syms := idx.FindSymbolsByQualified(from)
+		if len(syms) != 1 {
+			t.Fatalf("%s: %d symbols", from, len(syms))
+		}
+		n := 0
+		for _, e := range idx.GetCallees(syms[0].ID) {
+			if to, _ := idx.GetSymbol(e.To); to.Qualified == "TCall" && e.Kind == index.EdgeCalls {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("%s -> TCall: %d edges, want 1", from, n)
+		}
 	}
 }

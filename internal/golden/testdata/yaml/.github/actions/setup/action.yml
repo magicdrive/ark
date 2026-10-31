@@ -1,0 +1,15 @@
+name: Setup
+description: Set up the toolchain
+inputs:
+  go-version:
+    description: The Go version
+    required: false
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-go@v5
+      with:
+        go-version: ${{ inputs.go-version }}
+    - uses: ./.github/actions/lint
+    - run: echo done
+      shell: bash

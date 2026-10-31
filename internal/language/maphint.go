@@ -49,3 +49,11 @@ type MapHinter interface {
 	// composes, statically. ok is false for a scope that names none.
 	MemberScopeDir(scope string) (dir string, ok bool)
 }
+
+// Accompanying is implemented by a provider whose files accompany a unit's
+// code rather than make it — the configuration and CI files beside a Go
+// package (YAML). An overview names a unit by the language of its other
+// files when it has any.
+type Accompanying interface {
+	Accompanies() bool
+}
