@@ -182,7 +182,7 @@ worktrees, give each one a server of its own; each keeps its cache in its own
 check the root its server reports against the worktree it works in — the
 directory of a top-level file given by its relative name to
 `get_files_arklite`, or else `RootPath` of `get_repository_map` with
-`path: "."`, compared as paths with symlinks and letter case resolved — and
+`path: "."`, `format: "json"` and `maxPackages: 1`, compared as paths with symlinks and letter case resolved — and
 not to use another checkout's results. Nothing
 switches a client's server automatically, and the agent is told to ask you
 before any MCP configuration changes.

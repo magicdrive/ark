@@ -64,6 +64,7 @@ func toplevel(t *testing.T, dir string) string {
 	t.Helper()
 	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
 	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
 	out, err := cmd.Output()
 	if err != nil {
 		t.Fatal(err)

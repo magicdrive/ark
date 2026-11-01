@@ -160,7 +160,9 @@ adds each symbol's edge counts and lists the packages left out by
 `maxPackages`. Its `RootPath` is the absolute path of `path` as the server
 spells it (the root as it was given, symlinks not resolved): with `path: "."`,
 the server's root — one way to check which repository or Git worktree a server
-serves ([Git worktrees](getting-started.md#git-worktrees)).
+serves ([Git worktrees](getting-started.md#git-worktrees)). Even with
+`maxPackages: 1` the response lists every package left out, so on a large
+repository it is tens of kilobytes; `get_files_arklite` is the smaller check.
 
 A Terraform module (a directory) lists what it builds rather than its
 interface: managed and ephemeral resources, module calls and data sources
