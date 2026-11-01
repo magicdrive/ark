@@ -33,13 +33,13 @@ Ark itself never writes Claude Code's state file, and no temporary file or envir
   - `claude` is not started;
   - the file, other servers included, is unchanged byte for byte.
 - A concurrent change between the read and the remove (including a file that became malformed), and an unreadable file, change nothing.
-- Mutations of the new checks, made in the implementation and by three independent audits, are detected by the tests; the two that first survived (the `mcp-server` argument check, a failed reread) are covered now. One that survives (the reread comparing normalized instead of exact entries) is equivalent: the entry put back is the one first read either way.
+- Mutations of the new checks were made in the implementation and by four independent audits. Each one a review found surviving is now covered by a test, except one that is equivalent: the reread comparing normalized instead of exact entries, which puts back the entry first read either way.
 - Claude Code 2.1.316: `claude mcp add-json` takes no entry from standard input.
 
 ## Known Limitations
 
 - An existing `ark` entry not of the form Ark writes can no longer be replaced with `--force`; remove it with `claude mcp remove --scope user ark` first.
-- The check before the remove narrows, but cannot close, the window in which another process can change the file; Claude Code offers no way to remove an entry only if it is unchanged. If another process writes a different `ark` entry within that window (well under a second), `claude mcp remove` removes it, and setup reports success, or "restored" with the entry it first read; the other entry is not kept (Claude Code keeps no copy of a removed entry). Nothing of it reaches a command line or Ark's output.
+- The check before the remove narrows, but cannot close, the window in which another process can change the file; Claude Code offers no way to remove an entry only if it is unchanged. If another process writes a different `ark` entry within that window (a part of the time `claude mcp remove` runs, about 0.7 s on the machine tested), `claude mcp remove` removes it, and setup reports success, or "restored" with the entry it first read; the other entry is not kept (Claude Code keeps no copy of a removed entry). Nothing of it reaches a command line or Ark's output.
 - The conflict messages of the other clients and of Claude Code's project scope still show an existing entry's command and arguments.
 - Codex (`ark setup codex --force`) still passes a previous entry's command and arguments to `codex mcp add` when it restores one (never its environment). Codex's configuration is outside this fix.
 

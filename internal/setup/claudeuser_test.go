@@ -25,6 +25,7 @@ type fakeClaude struct {
 	addMangle        int    // upcoming add-json calls that store a different entry (verify fails)
 	echoInput        bool   // a failing add-json echoes its JSON argument on stderr
 	stderrText       string // a failing add-json's stderr
+	removeStderr     string // a failing remove's stderr
 	onLook           func() // runs when Ark looks claude up, between its read and its first call
 	failRemove       bool
 }
@@ -82,10 +83,13 @@ func (f *fakeClaude) run(name string, args ...string) ([]byte, []byte, int, erro
 		servers[args[4]] = entry
 	case args[1] == "remove" && len(args) == 5 && args[2] == "--scope" && args[3] == "user":
 		if f.failRemove {
+			if f.removeStderr != "" {
+				return nil, []byte(f.removeStderr), 1, fmt.Errorf("remove failed")
+			}
 			return nil, []byte("remove boom"), 1, fmt.Errorf("remove failed")
 		}
 		if _, ok := servers[args[4]]; !ok {
-			return nil, []byte("No user-scoped MCP server found"), 1, fmt.Errorf("exit 1")
+			return nil, []byte(`No MCP server named "` + args[4] + `" in user scope`), 1, fmt.Errorf("exit 1")
 		}
 		delete(servers, args[4])
 	default:
@@ -1028,6 +1032,35 @@ func TestClaudeUser_AddFailure_StderrNotShown(t *testing.T) {
 	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root})
 	if err == nil || !strings.Contains(err.Error(), "`claude mcp add-json` failed") {
 		t.Fatalf("got %v", err)
+	}
+	assertNoSecret(t, f, err)
+}
+
+// A failing remove whose stderr quotes the file does not bring it into Ark's
+// error.
+func TestClaudeUser_RemoveFailure_StderrNotShown(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old")}})
+	f := newFakeClaude(path)
+	f.failRemove, f.removeStderr = true, `JSON Parse error: Unexpected identifier "`+dummySecret+`-REMOVE"`
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "`claude mcp remove` failed") {
+		t.Fatalf("got %v", err)
+	}
+	assertNoSecret(t, f, err)
+}
+
+// restoreUserEntry refuses an entry of Ark's argument form under a command
+// that is neither named ark nor the one Ark is about to write.
+func TestClaudeUser_RestoreRefusesForeignCommand(t *testing.T) {
+	f := newFakeClaude(filepath.Join(t.TempDir(), ".claude.json"))
+	a := newClaudeAdapter().(claudeAdapter)
+	a.runner = f
+	foreign := map[string]any{"type": "stdio", "command": "/opt/other/" + dummySecret + "-dev", "args": []any{"mcp-server", "--root", "/r"}, "env": map[string]any{}}
+	err := a.restoreUserEntry(foreign, wantEntry("/opt/mine/ark-dev", "/new"))
+	if err == nil || len(f.calls) != 0 {
+		t.Fatalf("err=%v calls=%v", err, f.calls)
 	}
 	assertNoSecret(t, f, err)
 }

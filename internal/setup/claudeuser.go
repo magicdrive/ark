@@ -407,7 +407,7 @@ func (a claudeAdapter) removeUserEntry() error {
 
 // claudeKnownMessages are claude's own failure messages for add-json and
 // remove that name a server or a path but no value.
-var claudeKnownMessages = []string{"already exists", "No MCP server named", "No user-scoped MCP server", "Invalid configuration"}
+var claudeKnownMessages = []string{"already exists", "No MCP server named", "Invalid configuration"}
 
 // claudeMessage passes on claude's stderr only when it is one line of a
 // message claudeKnownMessages names. Anything else may quote the
