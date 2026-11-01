@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -322,30 +323,37 @@ func rewriteSameSize(p, old string) error {
 // writer and the reader take turns through channels, not time, so each step
 // below happens in every run, whatever the scheduler does:
 //
-//  1. The writer writes a burst while the reader reads: any read may fail
-//     with ErrChanged (or, between rename steps, find no file); one that
-//     succeeds and is settled is a whole version.
+//  1. The reader waits until the file is settled, then lets the writer
+//     write a burst and reads while it does: a read may fail with
+//     ErrChanged (and no bytes) or, between rename steps, find no file;
+//     one that succeeds and is settled (one that began before the burst's
+//     first change) is a whole version. How many reads settle is up to the
+//     scheduler: none is required.
 //  2. The writer stops after the burst's last version and says which. The
 //     reader reads it again after its SettleTime: settled, that version.
 //  3. The writer resumes while the reader reads the settled file: it writes
 //     once between the read's first fstat and its first read system call
-//     (SetReadHookForTest), and waits for the read to end before its next
-//     burst. In place, to other bytes of the same size with the
+//     (SetReadHookForTest), and waits for the next round before writing
+//     again. In place, to other bytes of the same size with the
 //     modification time restored, so that only the ctime tells: ErrChanged,
-//     and no bytes. By rename: ErrChanged or the old version whole
-//     (TestReadStable_RenameReplacement).
+//     and no bytes. By rename, to another version: ErrChanged or the old
+//     version whole (TestReadStable_RenameReplacement).
 func TestReadStable_ConcurrentWriters(t *testing.T) {
 	versions := []string{"x.txt\n", "*\n", "x.txt\nok.txt\nanother-longer-line.txt\n", "yy.txt\n"}
 	tr, p := stableTree(t, versions[0])
 	valid := map[string]bool{"": true} // between truncate and write
 	for _, v := range versions {
 		valid[v] = true
+		valid["#"+v[1:]] = true // rewriteSameSize
 	}
 	rounds := 8
 	if coarse(t, p) {
 		rounds = 2 // each settle waits two seconds and more
 	}
 	const burst = 50
+	// A failed write is a test failure, but for Windows, where a write or a
+	// rename can be refused for a while (the file is open, or scanned).
+	mayFail := runtime.GOOS == "windows"
 
 	write := func(v string, rename bool) error {
 		if rename {
@@ -365,24 +373,44 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 		}
 		return err
 	}
+	// settle waits until a read of the file, unchanged, is settled (the
+	// stamp's own bound, as accesspolicy's settle waits; the margin covers
+	// the monotonic and wall clocks drifting apart), and returns that read.
+	settle := func(r int) ([]byte, Stamp) {
+		t.Helper()
+		b, st, err := tr.ReadFileStable("rules", nil)
+		if err != nil {
+			t.Fatalf("round %d: read with the writer stopped: %v", r, err)
+		}
+		time.Sleep(time.Until(st.SettleTime()) + 10*time.Millisecond)
+		again, st2, err := tr.ReadFileStable("rules", nil)
+		if err != nil || string(again) != string(b) || !st2.Same(st) || !st2.Settled() {
+			t.Fatalf("round %d: read after SettleTime: %q %v (before: %q) same=%v settled=%v", r, again, err, b, st2.Same(st), st2.Settled())
+		}
+		return again, st2
+	}
 
-	paused := make(chan string)    // writer -> reader: the burst's last version, now unchanged
-	resume := make(chan struct{})  // reader -> writer: write once now
-	wrote := make(chan error)      // writer -> reader: that write's result
-	proceed := make(chan struct{}) // reader -> writer: that read is over, next burst
-	done := make(chan struct{})    // test end: the writer returns
+	start := make(chan struct{})  // reader -> writer: the file is settled, write a burst
+	paused := make(chan string)   // writer -> reader: the burst's last version, now unchanged
+	resume := make(chan struct{}) // reader -> writer: write once now
+	wrote := make(chan error)     // writer -> reader: that write's result
+	done := make(chan struct{})   // test end: the writer returns
 	var wg sync.WaitGroup
 	t.Cleanup(func() { close(done); wg.Wait() }) // also after a failure below
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for r := range rounds {
+			select {
+			case <-start:
+			case <-done:
+				return
+			}
 			var last string
 			for i := range burst {
 				last = versions[(r+i)%len(versions)]
-				rename := i%5 == 4
-				if err := write(last, rename); err != nil && !rename {
-					t.Errorf("round %d: write: %v", r, err) // a rename may fail on Windows while the file is open
+				if err := write(last, i%5 == 4); err != nil && !mayFail {
+					t.Errorf("round %d: write: %v", r, err)
 				}
 			}
 			// The burst ends in place, so that the file holds last.
@@ -401,7 +429,7 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 			}
 			var err error
 			if r%2 == 1 {
-				err = write(versions[(r+1)%len(versions)], true)
+				err = write(versions[(r+2)%len(versions)], true) // not last
 			} else {
 				err = rewriteSameSize(p, last)
 			}
@@ -410,17 +438,14 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 			case <-done:
 				return
 			}
-			select {
-			case <-proceed:
-			case <-done:
-				return
-			}
 		}
 	}()
 
 	var changed, missing, unsettled, settled int
 	for r := range rounds {
-		// 1. Reads during the burst.
+		// 1. A settled file, then reads during the burst.
+		settle(r)
+		start <- struct{}{}
 		var last string
 	burst:
 		for {
@@ -432,6 +457,9 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 			b, st, err := tr.ReadFileStable("rules", nil)
 			switch {
 			case errors.Is(err, ErrChanged):
+				if b != nil {
+					t.Fatalf("round %d: ErrChanged with bytes %q", r, b)
+				}
 				changed++
 			case errors.Is(err, os.ErrNotExist):
 				missing++
@@ -449,16 +477,9 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 
 		// 2. The writer has stopped (the receive above happens after its
 		// last write): the file is last, settled after its SettleTime.
-		b, st, err := tr.ReadFileStable("rules", nil)
-		if err != nil || string(b) != last {
-			t.Fatalf("round %d: read with the writer stopped: %q %v, want %q", r, b, err, last)
+		if b, _ := settle(r); string(b) != last {
+			t.Fatalf("round %d: read with the writer stopped: %q, want %q", r, b, last)
 		}
-		time.Sleep(time.Until(st.SettleTime()))
-		b, again, err := tr.ReadFileStable("rules", nil)
-		if err != nil || string(b) != last || !again.Same(st) || !again.Settled() {
-			t.Fatalf("round %d: read after SettleTime: %q %v same=%v settled=%v", r, b, err, again.Same(st), again.Settled())
-		}
-		settled++
 
 		// 3. The writer writes once during the next read.
 		var once sync.Once
@@ -471,16 +492,15 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 				werr = <-wrote
 			})
 		})
-		b, st, err = tr.ReadFileStable("rules", nil)
+		b, st, err := tr.ReadFileStable("rules", nil)
 		restore()
 		if !hooked {
 			// No read system call: the writer still waits to resume (the
 			// cleanup releases it).
 			t.Fatalf("round %d: the read made no read system call: %q %v", r, b, err)
 		}
-		proceed <- struct{}{} // the write above is the only one during that read
 		inPlace := r%2 == 0
-		if werr != nil && inPlace {
+		if werr != nil && (inPlace || !mayFail) {
 			t.Fatalf("round %d: write during the read: %v", r, werr)
 		}
 		switch {
@@ -488,10 +508,10 @@ func TestReadStable_ConcurrentWriters(t *testing.T) {
 			changed++
 		case !inPlace && err == nil && string(b) == last:
 			// By rename: the descriptor read the old object whole (or, on
-			// Windows, the rename failed while the file was open: werr).
+			// Windows, the rename was refused while the file was open).
 		default:
 			t.Fatalf("round %d: written during a settled read (in place: %v): %q %v settled=%v", r, inPlace, b, err, st.Settled())
 		}
 	}
-	t.Logf("%d rounds: %d changed, %d missing, %d unsettled, %d settled", rounds, changed, missing, unsettled, settled)
+	t.Logf("%d rounds: %d changed, %d missing, %d unsettled, %d settled during bursts", rounds, changed, missing, unsettled, settled)
 }
