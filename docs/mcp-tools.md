@@ -157,7 +157,10 @@ entry points, exported declarations and declarations other code depends on.
 The text names every package of the map — one that lists nothing too — so
 both ends of every dependency line are in it. `format: "json"`
 adds each symbol's edge counts and lists the packages left out by
-`maxPackages`.
+`maxPackages`. Its `RootPath` is the absolute path of the server's root,
+symlinks resolved: `detail: "minimal"` with `maxPackages: 1` is the cheap way
+to check which repository or Git worktree a server serves
+([Git worktrees](getting-started.md#git-worktrees)).
 
 A Terraform module (a directory) lists what it builds rather than its
 interface: managed and ephemeral resources, module calls and data sources

@@ -110,7 +110,7 @@ ark instruction claude >> CLAUDE.md   # or codex / cursor / cline / copilot-vsco
 **4. Ask** — "Give me an overview of this repository", "Who calls
 `PlaceOrder`?", "What could break if I change `store.Save`?".
 
-Full guide, including manual configuration:
+Full guide, including manual configuration and a server per Git worktree:
 [Getting started](docs/getting-started.md).
 
 ## Example: before changing a function

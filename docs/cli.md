@@ -376,8 +376,11 @@ safety contract described in [Getting started](getting-started.md#safety-contrac
 ## `instruction`
 
 `ark instruction <target>` prints Markdown that tells an agent which Ark tool
-to use for which question and how to treat uncertain results. It writes no
-file.
+to use for which question, how to treat uncertain results, and how to make
+sure its Ark server serves the repository or Git worktree it works in (and
+what to do when it does not). It writes no file and configures no client:
+[Git worktrees](getting-started.md#git-worktrees) shows how to give each
+worktree its own server.
 
 | Target | Agent | Where that agent reads repository instructions |
 |---|---|---|

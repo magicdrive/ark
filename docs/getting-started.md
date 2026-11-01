@@ -154,6 +154,27 @@ codex mcp add ark -- ark mcp-server --root /abs/path/to/repo
 Add `.ark/` to the repository's `.gitignore`: the server keeps its cache in
 `<root>/.ark/index` ([Operations](operations.md#extraction-cache)).
 
+### Git worktrees
+
+A server serves the one root it was started on and refuses paths outside it,
+so a server started on one checkout never sees another worktree's files or
+uncommitted changes. To work in several Git worktrees, give each one a server
+of its own; each keeps its cache in its own `<worktree>/.ark/index`. The
+guidance of `ark instruction` tells the agent to check the root its server
+reports (`get_repository_map`, `format: "json"`: `RootPath`) against the
+worktree it works in, and not to use another checkout's results.
+
+| Client | A server per worktree |
+|---|---|
+| Claude Code (project) | The `.mcp.json` entry serves the project Claude Code starts in: start the session in the worktree (with the file committed, copied, or written there by `ark setup claude`). A session started in another checkout keeps that checkout's server. |
+| Cursor, Copilot in VS Code, Copilot CLI | The project file holds the absolute `--root` of the checkout `setup` ran in: run `ark setup <client>` in each worktree and open that folder. A file committed or copied from another checkout names that checkout: `setup` reports the conflict, and `--force` replaces Ark's entry in this worktree's file only. |
+| Claude Code and Cursor (`--global`), Cline CLI, Codex | The user-level entry `ark` names one root: `setup` in a second worktree stops on the conflict, and `--force` would repoint every session that uses it. Add a second server by hand under its own name, with the same command and the worktree's absolute `--root` (Codex: `codex mcp add ark-feature -- ark mcp-server --root /abs/path/to/worktree`); `setup` keeps entries of other names. |
+
+Reload or restart the client after adding or changing a server. A client
+that prefixes tool names with the server's name shows a second server's
+tools under that name (Claude Code: `mcp__ark-feature__find_symbol`), not
+the `mcp__ark__` names `ark instruction claude` prints.
+
 To keep files away from the agent altogether — credentials, generated or
 vendored code — list them in an `.arkignore` file (`.gitignore` syntax) at
 the repository root or in any directory below it. The MCP server never reads,
