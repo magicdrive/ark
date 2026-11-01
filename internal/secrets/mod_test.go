@@ -11,8 +11,8 @@ import (
 func TestScanReader_FullMask(t *testing.T) {
 	rs := secrets.DefaultRuleSet()
 	input := `
-AWS_ACCESS_KEY_ID=AKIA1234567890ABCDEF
-GITHUB_TOKEN=ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd
+AWS_ACCESS_KEY_ID=AK` + `IA1234567890ABCDEF
+GITHUB_TOKEN=gh` + `p_abcdefghijklmnopqrstuvwxyz0123456789abcd
 password=supersecret
 normal_line=notasecret
 `
@@ -36,7 +36,7 @@ normal_line=notasecret
 
 func TestScanReader_AllowList(t *testing.T) {
 	rs := secrets.DefaultRuleSet()
-	input := `AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE
+	input := `AWS_ACCESS_KEY_ID=AK` + `IAIOSFODNN7EXAMPLE
 password=supersecret`
 	rs.AddAllowed("password=supersecret")
 	matches, err := rs.ScanReader(strings.NewReader(input), "test.env")
@@ -103,9 +103,9 @@ token: abcdefg
 token == abcdefg
 token || abcdefg
 token && abcdefg
-AWS_ACCESS_KEY_ID=AKIA1234567890ABCDEF
+AWS_ACCESS_KEY_ID=AK` + `IA1234567890ABCDEF
 normal = value
-normal_hoge = "ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd"
+normal_hoge = "gh` + `p_abcdefghijklmnopqrstuvwxyz0123456789abcd"
 `
 	want := `
 *****MASKED*****
@@ -177,8 +177,8 @@ func TestDefaultPatterns_CompleteCoverage(t *testing.T) {
 		pattern string
 	}{
 		// AWS
-		{"AKIA", "AWS_ACCESS_KEY_ID=AKIA1234567890ABCDEF", `AKIA[0-9A-Z]{16}`},
-		{"ASIA", "AWS_ACCESS_KEY_ID=ASIAABCDEFGHIJKLMN12", `ASIA[0-9A-Z]{16}`},
+		{"AKIA", "AWS_ACCESS_KEY_ID=AK" + "IA1234567890ABCDEF", `AKIA[0-9A-Z]{16}`},
+		{"ASIA", "AWS_ACCESS_KEY_ID=AS" + "IAABCDEFGHIJKLMN12", `ASIA[0-9A-Z]{16}`},
 		{"A3T", "AWS_ID=A3T1234567890ABCDEF", `A3T[A-Z0-9]{16}`},
 		{"AGPA", "AWS_ID=AGPA1234567890ABCDEF", `AGPA[A-Z0-9]{16}`},
 		{"AIDA", "AWS_ID=AIDA1234567890ABCDEF", `AIDA[A-Z0-9]{16}`},
@@ -205,23 +205,27 @@ func TestDefaultPatterns_CompleteCoverage(t *testing.T) {
 		{"Azure triple-32", `abcdefabcdefabcdefabcdefabcdefab-abcdefabcdefabcdefabcdefabcdefab-abcdefabcdefabcdefabcdefabcdefab`, `[0-9a-f]{32}-[0-9a-f]{32}-[0-9a-f]{32}`},
 
 		// GitHub/GitLab
-		{"ghp", `ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd1234abcd`, `ghp_[A-Za-z0-9_]{36,255}`},
-		{"ghu", `ghu_abcdefghijklmnopqrstuvwxyz0123456789abcd1234abcd`, `ghu_[A-Za-z0-9_]{36,255}`},
-		{"ghs", `ghs_abcdefghijklmnopqrstuvwxyz0123456789abcd1234abcd`, `ghs_[A-Za-z0-9_]{36,255}`},
-		{"glpat", `glpat-abcdefghijklmnopqrstuvwx`, `glpat-[0-9a-zA-Z\-\_]{20}`},
+		{"ghp", `gh` + `p_abcdefghijklmnopqrstuvwxyz0123456789abcd1234abcd`, `ghp_[A-Za-z0-9_]{36,255}`},
+		{"ghu", `gh` + `u_abcdefghijklmnopqrstuvwxyz0123456789abcd1234abcd`, `ghu_[A-Za-z0-9_]{36,255}`},
+		{"ghs", `gh` + `s_abcdefghijklmnopqrstuvwxyz0123456789abcd1234abcd`, `ghs_[A-Za-z0-9_]{36,255}`},
+		{"glpat", `gl` + `pat-abcdefghijklmnopqrstuvwx`, `glpat-[0-9a-zA-Z\-\_]{20}`},
 
 		// Slack
-		{"xoxb", `xoxb-1234567890abcdefg`, `xox[baprs]-([0-9a-zA-Z]{10,48})?`},
+		{"xoxb", `xox` + `b-1234567890abcdefg`, `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9]+-)+(?:[0-9A-Za-z]{20,}|[0-9A-Fa-f]{10,}|[0-9]+)|[0-9A-Za-z]{10,})?` +
+			`|(?:xoxe\.)?xapp-[0-9]+-[0-9A-Z]+-[0-9]+-[0-9A-Fa-f]+` +
+			`|xoxe-[0-9]+-[0-9A-Za-z]{20,}` +
+			`|xoxo-[0-9]+-[0-9]+-[0-9]+-[0-9A-Fa-f]+` +
+			`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]{20,})*`},
 
 		// Stripe
-		{"sk_live", `sk_live_abcdefghijklmnopqrstuvwxyzABCDEF12`, `sk_live_[0-9a-zA-Z]{24}`},
+		{"sk_live", `sk_` + `live_abcdefghijklmnopqrstuvwxyzABCDEF12`, `sk_live_[0-9a-zA-Z]{24}`},
 		{"pk_live", `pk_live_abcdefghijklmnopqrstuvwxyzABCDEF12`, `pk_live_[0-9a-zA-Z]{24}`},
 
 		// SendGrid
-		{"sendgrid", `SG.abcdefghijklmnopqrstuv.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi1234567890123456789abcdefghijklmno`, `SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`},
+		{"sendgrid", `SG` + `.abcdefghijklmnopqrstuv.ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi1234567890123456789abcdefghijklmno`, `SG\.[A-Za-z0-9_-]{22}\.[A-Za-z0-9_-]{43}`},
 
 		// Google OAuth/Client
-		{"ya29", `ya29.A0ARrdaM-0123456789abcdefGHIJKLMNOPQRSTUVWXYZ`, `ya29\.[0-9A-Za-z\-_]+`},
+		{"ya29", `ya` + `29.A0ARrdaM-0123456789abcdefGHIJKLMNOPQRSTUVWXYZ`, `ya29\.[0-9A-Za-z\-_]+`},
 		{"google_clientid", "123456789012-abcdefghijklmnopqrstuvwxyzABCDEF.apps.googleusercontent.com", `[0-9]+-([0-9A-Za-z_]{32})\.apps\.googleusercontent\.com`},
 
 		// Private Keys

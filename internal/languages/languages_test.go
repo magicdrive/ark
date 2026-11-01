@@ -11,7 +11,7 @@ import (
 // tsx is a first-class language in the registry and is indexed by every MCP
 // tool like any other language.
 func TestRegistry_CanonicalSet(t *testing.T) {
-	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css", "zig", "yaml"}
+	want := []language.Language{"go", "typescript", "tsx", "javascript", "python", "php", "terraform", "rust", "java", "html", "css", "zig", "yaml", "toml", "xml", "markdown"}
 	got := languages.Registry().Languages()
 	if len(got) != len(want) {
 		t.Fatalf("Languages() = %v, want %v", got, want)
@@ -25,7 +25,7 @@ func TestRegistry_CanonicalSet(t *testing.T) {
 
 // withoutGrammar are the languages whose provider parses without
 // Tree-sitter (HTML: golang.org/x/net/html; CSS: its own CSS Syntax Level 3).
-var withoutGrammar = map[language.Language]bool{"html": true, "css": true, "yaml": true}
+var withoutGrammar = map[language.Language]bool{"html": true, "css": true, "yaml": true, "toml": true, "xml": true, "markdown": true}
 
 // TestRegistry_DescriptorIntegrity verifies each descriptor is coherent: the
 // extensions match the provider's own Extensions(), and a grammar exists —
@@ -85,6 +85,9 @@ func TestRegistry_TypeScriptAndTSXAreContextQualityCertified(t *testing.T) {
 		"css":        language.SupportLevelGraph,
 		"zig":        language.SupportLevelGraph,
 		"yaml":       language.SupportLevelGraph,
+		"toml":       language.SupportLevelGraph,
+		"xml":        language.SupportLevelGraph,
+		"markdown":   language.SupportLevelGraph,
 	} {
 		if got := languages.Registry().SupportLevelFor(lang); got != want {
 			t.Errorf("%s SupportLevel = %v, want %v", lang, got, want)

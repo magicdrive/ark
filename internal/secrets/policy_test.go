@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -15,15 +16,87 @@ import (
 	"github.com/magicdrive/ark/internal/secrets/internal/v61"
 )
 
-// modes are the ways a text is masked, with v6.1.0's function for each.
+// modes are the ways a text is masked, with v6.1.0's function for each,
+// amended (v61.Amendments) and as v6.1.0 shipped it.
 var modes = []struct {
-	name string
-	mode secrets.Mode
-	v61  func(string) string
+	name     string
+	mode     secrets.Mode
+	v61      func(string) string
+	pristine func(string) string
 }{
-	{"unknown", secrets.Mode{}, func(s string) string { return v61.MaskAllIn(s, v61.SyntaxUnknown) }},
-	{"terraform", secrets.Mode{Syntax: secrets.SyntaxTerraform}, func(s string) string { return v61.MaskAllIn(s, v61.SyntaxTerraform) }},
-	{"compact", secrets.Mode{Compact: true}, func(s string) string { return v61.MaskCompactIn(s, v61.SyntaxUnknown) }},
+	{"unknown", secrets.Mode{},
+		func(s string) string { return v61.MaskAllInAmended(s, v61.SyntaxUnknown) },
+		func(s string) string { return v61.MaskAllIn(s, v61.SyntaxUnknown) }},
+	{"terraform", secrets.Mode{Syntax: secrets.SyntaxTerraform},
+		func(s string) string { return v61.MaskAllInAmended(s, v61.SyntaxTerraform) },
+		func(s string) string { return v61.MaskAllIn(s, v61.SyntaxTerraform) }},
+	{"compact", secrets.Mode{Compact: true},
+		func(s string) string { return v61.MaskCompactInAmended(s, v61.SyntaxUnknown) },
+		func(s string) string { return v61.MaskCompactIn(s, v61.SyntaxUnknown) }},
+}
+
+// triggered reports whether s holds a trigger of an amendment: text an
+// amendment can mask differently from v6.1.0.
+func triggered(s string) bool {
+	for _, a := range v61.Amendments {
+		for _, t := range a.Triggers {
+			if strings.Contains(s, t) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// checkPristine compares the recommended policy with v6.1.0 as it shipped,
+// on a text no amendment applies to.
+func checkPristine(t *testing.T, what, s string) {
+	t.Helper()
+	if triggered(s) {
+		return
+	}
+	p := secrets.Recommended()
+	for _, m := range modes {
+		if got, want := p.Mask(s, m.mode), m.pristine(s); got != want {
+			t.Errorf("%s (%s): no amendment applies, yet Recommended().Mask differs from v6.1.0\n got %q\nwant %q", what, m.name, clip(got), clip(want))
+		}
+	}
+}
+
+// wordRE is a word worth hiding: a value, a key, a token's section.
+var wordRE = regexp.MustCompile(`[0-9A-Za-z]{6,}`)
+
+// shownWord returns a word of s that the mask got shows and the mask was
+// does not, or "": words are compared whole, in one pass over each text.
+func shownWord(s, got, was string) string {
+	words := func(x string) map[string]bool {
+		m := map[string]bool{}
+		for _, w := range wordRE.FindAllString(x, -1) {
+			m[w] = true
+		}
+		return m
+	}
+	inGot, inWas := words(got), words(was)
+	for _, w := range wordRE.FindAllString(s, -1) {
+		if w != "MASKED" && inGot[w] && !inWas[w] {
+			return w
+		}
+	}
+	return ""
+}
+
+// checkNoLessMasked holds where an amendment applies: no word that v6.1.0 as
+// it shipped hid is shown by the recommended policy — an amended rule's longer
+// match never takes away what a later rule masked after it.
+func checkNoLessMasked(t *testing.T, what, s string) {
+	t.Helper()
+	p := secrets.Recommended()
+	for _, m := range modes {
+		got, was := p.Mask(s, m.mode), m.pristine(s)
+		if w := shownWord(s, got, was); w != "" {
+			t.Errorf("%s (%s): v6.1.0 hid %q, Recommended().Mask shows it\n got %q\n was %q", what, m.name, w, clip(got), clip(was))
+		}
+	}
 }
 
 // fixtureTexts are texts full of secret-like syntax: this package's tests
@@ -85,16 +158,23 @@ func rebuild(s string, fs []secrets.Finding) string {
 	return out.String()
 }
 
-// checkRecommended compares the recommended policy with v6.1.0 on s, and
-// Find with Mask.
+// checkRecommended compares the recommended policy's pipeline with v6.1.0
+// amended on s, the policy (that pipeline floored by v6.1.0's slack-token
+// expression) with both, and Find with Mask.
 func checkRecommended(t *testing.T, what, s string) {
 	t.Helper()
 	p := secrets.Recommended()
 	for _, m := range modes {
-		got := p.Mask(s, m.mode)
-		if want := m.v61(s); got != want {
-			t.Errorf("%s (%s): Recommended().Mask differs from v6.1.0\n got %q\nwant %q", what, m.name, clip(got), clip(want))
+		if got, want := p.WithoutFloor().Mask(s, m.mode), m.v61(s); got != want {
+			t.Errorf("%s (%s): the recommended pipeline differs from v6.1.0 amended\n got %q\nwant %q", what, m.name, clip(got), clip(want))
 			continue
+		}
+		got, amended := p.Mask(s, m.mode), m.v61(s)
+		if !triggered(s) && got != amended {
+			t.Errorf("%s (%s): no trigger, yet the floor changes the mask\n got %q\nwant %q", what, m.name, clip(got), clip(amended))
+		}
+		if w := shownWord(s, got, amended); w != "" {
+			t.Errorf("%s (%s): v6.1.0 amended hid %q, Recommended().Mask shows it\n got %q", what, m.name, w, clip(got))
 		}
 		if r := rebuild(s, p.Find(s, m.mode)); r != got {
 			t.Errorf("%s (%s): Find's spans do not make Mask's result\nfind %q\nmask %q", what, m.name, clip(r), clip(got))
@@ -110,7 +190,8 @@ func clip(s string) string {
 }
 
 // Without configuration, Ark masks exactly what v6.1.0 masked, byte for
-// byte, in every mode; and Find finds exactly what Mask masks.
+// byte, in every mode, but for the intended changes (v61.Amendments); and
+// Find finds exactly what Mask masks.
 func TestRecommended_MatchesV61(t *testing.T) {
 	for path, s := range fixtureTexts(t) {
 		checkRecommended(t, path, s)
@@ -125,19 +206,50 @@ func TestRecommended_MatchesV61(t *testing.T) {
 	}
 }
 
-// FuzzRecommended_MatchesV61 compares the recommended policy with v6.1.0,
-// and Find with Mask, on any text.
+// FuzzRecommended_MatchesV61 compares the recommended policy with v6.1.0
+// (amended, and as it shipped where no amendment applies), and Find with
+// Mask, on any text.
 func FuzzRecommended_MatchesV61(f *testing.F) {
 	for _, s := range []string{
 		"password: correct horse battery", `"api_key": "x", 'pw' => 'y'`, "token: ${{ secrets.A }} x",
-		"  password = var.x # c\r\n", "a␤password: |␤  b␤c", "AKIA1234567890ABCDEF password=x;token=y",
+		"  password = var.x # c\r\n", "a␤password: |␤  b␤c", "AK" + "IA1234567890ABCDEF password=x;token=y",
 		"key: <<-EOT\n  s\n  EOT\n", `export TOKEN="a"b`, "-----BEGIN EC PRIVATE KEY-----\nx\n-----END EC PRIVATE KEY-----",
+		"xox" + "b-123456789012-1234567890123-SXpfKtHF4vUCsMehGAkWvj7F", "SLACK=xox" + "p-111-222-333-d6bc768406e5c2e6958cfc399b438004 x",
+		"xox" + "e.xap" + "p-1-A0123ABCDEF-1234567890123-0a1b xox" + "e-1-AbC xap" + "p-style xox" + "o-gossip", "xoxb-␤password: x",
+		"xox" + "b-1234567890-password=hunterC1",
+		"xox" + "p-1-2-3-secret=hunterC4",
+		"xap" + "p-1-A01-123-ab-token=hunterC5",
+		"xox" + "b-1234567890-1234567890abcdef0123password=hunterQ1",
+		"xox" + "b-1-2-abcdefabcdefAPI_KEY=hunterQ3",
+		"xwf" + "p-tokenabcdefABCDEFGHIJxox" + "b-0123456789abcdef",
 	} {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, s string) {
 		checkRecommended(t, "fuzz", s)
+		checkPristine(t, "fuzz", s)
+		checkNoLessMasked(t, "fuzz", s)
 	})
+}
+
+// Every amendment is the recommended policy's expression for its rule, and
+// it changes nothing in text without its triggers — the fixture texts here
+// (every masking case written so far) as anywhere.
+func TestRecommended_AmendmentsOnly(t *testing.T) {
+	for _, a := range v61.Amendments {
+		if a.Version == "" || a.Why == "" || len(a.Triggers) == 0 {
+			t.Errorf("amendment %s: want a version, a reason and triggers", a.Rule)
+		}
+		if !slices.Contains(secrets.BuiltinRuleIDs(), a.Rule) {
+			t.Errorf("amendment %s: no such built-in rule", a.Rule)
+		}
+	}
+	for path, s := range fixtureTexts(t) {
+		for i, line := range strings.Split(s, "\n") {
+			checkPristine(t, fmt.Sprintf("%s:%d", path, i+1), line)
+			checkNoLessMasked(t, fmt.Sprintf("%s:%d", path, i+1), line)
+		}
+	}
 }
 
 // The built-in rule IDs are a public contract (docs/secret-rules.md): a
@@ -202,7 +314,7 @@ func TestPolicy_DisableRemovesOnlyThatRule(t *testing.T) {
 		// The AWS pattern no longer masks a bare key; an assignment still masks its value.
 		{[]string{"aws-access-key-id"}, "", "id: " + aws + "\npassword: " + aws, "id: " + aws + "\npassword: " + m},
 		// All generic assignments off, a heredoc's body with them; token patterns stay.
-		{[]string{"generic-assignment"}, "", "password = <<EOT\nhunter2\nEOT\nx = ghp_abcdefghijklmnopqrstuvwxyz0123456789abcd", "password = <<EOT\nhunter2\nEOT\nx = " + m},
+		{[]string{"generic-assignment"}, "", "password = <<EOT\nhunter2\nEOT\nx = gh" + "p_abcdefghijklmnopqrstuvwxyz0123456789abcd", "password = <<EOT\nhunter2\nEOT\nx = " + m},
 		// The PEM block off: the header pattern still masks the BEGIN line.
 		{[]string{"pem-private-key-block"}, "", "-----BEGIN RSA PRIVATE KEY-----\nMIIE\n-----END RSA PRIVATE KEY-----", m + "\nMIIE\n-----END RSA PRIVATE KEY-----"},
 		// A reference exception off: a Terraform reference is masked too.

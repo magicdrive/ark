@@ -48,10 +48,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	yaml "go.yaml.in/yaml/v3"
+
+	"github.com/magicdrive/ark/internal/languages/internal/declname"
 )
 
 // MaxBytes is the largest stream Parse reads. A larger one is reported
@@ -768,24 +769,8 @@ func Scalar(n *yaml.Node) (string, bool) {
 }
 
 // MaxName bounds the bytes of a text that is a declaration's name.
-const MaxName = 256
+const MaxName = declname.MaxBytes
 
-// IsName reports whether a key or a value may be a declaration's name: one
-// line of at most MaxName bytes of valid UTF-8 without a control, line
-// break, zero-width or bidirectional formatting character. Names reach the output as identifiers: a multi-line or
-// control-character "name" could forge a line of a text result, and a long
-// one is data, not a name.
-func IsName(s string) bool {
-	if s == "" || len(s) > MaxName || !utf8.ValidString(s) {
-		return false
-	}
-	for _, r := range s {
-		// Control (Cc), format (Cf: zero-width, bidirectional and other
-		// invisible characters), line and paragraph separators.
-		if unicode.Is(unicode.Cc, r) || unicode.Is(unicode.Cf, r) || unicode.Is(unicode.Bidi_Control, r) ||
-			r == 0x2028 || r == 0x2029 || r == 0x180e {
-			return false
-		}
-	}
-	return true
-}
+// IsName reports whether a key or a value may be a declaration's name
+// (declname.IsName, the rule every data and markup provider shares).
+func IsName(s string) bool { return declname.IsName(s) }

@@ -1,0 +1,44 @@
+symbol Cargo.toml#/workspace unattributed_in=0 unattributed_out=0 unresolved=1 outside=1
+  no_candidate plugins/* kind=contains receiver="" reason=unresolved @Cargo.toml:3:74-3:85
+  no_candidate ../elsewhere kind=contains receiver="" reason=outside_repository @Cargo.toml:3:87-3:101
+symbol Cargo.toml#/workspace/dependencies/serde unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate serde kind=depends_on receiver="" reason=outside_repository @Cargo.toml:8:1-8:6
+symbol crates/app/Cargo.toml#/dependencies/regex unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate regex kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:9:1-9:6
+symbol crates/app/Cargo.toml#/dependencies/json unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate serde_json kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:10:1-10:5
+symbol crates/app/Cargo.toml#/dependencies/private unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate private kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:11:1-11:8
+symbol crates/app/Cargo.toml#/dependencies/outside unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate outside kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:12:1-12:8
+symbol crates/app/Cargo.toml#/dependencies/libc unattributed_in=1 unattributed_out=0 unresolved=0 outside=1
+  no_candidate libc kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:13:1-13:5
+  candidate_caller crates/app/Cargo.toml#/features/std kind=value_reference confidence=candidate refs=1
+symbol crates/app/Cargo.toml#/dependencies/log unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate log kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:15:15-15:18
+symbol crates/app/Cargo.toml#/dev-dependencies/tempfile unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate tempfile kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:20:1-20:9
+symbol crates/app/Cargo.toml#/build-dependencies/cc unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate cc kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:23:1-23:3
+symbol crates/app/Cargo.toml#/target/cfg(unix)/dependencies/libc unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate libc kind=depends_on receiver="" reason=outside_repository @crates/app/Cargo.toml:26:1-26:5
+symbol crates/app/Cargo.toml#/features/std unattributed_in=0 unattributed_out=1 unresolved=0 outside=0
+  candidate_callee crates/app/Cargo.toml#/dependencies/libc kind=value_reference confidence=candidate refs=1
+symbol crates/app/Cargo.toml#/features/fast unattributed_in=0 unattributed_out=0 unresolved=1 outside=0
+  no_candidate missing kind=value_reference receiver="" reason=unresolved @crates/app/Cargo.toml:31:9-31:18
+symbol py/pyproject.toml#/build-system/requires/setuptools unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate setuptools kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:2:13-2:29
+symbol py/pyproject.toml#/build-system/requires/wheel unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate wheel kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:2:31-2:38
+symbol py/pyproject.toml#/project/dependencies/requests unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate requests kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:10:3-10:19
+symbol py/pyproject.toml#/project/dependencies/regex unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate Regex kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:11:3-11:34
+symbol py/pyproject.toml#/project/dependencies/regex#2 unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate regex kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:12:3-12:16
+symbol py/pyproject.toml#/project/optional-dependencies/dev/pytest unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate pytest kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:17:8-17:19
+symbol py/pyproject.toml#/project/optional-dependencies/dev/ruff unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate ruff kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:17:21-17:27
+symbol py/pyproject.toml#/dependency-groups/test/coverage unattributed_in=0 unattributed_out=0 unresolved=0 outside=1
+  no_candidate coverage kind=depends_on receiver="" reason=outside_repository @py/pyproject.toml:20:9-20:25

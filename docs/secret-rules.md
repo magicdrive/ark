@@ -129,7 +129,7 @@ reused. `ark secrets-scan --list-rules` lists them with their state.
 | `azure-hex-key` | pattern | Three 32-digit hex groups joined by hyphens |
 | `github-token` | pattern | GitHub tokens (`ghp_`, `ghu_`, `ghs_`) |
 | `gitlab-token` | pattern | GitLab personal access tokens (`glpat-`) |
-| `slack-token` | pattern | Slack tokens (`xoxb-`, `xoxa-`, `xoxp-`, `xoxr-`, `xoxs-`) |
+| `slack-token` | pattern | Slack tokens, whole (`xoxb-`, `xoxp-`, `xoxa-`, `xoxr-`, `xoxs-`, rotated `xoxe.…`, app-level `xapp-`, refresh `xoxe-`, legacy `xoxo-`, workflow `xwfp-`) |
 | `stripe-live-key` | pattern | Stripe live keys (`sk_live_`, `pk_live_`) |
 | `sendgrid-api-key` | pattern | SendGrid API keys (`SG.…`) |
 | `google-oauth-token` | pattern | Google OAuth access tokens (`ya29.…`) |

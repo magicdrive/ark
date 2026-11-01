@@ -97,6 +97,19 @@ const (
 	KindJob      SymbolKind = "job"
 	KindStep     SymbolKind = "step"
 	KindAction   SymbolKind = "action"
+
+	// Declarations of data and markup files (TOML, XML, Markdown). A table
+	// is a TOML table (or array-of-tables entry); an attribute an XML
+	// attribute (an XML element is KindElement); a section a Markdown
+	// heading and the content under it; a code block a fenced code block,
+	// named by its info string's language; a dependency a dependency a
+	// manifest declares (Cargo, pyproject, Maven) — a package a manifest
+	// declares is KindPackage.
+	KindTable      SymbolKind = "table"
+	KindAttribute  SymbolKind = "attribute"
+	KindSection    SymbolKind = "section"
+	KindCodeBlock  SymbolKind = "code_block"
+	KindDependency SymbolKind = "dependency"
 )
 
 // DeclaresFile reports whether a symbol of kind k declares the file it is in

@@ -23,11 +23,14 @@ import (
 	"github.com/magicdrive/ark/internal/languages/html"
 	"github.com/magicdrive/ark/internal/languages/java"
 	"github.com/magicdrive/ark/internal/languages/javascript"
+	"github.com/magicdrive/ark/internal/languages/markdown"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
 	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
+	"github.com/magicdrive/ark/internal/languages/toml"
 	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages/xml"
 	"github.com/magicdrive/ark/internal/languages/yaml"
 	"github.com/magicdrive/ark/internal/languages/zig"
 )
@@ -116,6 +119,40 @@ func specList() []spec {
 		// and expressions (${{ ... }}) are never evaluated; see
 		// docs/language-support.md.
 		{yaml.NewProvider(), nil, language.SupportLevelGraph},
+		// TOML (.toml): the file, its tables and keys by JSON Pointer
+		// (<file>#/a/b; an array-of-tables element by its name key), with
+		// contains relations; for a Cargo manifest (Cargo.toml) its package,
+		// dependencies (path, workspace, registry, git, target), workspace
+		// members and features, for a pyproject.toml its project and PEP 508
+		// requirements, with depends_on relations (go-toml/v2's parser and
+		// BurntSushi/toml's decoder; no Tree-sitter grammar). Graph, not
+		// ContextQualityCertified: no context-quality benchmark covers it,
+		// and no version, cfg(), marker or glob is evaluated; see
+		// docs/language-support.md.
+		{toml.NewProvider(), nil, language.SupportLevelGraph},
+		// XML (.xml): the document, its elements by namespace-aware
+		// XPath-like paths, attributes, namespace declarations and IDs
+		// (xml:id; an id in no namespace capped at Candidate), with
+		// contains relations, fragment id references and XInclude /
+		// xml-stylesheet path evidence; for a Maven POM, the project, its
+		// parent, modules and dependencies (encoding/xml; no Tree-sitter
+		// grammar). No DTD, external entity or URL is ever read and no
+		// entity is expanded. Graph, not ContextQualityCertified: no
+		// context-quality benchmark covers it, and Maven properties and
+		// parents outside the file are not resolved; see
+		// docs/language-support.md.
+		{xml.NewProvider(), nil, language.SupportLevelGraph},
+		// Markdown (.md / .markdown): the document, its sections (ATX and
+		// setext headings, H1-H6) by GitHub's anchors, fenced code blocks by
+		// language, raw HTML ids, and its links — to anchors of the same or
+		// another document (id references), to repository files of any
+		// language by path (path evidence), and outside the repository (web
+		// URLs, named without query or fragment) — with contains relations
+		// (github.com/yuin/goldmark, CommonMark 0.31.2 with the GFM
+		// extensions; no Tree-sitter grammar). Graph, not
+		// ContextQualityCertified: no context-quality benchmark covers it;
+		// code blocks are never read as code; see docs/language-support.md.
+		{markdown.NewProvider(), nil, language.SupportLevelGraph},
 	}
 }
 

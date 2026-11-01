@@ -16,7 +16,8 @@ func TestDetectLanguage(t *testing.T) {
 		{"module.mjs", SupportedLanguage("javascript")},
 		{"app.py", SupportedLanguage("python")},
 		{"unknown.xyz", LangUnknown},
-		{"README.md", LangUnknown},
+		{"notes.txt", LangUnknown},
+		{"README.md", "markdown"},
 	}
 
 	for _, tt := range tests {
@@ -36,7 +37,8 @@ func TestIsSupportedFile(t *testing.T) {
 	}{
 		{"main.go", true},
 		{"app.ts", true},
-		{"README.md", false},
+		{"notes.txt", false},
+		{"README.md", true},
 		{"image.png", false},
 	}
 

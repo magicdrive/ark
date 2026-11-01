@@ -1,3 +1,19 @@
+# file: Cargo.toml
+## symbols
+symbol Cargo.toml kind=document qualified="Cargo.toml" parent="" receiver="" exported=true @Cargo.toml:1:1-5:1
+symbol golden kind=package qualified="Cargo.toml#/package" parent="Cargo.toml" receiver="" exported=true @Cargo.toml:1:1-4:17
+symbol /package/name kind=key qualified="Cargo.toml#/package/name" parent="Cargo.toml#/package" receiver="" exported=true @Cargo.toml:2:1-2:16
+symbol /package/version kind=key qualified="Cargo.toml#/package/version" parent="Cargo.toml#/package" receiver="" exported=true @Cargo.toml:3:1-3:18
+symbol /package/edition kind=key qualified="Cargo.toml#/package/edition" parent="Cargo.toml#/package" receiver="" exported=true @Cargo.toml:4:1-4:17
+## references
+ref Cargo.toml#/package kind=contains container="Cargo.toml" receiver="" name_qualified="Cargo.toml#/package" identity_in_repository=true call=false @Cargo.toml:1:2-1:9
+ref Cargo.toml#/package/name kind=contains container="Cargo.toml#/package" receiver="" name_qualified="Cargo.toml#/package/name" identity_in_repository=true call=false @Cargo.toml:2:1-2:5
+ref Cargo.toml#/package/version kind=contains container="Cargo.toml#/package" receiver="" name_qualified="Cargo.toml#/package/version" identity_in_repository=true call=false @Cargo.toml:3:1-3:8
+ref Cargo.toml#/package/edition kind=contains container="Cargo.toml#/package" receiver="" name_qualified="Cargo.toml#/package/edition" identity_in_repository=true call=false @Cargo.toml:4:1-4:8
+## imports
+## identity_only
+## diagnostics
+
 # file: scripts/gen.rs
 ## symbols
 symbol main kind=function qualified="{scripts/gen.rs}::main" parent="" receiver="" exported=false @scripts/gen.rs:1:1-3:2

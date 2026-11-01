@@ -110,7 +110,8 @@ func TestDiagnostics_MixedRepositoryAcrossLanguages(t *testing.T) {
 	if _, ok := files["vars.tf.json"]; ok {
 		t.Error(".tf.json is not examined, so it cannot have a diagnostic")
 	}
-	if out.Summary.FilesIndexed != 8 || out.Summary.FilesWithDiagnostics != 7 || out.Summary.ByCode["parse_error"] != out.Summary.Errors {
+	// notes/README.md is indexed (Markdown) and valid: no diagnostic.
+	if out.Summary.FilesIndexed != 9 || out.Summary.FilesWithDiagnostics != 7 || out.Summary.ByCode["parse_error"] != out.Summary.Errors {
 		t.Errorf("summary %+v", out.Summary)
 	}
 	// Valid code keeps its graph; the result says the index has diagnostics.

@@ -104,6 +104,12 @@ type Policy struct {
 	patterns []compiledPattern
 	pemRule  int // index of the PEM block rule, or -1 when disabled
 	assign   *assignment
+	// floor is this policy with v6.1.0's slack-token expression, or nil:
+	// a text holding a Slack token's trigger is masked at the union of
+	// both pipelines' spans, so the longer match of today's expression
+	// never takes away what a later rule masked after v6.1.0's (a key
+	// glued to a token: xoxb-…0123password=x).
+	floor *Policy
 }
 
 // Mode is how a text is read: its syntax (from the file it was read from,
@@ -298,6 +304,16 @@ func NewPolicy(spec Spec) (*Policy, error) {
 	if len(errs) > 0 {
 		return nil, errors.Join(errs...)
 	}
+	if i := index[RuleSlackToken]; p.rules[i].Enabled {
+		f := *p
+		f.patterns = slices.Clone(p.patterns)
+		for j := range f.patterns {
+			if f.patterns[j].rule == i {
+				f.patterns[j].re = slackTokenV61
+			}
+		}
+		p.floor = &f
+	}
 	return p, nil
 }
 
@@ -323,7 +339,36 @@ func (p *Policy) Rules() []Rule { return slices.Clone(p.rules) }
 // Mask returns content with every span the policy finds replaced by
 // "*****MASKED*****" (overlapping spans become one mask).
 func (p *Policy) Mask(content string, mode Mode) string {
+	if p.floored(content) {
+		return rebuildMasked(content, p.find(content, mode))
+	}
 	return p.run(content, mode, nil)
+}
+
+// floored reports whether content is masked at the union with p.floor's
+// spans: it holds a Slack token's trigger, where the two expressions may
+// differ.
+func (p *Policy) floored(content string) bool {
+	if p.floor == nil {
+		return false
+	}
+	for _, t := range slackTriggers {
+		if strings.Contains(content, t) {
+			return true
+		}
+	}
+	return false
+}
+
+// find returns what p's pipeline finds in content, and p.floor's too where
+// content is floored.
+func (p *Policy) find(content string, mode Mode) spans {
+	var rec spans
+	p.run(content, mode, &rec)
+	if p.floored(content) {
+		p.floor.run(content, mode, &rec)
+	}
+	return rec
 }
 
 // Finding is one span a rule of a policy masks, located in the original
@@ -342,8 +387,7 @@ type Finding struct {
 // different rules may overlap — a secret can match several — each with its
 // own rule.
 func (p *Policy) Find(content string, mode Mode) []Finding {
-	var rec spans
-	p.run(content, mode, &rec)
+	rec := p.find(content, mode)
 	out := make([]Finding, len(rec))
 	for i, f := range rec {
 		out[i] = Finding{RuleID: p.rules[f.rule].ID, Start: f.oStart, End: f.oEnd}

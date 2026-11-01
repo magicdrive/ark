@@ -1,0 +1,9 @@
+# A virtual workspace: no [package].
+[workspace]
+members = ["crates/app", "crates/core", "crates/tool", "crates/inherit", "plugins/*", "../elsewhere"]
+exclude = ["crates/old"]
+resolver = "2"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+core-lib = { path = "crates/core" }

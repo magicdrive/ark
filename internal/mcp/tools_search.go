@@ -25,7 +25,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"kind": map[string]interface{}{
 						"type":        "string",
-						"description": "Symbol kind filter: function, method, class, struct, interface, type, constant, variable, ...; Terraform: resource (managed and ephemeral), data_source, module (a module call), output, variable (var.* and local.*), configuration (provider, terraform, check); Rust: impl (an impl block), macro (a macro_rules! macro); HTML: document (a file), element (an element with an id); CSS: stylesheet, keyframes, font_face, property_registration, custom_property, css_class (a CSS Modules class); JavaScript: script (a file); YAML: document (a file), key (a mapping key, by its JSON Pointer path), anchor; GitHub Actions: workflow (a workflow file), trigger (an event of on), job, step, action (an action, by its directory); asset (an image, a font or a media file web documents link to)",
+						"description": "Symbol kind filter: function, method, class, struct, interface, type, constant, variable, ...; Terraform: resource (managed and ephemeral), data_source, module (a module call), output, variable (var.* and local.*), configuration (provider, terraform, check); Rust: impl (an impl block), macro (a macro_rules! macro); HTML: document (a file), element (an element with an id); CSS: stylesheet, keyframes, font_face, property_registration, custom_property, css_class (a CSS Modules class); JavaScript: script (a file); YAML: document (a file), key (a mapping key, by its JSON Pointer path), anchor; GitHub Actions: workflow (a workflow file), trigger (an event of on), job, step, action (an action, by its directory); TOML: document, table, key, package (a Cargo or pyproject package), dependency; XML: document, element, attribute, namespace (a namespace declaration), anchor (an xml:id; an id attribute), package (a Maven project), dependency; Markdown: document, section (a heading and its content), code_block (a fenced code block, by its language), anchor; asset (an image, a font or a media file web documents link to)",
 					},
 					"namePattern": map[string]interface{}{
 						"type":        "string",
@@ -45,7 +45,7 @@ func SearchToolDefinitions() []Tool {
 					},
 					"language": map[string]interface{}{
 						"type":        "string",
-						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml (get_language_support lists them)",
+						"description": "Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml, toml, xml, markdown (get_language_support lists them)",
 					},
 					"filePattern": map[string]interface{}{
 						"type":        "string",

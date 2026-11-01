@@ -11,11 +11,14 @@ import (
 	"github.com/magicdrive/ark/internal/languages/html"
 	"github.com/magicdrive/ark/internal/languages/java"
 	"github.com/magicdrive/ark/internal/languages/javascript"
+	"github.com/magicdrive/ark/internal/languages/markdown"
 	"github.com/magicdrive/ark/internal/languages/php"
 	"github.com/magicdrive/ark/internal/languages/python"
 	"github.com/magicdrive/ark/internal/languages/rust"
 	"github.com/magicdrive/ark/internal/languages/terraform"
+	"github.com/magicdrive/ark/internal/languages/toml"
 	"github.com/magicdrive/ark/internal/languages/typescript"
+	"github.com/magicdrive/ark/internal/languages/xml"
 	"github.com/magicdrive/ark/internal/languages/yaml"
 	"github.com/magicdrive/ark/internal/languages/zig"
 	"github.com/magicdrive/ark/internal/source"
@@ -185,6 +188,48 @@ func fixtures() []providerFixture {
 			// A document's syntax error loses that document; the next one is read.
 			broken:  conformance.Case{Name: "broken", File: "broken.yaml", Source: []byte("bad: [\n---\ngood: 1\n")},
 			dynamic: conformance.Case{Name: "dynamic", File: ".github/workflows/dyn.yml", Source: []byte("on: push\njobs:\n  a:\n    runs-on: x\n    steps:\n      - uses: ${{ matrix.action }}\n")},
+		},
+		{
+			name:     "toml",
+			provider: toml.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "cargo", File: "crates/app/Cargo.toml", Source: []byte("[package]\nname = \"app\"\nversion = \"0.1.0\"\n\n[dependencies]\ncore = { path = \"../core\" }\nserde = { version = \"1\", features = [\"derive\"] }\n\n[target.'cfg(unix)'.dependencies]\nlibc = \"0.2\"\n\n[features]\ndefault = [\"serde/std\"]\n\n[[bin]]\nname = \"app-cli\"\npath = \"src/main.rs\"\n")},
+				{Name: "pyproject", File: "py/pyproject.toml", Source: []byte("[build-system]\nrequires = [\"setuptools>=61\"]\nbuild-backend = \"setuptools.build_meta\"\n\n[project]\nname = \"sample\"\nversion = \"1.0\"\ndependencies = [\"requests>=2\", \"rich; python_version >= '3.9'\"]\n\n[tool.ruff]\nline-length = 100\n")},
+				{Name: "data", File: "config/app.toml", Source: []byte("title = \"x\"\n\n[server]\nhost = \"localhost\"\nports = [8000, 8001]\ntls = { cert = \"c.pem\", key = \"k.pem\" }\n\n[[users]]\nname = \"alice\"\n\n[users.prefs]\ntheme = \"dark\"\n")},
+			},
+			// A syntax error: what precedes it is read, the rest is not.
+			broken: conformance.Case{Name: "broken", File: "broken.toml", Source: []byte("ok = 1\n[bad\nlater = 2\n")},
+			// TOML has no computed names; the nearest is a glob workspace
+			// member, observed and Unresolved (not Dynamic): Q7 reads 0.
+			dynamic: conformance.Case{Name: "dynamic", File: "Cargo.toml", Source: []byte("[workspace]\nmembers = [\"crates/*\"]\n")},
+		},
+		{
+			name:     "xml",
+			provider: xml.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "pom", File: "pom.xml", Source: []byte("<?xml version=\"1.0\"?>\n<project xmlns=\"http://maven.apache.org/POM/4.0.0\">\n  <modelVersion>4.0.0</modelVersion>\n  <parent>\n    <groupId>com.example</groupId>\n    <artifactId>parent</artifactId>\n    <version>1.0</version>\n  </parent>\n  <artifactId>app</artifactId>\n  <modules>\n    <module>core</module>\n  </modules>\n  <dependencies>\n    <dependency>\n      <groupId>org.slf4j</groupId>\n      <artifactId>slf4j-api</artifactId>\n      <version>2.0.13</version>\n    </dependency>\n  </dependencies>\n</project>\n")},
+				{Name: "namespaces", File: "docs/book.xml", Source: []byte("<?xml version=\"1.0\"?>\n<b:book xmlns:b=\"urn:book\" xmlns:xi=\"http://www.w3.org/2001/XInclude\" xmlns:xlink=\"http://www.w3.org/1999/xlink\">\n  <b:title xml:id=\"top\">Title</b:title>\n  <b:para>See <b:link xlink:href=\"#top\">the title</b:link>.</b:para>\n  <xi:include href=\"chapter.xml\"/>\n</b:book>\n")},
+				{Name: "data", File: "config/app.xml", Source: []byte("<config>\r\n  <!-- settings -->\r\n  <server host=\"localhost\" port=\"8080\"/>\r\n  <server host=\"example.com\"/>\r\n  <script><![CDATA[if (a < b) {}]]></script>\r\n</config>\r\n")},
+			},
+			// An element closed by the wrong end tag: the elements read stay.
+			broken: conformance.Case{Name: "broken", File: "broken.xml", Source: []byte("<a>\n  <b>\n</a>\n<c/>\n")},
+			// A dependency whose groupId is a property the file does not define.
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn/pom.xml", Source: []byte("<project><artifactId>a</artifactId><dependencies><dependency><groupId>${vendor}</groupId><artifactId>lib</artifactId></dependency></dependencies></project>\n")},
+		},
+		{
+			name:     "markdown",
+			provider: markdown.NewProvider(),
+			valid: []conformance.Case{
+				{Name: "readme", File: "README.md", Source: []byte("# Project\n\nSee [the design](docs/design.md#architecture) and ![logo](img/logo.png).\n\n## Usage\n\n```bash\nmake\n```\n\n[Back to top](#project)\n")},
+				{Name: "design", File: "docs/design.md", Source: []byte("Design\n======\n\n## Architecture\n\n> Note: see [ADR 1][adr].\n\n### Index\n\n<a id=\"legacy\"></a>\n| a | b |\n|---|---|\n| [x](#index) | `y` |\n\n[adr]: adr/0001.md\n")},
+				{Name: "adr", File: "docs/adr/0001.md", Source: []byte("# ADR 0001: Use Markdown\r\n\r\n## Context\r\n\r\n- [design](../design.md#index)\r\n- <https://example.com/rfc?token=x>\r\n\r\n## Decision\r\n\r\n~~~go\r\nx := 1\r\n~~~\r\n")},
+			},
+			// Markdown has no syntax errors: the one broken Markdown is bytes
+			// that are no UTF-8 text (markdown_invalid_utf8). The headings
+			// around them are read all the same.
+			broken: conformance.Case{Name: "broken", File: "broken.md", Source: []byte("# Good\n\n\xff\xfe broken bytes\n\n## After\n")},
+			// No Markdown name is computed at run time: Q7 is 0 by design.
+			dynamic: conformance.Case{Name: "dynamic", File: "dyn.md", Source: []byte("# D\n\n[run](javascript:go())\n")},
 		},
 	}
 }

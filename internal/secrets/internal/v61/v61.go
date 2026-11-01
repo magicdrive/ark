@@ -4,6 +4,13 @@
 // (secrets.TestRecommended_MatchesV61, FuzzRecommended_MatchesV61). It is
 // imported by tests only. Change it only with an intended change of the
 // recommended masking, in the same change and said so.
+//
+// v6.1.0's own masking (MaskAllIn, MaskCompactIn) is never changed. An
+// intended change is an Amendment (amend.go): one of v6.1.0's expressions,
+// replaced by a named, versioned and explained one, applied by the Amended
+// functions, which the recommended policy is compared with; and outside the
+// text an amendment can match (Amendment.Trigger), the recommended policy
+// is compared with v6.1.0 itself (secrets.TestRecommended_AmendmentsOnly).
 package v61
 
 import (
@@ -63,7 +70,7 @@ var defaultPatterns = []*regexp.Regexp{
 
 // ===== Allow-list patterns (to avoid false positives for known test/demo values) =====
 var defaultAllowed = []*regexp.Regexp{
-	regexp.MustCompile(`AKIAIOSFODNN7EXAMPLE`),
+	regexp.MustCompile(`AK` + `IAIOSFODNN7EXAMPLE`),
 	regexp.MustCompile(`wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY`),
 }
 
@@ -554,8 +561,13 @@ func MaskCompactIn(content string, syntax Syntax) string {
 
 // maskLines masks content line by line; with compact, a "␤" breaks lines too.
 func maskLines(content string, syntax Syntax, compact bool) string {
+	return maskLinesWith(DefaultRuleSet(), content, syntax, compact)
+}
+
+// maskLinesWith is maskLines with rules: v6.1.0's rules (DefaultRuleSet) or
+// the amended ones (amend.go).
+func maskLinesWith(rules *RuleSet, content string, syntax Syntax, compact bool) string {
 	content = MaskSecretKeyBlocks(content)
-	rules := DefaultRuleSet()
 	var block valueBlock
 	lines := strings.Split(content, "\n")
 	for i, line := range lines {

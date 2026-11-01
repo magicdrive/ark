@@ -8,7 +8,7 @@
 
 Ark はリポジトリを構文解析して宣言と参照を抽出し、各参照がどの宣言を指すかを解決したうえで、その結果のグラフを [Model Context Protocol](https://modelcontextprotocol.io)（MCP）でコーディングエージェントに提供します。エージェントは「この関数を呼んでいるのはどこか」「この変更は何に影響するか」「編集の前に読むべきコードはどれか」を問い合わせ、どこまで確かな答えなのかを添えた回答を受け取れます。
 
-Ark は単一の静的バイナリです。Go、TypeScript、TSX、PHP、Terraform、Rust、Java、Zig、JavaScript、Python、YAML（GitHub Actions のワークフローとアクションを含む）を、リポジトリのコードを一切実行せずに解析します。
+Ark は単一の静的バイナリです。Go、TypeScript、TSX、PHP、Terraform、Rust、Java、Zig、JavaScript、Python、YAML（GitHub Actions のワークフローとアクションを含む）、TOML（Cargo、pyproject）、XML（Maven POM）、Markdown を、リポジトリのコードを一切実行せずに解析します。
 
 > 詳細なドキュメント（`docs/` 以下）は英語で提供しています。
 
@@ -224,6 +224,9 @@ Ark の根拠は静的なものです。コンパイラではなく、型推論�
 | Python | graph | スコープ（LEGB）、import と相対 import、パッケージの再エクスポート、`self` / `cls` / `super()`、継承。ローカル変数の型推論、star import、動的な属性は解決しない |
 | Zig | graph | 字句スコープ、相対パスの `@import`、コンテナと `@This()`、再エクスポート、generic な型ファクトリ、型を宣言した値と宣言された戻り値型によるレシーバー、import 元の module の import 表を build.zig の記述から読んだ名前付き module。strong になるのは、リポジトリのすべての build.zig が Closed（Ark がそのコードをすべて追える：依存・build 用の helper ファイル・ZON の import や、Ark がモデル化しない操作がない）で、束縛が 1 つに決まるときだけで、それ以外はすべての import が candidate になる。comptime の評価、`std`、build.zig 以外の build コードだけが束縛する module は扱わない（[Zig](docs/language-support.md#zig)） |
 | YAML、GitHub Actions | graph | 任意の YAML のキー（JSON Pointer で名前を付ける）とアンカー・エイリアス。GitHub Actions のワークフロー（トリガー・ジョブ・ステップ・設定）と composite などのアクション、`contains`・`needs`（`depends_on`）・`uses`（`calls`。ローカルの再利用ワークフローは exact、ローカルのアクションは strong、リモートのアクションはリポジトリ外）。式（`${{ }}`）は評価しない（[YAML and GitHub Actions](docs/language-support.md#yaml-and-github-actions)） |
+| TOML、Cargo、pyproject | graph | 任意の TOML の table と key（JSON Pointer で名前を付ける）。Cargo の manifest の package・依存（リポジトリ内の path 依存は exact、crates.io・registry・git はリポジトリ外）・workspace のメンバー・features。pyproject.toml の project と PEP 508 の要件（PyPI はリポジトリ外）。`contains` と `depends_on`。何も評価しない（[TOML, Cargo and pyproject](docs/language-support.md#toml-cargo-and-pyproject)） |
+| XML、Maven POM | graph | 任意の XML の要素（名前空間を考慮したパス）・属性・名前空間・ID、`contains`、フラグメントの `id_reference`、XInclude のリンク。Maven POM の project・parent・module・依存。DTD・外部エンティティ・URL は読まず、エンティティは展開しない（[XML and Maven POM](docs/language-support.md#xml-and-maven-pom)） |
+| Markdown | graph | 文書、GitHub の見出しアンカーによる section、言語ごとのコードフェンス、HTML の id、`contains` と、同じ文書・他の文書のアンカー（`references`）・リポジトリのファイル（`links`、パスの証拠）・リポジトリ外の URL（scheme と host だけを名前にする）へのリンク。存在しない先は Unresolved（[Markdown](docs/language-support.md#markdown)） |
 | JavaScript | references | 宣言、クラスのメンバー、ES module と CommonJS（TypeScript と同じ抽出器）、スコープを考慮。グラフと context の品質は未認定 |
 
 グラフ系のツールはすべての言語で動作しますが、認定レベルを超える結果はテストの対象外です。詳細と言語ごとの制限は[言語サポート](docs/language-support.md)を参照してください。

@@ -507,7 +507,7 @@ ark syntax script.py --lang python
 
 | Option | Description | Default |
 |---|---|---|
-| `--lang <language>` | `go`, `typescript`, `tsx`, `javascript`, `python`, `php`, `terraform`, `rust`, `java`, `html`, `css`, `zig`, `yaml` (`ark syntax`: not `html`, `css` or `yaml`, which have no syntax tree) | detected from the extension |
+| `--lang <language>` | `go`, `typescript`, `tsx`, `javascript`, `python`, `php`, `terraform`, `rust`, `java`, `html`, `css`, `zig`, `yaml`, `toml`, `xml`, `markdown` (`ark syntax`: not `html`, `css`, `yaml`, `toml`, `xml` or `markdown`, which have no syntax tree) | detected from the extension |
 | `--format <text\|json>` | Output format | `text` |
 
 ## Shell completions

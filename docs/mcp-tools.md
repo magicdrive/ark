@@ -68,7 +68,9 @@ from them) are masked only where they hold a secret of its own form — a PEM
 block, a known token format — since a name can be data (a YAML key, a step
 name); a masked declaration is still selected by its `symbolId`. The text
 of `list_files` (paths) is not masked; that of `get_repository_map` and
-`search_code` is masked as names are. `ark mcp-server --mask-secrets off` turns
+`search_code` is masked as names are, and in the text of `get_context` and
+`analyze_change_impact` the paths and names are masked as names are while
+the sources are masked as content. `ark mcp-server --mask-secrets off` turns
 masking off for the server and logs a warning; a request cannot change it
 (the `maskSecrets` argument of `get_file_content` and `get_files_arklite` is
 accepted and has no effect). A value that only names another value is kept
@@ -264,8 +266,8 @@ languages omit.
 | `filePattern` | string |  |  | File path substring filter (case-insensitive) |
 | `format` | string (`text`, `json`) |  | `text` |  |
 | `groupBy` | string |  |  | Count the matches instead of listing them, by one or two comma-separated keys: `kind`, `language`, `directory`, `file`, `resourceType` |
-| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro); HTML: `document` (a file), `element` (an element with an id); CSS: `stylesheet`, `keyframes`, `font_face`, `property_registration`, `custom_property`, `css_class` (a CSS Modules class); JavaScript: `script` (a file); YAML: `document` (a file), `key` (a mapping key, by its JSON Pointer path), `anchor`; GitHub Actions: `workflow` (a workflow file), `trigger` (an event of `on`), `job`, `step`, `action` (an action, by its directory); `asset` (an image, a font or a media file web documents link to) |
-| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml |
+| `kind` | string |  |  | Symbol kind filter: function, method, class, struct, interface, type, constant, variable, …; Terraform: `resource` (managed and ephemeral), `data_source`, `module` (a module call), `output`, `variable` (`var.*` and `local.*`), `configuration` (provider, terraform, check); Rust: `impl` (an impl block), `macro` (a `macro_rules!` macro); HTML: `document` (a file), `element` (an element with an id); CSS: `stylesheet`, `keyframes`, `font_face`, `property_registration`, `custom_property`, `css_class` (a CSS Modules class); JavaScript: `script` (a file); YAML: `document` (a file), `key` (a mapping key, by its JSON Pointer path), `anchor`; GitHub Actions: `workflow` (a workflow file), `trigger` (an event of `on`), `job`, `step`, `action` (an action, by its directory); TOML: `document`, `table`, `key`, `package` (a Cargo or pyproject package), `dependency`; XML: `document`, `element`, `attribute`, `namespace` (a namespace declaration), `anchor` (an `xml:id`; an `id` attribute), `package` (a Maven project), `dependency`; Markdown: `document`, `section` (a heading and its content), `code_block` (a fenced code block, by its language), `anchor`; `asset` (an image, a font or a media file web documents link to) |
+| `language` | string |  |  | Language filter: go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml, toml, xml, markdown |
 | `maxResults` | integer |  | `50` | Maximum number of matches listed (the total is always reported); with `groupBy`, of group lines (at most 1000) |
 | `namePattern` | string |  |  | Name substring filter (case-insensitive) |
 | `usesType` | string |  |  | Only symbols that reference a type whose name contains this string |
@@ -320,7 +322,7 @@ it with [`search_in_files`](#search_in_files), e.g. the regex
 | Parameter | Type | Required | Default | Description |
 |---|---|---|---|---|
 | `path` | string | yes |  | File path to analyze |
-| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml). Auto-detected if not specified. |
+| `lang` | string |  |  | Language override (go, typescript, tsx, javascript, python, php, terraform, rust, java, html, css, zig, yaml, toml, xml, markdown). Auto-detected if not specified. |
 
 Example:
 

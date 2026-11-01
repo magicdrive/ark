@@ -1,0 +1,432 @@
+# file: app/pom.xml
+## symbols
+symbol pom.xml kind=document qualified="app/pom.xml" parent="" receiver="" exported=true @app/pom.xml:1:1-34:1
+symbol /project kind=element qualified="app/pom.xml#/project" parent="app/pom.xml" receiver="" exported=true @app/pom.xml:2:1-33:11
+symbol com.example:app kind=package qualified="app/pom.xml::com.example:app" parent="" receiver="" exported=true @app/pom.xml:2:1-33:11
+symbol /project/@xmlns kind=namespace qualified="app/pom.xml#/project/@xmlns" parent="app/pom.xml#/project" receiver="" exported=true @app/pom.xml:2:10-2:51
+symbol /project/modelVersion kind=element qualified="app/pom.xml#/project/modelVersion" parent="app/pom.xml#/project" receiver="" exported=true @app/pom.xml:3:3-3:37
+symbol /project/parent kind=element qualified="app/pom.xml#/project/parent" parent="app/pom.xml#/project" receiver="" exported=true @app/pom.xml:4:3-9:12
+symbol /project/parent/groupId kind=element qualified="app/pom.xml#/project/parent/groupId" parent="app/pom.xml#/project/parent" receiver="" exported=true @app/pom.xml:5:5-5:35
+symbol /project/parent/artifactId kind=element qualified="app/pom.xml#/project/parent/artifactId" parent="app/pom.xml#/project/parent" receiver="" exported=true @app/pom.xml:6:5-6:36
+symbol /project/parent/version kind=element qualified="app/pom.xml#/project/parent/version" parent="app/pom.xml#/project/parent" receiver="" exported=true @app/pom.xml:7:5-7:29
+symbol /project/parent/relativePath kind=element qualified="app/pom.xml#/project/parent/relativePath" parent="app/pom.xml#/project/parent" receiver="" exported=true @app/pom.xml:8:5-8:44
+symbol /project/artifactId kind=element qualified="app/pom.xml#/project/artifactId" parent="app/pom.xml#/project" receiver="" exported=true @app/pom.xml:10:3-10:31
+symbol /project/dependencies kind=element qualified="app/pom.xml#/project/dependencies" parent="app/pom.xml#/project" receiver="" exported=true @app/pom.xml:11:3-21:18
+symbol /project/dependencies/dependency kind=element qualified="app/pom.xml#/project/dependencies/dependency" parent="app/pom.xml#/project/dependencies" receiver="" exported=true @app/pom.xml:12:5-16:18
+symbol com.example:core kind=dependency qualified="app/pom.xml::dependencies::com.example:core" parent="app/pom.xml::com.example:app" receiver="" exported=true @app/pom.xml:12:5-16:18
+symbol /project/dependencies/dependency/groupId kind=element qualified="app/pom.xml#/project/dependencies/dependency/groupId" parent="app/pom.xml#/project/dependencies/dependency" receiver="" exported=true @app/pom.xml:13:7-13:44
+symbol /project/dependencies/dependency/artifactId kind=element qualified="app/pom.xml#/project/dependencies/dependency/artifactId" parent="app/pom.xml#/project/dependencies/dependency" receiver="" exported=true @app/pom.xml:14:7-14:36
+symbol /project/dependencies/dependency/version kind=element qualified="app/pom.xml#/project/dependencies/dependency/version" parent="app/pom.xml#/project/dependencies/dependency" receiver="" exported=true @app/pom.xml:15:7-15:44
+symbol /project/dependencies/dependency[2] kind=element qualified="app/pom.xml#/project/dependencies/dependency[2]" parent="app/pom.xml#/project/dependencies" receiver="" exported=true @app/pom.xml:17:5-20:18
+symbol ${vendor.group}:vendor-lib kind=dependency qualified="app/pom.xml::dependencies::${vendor.group}:vendor-lib" parent="app/pom.xml::com.example:app" receiver="" exported=true @app/pom.xml:17:5-20:18
+symbol /project/dependencies/dependency[2]/groupId kind=element qualified="app/pom.xml#/project/dependencies/dependency[2]/groupId" parent="app/pom.xml#/project/dependencies/dependency[2]" receiver="" exported=true @app/pom.xml:18:7-18:41
+symbol /project/dependencies/dependency[2]/artifactId kind=element qualified="app/pom.xml#/project/dependencies/dependency[2]/artifactId" parent="app/pom.xml#/project/dependencies/dependency[2]" receiver="" exported=true @app/pom.xml:19:7-19:42
+symbol /project/profiles kind=element qualified="app/pom.xml#/project/profiles" parent="app/pom.xml#/project" receiver="" exported=true @app/pom.xml:22:3-32:14
+symbol /project/profiles/profile kind=element qualified="app/pom.xml#/project/profiles/profile" parent="app/pom.xml#/project/profiles" receiver="" exported=true @app/pom.xml:23:5-31:15
+symbol /project/profiles/profile/id kind=element qualified="app/pom.xml#/project/profiles/profile/id" parent="app/pom.xml#/project/profiles/profile" receiver="" exported=true @app/pom.xml:24:7-24:18
+symbol /project/profiles/profile/dependencies kind=element qualified="app/pom.xml#/project/profiles/profile/dependencies" parent="app/pom.xml#/project/profiles/profile" receiver="" exported=true @app/pom.xml:25:7-30:22
+symbol /project/profiles/profile/dependencies/dependency kind=element qualified="app/pom.xml#/project/profiles/profile/dependencies/dependency" parent="app/pom.xml#/project/profiles/profile/dependencies" receiver="" exported=true @app/pom.xml:26:9-29:22
+symbol org.testcontainers:testcontainers kind=dependency qualified="app/pom.xml::profile:it::dependencies::org.testcontainers:testcontainers" parent="app/pom.xml::com.example:app" receiver="" exported=true @app/pom.xml:26:9-29:22
+symbol /project/profiles/profile/dependencies/dependency/groupId kind=element qualified="app/pom.xml#/project/profiles/profile/dependencies/dependency/groupId" parent="app/pom.xml#/project/profiles/profile/dependencies/dependency" receiver="" exported=true @app/pom.xml:27:11-27:48
+symbol /project/profiles/profile/dependencies/dependency/artifactId kind=element qualified="app/pom.xml#/project/profiles/profile/dependencies/dependency/artifactId" parent="app/pom.xml#/project/profiles/profile/dependencies/dependency" receiver="" exported=true @app/pom.xml:28:11-28:50
+## references
+ref app/pom.xml#/project kind=contains container="app/pom.xml" receiver="" name_qualified="app/pom.xml#/project" identity_in_repository=true call=false @app/pom.xml:2:1-33:11
+ref app/pom.xml::com.example:app kind=contains container="app/pom.xml" receiver="" name_qualified="app/pom.xml::com.example:app" identity_in_repository=true call=false @app/pom.xml:2:1-33:11
+ref app/pom.xml#/project/@xmlns kind=contains container="app/pom.xml#/project" receiver="" name_qualified="app/pom.xml#/project/@xmlns" identity_in_repository=true call=false @app/pom.xml:2:10-2:51
+ref app/pom.xml#/project/modelVersion kind=contains container="app/pom.xml#/project" receiver="" name_qualified="app/pom.xml#/project/modelVersion" identity_in_repository=true call=false @app/pom.xml:3:3-3:37
+ref app/pom.xml#/project/parent kind=contains container="app/pom.xml#/project" receiver="" name_qualified="app/pom.xml#/project/parent" identity_in_repository=true call=false @app/pom.xml:4:3-9:12
+ref com.example:parent kind=inheritance container="app/pom.xml::com.example:app" receiver="" name_qualified="pom.xml::com.example:parent" call=false @app/pom.xml:4:3-9:12
+ref app/pom.xml#/project/parent/groupId kind=contains container="app/pom.xml#/project/parent" receiver="" name_qualified="app/pom.xml#/project/parent/groupId" identity_in_repository=true call=false @app/pom.xml:5:5-5:35
+ref app/pom.xml#/project/parent/artifactId kind=contains container="app/pom.xml#/project/parent" receiver="" name_qualified="app/pom.xml#/project/parent/artifactId" identity_in_repository=true call=false @app/pom.xml:6:5-6:36
+ref app/pom.xml#/project/parent/version kind=contains container="app/pom.xml#/project/parent" receiver="" name_qualified="app/pom.xml#/project/parent/version" identity_in_repository=true call=false @app/pom.xml:7:5-7:29
+ref app/pom.xml#/project/parent/relativePath kind=contains container="app/pom.xml#/project/parent" receiver="" name_qualified="app/pom.xml#/project/parent/relativePath" identity_in_repository=true call=false @app/pom.xml:8:5-8:44
+ref app/pom.xml#/project/artifactId kind=contains container="app/pom.xml#/project" receiver="" name_qualified="app/pom.xml#/project/artifactId" identity_in_repository=true call=false @app/pom.xml:10:3-10:31
+ref app/pom.xml#/project/dependencies kind=contains container="app/pom.xml#/project" receiver="" name_qualified="app/pom.xml#/project/dependencies" identity_in_repository=true call=false @app/pom.xml:11:3-21:18
+ref app/pom.xml#/project/dependencies/dependency kind=contains container="app/pom.xml#/project/dependencies" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency" identity_in_repository=true call=false @app/pom.xml:12:5-16:18
+ref app/pom.xml::dependencies::com.example:core kind=depends_on container="app/pom.xml::com.example:app" receiver="" name_qualified="app/pom.xml::dependencies::com.example:core" identity_in_repository=true call=false @app/pom.xml:12:5-16:18
+ref app/pom.xml#/project/dependencies/dependency/groupId kind=contains container="app/pom.xml#/project/dependencies/dependency" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency/groupId" identity_in_repository=true call=false @app/pom.xml:13:7-13:44
+ref app/pom.xml#/project/dependencies/dependency/artifactId kind=contains container="app/pom.xml#/project/dependencies/dependency" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency/artifactId" identity_in_repository=true call=false @app/pom.xml:14:7-14:36
+ref com.example:core kind=depends_on container="app/pom.xml::dependencies::com.example:core" receiver="" name_qualified="maven:com.example:core" call=false @app/pom.xml:14:19-14:23
+ref app/pom.xml#/project/dependencies/dependency/version kind=contains container="app/pom.xml#/project/dependencies/dependency" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency/version" identity_in_repository=true call=false @app/pom.xml:15:7-15:44
+ref app/pom.xml#/project/dependencies/dependency[2] kind=contains container="app/pom.xml#/project/dependencies" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency[2]" identity_in_repository=true call=false @app/pom.xml:17:5-20:18
+ref app/pom.xml::dependencies::${vendor.group}:vendor-lib kind=depends_on container="app/pom.xml::com.example:app" receiver="" name_qualified="app/pom.xml::dependencies::${vendor.group}:vendor-lib" identity_in_repository=true call=false @app/pom.xml:17:5-20:18
+ref app/pom.xml#/project/dependencies/dependency[2]/groupId kind=contains container="app/pom.xml#/project/dependencies/dependency[2]" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency[2]/groupId" identity_in_repository=true call=false @app/pom.xml:18:7-18:41
+ref app/pom.xml#/project/dependencies/dependency[2]/artifactId kind=contains container="app/pom.xml#/project/dependencies/dependency[2]" receiver="" name_qualified="app/pom.xml#/project/dependencies/dependency[2]/artifactId" identity_in_repository=true call=false @app/pom.xml:19:7-19:42
+ref ${vendor.group}:vendor-lib kind=depends_on container="app/pom.xml::dependencies::${vendor.group}:vendor-lib" receiver="" dynamic=true call=false @app/pom.xml:19:19-19:29
+ref app/pom.xml#/project/profiles kind=contains container="app/pom.xml#/project" receiver="" name_qualified="app/pom.xml#/project/profiles" identity_in_repository=true call=false @app/pom.xml:22:3-32:14
+ref app/pom.xml#/project/profiles/profile kind=contains container="app/pom.xml#/project/profiles" receiver="" name_qualified="app/pom.xml#/project/profiles/profile" identity_in_repository=true call=false @app/pom.xml:23:5-31:15
+ref app/pom.xml#/project/profiles/profile/id kind=contains container="app/pom.xml#/project/profiles/profile" receiver="" name_qualified="app/pom.xml#/project/profiles/profile/id" identity_in_repository=true call=false @app/pom.xml:24:7-24:18
+ref app/pom.xml#/project/profiles/profile/dependencies kind=contains container="app/pom.xml#/project/profiles/profile" receiver="" name_qualified="app/pom.xml#/project/profiles/profile/dependencies" identity_in_repository=true call=false @app/pom.xml:25:7-30:22
+ref app/pom.xml#/project/profiles/profile/dependencies/dependency kind=contains container="app/pom.xml#/project/profiles/profile/dependencies" receiver="" name_qualified="app/pom.xml#/project/profiles/profile/dependencies/dependency" identity_in_repository=true call=false @app/pom.xml:26:9-29:22
+ref app/pom.xml::profile:it::dependencies::org.testcontainers:testcontainers kind=contains container="app/pom.xml::com.example:app" receiver="" name_qualified="app/pom.xml::profile:it::dependencies::org.testcontainers:testcontainers" identity_in_repository=true call=false @app/pom.xml:26:9-29:22
+ref app/pom.xml#/project/profiles/profile/dependencies/dependency/groupId kind=contains container="app/pom.xml#/project/profiles/profile/dependencies/dependency" receiver="" name_qualified="app/pom.xml#/project/profiles/profile/dependencies/dependency/groupId" identity_in_repository=true call=false @app/pom.xml:27:11-27:48
+ref app/pom.xml#/project/profiles/profile/dependencies/dependency/artifactId kind=contains container="app/pom.xml#/project/profiles/profile/dependencies/dependency" receiver="" name_qualified="app/pom.xml#/project/profiles/profile/dependencies/dependency/artifactId" identity_in_repository=true call=false @app/pom.xml:28:11-28:50
+ref org.testcontainers:testcontainers kind=depends_on container="app/pom.xml::profile:it::dependencies::org.testcontainers:testcontainers" receiver="" name_qualified="maven:org.testcontainers:testcontainers" call=false @app/pom.xml:28:23-28:37
+## imports
+## identity_only
+## aliases
+alias maven:com.example:app -> app/pom.xml::com.example:app cap=strong @app/pom.xml:2:1-2:1
+alias pom.xml::com.example:parent -> maven:com.example:parent cap=strong @app/pom.xml:4:3-4:3
+## diagnostics
+
+# file: core/fallback/pom.xml
+## symbols
+symbol pom.xml kind=document qualified="core/fallback/pom.xml" parent="" receiver="" exported=true @core/fallback/pom.xml:1:1-11:1
+symbol /project kind=element qualified="core/fallback/pom.xml#/project" parent="core/fallback/pom.xml" receiver="" exported=true @core/fallback/pom.xml:1:1-10:11
+symbol com.example:fallback kind=package qualified="core/fallback/pom.xml::com.example:fallback" parent="" receiver="" exported=true @core/fallback/pom.xml:1:1-10:11
+symbol /project/@xmlns kind=namespace qualified="core/fallback/pom.xml#/project/@xmlns" parent="core/fallback/pom.xml#/project" receiver="" exported=true @core/fallback/pom.xml:1:10-1:51
+symbol /project/modelVersion kind=element qualified="core/fallback/pom.xml#/project/modelVersion" parent="core/fallback/pom.xml#/project" receiver="" exported=true @core/fallback/pom.xml:2:3-2:37
+symbol /project/parent kind=element qualified="core/fallback/pom.xml#/project/parent" parent="core/fallback/pom.xml#/project" receiver="" exported=true @core/fallback/pom.xml:4:3-8:12
+symbol /project/parent/groupId kind=element qualified="core/fallback/pom.xml#/project/parent/groupId" parent="core/fallback/pom.xml#/project/parent" receiver="" exported=true @core/fallback/pom.xml:5:5-5:35
+symbol /project/parent/artifactId kind=element qualified="core/fallback/pom.xml#/project/parent/artifactId" parent="core/fallback/pom.xml#/project/parent" receiver="" exported=true @core/fallback/pom.xml:6:5-6:36
+symbol /project/parent/version kind=element qualified="core/fallback/pom.xml#/project/parent/version" parent="core/fallback/pom.xml#/project/parent" receiver="" exported=true @core/fallback/pom.xml:7:5-7:29
+symbol /project/artifactId kind=element qualified="core/fallback/pom.xml#/project/artifactId" parent="core/fallback/pom.xml#/project" receiver="" exported=true @core/fallback/pom.xml:9:3-9:36
+## references
+ref core/fallback/pom.xml#/project kind=contains container="core/fallback/pom.xml" receiver="" name_qualified="core/fallback/pom.xml#/project" identity_in_repository=true call=false @core/fallback/pom.xml:1:1-10:11
+ref core/fallback/pom.xml::com.example:fallback kind=contains container="core/fallback/pom.xml" receiver="" name_qualified="core/fallback/pom.xml::com.example:fallback" identity_in_repository=true call=false @core/fallback/pom.xml:1:1-10:11
+ref core/fallback/pom.xml#/project/@xmlns kind=contains container="core/fallback/pom.xml#/project" receiver="" name_qualified="core/fallback/pom.xml#/project/@xmlns" identity_in_repository=true call=false @core/fallback/pom.xml:1:10-1:51
+ref core/fallback/pom.xml#/project/modelVersion kind=contains container="core/fallback/pom.xml#/project" receiver="" name_qualified="core/fallback/pom.xml#/project/modelVersion" identity_in_repository=true call=false @core/fallback/pom.xml:2:3-2:37
+ref com.example:parent kind=inheritance container="core/fallback/pom.xml::com.example:fallback" receiver="" name_qualified="core/pom.xml::com.example:parent" call=false @core/fallback/pom.xml:4:3-8:12
+ref core/fallback/pom.xml#/project/parent kind=contains container="core/fallback/pom.xml#/project" receiver="" name_qualified="core/fallback/pom.xml#/project/parent" identity_in_repository=true call=false @core/fallback/pom.xml:4:3-8:12
+ref core/fallback/pom.xml#/project/parent/groupId kind=contains container="core/fallback/pom.xml#/project/parent" receiver="" name_qualified="core/fallback/pom.xml#/project/parent/groupId" identity_in_repository=true call=false @core/fallback/pom.xml:5:5-5:35
+ref core/fallback/pom.xml#/project/parent/artifactId kind=contains container="core/fallback/pom.xml#/project/parent" receiver="" name_qualified="core/fallback/pom.xml#/project/parent/artifactId" identity_in_repository=true call=false @core/fallback/pom.xml:6:5-6:36
+ref core/fallback/pom.xml#/project/parent/version kind=contains container="core/fallback/pom.xml#/project/parent" receiver="" name_qualified="core/fallback/pom.xml#/project/parent/version" identity_in_repository=true call=false @core/fallback/pom.xml:7:5-7:29
+ref core/fallback/pom.xml#/project/artifactId kind=contains container="core/fallback/pom.xml#/project" receiver="" name_qualified="core/fallback/pom.xml#/project/artifactId" identity_in_repository=true call=false @core/fallback/pom.xml:9:3-9:36
+## imports
+## identity_only
+## aliases
+alias maven:com.example:fallback -> core/fallback/pom.xml::com.example:fallback cap=strong @core/fallback/pom.xml:1:1-1:1
+alias core/pom.xml::com.example:parent -> maven:com.example:parent cap=strong @core/fallback/pom.xml:4:3-4:3
+## diagnostics
+
+# file: core/pom.xml
+## symbols
+symbol pom.xml kind=document qualified="core/pom.xml" parent="" receiver="" exported=true @core/pom.xml:1:1-26:1
+symbol /project kind=element qualified="core/pom.xml#/project" parent="core/pom.xml" receiver="" exported=true @core/pom.xml:2:1-25:11
+symbol com.example:core kind=package qualified="core/pom.xml::com.example:core" parent="" receiver="" exported=true @core/pom.xml:2:1-25:11
+symbol /project/@xmlns kind=namespace qualified="core/pom.xml#/project/@xmlns" parent="core/pom.xml#/project" receiver="" exported=true @core/pom.xml:2:10-2:51
+symbol /project/modelVersion kind=element qualified="core/pom.xml#/project/modelVersion" parent="core/pom.xml#/project" receiver="" exported=true @core/pom.xml:3:3-3:37
+symbol /project/parent kind=element qualified="core/pom.xml#/project/parent" parent="core/pom.xml#/project" receiver="" exported=true @core/pom.xml:4:3-8:12
+symbol /project/parent/groupId kind=element qualified="core/pom.xml#/project/parent/groupId" parent="core/pom.xml#/project/parent" receiver="" exported=true @core/pom.xml:5:5-5:35
+symbol /project/parent/artifactId kind=element qualified="core/pom.xml#/project/parent/artifactId" parent="core/pom.xml#/project/parent" receiver="" exported=true @core/pom.xml:6:5-6:36
+symbol /project/parent/version kind=element qualified="core/pom.xml#/project/parent/version" parent="core/pom.xml#/project/parent" receiver="" exported=true @core/pom.xml:7:5-7:29
+symbol /project/artifactId kind=element qualified="core/pom.xml#/project/artifactId" parent="core/pom.xml#/project" receiver="" exported=true @core/pom.xml:9:3-9:32
+symbol /project/properties kind=element qualified="core/pom.xml#/project/properties" parent="core/pom.xml#/project" receiver="" exported=true @core/pom.xml:10:3-12:16
+symbol /project/properties/guava.version kind=element qualified="core/pom.xml#/project/properties/guava.version" parent="core/pom.xml#/project/properties" receiver="" exported=true @core/pom.xml:11:5-11:46
+symbol /project/dependencies kind=element qualified="core/pom.xml#/project/dependencies" parent="core/pom.xml#/project" receiver="" exported=true @core/pom.xml:13:3-24:18
+symbol /project/dependencies/dependency kind=element qualified="core/pom.xml#/project/dependencies/dependency" parent="core/pom.xml#/project/dependencies" receiver="" exported=true @core/pom.xml:14:5-18:18
+symbol com.google.guava:guava kind=dependency qualified="core/pom.xml::dependencies::com.google.guava:guava" parent="core/pom.xml::com.example:core" receiver="" exported=true @core/pom.xml:14:5-18:18
+symbol /project/dependencies/dependency/groupId kind=element qualified="core/pom.xml#/project/dependencies/dependency/groupId" parent="core/pom.xml#/project/dependencies/dependency" receiver="" exported=true @core/pom.xml:15:7-15:42
+symbol /project/dependencies/dependency/artifactId kind=element qualified="core/pom.xml#/project/dependencies/dependency/artifactId" parent="core/pom.xml#/project/dependencies/dependency" receiver="" exported=true @core/pom.xml:16:7-16:37
+symbol /project/dependencies/dependency/version kind=element qualified="core/pom.xml#/project/dependencies/dependency/version" parent="core/pom.xml#/project/dependencies/dependency" receiver="" exported=true @core/pom.xml:17:7-17:42
+symbol /project/dependencies/dependency[2] kind=element qualified="core/pom.xml#/project/dependencies/dependency[2]" parent="core/pom.xml#/project/dependencies" receiver="" exported=true @core/pom.xml:19:5-23:18
+symbol org.junit.jupiter:junit-jupiter kind=dependency qualified="core/pom.xml::dependencies::org.junit.jupiter:junit-jupiter" parent="core/pom.xml::com.example:core" receiver="" exported=true @core/pom.xml:19:5-23:18
+symbol /project/dependencies/dependency[2]/groupId kind=element qualified="core/pom.xml#/project/dependencies/dependency[2]/groupId" parent="core/pom.xml#/project/dependencies/dependency[2]" receiver="" exported=true @core/pom.xml:20:7-20:43
+symbol /project/dependencies/dependency[2]/artifactId kind=element qualified="core/pom.xml#/project/dependencies/dependency[2]/artifactId" parent="core/pom.xml#/project/dependencies/dependency[2]" receiver="" exported=true @core/pom.xml:21:7-21:45
+symbol /project/dependencies/dependency[2]/scope kind=element qualified="core/pom.xml#/project/dependencies/dependency[2]/scope" parent="core/pom.xml#/project/dependencies/dependency[2]" receiver="" exported=true @core/pom.xml:22:7-22:26
+## references
+ref core/pom.xml#/project kind=contains container="core/pom.xml" receiver="" name_qualified="core/pom.xml#/project" identity_in_repository=true call=false @core/pom.xml:2:1-25:11
+ref core/pom.xml::com.example:core kind=contains container="core/pom.xml" receiver="" name_qualified="core/pom.xml::com.example:core" identity_in_repository=true call=false @core/pom.xml:2:1-25:11
+ref core/pom.xml#/project/@xmlns kind=contains container="core/pom.xml#/project" receiver="" name_qualified="core/pom.xml#/project/@xmlns" identity_in_repository=true call=false @core/pom.xml:2:10-2:51
+ref core/pom.xml#/project/modelVersion kind=contains container="core/pom.xml#/project" receiver="" name_qualified="core/pom.xml#/project/modelVersion" identity_in_repository=true call=false @core/pom.xml:3:3-3:37
+ref com.example:parent kind=inheritance container="core/pom.xml::com.example:core" receiver="" name_qualified="pom.xml::com.example:parent" call=false @core/pom.xml:4:3-8:12
+ref core/pom.xml#/project/parent kind=contains container="core/pom.xml#/project" receiver="" name_qualified="core/pom.xml#/project/parent" identity_in_repository=true call=false @core/pom.xml:4:3-8:12
+ref core/pom.xml#/project/parent/groupId kind=contains container="core/pom.xml#/project/parent" receiver="" name_qualified="core/pom.xml#/project/parent/groupId" identity_in_repository=true call=false @core/pom.xml:5:5-5:35
+ref core/pom.xml#/project/parent/artifactId kind=contains container="core/pom.xml#/project/parent" receiver="" name_qualified="core/pom.xml#/project/parent/artifactId" identity_in_repository=true call=false @core/pom.xml:6:5-6:36
+ref core/pom.xml#/project/parent/version kind=contains container="core/pom.xml#/project/parent" receiver="" name_qualified="core/pom.xml#/project/parent/version" identity_in_repository=true call=false @core/pom.xml:7:5-7:29
+ref core/pom.xml#/project/artifactId kind=contains container="core/pom.xml#/project" receiver="" name_qualified="core/pom.xml#/project/artifactId" identity_in_repository=true call=false @core/pom.xml:9:3-9:32
+ref core/pom.xml#/project/properties kind=contains container="core/pom.xml#/project" receiver="" name_qualified="core/pom.xml#/project/properties" identity_in_repository=true call=false @core/pom.xml:10:3-12:16
+ref core/pom.xml#/project/properties/guava.version kind=contains container="core/pom.xml#/project/properties" receiver="" name_qualified="core/pom.xml#/project/properties/guava.version" identity_in_repository=true call=false @core/pom.xml:11:5-11:46
+ref core/pom.xml#/project/dependencies kind=contains container="core/pom.xml#/project" receiver="" name_qualified="core/pom.xml#/project/dependencies" identity_in_repository=true call=false @core/pom.xml:13:3-24:18
+ref core/pom.xml#/project/dependencies/dependency kind=contains container="core/pom.xml#/project/dependencies" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency" identity_in_repository=true call=false @core/pom.xml:14:5-18:18
+ref core/pom.xml::dependencies::com.google.guava:guava kind=depends_on container="core/pom.xml::com.example:core" receiver="" name_qualified="core/pom.xml::dependencies::com.google.guava:guava" identity_in_repository=true call=false @core/pom.xml:14:5-18:18
+ref core/pom.xml#/project/dependencies/dependency/groupId kind=contains container="core/pom.xml#/project/dependencies/dependency" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency/groupId" identity_in_repository=true call=false @core/pom.xml:15:7-15:42
+ref core/pom.xml#/project/dependencies/dependency/artifactId kind=contains container="core/pom.xml#/project/dependencies/dependency" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency/artifactId" identity_in_repository=true call=false @core/pom.xml:16:7-16:37
+ref com.google.guava:guava kind=depends_on container="core/pom.xml::dependencies::com.google.guava:guava" receiver="" name_qualified="maven:com.google.guava:guava" call=false @core/pom.xml:16:19-16:24
+ref core/pom.xml#/project/dependencies/dependency/version kind=contains container="core/pom.xml#/project/dependencies/dependency" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency/version" identity_in_repository=true call=false @core/pom.xml:17:7-17:42
+ref core/pom.xml#/project/dependencies/dependency[2] kind=contains container="core/pom.xml#/project/dependencies" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency[2]" identity_in_repository=true call=false @core/pom.xml:19:5-23:18
+ref core/pom.xml::dependencies::org.junit.jupiter:junit-jupiter kind=depends_on container="core/pom.xml::com.example:core" receiver="" name_qualified="core/pom.xml::dependencies::org.junit.jupiter:junit-jupiter" identity_in_repository=true call=false @core/pom.xml:19:5-23:18
+ref core/pom.xml#/project/dependencies/dependency[2]/groupId kind=contains container="core/pom.xml#/project/dependencies/dependency[2]" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency[2]/groupId" identity_in_repository=true call=false @core/pom.xml:20:7-20:43
+ref core/pom.xml#/project/dependencies/dependency[2]/artifactId kind=contains container="core/pom.xml#/project/dependencies/dependency[2]" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency[2]/artifactId" identity_in_repository=true call=false @core/pom.xml:21:7-21:45
+ref org.junit.jupiter:junit-jupiter kind=depends_on container="core/pom.xml::dependencies::org.junit.jupiter:junit-jupiter" receiver="" name_qualified="maven:org.junit.jupiter:junit-jupiter" call=false @core/pom.xml:21:19-21:32
+ref core/pom.xml#/project/dependencies/dependency[2]/scope kind=contains container="core/pom.xml#/project/dependencies/dependency[2]" receiver="" name_qualified="core/pom.xml#/project/dependencies/dependency[2]/scope" identity_in_repository=true call=false @core/pom.xml:22:7-22:26
+## imports
+## identity_only
+## aliases
+alias maven:com.example:core -> core/pom.xml::com.example:core cap=strong @core/pom.xml:2:1-2:1
+alias pom.xml::com.example:parent -> maven:com.example:parent cap=strong @core/pom.xml:4:3-4:3
+## diagnostics
+
+# file: docs/book.xml
+## symbols
+symbol book.xml kind=document qualified="docs/book.xml" parent="" receiver="" exported=true @docs/book.xml:1:1-14:1
+symbol /b:book kind=element qualified="docs/book.xml#/b:book" parent="docs/book.xml" receiver="" exported=true @docs/book.xml:3:1-13:10
+symbol /b:book/@xmlns:b kind=namespace qualified="docs/book.xml#/b:book/@xmlns:b" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:3:9-3:35
+symbol /b:book/@xmlns:xi kind=namespace qualified="docs/book.xml#/b:book/@xmlns:xi" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:3:36-3:78
+symbol /b:book/@xmlns:xlink kind=namespace qualified="docs/book.xml#/b:book/@xmlns:xlink" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:3:79-3:121
+symbol /b:book/b:title kind=element qualified="docs/book.xml#/b:book/b:title" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:4:3-4:39
+symbol /b:book/b:title/@xml:id kind=attribute qualified="docs/book.xml#/b:book/b:title/@xml:id" parent="docs/book.xml#/b:book/b:title" receiver="" exported=true @docs/book.xml:4:12-4:24
+symbol #top kind=anchor qualified="docs/book.xml#top" parent="" receiver="" exported=true @docs/book.xml:4:12-4:24
+symbol /b:book/b:chapter kind=element qualified="docs/book.xml#/b:book/b:chapter" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:5:3-8:13
+symbol /b:book/b:chapter/@xmlns kind=namespace qualified="docs/book.xml#/b:book/b:chapter/@xmlns" parent="docs/book.xml#/b:book/b:chapter" receiver="" exported=true @docs/book.xml:5:12-5:36
+symbol /b:book/b:chapter/@id kind=attribute qualified="docs/book.xml#/b:book/b:chapter/@id" parent="docs/book.xml#/b:book/b:chapter" receiver="" exported=true @docs/book.xml:5:37-5:47
+symbol #intro kind=anchor qualified="docs/book.xml#intro" parent="" receiver="" exported=true @docs/book.xml:5:37-5:47
+symbol /b:book/b:chapter/b:para kind=element qualified="docs/book.xml#/b:book/b:chapter/b:para" parent="docs/book.xml#/b:book/b:chapter" receiver="" exported=true @docs/book.xml:6:5-6:86
+symbol /b:book/b:chapter/b:para/b:link kind=element qualified="docs/book.xml#/b:book/b:chapter/b:para/b:link" parent="docs/book.xml#/b:book/b:chapter/b:para" receiver="" exported=true @docs/book.xml:6:15-6:53
+symbol /b:book/b:chapter/b:para/b:link/@xlink:href kind=attribute qualified="docs/book.xml#/b:book/b:chapter/b:para/b:link/@xlink:href" parent="docs/book.xml#/b:book/b:chapter/b:para/b:link" receiver="" exported=true @docs/book.xml:6:21-6:38
+symbol /b:book/b:chapter/b:para/b:ref kind=element qualified="docs/book.xml#/b:book/b:chapter/b:para/b:ref" parent="docs/book.xml#/b:book/b:chapter/b:para" receiver="" exported=true @docs/book.xml:6:58-6:78
+symbol /b:book/b:chapter/b:para/b:ref/@href kind=attribute qualified="docs/book.xml#/b:book/b:chapter/b:para/b:ref/@href" parent="docs/book.xml#/b:book/b:chapter/b:para/b:ref" receiver="" exported=true @docs/book.xml:6:63-6:76
+symbol /b:book/b:chapter/b:para[2] kind=element qualified="docs/book.xml#/b:book/b:chapter/b:para[2]" parent="docs/book.xml#/b:book/b:chapter" receiver="" exported=true @docs/book.xml:7:5-7:66
+symbol /b:book/b:chapter/b:para[2]/b:link kind=element qualified="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link" parent="docs/book.xml#/b:book/b:chapter/b:para[2]" receiver="" exported=true @docs/book.xml:7:19-7:58
+symbol /b:book/b:chapter/b:para[2]/b:link/@xlink:href kind=attribute qualified="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link/@xlink:href" parent="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link" receiver="" exported=true @docs/book.xml:7:25-7:46
+symbol /b:book/xi:include kind=element qualified="docs/book.xml#/b:book/xi:include" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:9:3-9:35
+symbol /b:book/xi:include/@href kind=attribute qualified="docs/book.xml#/b:book/xi:include/@href" parent="docs/book.xml#/b:book/xi:include" receiver="" exported=true @docs/book.xml:9:15-9:33
+symbol /b:book/xi:include[2] kind=element qualified="docs/book.xml#/b:book/xi:include[2]" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:10:3-10:54
+symbol /b:book/xi:include[2]/@href kind=attribute qualified="docs/book.xml#/b:book/xi:include[2]/@href" parent="docs/book.xml#/b:book/xi:include[2]" receiver="" exported=true @docs/book.xml:10:15-10:52
+symbol /b:book/code kind=element qualified="docs/book.xml#/b:book/code" parent="docs/book.xml#/b:book" receiver="" exported=true @docs/book.xml:12:3-12:45
+## references
+ref book.xsl kind=resource_link container="docs/book.xml" receiver="" name_qualified="docs/book.xsl" identity_in_repository=true call=false @docs/book.xml:2:1-2:51
+ref docs/book.xml#/b:book kind=contains container="docs/book.xml" receiver="" name_qualified="docs/book.xml#/b:book" identity_in_repository=true call=false @docs/book.xml:3:1-13:10
+ref docs/book.xml#/b:book/@xmlns:b kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/@xmlns:b" identity_in_repository=true call=false @docs/book.xml:3:9-3:35
+ref docs/book.xml#/b:book/@xmlns:xi kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/@xmlns:xi" identity_in_repository=true call=false @docs/book.xml:3:36-3:78
+ref docs/book.xml#/b:book/@xmlns:xlink kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/@xmlns:xlink" identity_in_repository=true call=false @docs/book.xml:3:79-3:121
+ref docs/book.xml#/b:book/b:title kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/b:title" identity_in_repository=true call=false @docs/book.xml:4:3-4:39
+ref docs/book.xml#/b:book/b:title/@xml:id kind=contains container="docs/book.xml#/b:book/b:title" receiver="" name_qualified="docs/book.xml#/b:book/b:title/@xml:id" identity_in_repository=true call=false @docs/book.xml:4:12-4:24
+ref docs/book.xml#/b:book/b:chapter kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter" identity_in_repository=true call=false @docs/book.xml:5:3-8:13
+ref docs/book.xml#/b:book/b:chapter/@xmlns kind=contains container="docs/book.xml#/b:book/b:chapter" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/@xmlns" identity_in_repository=true call=false @docs/book.xml:5:12-5:36
+ref docs/book.xml#/b:book/b:chapter/@id kind=contains container="docs/book.xml#/b:book/b:chapter" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/@id" identity_in_repository=true call=false @docs/book.xml:5:37-5:47
+ref docs/book.xml#/b:book/b:chapter/b:para kind=contains container="docs/book.xml#/b:book/b:chapter" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para" identity_in_repository=true call=false @docs/book.xml:6:5-6:86
+ref docs/book.xml#/b:book/b:chapter/b:para/b:link kind=contains container="docs/book.xml#/b:book/b:chapter/b:para" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para/b:link" identity_in_repository=true call=false @docs/book.xml:6:15-6:53
+ref docs/book.xml#/b:book/b:chapter/b:para/b:link/@xlink:href kind=contains container="docs/book.xml#/b:book/b:chapter/b:para/b:link" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para/b:link/@xlink:href" identity_in_repository=true call=false @docs/book.xml:6:21-6:38
+ref #top kind=id_reference container="docs/book.xml#/b:book/b:chapter/b:para/b:link/@xlink:href" receiver="" name_qualified="docs/book.xml#top" identity_in_repository=true call=false @docs/book.xml:6:33-6:37
+ref docs/book.xml#/b:book/b:chapter/b:para/b:ref kind=contains container="docs/book.xml#/b:book/b:chapter/b:para" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para/b:ref" identity_in_repository=true call=false @docs/book.xml:6:58-6:78
+ref docs/book.xml#/b:book/b:chapter/b:para/b:ref/@href kind=contains container="docs/book.xml#/b:book/b:chapter/b:para/b:ref" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para/b:ref/@href" identity_in_repository=true call=false @docs/book.xml:6:63-6:76
+ref #intro kind=id_reference container="docs/book.xml#/b:book/b:chapter/b:para/b:ref/@href" receiver="" name_qualified="docs/book.xml#intro" identity_in_repository=true call=false @docs/book.xml:6:69-6:75
+ref docs/book.xml#/b:book/b:chapter/b:para[2] kind=contains container="docs/book.xml#/b:book/b:chapter" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para[2]" identity_in_repository=true call=false @docs/book.xml:7:5-7:66
+ref docs/book.xml#/b:book/b:chapter/b:para[2]/b:link kind=contains container="docs/book.xml#/b:book/b:chapter/b:para[2]" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link" identity_in_repository=true call=false @docs/book.xml:7:19-7:58
+ref docs/book.xml#/b:book/b:chapter/b:para[2]/b:link/@xlink:href kind=contains container="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link" receiver="" name_qualified="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link/@xlink:href" identity_in_repository=true call=false @docs/book.xml:7:25-7:46
+ref #nowhere kind=id_reference container="docs/book.xml#/b:book/b:chapter/b:para[2]/b:link/@xlink:href" receiver="" name_qualified="docs/book.xml#nowhere" identity_in_repository=true call=false @docs/book.xml:7:37-7:45
+ref docs/book.xml#/b:book/xi:include kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/xi:include" identity_in_repository=true call=false @docs/book.xml:9:3-9:35
+ref docs/book.xml#/b:book/xi:include/@href kind=contains container="docs/book.xml#/b:book/xi:include" receiver="" name_qualified="docs/book.xml#/b:book/xi:include/@href" identity_in_repository=true call=false @docs/book.xml:9:15-9:33
+ref chapter.xml kind=resource_link container="docs/book.xml#/b:book/xi:include/@href" receiver="" name_qualified="docs/chapter.xml" identity_in_repository=true call=false @docs/book.xml:9:21-9:32
+ref docs/book.xml#/b:book/xi:include[2] kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/xi:include[2]" identity_in_repository=true call=false @docs/book.xml:10:3-10:54
+ref docs/book.xml#/b:book/xi:include[2]/@href kind=contains container="docs/book.xml#/b:book/xi:include[2]" receiver="" name_qualified="docs/book.xml#/b:book/xi:include[2]/@href" identity_in_repository=true call=false @docs/book.xml:10:15-10:52
+ref docs/book.xml#/b:book/code kind=contains container="docs/book.xml#/b:book" receiver="" name_qualified="docs/book.xml#/b:book/code" identity_in_repository=true call=false @docs/book.xml:12:3-12:45
+## imports
+## identity_only
+## diagnostics
+
+# file: docs/chapter.xml
+## symbols
+symbol chapter.xml kind=document qualified="docs/chapter.xml" parent="" receiver="" exported=true @docs/chapter.xml:1:1-2:1
+symbol /chapter kind=element qualified="docs/chapter.xml#/chapter" parent="docs/chapter.xml" receiver="" exported=true @docs/chapter.xml:1:1-1:65
+symbol /chapter/@xmlns kind=namespace qualified="docs/chapter.xml#/chapter/@xmlns" parent="docs/chapter.xml#/chapter" receiver="" exported=true @docs/chapter.xml:1:10-1:34
+symbol /chapter/para kind=element qualified="docs/chapter.xml#/chapter/para" parent="docs/chapter.xml#/chapter" receiver="" exported=true @docs/chapter.xml:1:35-1:55
+## references
+ref docs/chapter.xml#/chapter kind=contains container="docs/chapter.xml" receiver="" name_qualified="docs/chapter.xml#/chapter" identity_in_repository=true call=false @docs/chapter.xml:1:1-1:65
+ref docs/chapter.xml#/chapter/@xmlns kind=contains container="docs/chapter.xml#/chapter" receiver="" name_qualified="docs/chapter.xml#/chapter/@xmlns" identity_in_repository=true call=false @docs/chapter.xml:1:10-1:34
+ref docs/chapter.xml#/chapter/para kind=contains container="docs/chapter.xml#/chapter" receiver="" name_qualified="docs/chapter.xml#/chapter/para" identity_in_repository=true call=false @docs/chapter.xml:1:35-1:55
+## imports
+## identity_only
+## diagnostics
+
+# file: docs/ids.xml
+## symbols
+symbol ids.xml kind=document qualified="docs/ids.xml" parent="" receiver="" exported=true @docs/ids.xml:1:1-6:1
+symbol /doc kind=element qualified="docs/ids.xml#/doc" parent="docs/ids.xml" receiver="" exported=true @docs/ids.xml:1:1-5:7
+symbol /doc/sec kind=element qualified="docs/ids.xml#/doc/sec" parent="docs/ids.xml#/doc" receiver="" exported=true @docs/ids.xml:2:3-2:30
+symbol /doc/sec/@xml:id kind=attribute qualified="docs/ids.xml#/doc/sec/@xml:id" parent="docs/ids.xml#/doc/sec" receiver="" exported=true @docs/ids.xml:2:8-2:20
+symbol #dup kind=anchor qualified="docs/ids.xml#dup" parent="" receiver="" exported=true @docs/ids.xml:2:8-2:20
+symbol /doc/sec[2] kind=element qualified="docs/ids.xml#/doc/sec[2]" parent="docs/ids.xml#/doc" receiver="" exported=true @docs/ids.xml:3:3-3:30
+symbol /doc/sec[2]/@xml:id kind=attribute qualified="docs/ids.xml#/doc/sec[2]/@xml:id" parent="docs/ids.xml#/doc/sec[2]" receiver="" exported=true @docs/ids.xml:3:8-3:20
+symbol #dup kind=anchor qualified="docs/ids.xml#dup" parent="" receiver="" exported=true @docs/ids.xml:3:8-3:20
+symbol /doc/a kind=element qualified="docs/ids.xml#/doc/a" parent="docs/ids.xml#/doc" receiver="" exported=true @docs/ids.xml:4:3-4:68
+symbol /doc/a/@xlink:href kind=attribute qualified="docs/ids.xml#/doc/a/@xlink:href" parent="docs/ids.xml#/doc/a" receiver="" exported=true @docs/ids.xml:4:6-4:23
+symbol /doc/a/@xmlns:xlink kind=namespace qualified="docs/ids.xml#/doc/a/@xmlns:xlink" parent="docs/ids.xml#/doc/a" receiver="" exported=true @docs/ids.xml:4:24-4:66
+## references
+ref docs/ids.xml#/doc kind=contains container="docs/ids.xml" receiver="" name_qualified="docs/ids.xml#/doc" identity_in_repository=true call=false @docs/ids.xml:1:1-5:7
+ref docs/ids.xml#/doc/sec kind=contains container="docs/ids.xml#/doc" receiver="" name_qualified="docs/ids.xml#/doc/sec" identity_in_repository=true call=false @docs/ids.xml:2:3-2:30
+ref docs/ids.xml#/doc/sec/@xml:id kind=contains container="docs/ids.xml#/doc/sec" receiver="" name_qualified="docs/ids.xml#/doc/sec/@xml:id" identity_in_repository=true call=false @docs/ids.xml:2:8-2:20
+ref docs/ids.xml#/doc/sec[2] kind=contains container="docs/ids.xml#/doc" receiver="" name_qualified="docs/ids.xml#/doc/sec[2]" identity_in_repository=true call=false @docs/ids.xml:3:3-3:30
+ref docs/ids.xml#/doc/sec[2]/@xml:id kind=contains container="docs/ids.xml#/doc/sec[2]" receiver="" name_qualified="docs/ids.xml#/doc/sec[2]/@xml:id" identity_in_repository=true call=false @docs/ids.xml:3:8-3:20
+ref docs/ids.xml#/doc/a kind=contains container="docs/ids.xml#/doc" receiver="" name_qualified="docs/ids.xml#/doc/a" identity_in_repository=true call=false @docs/ids.xml:4:3-4:68
+ref docs/ids.xml#/doc/a/@xlink:href kind=contains container="docs/ids.xml#/doc/a" receiver="" name_qualified="docs/ids.xml#/doc/a/@xlink:href" identity_in_repository=true call=false @docs/ids.xml:4:6-4:23
+ref #dup kind=id_reference container="docs/ids.xml#/doc/a/@xlink:href" receiver="" name_qualified="docs/ids.xml#dup" identity_in_repository=true call=false @docs/ids.xml:4:18-4:22
+ref docs/ids.xml#/doc/a/@xmlns:xlink kind=contains container="docs/ids.xml#/doc/a" receiver="" name_qualified="docs/ids.xml#/doc/a/@xmlns:xlink" identity_in_repository=true call=false @docs/ids.xml:4:24-4:66
+## imports
+## identity_only
+## diagnostics
+diag warning code=xml_duplicate_id "the xml:id \"dup\" is not unique in the document: a reference to it has more than one target" @docs/ids.xml:3:8-3:20
+
+# file: javaapp/pom.xml
+## symbols
+symbol pom.xml kind=document qualified="javaapp/pom.xml" parent="" receiver="" exported=true @javaapp/pom.xml:1:1-7:1
+symbol /project kind=element qualified="javaapp/pom.xml#/project" parent="javaapp/pom.xml" receiver="" exported=true @javaapp/pom.xml:1:1-6:11
+symbol com.example:javaapp kind=package qualified="javaapp/pom.xml::com.example:javaapp" parent="" receiver="" exported=true @javaapp/pom.xml:1:1-6:11
+symbol /project/@xmlns kind=namespace qualified="javaapp/pom.xml#/project/@xmlns" parent="javaapp/pom.xml#/project" receiver="" exported=true @javaapp/pom.xml:1:10-1:51
+symbol /project/modelVersion kind=element qualified="javaapp/pom.xml#/project/modelVersion" parent="javaapp/pom.xml#/project" receiver="" exported=true @javaapp/pom.xml:2:3-2:37
+symbol /project/groupId kind=element qualified="javaapp/pom.xml#/project/groupId" parent="javaapp/pom.xml#/project" receiver="" exported=true @javaapp/pom.xml:3:3-3:33
+symbol /project/artifactId kind=element qualified="javaapp/pom.xml#/project/artifactId" parent="javaapp/pom.xml#/project" receiver="" exported=true @javaapp/pom.xml:4:3-4:35
+symbol /project/version kind=element qualified="javaapp/pom.xml#/project/version" parent="javaapp/pom.xml#/project" receiver="" exported=true @javaapp/pom.xml:5:3-5:27
+## references
+ref javaapp/pom.xml#/project kind=contains container="javaapp/pom.xml" receiver="" name_qualified="javaapp/pom.xml#/project" identity_in_repository=true call=false @javaapp/pom.xml:1:1-6:11
+ref javaapp/pom.xml::com.example:javaapp kind=contains container="javaapp/pom.xml" receiver="" name_qualified="javaapp/pom.xml::com.example:javaapp" identity_in_repository=true call=false @javaapp/pom.xml:1:1-6:11
+ref javaapp/pom.xml#/project/@xmlns kind=contains container="javaapp/pom.xml#/project" receiver="" name_qualified="javaapp/pom.xml#/project/@xmlns" identity_in_repository=true call=false @javaapp/pom.xml:1:10-1:51
+ref javaapp/pom.xml#/project/modelVersion kind=contains container="javaapp/pom.xml#/project" receiver="" name_qualified="javaapp/pom.xml#/project/modelVersion" identity_in_repository=true call=false @javaapp/pom.xml:2:3-2:37
+ref javaapp/pom.xml#/project/groupId kind=contains container="javaapp/pom.xml#/project" receiver="" name_qualified="javaapp/pom.xml#/project/groupId" identity_in_repository=true call=false @javaapp/pom.xml:3:3-3:33
+ref javaapp/pom.xml#/project/artifactId kind=contains container="javaapp/pom.xml#/project" receiver="" name_qualified="javaapp/pom.xml#/project/artifactId" identity_in_repository=true call=false @javaapp/pom.xml:4:3-4:35
+ref javaapp/pom.xml#/project/version kind=contains container="javaapp/pom.xml#/project" receiver="" name_qualified="javaapp/pom.xml#/project/version" identity_in_repository=true call=false @javaapp/pom.xml:5:3-5:27
+## imports
+## identity_only
+## aliases
+alias maven:com.example:javaapp -> javaapp/pom.xml::com.example:javaapp cap=strong @javaapp/pom.xml:1:1-1:1
+## diagnostics
+
+# file: javaapp/src/main/java/com/example/App.java
+## symbols
+symbol App kind=class qualified="com.example.App" parent="" receiver="" exported=true implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @javaapp/src/main/java/com/example/App.java:3:1-7:2
+symbol artifactId kind=method qualified="com.example.App.artifactId" parent="com.example.App" receiver="App" exported=false params="()" @javaapp/src/main/java/com/example/App.java:4:5-4:46
+symbol project kind=method qualified="com.example.App.project" parent="com.example.App" receiver="App" exported=false params="()" @javaapp/src/main/java/com/example/App.java:5:5-5:46
+symbol dependency kind=method qualified="com.example.App.dependency" parent="com.example.App" receiver="App" exported=false params="()" @javaapp/src/main/java/com/example/App.java:6:5-6:45
+## references
+ref String kind=type_use container="com.example.App.artifactId" receiver="" lookup="=T:com.example.String;=T:java.lang.String" call=false @javaapp/src/main/java/com/example/App.java:4:5-4:11
+ref String kind=type_use container="com.example.App.project" receiver="" lookup="=T:com.example.String;=T:java.lang.String" call=false @javaapp/src/main/java/com/example/App.java:5:5-5:11
+ref artifactId kind=call container="com.example.App.project" receiver="" lookup="@M:com.example.App.artifactId" args=0 call=true @javaapp/src/main/java/com/example/App.java:5:31-5:41
+ref <init> kind=call container="com.example.App.dependency" receiver="Core" speculative=true receiver_lookup="=T:com.example.Core;=T:java.lang.Core" args=0 call=true @javaapp/src/main/java/com/example/App.java:6:29-6:33
+ref Core kind=construction container="com.example.App.dependency" receiver="" lookup="=T:com.example.Core;=T:java.lang.Core" call=false @javaapp/src/main/java/com/example/App.java:6:29-6:33
+ref core kind=call container="com.example.App.dependency" receiver="newCore()" receiver_type="Core" receiver_lookup="=T:com.example.Core;=T:java.lang.Core" args=0 call=true @javaapp/src/main/java/com/example/App.java:6:36-6:40
+## imports
+## identity_only
+## diagnostics
+
+# file: javaapp/src/main/java/com/example/Core.java
+## symbols
+symbol Core kind=class qualified="com.example.Core" parent="" receiver="" exported=false implicit="+<init>(),getClass(),hashCode(),equals(?Object),clone(),toString(),notify(),notifyAll(),wait(),wait(long),wait(long,int),finalize()" @javaapp/src/main/java/com/example/Core.java:3:1-6:2
+symbol core kind=method qualified="com.example.Core.core" parent="com.example.Core" receiver="Core" exported=false params="()" @javaapp/src/main/java/com/example/Core.java:4:5-4:19
+symbol parent kind=method qualified="com.example.Core.parent" parent="com.example.Core" receiver="Core" exported=false params="()" @javaapp/src/main/java/com/example/Core.java:5:5-5:30
+## references
+ref core kind=call container="com.example.Core.parent" receiver="" lookup="@M:com.example.Core.core" args=0 call=true @javaapp/src/main/java/com/example/Core.java:5:21-5:25
+## imports
+## identity_only
+## diagnostics
+
+# file: other/pom.xml
+## symbols
+symbol pom.xml kind=document qualified="other/pom.xml" parent="" receiver="" exported=true @other/pom.xml:1:1-12:1
+symbol /project kind=element qualified="other/pom.xml#/project" parent="other/pom.xml" receiver="" exported=true @other/pom.xml:1:1-11:11
+symbol com.example.other:other kind=package qualified="other/pom.xml::com.example.other:other" parent="" receiver="" exported=true @other/pom.xml:1:1-11:11
+symbol /project/@xmlns kind=namespace qualified="other/pom.xml#/project/@xmlns" parent="other/pom.xml#/project" receiver="" exported=true @other/pom.xml:1:10-1:51
+symbol /project/modelVersion kind=element qualified="other/pom.xml#/project/modelVersion" parent="other/pom.xml#/project" receiver="" exported=true @other/pom.xml:2:3-2:37
+symbol /project/parent kind=element qualified="other/pom.xml#/project/parent" parent="other/pom.xml#/project" receiver="" exported=true @other/pom.xml:3:3-8:12
+symbol /project/parent/groupId kind=element qualified="other/pom.xml#/project/parent/groupId" parent="other/pom.xml#/project/parent" receiver="" exported=true @other/pom.xml:4:5-4:48
+symbol /project/parent/artifactId kind=element qualified="other/pom.xml#/project/parent/artifactId" parent="other/pom.xml#/project/parent" receiver="" exported=true @other/pom.xml:5:5-5:56
+symbol /project/parent/version kind=element qualified="other/pom.xml#/project/parent/version" parent="other/pom.xml#/project/parent" receiver="" exported=true @other/pom.xml:6:5-6:29
+symbol /project/parent/relativePath kind=element qualified="other/pom.xml#/project/parent/relativePath" parent="other/pom.xml#/project/parent" receiver="" exported=true @other/pom.xml:7:5-7:20
+symbol /project/groupId kind=element qualified="other/pom.xml#/project/groupId" parent="other/pom.xml#/project" receiver="" exported=true @other/pom.xml:9:3-9:39
+symbol /project/artifactId kind=element qualified="other/pom.xml#/project/artifactId" parent="other/pom.xml#/project" receiver="" exported=true @other/pom.xml:10:3-10:33
+## references
+ref other/pom.xml#/project kind=contains container="other/pom.xml" receiver="" name_qualified="other/pom.xml#/project" identity_in_repository=true call=false @other/pom.xml:1:1-11:11
+ref other/pom.xml::com.example.other:other kind=contains container="other/pom.xml" receiver="" name_qualified="other/pom.xml::com.example.other:other" identity_in_repository=true call=false @other/pom.xml:1:1-11:11
+ref other/pom.xml#/project/@xmlns kind=contains container="other/pom.xml#/project" receiver="" name_qualified="other/pom.xml#/project/@xmlns" identity_in_repository=true call=false @other/pom.xml:1:10-1:51
+ref other/pom.xml#/project/modelVersion kind=contains container="other/pom.xml#/project" receiver="" name_qualified="other/pom.xml#/project/modelVersion" identity_in_repository=true call=false @other/pom.xml:2:3-2:37
+ref org.springframework.boot:spring-boot-starter-parent kind=inheritance container="other/pom.xml::com.example.other:other" receiver="" name_qualified="maven:org.springframework.boot:spring-boot-starter-parent" call=false @other/pom.xml:3:3-8:12
+ref other/pom.xml#/project/parent kind=contains container="other/pom.xml#/project" receiver="" name_qualified="other/pom.xml#/project/parent" identity_in_repository=true call=false @other/pom.xml:3:3-8:12
+ref other/pom.xml#/project/parent/groupId kind=contains container="other/pom.xml#/project/parent" receiver="" name_qualified="other/pom.xml#/project/parent/groupId" identity_in_repository=true call=false @other/pom.xml:4:5-4:48
+ref other/pom.xml#/project/parent/artifactId kind=contains container="other/pom.xml#/project/parent" receiver="" name_qualified="other/pom.xml#/project/parent/artifactId" identity_in_repository=true call=false @other/pom.xml:5:5-5:56
+ref other/pom.xml#/project/parent/version kind=contains container="other/pom.xml#/project/parent" receiver="" name_qualified="other/pom.xml#/project/parent/version" identity_in_repository=true call=false @other/pom.xml:6:5-6:29
+ref other/pom.xml#/project/parent/relativePath kind=contains container="other/pom.xml#/project/parent" receiver="" name_qualified="other/pom.xml#/project/parent/relativePath" identity_in_repository=true call=false @other/pom.xml:7:5-7:20
+ref other/pom.xml#/project/groupId kind=contains container="other/pom.xml#/project" receiver="" name_qualified="other/pom.xml#/project/groupId" identity_in_repository=true call=false @other/pom.xml:9:3-9:39
+ref other/pom.xml#/project/artifactId kind=contains container="other/pom.xml#/project" receiver="" name_qualified="other/pom.xml#/project/artifactId" identity_in_repository=true call=false @other/pom.xml:10:3-10:33
+## imports
+## identity_only
+## aliases
+alias maven:com.example.other:other -> other/pom.xml::com.example.other:other cap=strong @other/pom.xml:1:1-1:1
+## diagnostics
+
+# file: pom.xml
+## symbols
+symbol pom.xml kind=document qualified="pom.xml" parent="" receiver="" exported=true @pom.xml:1:1-43:1
+symbol /project kind=element qualified="pom.xml#/project" parent="pom.xml" receiver="" exported=true @pom.xml:2:1-42:11
+symbol com.example:parent kind=package qualified="pom.xml::com.example:parent" parent="" receiver="" exported=true @pom.xml:2:1-42:11
+symbol /project/@xmlns kind=namespace qualified="pom.xml#/project/@xmlns" parent="pom.xml#/project" receiver="" exported=true @pom.xml:2:10-2:51
+symbol /project/@xmlns:xsi kind=namespace qualified="pom.xml#/project/@xmlns:xsi" parent="pom.xml#/project" receiver="" exported=true @pom.xml:3:10-3:63
+symbol /project/@xsi:schemaLocation kind=attribute qualified="pom.xml#/project/@xsi:schemaLocation" parent="pom.xml#/project" receiver="" exported=true @pom.xml:4:10-4:109
+symbol /project/modelVersion kind=element qualified="pom.xml#/project/modelVersion" parent="pom.xml#/project" receiver="" exported=true @pom.xml:5:3-5:37
+symbol /project/groupId kind=element qualified="pom.xml#/project/groupId" parent="pom.xml#/project" receiver="" exported=true @pom.xml:6:3-6:33
+symbol /project/artifactId kind=element qualified="pom.xml#/project/artifactId" parent="pom.xml#/project" receiver="" exported=true @pom.xml:7:3-7:34
+symbol /project/version kind=element qualified="pom.xml#/project/version" parent="pom.xml#/project" receiver="" exported=true @pom.xml:8:3-8:27
+symbol /project/packaging kind=element qualified="pom.xml#/project/packaging" parent="pom.xml#/project" receiver="" exported=true @pom.xml:9:3-9:29
+symbol /project/properties kind=element qualified="pom.xml#/project/properties" parent="pom.xml#/project" receiver="" exported=true @pom.xml:10:3-12:16
+symbol /project/properties/junit.version kind=element qualified="pom.xml#/project/properties/junit.version" parent="pom.xml#/project/properties" receiver="" exported=true @pom.xml:11:5-11:42
+symbol /project/modules kind=element qualified="pom.xml#/project/modules" parent="pom.xml#/project" receiver="" exported=true @pom.xml:13:3-17:13
+symbol /project/modules/module kind=element qualified="pom.xml#/project/modules/module" parent="pom.xml#/project/modules" receiver="" exported=true @pom.xml:14:5-14:26
+symbol /project/modules/module[2] kind=element qualified="pom.xml#/project/modules/module[2]" parent="pom.xml#/project/modules" receiver="" exported=true @pom.xml:15:5-15:25
+symbol /project/modules/module[3] kind=element qualified="pom.xml#/project/modules/module[3]" parent="pom.xml#/project/modules" receiver="" exported=true @pom.xml:16:5-16:29
+symbol /project/dependencyManagement kind=element qualified="pom.xml#/project/dependencyManagement" parent="pom.xml#/project" receiver="" exported=true @pom.xml:18:3-33:26
+symbol /project/dependencyManagement/dependencies kind=element qualified="pom.xml#/project/dependencyManagement/dependencies" parent="pom.xml#/project/dependencyManagement" receiver="" exported=true @pom.xml:19:5-32:20
+symbol /project/dependencyManagement/dependencies/dependency kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency" parent="pom.xml#/project/dependencyManagement/dependencies" receiver="" exported=true @pom.xml:20:7-24:20
+symbol org.junit.jupiter:junit-jupiter kind=dependency qualified="pom.xml::dependencyManagement::org.junit.jupiter:junit-jupiter" parent="pom.xml::com.example:parent" receiver="" exported=true @pom.xml:20:7-24:20
+symbol /project/dependencyManagement/dependencies/dependency/groupId kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency/groupId" parent="pom.xml#/project/dependencyManagement/dependencies/dependency" receiver="" exported=true @pom.xml:21:9-21:45
+symbol /project/dependencyManagement/dependencies/dependency/artifactId kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency/artifactId" parent="pom.xml#/project/dependencyManagement/dependencies/dependency" receiver="" exported=true @pom.xml:22:9-22:47
+symbol /project/dependencyManagement/dependencies/dependency/version kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency/version" parent="pom.xml#/project/dependencyManagement/dependencies/dependency" receiver="" exported=true @pom.xml:23:9-23:44
+symbol /project/dependencyManagement/dependencies/dependency[2] kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" parent="pom.xml#/project/dependencyManagement/dependencies" receiver="" exported=true @pom.xml:25:7-31:20
+symbol org.springframework.boot:spring-boot-dependencies kind=dependency qualified="pom.xml::dependencyManagement::org.springframework.boot:spring-boot-dependencies" parent="pom.xml::com.example:parent" receiver="" exported=true @pom.xml:25:7-31:20
+symbol /project/dependencyManagement/dependencies/dependency[2]/groupId kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/groupId" parent="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" exported=true @pom.xml:26:9-26:52
+symbol /project/dependencyManagement/dependencies/dependency[2]/artifactId kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/artifactId" parent="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" exported=true @pom.xml:27:9-27:58
+symbol /project/dependencyManagement/dependencies/dependency[2]/version kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/version" parent="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" exported=true @pom.xml:28:9-28:33
+symbol /project/dependencyManagement/dependencies/dependency[2]/type kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/type" parent="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" exported=true @pom.xml:29:9-29:25
+symbol /project/dependencyManagement/dependencies/dependency[2]/scope kind=element qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/scope" parent="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" exported=true @pom.xml:30:9-30:30
+symbol /project/build kind=element qualified="pom.xml#/project/build" parent="pom.xml#/project" receiver="" exported=true @pom.xml:34:3-41:11
+symbol /project/build/plugins kind=element qualified="pom.xml#/project/build/plugins" parent="pom.xml#/project/build" receiver="" exported=true @pom.xml:35:5-40:15
+symbol /project/build/plugins/plugin kind=element qualified="pom.xml#/project/build/plugins/plugin" parent="pom.xml#/project/build/plugins" receiver="" exported=true @pom.xml:36:7-39:16
+symbol org.apache.maven.plugins:maven-compiler-plugin kind=dependency qualified="pom.xml::plugins::org.apache.maven.plugins:maven-compiler-plugin" parent="pom.xml::com.example:parent" receiver="" exported=true @pom.xml:36:7-39:16
+symbol /project/build/plugins/plugin/artifactId kind=element qualified="pom.xml#/project/build/plugins/plugin/artifactId" parent="pom.xml#/project/build/plugins/plugin" receiver="" exported=true @pom.xml:37:9-37:55
+symbol /project/build/plugins/plugin/version kind=element qualified="pom.xml#/project/build/plugins/plugin/version" parent="pom.xml#/project/build/plugins/plugin" receiver="" exported=true @pom.xml:38:9-38:34
+## references
+ref pom.xml#/project kind=contains container="pom.xml" receiver="" name_qualified="pom.xml#/project" identity_in_repository=true call=false @pom.xml:2:1-42:11
+ref pom.xml::com.example:parent kind=contains container="pom.xml" receiver="" name_qualified="pom.xml::com.example:parent" identity_in_repository=true call=false @pom.xml:2:1-42:11
+ref pom.xml#/project/@xmlns kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/@xmlns" identity_in_repository=true call=false @pom.xml:2:10-2:51
+ref pom.xml#/project/@xmlns:xsi kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/@xmlns:xsi" identity_in_repository=true call=false @pom.xml:3:10-3:63
+ref pom.xml#/project/@xsi:schemaLocation kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/@xsi:schemaLocation" identity_in_repository=true call=false @pom.xml:4:10-4:109
+ref pom.xml#/project/modelVersion kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/modelVersion" identity_in_repository=true call=false @pom.xml:5:3-5:37
+ref pom.xml#/project/groupId kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/groupId" identity_in_repository=true call=false @pom.xml:6:3-6:33
+ref pom.xml#/project/artifactId kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/artifactId" identity_in_repository=true call=false @pom.xml:7:3-7:34
+ref pom.xml#/project/version kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/version" identity_in_repository=true call=false @pom.xml:8:3-8:27
+ref pom.xml#/project/packaging kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/packaging" identity_in_repository=true call=false @pom.xml:9:3-9:29
+ref pom.xml#/project/properties kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/properties" identity_in_repository=true call=false @pom.xml:10:3-12:16
+ref pom.xml#/project/properties/junit.version kind=contains container="pom.xml#/project/properties" receiver="" name_qualified="pom.xml#/project/properties/junit.version" identity_in_repository=true call=false @pom.xml:11:5-11:42
+ref pom.xml#/project/modules kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/modules" identity_in_repository=true call=false @pom.xml:13:3-17:13
+ref pom.xml#/project/modules/module kind=contains container="pom.xml#/project/modules" receiver="" name_qualified="pom.xml#/project/modules/module" identity_in_repository=true call=false @pom.xml:14:5-14:26
+ref core kind=resource_link container="pom.xml::com.example:parent" receiver="" name_qualified="core/pom.xml" identity_in_repository=true call=false @pom.xml:14:13-14:17
+ref pom.xml#/project/modules/module[2] kind=contains container="pom.xml#/project/modules" receiver="" name_qualified="pom.xml#/project/modules/module[2]" identity_in_repository=true call=false @pom.xml:15:5-15:25
+ref app kind=resource_link container="pom.xml::com.example:parent" receiver="" name_qualified="app/pom.xml" identity_in_repository=true call=false @pom.xml:15:13-15:16
+ref pom.xml#/project/modules/module[3] kind=contains container="pom.xml#/project/modules" receiver="" name_qualified="pom.xml#/project/modules/module[3]" identity_in_repository=true call=false @pom.xml:16:5-16:29
+ref missing kind=resource_link container="pom.xml::com.example:parent" receiver="" name_qualified="missing/pom.xml" identity_in_repository=true call=false @pom.xml:16:13-16:20
+ref pom.xml#/project/dependencyManagement kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/dependencyManagement" identity_in_repository=true call=false @pom.xml:18:3-33:26
+ref pom.xml#/project/dependencyManagement/dependencies kind=contains container="pom.xml#/project/dependencyManagement" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies" identity_in_repository=true call=false @pom.xml:19:5-32:20
+ref pom.xml#/project/dependencyManagement/dependencies/dependency kind=contains container="pom.xml#/project/dependencyManagement/dependencies" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency" identity_in_repository=true call=false @pom.xml:20:7-24:20
+ref pom.xml::dependencyManagement::org.junit.jupiter:junit-jupiter kind=contains container="pom.xml::com.example:parent" receiver="" name_qualified="pom.xml::dependencyManagement::org.junit.jupiter:junit-jupiter" identity_in_repository=true call=false @pom.xml:20:7-24:20
+ref pom.xml#/project/dependencyManagement/dependencies/dependency/groupId kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency/groupId" identity_in_repository=true call=false @pom.xml:21:9-21:45
+ref pom.xml#/project/dependencyManagement/dependencies/dependency/artifactId kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency/artifactId" identity_in_repository=true call=false @pom.xml:22:9-22:47
+ref pom.xml#/project/dependencyManagement/dependencies/dependency/version kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency/version" identity_in_repository=true call=false @pom.xml:23:9-23:44
+ref pom.xml#/project/dependencyManagement/dependencies/dependency[2] kind=contains container="pom.xml#/project/dependencyManagement/dependencies" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" identity_in_repository=true call=false @pom.xml:25:7-31:20
+ref pom.xml::dependencyManagement::org.springframework.boot:spring-boot-dependencies kind=contains container="pom.xml::com.example:parent" receiver="" name_qualified="pom.xml::dependencyManagement::org.springframework.boot:spring-boot-dependencies" identity_in_repository=true call=false @pom.xml:25:7-31:20
+ref pom.xml#/project/dependencyManagement/dependencies/dependency[2]/groupId kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/groupId" identity_in_repository=true call=false @pom.xml:26:9-26:52
+ref pom.xml#/project/dependencyManagement/dependencies/dependency[2]/artifactId kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/artifactId" identity_in_repository=true call=false @pom.xml:27:9-27:58
+ref org.springframework.boot:spring-boot-dependencies kind=depends_on container="pom.xml::dependencyManagement::org.springframework.boot:spring-boot-dependencies" receiver="" name_qualified="maven:org.springframework.boot:spring-boot-dependencies" call=false @pom.xml:27:21-27:45
+ref pom.xml#/project/dependencyManagement/dependencies/dependency[2]/version kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/version" identity_in_repository=true call=false @pom.xml:28:9-28:33
+ref pom.xml#/project/dependencyManagement/dependencies/dependency[2]/type kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/type" identity_in_repository=true call=false @pom.xml:29:9-29:25
+ref pom.xml#/project/dependencyManagement/dependencies/dependency[2]/scope kind=contains container="pom.xml#/project/dependencyManagement/dependencies/dependency[2]" receiver="" name_qualified="pom.xml#/project/dependencyManagement/dependencies/dependency[2]/scope" identity_in_repository=true call=false @pom.xml:30:9-30:30
+ref pom.xml#/project/build kind=contains container="pom.xml#/project" receiver="" name_qualified="pom.xml#/project/build" identity_in_repository=true call=false @pom.xml:34:3-41:11
+ref pom.xml#/project/build/plugins kind=contains container="pom.xml#/project/build" receiver="" name_qualified="pom.xml#/project/build/plugins" identity_in_repository=true call=false @pom.xml:35:5-40:15
+ref pom.xml#/project/build/plugins/plugin kind=contains container="pom.xml#/project/build/plugins" receiver="" name_qualified="pom.xml#/project/build/plugins/plugin" identity_in_repository=true call=false @pom.xml:36:7-39:16
+ref pom.xml::plugins::org.apache.maven.plugins:maven-compiler-plugin kind=depends_on container="pom.xml::com.example:parent" receiver="" name_qualified="pom.xml::plugins::org.apache.maven.plugins:maven-compiler-plugin" identity_in_repository=true call=false @pom.xml:36:7-39:16
+ref pom.xml#/project/build/plugins/plugin/artifactId kind=contains container="pom.xml#/project/build/plugins/plugin" receiver="" name_qualified="pom.xml#/project/build/plugins/plugin/artifactId" identity_in_repository=true call=false @pom.xml:37:9-37:55
+ref org.apache.maven.plugins:maven-compiler-plugin kind=depends_on container="pom.xml::plugins::org.apache.maven.plugins:maven-compiler-plugin" receiver="" name_qualified="maven:org.apache.maven.plugins:maven-compiler-plugin" call=false @pom.xml:37:21-37:42
+ref pom.xml#/project/build/plugins/plugin/version kind=contains container="pom.xml#/project/build/plugins/plugin" receiver="" name_qualified="pom.xml#/project/build/plugins/plugin/version" identity_in_repository=true call=false @pom.xml:38:9-38:34
+## imports
+## identity_only
+## aliases
+alias maven:com.example:parent -> pom.xml::com.example:parent cap=strong @pom.xml:2:1-2:1
+## diagnostics
+

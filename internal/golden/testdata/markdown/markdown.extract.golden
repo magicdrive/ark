@@ -1,0 +1,108 @@
+# file: README.md
+## symbols
+symbol README.md kind=document qualified="README.md" parent="" receiver="" exported=true @README.md:1:1-25:1
+symbol Example Project kind=section qualified="README.md#example-project" parent="README.md" receiver="" exported=true @README.md:1:1-24:36
+symbol Usage kind=section qualified="README.md#usage" parent="README.md#example-project" receiver="" exported=true @README.md:14:1-18:4
+symbol bash kind=code_block qualified="README.md#usage::bash" parent="README.md#usage" receiver="" exported=true @README.md:16:1-18:4
+symbol Usage kind=section qualified="README.md#usage-1" parent="README.md#example-project" receiver="" exported=true @README.md:20:1-24:36
+## references
+ref README.md#example-project kind=contains container="README.md" receiver="" name_qualified="README.md#example-project" identity_in_repository=true call=false @README.md:1:1-1:18
+ref design.md kind=resource_link container="README.md#example-project" receiver="" name_qualified="docs/design.md" identity_in_repository=true call=false @README.md:3:9-3:33
+ref rollback kind=id_reference container="README.md#example-project" receiver="" name_qualified="docs/ops/runbook.md#rollback" identity_in_repository=true call=false @README.md:3:42-3:88
+ref usage kind=id_reference container="README.md#example-project" receiver="" name_qualified="README.md#usage" identity_in_repository=true call=false @README.md:4:9-4:24
+ref usage-1 kind=id_reference container="README.md#example-project" receiver="" name_qualified="README.md#usage-1" identity_in_repository=true call=false @README.md:4:26-4:54
+ref nowhere kind=id_reference container="README.md#example-project" receiver="" name_qualified="README.md#nowhere" identity_in_repository=true call=false @README.md:4:58-4:77
+ref logo.png kind=resource_link container="README.md#example-project" receiver="" name_qualified="img/logo.png" identity_in_repository=true call=false @README.md:6:1-6:22
+ref missing.png kind=resource_link container="README.md#example-project" receiver="" name_qualified="img/missing.png" identity_in_repository=true call=false @README.md:6:23-6:56
+ref index.html kind=resource_link container="README.md#example-project" receiver="" name_qualified="site/index.html" identity_in_repository=true call=false @README.md:8:11-8:34
+ref app.yaml kind=resource_link container="README.md#example-project" receiver="" name_qualified="config/app.yaml" identity_in_repository=true call=false @README.md:8:40-8:65
+ref gone.md kind=resource_link container="README.md#example-project" receiver="" name_qualified="docs/gone.md" identity_in_repository=true call=false @README.md:9:3-9:28
+ref ../outside.md kind=resource_link container="README.md#example-project" receiver="" call=false @README.md:9:37-9:61
+ref main.go kind=resource_link container="README.md#example-project" receiver="" name_qualified="main.go" identity_in_repository=true call=false @README.md:10:5-10:27
+ref docs kind=resource_link container="README.md#example-project" receiver="" name_qualified="docs" identity_in_repository=true call=false @README.md:10:33-10:56
+ref https://example.com kind=resource_link container="README.md#example-project" receiver="" name_qualified="url:https://example.com" call=false @README.md:11:1-11:56
+ref architecture kind=id_reference container="README.md#example-project" receiver="" name_qualified="docs/design.md#architecture" identity_in_repository=true call=false @README.md:12:14-12:34
+ref README.md#usage kind=contains container="README.md#example-project" receiver="" name_qualified="README.md#usage" identity_in_repository=true call=false @README.md:14:1-14:9
+ref README.md#usage-1 kind=contains container="README.md#example-project" receiver="" name_qualified="README.md#usage-1" identity_in_repository=true call=false @README.md:20:1-20:9
+## imports
+## identity_only
+## diagnostics
+
+# file: config/app.yaml
+## symbols
+symbol app.yaml kind=document qualified="config/app.yaml" parent="" receiver="" exported=true @config/app.yaml:1:1-2:1
+symbol /name kind=key qualified="config/app.yaml#/name" parent="config/app.yaml" receiver="" exported=true @config/app.yaml:1:1-1:14
+## references
+## imports
+## identity_only
+## diagnostics
+
+# file: docs/adr/0001-markdown.md
+## symbols
+symbol 0001-markdown.md kind=document qualified="docs/adr/0001-markdown.md" parent="" receiver="" exported=true @docs/adr/0001-markdown.md:1:1-11:1
+symbol ADR 0001: Markdown support kind=section qualified="docs/adr/0001-markdown.md#adr-0001-markdown-support" parent="docs/adr/0001-markdown.md" receiver="" exported=true @docs/adr/0001-markdown.md:1:1-10:41
+symbol Context kind=section qualified="docs/adr/0001-markdown.md#context" parent="docs/adr/0001-markdown.md#adr-0001-markdown-support" receiver="" exported=true @docs/adr/0001-markdown.md:3:1-6:65
+symbol Decision kind=section qualified="docs/adr/0001-markdown.md#decision" parent="docs/adr/0001-markdown.md#adr-0001-markdown-support" receiver="" exported=true @docs/adr/0001-markdown.md:8:1-10:41
+## references
+ref docs/adr/0001-markdown.md#adr-0001-markdown-support kind=contains container="docs/adr/0001-markdown.md" receiver="" name_qualified="docs/adr/0001-markdown.md#adr-0001-markdown-support" identity_in_repository=true call=false @docs/adr/0001-markdown.md:1:1-1:29
+ref docs/adr/0001-markdown.md#context kind=contains container="docs/adr/0001-markdown.md#adr-0001-markdown-support" receiver="" name_qualified="docs/adr/0001-markdown.md#context" identity_in_repository=true call=false @docs/adr/0001-markdown.md:3:1-3:11
+ref architecture kind=id_reference container="docs/adr/0001-markdown.md#context" receiver="" name_qualified="docs/design.md#architecture" identity_in_repository=true call=false @docs/adr/0001-markdown.md:5:5-5:46
+ref index kind=id_reference container="docs/adr/0001-markdown.md#context" receiver="" name_qualified="docs/design.md#index" identity_in_repository=true call=false @docs/adr/0001-markdown.md:5:55-5:82
+ref removed kind=id_reference container="docs/adr/0001-markdown.md#context" receiver="" name_qualified="docs/design.md#removed" identity_in_repository=true call=false @docs/adr/0001-markdown.md:6:21-6:56
+ref docs/adr/0001-markdown.md#decision kind=contains container="docs/adr/0001-markdown.md#adr-0001-markdown-support" receiver="" name_qualified="docs/adr/0001-markdown.md#decision" identity_in_repository=true call=false @docs/adr/0001-markdown.md:8:1-8:12
+ref runbook.md kind=resource_link container="docs/adr/0001-markdown.md#decision" receiver="" name_qualified="docs/ops/runbook.md" identity_in_repository=true call=false @docs/adr/0001-markdown.md:10:12-10:40
+## imports
+## identity_only
+## diagnostics
+
+# file: docs/design.md
+## symbols
+symbol design.md kind=document qualified="docs/design.md" parent="" receiver="" exported=true @docs/design.md:1:1-14:1
+symbol Design kind=section qualified="docs/design.md#design" parent="docs/design.md" receiver="" exported=true @docs/design.md:1:1-13:10
+symbol Architecture kind=section qualified="docs/design.md#architecture" parent="docs/design.md#design" receiver="" exported=true @docs/design.md:7:1-11:25
+symbol Index kind=section qualified="docs/design.md#index" parent="docs/design.md#architecture" receiver="" exported=true @docs/design.md:9:1-11:25
+symbol Limits kind=section qualified="docs/design.md#limits" parent="docs/design.md#design" receiver="" exported=true @docs/design.md:13:1-13:10
+## references
+ref docs/design.md#design kind=contains container="docs/design.md" receiver="" name_qualified="docs/design.md#design" identity_in_repository=true call=false @docs/design.md:1:1-2:7
+ref usage kind=id_reference container="docs/design.md#design" receiver="" name_qualified="README.md#usage" identity_in_repository=true call=false @docs/design.md:4:13-4:47
+ref 0001-markdown.md kind=resource_link container="docs/design.md#design" receiver="" name_qualified="docs/adr/0001-markdown.md" identity_in_repository=true call=false @docs/design.md:5:1-5:33
+ref docs/design.md#architecture kind=contains container="docs/design.md#design" receiver="" name_qualified="docs/design.md#architecture" identity_in_repository=true call=false @docs/design.md:7:1-7:16
+ref docs/design.md#index kind=contains container="docs/design.md#architecture" receiver="" name_qualified="docs/design.md#index" identity_in_repository=true call=false @docs/design.md:9:1-9:10
+ref docs/design.md#limits kind=contains container="docs/design.md#design" receiver="" name_qualified="docs/design.md#limits" identity_in_repository=true call=false @docs/design.md:13:1-13:10
+## imports
+## identity_only
+## diagnostics
+
+# file: docs/ops/runbook.md
+## symbols
+symbol runbook.md kind=document qualified="docs/ops/runbook.md" parent="" receiver="" exported=true @docs/ops/runbook.md:1:1-13:1
+symbol Runbook kind=section qualified="docs/ops/runbook.md#runbook" parent="docs/ops/runbook.md" receiver="" exported=true @docs/ops/runbook.md:1:1-12:64
+symbol Deploy kind=section qualified="docs/ops/runbook.md#deploy" parent="docs/ops/runbook.md#runbook" receiver="" exported=true @docs/ops/runbook.md:3:1-7:4
+symbol sh kind=code_block qualified="docs/ops/runbook.md#deploy::sh" parent="docs/ops/runbook.md#deploy" receiver="" exported=true @docs/ops/runbook.md:5:1-7:4
+symbol Rollback kind=section qualified="docs/ops/runbook.md#rollback" parent="docs/ops/runbook.md#runbook" receiver="" exported=true @docs/ops/runbook.md:9:1-12:64
+symbol manual-rollback kind=anchor qualified="docs/ops/runbook.md#manual-rollback" parent="docs/ops/runbook.md#rollback" receiver="" exported=true @docs/ops/runbook.md:11:1-11:25
+## references
+ref docs/ops/runbook.md#runbook kind=contains container="docs/ops/runbook.md" receiver="" name_qualified="docs/ops/runbook.md#runbook" identity_in_repository=true call=false @docs/ops/runbook.md:1:1-1:10
+ref docs/ops/runbook.md#deploy kind=contains container="docs/ops/runbook.md#runbook" receiver="" name_qualified="docs/ops/runbook.md#deploy" identity_in_repository=true call=false @docs/ops/runbook.md:3:1-3:10
+ref docs/ops/runbook.md#rollback kind=contains container="docs/ops/runbook.md#runbook" receiver="" name_qualified="docs/ops/runbook.md#rollback" identity_in_repository=true call=false @docs/ops/runbook.md:9:1-9:12
+ref deploy kind=id_reference container="docs/ops/runbook.md#rollback" receiver="" name_qualified="docs/ops/runbook.md#deploy" identity_in_repository=true call=false @docs/ops/runbook.md:12:5-12:22
+ref manual-rollback kind=id_reference container="docs/ops/runbook.md#rollback" receiver="" name_qualified="docs/ops/runbook.md#manual-rollback" identity_in_repository=true call=false @docs/ops/runbook.md:12:31-12:63
+## imports
+## identity_only
+## diagnostics
+
+# file: main.go
+## symbols
+## references
+## imports
+## diagnostics
+
+# file: site/index.html
+## symbols
+symbol index.html kind=document qualified="site/index.html" parent="" receiver="" exported=true @site/index.html:1:1-3:1
+symbol top kind=element qualified="site/index.html#top" parent="site/index.html" receiver="" exported=true @site/index.html:2:45-2:57
+## references
+## imports
+## identity_only
+## diagnostics
+

@@ -275,10 +275,6 @@ func TestSecretPolicy_BoundaryAndAnalysisUnchanged(t *testing.T) {
 		".arkignore":  "secret.env\n",
 		"rules.toml":  acmeRule,
 	})
-	plain := maskServer(t, root)
-	mapBefore := mustText(t, plain, "get_repository_map", map[string]interface{}{"path": ".", "format": "json"})
-	searchBefore := mustText(t, plain, "search_code", map[string]interface{}{"path": ".", "namePattern": "Conf", "format": "json"})
-
 	if err := os.Symlink("rules.toml", filepath.Join(root, ".ark-secrets-rules.toml")); err != nil {
 		if os.Getenv("ARK_REQUIRE_SYMLINKS") != "" {
 			t.Fatal(err)
@@ -292,6 +288,12 @@ func TestSecretPolicy_BoundaryAndAnalysisUnchanged(t *testing.T) {
 	}
 	os.Remove(filepath.Join(root, ".ark-secrets-rules.toml"))
 	os.WriteFile(filepath.Join(root, ".ark-secrets-rules.toml"), []byte(weakening), 0o644)
+	// The analysis without the configuration in effect (masking off), of
+	// the same files: the configuration file is a TOML file of the
+	// repository like any other, which the index reads either way.
+	plain := maskServer(t, root, "--mask-secrets", "off")
+	mapBefore := mustText(t, plain, "get_repository_map", map[string]interface{}{"path": ".", "format": "json"})
+	searchBefore := mustText(t, plain, "search_code", map[string]interface{}{"path": ".", "namePattern": "Conf", "format": "json"})
 	h = maskServer(t, root, "--secret-rule-overrides", "on")
 	if text, isErr := callText(t, h, "get_file_content", map[string]interface{}{"path": "secret.env"}); !isErr || strings.Contains(text, "abc") {
 		t.Errorf("an excluded file read with a configuration: %v %q", isErr, text)
