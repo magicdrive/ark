@@ -112,9 +112,16 @@ Client-specific notes:
   with a default one and drop your other servers). With
   `CLAUDE_CODE_CUSTOM_OAUTH_URL` set, Claude Code keeps its state in another
   file, and setup only prints the command. The user-scope entry names the
-  repository's absolute path. When `--force` replaces an entry and fails,
-  Ark puts the previous entry back with `claude mcp add-json`, which takes
-  the entry, `env` included, as a command-line argument. The project scope
+  repository's absolute path. `--force` replaces only an `ark` entry of the
+  form Ark writes (`"command"` an `ark` executable, `"args"` `["mcp-server",
+  "--root", <path>]`, nothing else but `"type": "stdio"` and an empty
+  `"env"`), and puts it back if the replacement fails. `claude mcp add-json`
+  takes an entry only as a command-line argument, which other processes on
+  the machine can read, so Ark never passes it any other entry: one with an
+  `env`, headers, a URL, other arguments or other fields is refused, with or
+  without `--force`, before anything changes, and is not shown. Remove it
+  yourself (`claude mcp remove --scope user ark`) and re-run setup, or keep it
+  and register Ark under another name. The project scope
   (`.mcp.json`) is unaffected.
 - **Copilot in VS Code** and **Copilot CLI:** project scope only (`--global`
   is refused). The generated `--root` is the absolute path of the
@@ -163,7 +170,8 @@ are unchanged. `ark mcp-init --global` is now refused and writes nothing; use
 - **Client-owned files through the client.** Codex and Claude Code's user
   scope are changed only through their own CLI (`codex mcp`, `claude mcp`),
   with the result read back; a failed `--force` replacement restores the
-  previous entry.
+  previous entry. An existing Claude Code entry is never passed to `claude`
+  unless it is of the form Ark writes (see Claude Code `--global` above).
 
 ### Manual configuration
 

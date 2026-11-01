@@ -339,3 +339,46 @@ func TestCLI_SetupCline_FollowsClineDataDir(t *testing.T) {
 		t.Errorf("second run: exit %d\n%s", code, stdout)
 	}
 }
+
+// An existing "ark" entry that is not of the form Ark writes may hold
+// credentials anywhere (env, headers, URL, unknown fields). setup refuses it,
+// with and without --force, before running claude: nothing of it reaches a
+// command line, Ark's output or the file.
+func TestCLI_SetupClaudeGlobal_SecretEntryNeverExposed(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake claude CLI is a POSIX shell script")
+	}
+	const secret = "DUMMY-SECRET" // not shaped like any real token
+	bin := buildArk(t)
+	repo, home, ark := t.TempDir(), t.TempDir(), fakeArkBin(t)
+	log := installFakeClaude(t)
+	cfg := filepath.Join(home, ".claude.json")
+	body := []byte(`{"userID":"u","mcpServers":{` +
+		`"ark":{"type":"stdio","command":"/x/ark","args":["mcp-server","--root","/r"],"env":{"API_KEY":"` + secret + `-ENV"},"headers":{"Authorization":"Bearer ` + secret + `-BEARER"},"x-extra":"` + secret + `-UNKNOWN"},` +
+		`"other":{"type":"http","url":"https://u:` + secret + `-URL@mcp.example.invalid/mcp"}}}`)
+	if err := os.WriteFile(cfg, body, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, force := range []bool{false, true} {
+		args := []string{"setup", "claude", "--global", "--ark-path", ark, "--root", repo}
+		if force {
+			args = append(args, "--force")
+		}
+		stdout, stderr, code := runArk(t, bin, repo, home, args...)
+		if code == 0 {
+			t.Fatalf("force=%v: exit 0\n%s\n%s", force, stdout, stderr)
+		}
+		if !strings.Contains(stderr, "not of the form Ark writes") {
+			t.Errorf("force=%v: no refusal in stderr:\n%s", force, stderr)
+		}
+		if strings.Contains(stdout+stderr, secret) {
+			t.Errorf("force=%v: a secret is in Ark's output:\n%s\n%s", force, stdout, stderr)
+		}
+	}
+	if calls, err := os.ReadFile(log); err == nil {
+		t.Errorf("claude ran: %s", calls)
+	}
+	if after, _ := os.ReadFile(cfg); string(after) != string(body) {
+		t.Errorf("%s changed:\n%s", cfg, after)
+	}
+}
