@@ -607,9 +607,11 @@ Reads several files in the compact arklite format (one line per file).
 | `maskSecrets` | boolean |  | `true` | Accepted for compatibility. Masking follows the server's --mask-secrets setting; a call cannot turn it off |
 | `maxFiles` | integer |  | `10` | Maximum number of files to process |
 
-The header and file entries show absolute paths: a file at the root's top
-shows the server's root, which makes one small top-level file the cheapest
-check of which repository or Git worktree a server serves.
+The header and file entries show absolute paths: a file at the root's top,
+given by its relative name, shows the server's root, which makes one small
+top-level file the cheapest check of which repository or Git worktree a
+server serves. (An absolute path names that directory instead, also one
+inside the root, so it is no check of the root.)
 
 ### `list_files`
 

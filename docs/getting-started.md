@@ -180,9 +180,10 @@ see a sibling worktree's files or uncommitted changes. To work in several Git
 worktrees, give each one a server of its own; each keeps its cache in its own
 `<worktree>/.ark/index`. The guidance of `ark instruction` tells the agent to
 check the root its server reports against the worktree it works in — the
-directory of a top-level file in `get_files_arklite`, or `RootPath` of
-`get_repository_map` with `path: "."` and `format: "json"`, compared as paths
-with symlinks resolved — and not to use another checkout's results. Nothing
+directory of a top-level file given by its relative name to
+`get_files_arklite`, or else `RootPath` of `get_repository_map` with
+`path: "."`, compared as paths with symlinks and letter case resolved — and
+not to use another checkout's results. Nothing
 switches a client's server automatically, and the agent is told to ask you
 before any MCP configuration changes.
 

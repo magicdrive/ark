@@ -76,7 +76,7 @@ func toplevel(t *testing.T, dir string) string {
 }
 
 // rootPath is the root a server reports, as `ark instruction` tells an agent
-// to check it: get_repository_map, format json, detail minimal.
+// to check it when arklite cannot: get_repository_map, path ".", format json.
 func rootPath(t *testing.T, c *rpcClient) string {
 	t.Helper()
 	text, isErr := c.tool("get_repository_map", map[string]any{"path": ".", "format": "json", "detail": "minimal", "maxPackages": 1})
@@ -428,6 +428,7 @@ func TestMCPWorktrees_NestedWorktree(t *testing.T) {
 	nested := filepath.Join(main, ".worktrees", "nested")
 	cmd := exec.Command("git", "worktree", "add", "-q", "-b", "nested", nested)
 	cmd.Dir = main
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git worktree add: %v\n%s", err, out)
 	}
@@ -441,9 +442,14 @@ func TestMCPWorktrees_NestedWorktree(t *testing.T) {
 	if !hasSymbol(t, m, "NestedOnly") {
 		t.Error("the root's server does not see the nested worktree: the guidance's warning would be moot")
 	}
-	// The check from the nested worktree: the server's file is not its own.
+	// The check from the nested worktree: the server's file, named
+	// relatively, is not its own. An absolute path would name the nested
+	// directory itself — why the guidance asks for a relative name.
 	if samePath(t, arkliteDir(t, m, "shared.go"), toplevel(t, nested)) || samePath(t, rootPath(t, m), toplevel(t, nested)) {
 		t.Error("the root's server passes the root check for the nested worktree")
+	}
+	if !samePath(t, arkliteDir(t, m, filepath.Join(nested, "shared.go")), toplevel(t, nested)) {
+		t.Error("an absolute path inside the root no longer names that directory: revisit the guidance's relative-name rule")
 	}
 
 	if err := os.WriteFile(filepath.Join(main, ".arkignore"), []byte(".worktrees/\n"), 0o644); err != nil {

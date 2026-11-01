@@ -382,7 +382,8 @@ func TestGuidance_WorktreeRules(t *testing.T) {
 		{"A active workspace", "Which repository", []string{"repository or Git worktree you work in", "git rev-parse --show-toplevel"}},
 		{"A again on a move", "Which repository", []string{"At the start of a session, and again when you move to another worktree"}},
 		{"A intended subdirectory", "Which repository", []string{"or the subdirectory of it the server was set up for"}},
-		{"B root verification", "Which repository", []string{"get_files_arklite", "one small file at your worktree's top", "get_repository_map", `path: "."`, `format: "json"`, "`RootPath`"}},
+		{"B root verification", "Which repository", []string{"get_files_arklite", "the relative name of one small file at your worktree's top", "not an absolute path"}},
+		{"B fallback check", "Which repository", []string{"if that call fails", "get_repository_map", `path: "."`, `format: "json"`, "`maxPackages: 1`", "`RootPath`"}},
 		{"B compare as paths", "Which repository", []string{"as paths after resolving symlinks and letter case", "not as strings"}},
 		{"B root is the server's", "Which repository", []string{"the root it was started on"}},
 		{"C worktree isolation", "Which repository", []string{"another checkout or worktree", "describe that checkout, not yours"}},
@@ -433,13 +434,22 @@ func TestGuidance_WorktreeRulesPointToWhatExists(t *testing.T) {
 	if _, ok := props["path"]; !ok {
 		t.Error("get_repository_map takes no path")
 	}
-	for _, tool := range mcp.NewToolsHandler(".", nil).ListTools() {
-		if tool.Name == "get_files_arklite" {
-			ps, _ := tool.InputSchema["properties"].(map[string]interface{})
-			if _, ok := ps["paths"]; !ok {
-				t.Error("get_files_arklite takes no paths")
+	for _, want := range []struct{ tool, param string }{{"get_files_arklite", "paths"}, {"get_repository_map", "maxPackages"}} {
+		found := false
+		for _, tool := range mcp.NewToolsHandler(".", nil).ListTools() {
+			if tool.Name == want.tool {
+				ps, _ := tool.InputSchema["properties"].(map[string]interface{})
+				_, found = ps[want.param]
 			}
 		}
+		if !found {
+			t.Errorf("%s takes no %s", want.tool, want.param)
+		}
+	}
+	// The guidance is prompt text read every session: its rules stay short
+	// in bytes too, not only in lines.
+	if n := len(instruction.Guidance()); n > 5000 {
+		t.Errorf("the guidance is %d bytes; keep it under 5000", n)
 	}
 	g := instruction.Guidance()
 	for _, word := range []string{".mcp.json", "mcp.json", "config.toml", "settings.json", "ark setup", "--force", "--global",

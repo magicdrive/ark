@@ -39,7 +39,7 @@ Ark answers one question: what code do I need to read to understand or safely mo
 
 ### Which repository
 
-- The server answers for the root it was started on. Before relying on it — at the start of a session, and when you move to another Git worktree — confirm that root: `get_files_arklite` with one small file at the top of your worktree shows the server's absolute path of it (or `get_repository_map` with `path: "."` and `format: "json"`: `RootPath`). Compare it with `git rev-parse --show-toplevel` as paths, symlinks resolved.
+- The server answers for the root it was started on. Before relying on it — at the start of a session, and when you move to another Git worktree — confirm that root: `get_files_arklite` with the relative name of one small file at the top of your worktree (not an absolute path) shows the server's absolute path of it; if it fails, `get_repository_map` with `path: "."`, `format: "json"` and `maxPackages: 1` shows `RootPath`. Compare it with `git rev-parse --show-toplevel` as paths, symlinks and letter case resolved.
 - A worktree placed inside the root (a directory with its own `.git` file) is part of the root's files: what the root's server reports from it is neither the root's code nor that worktree's state.
 - When the root is another checkout, say so and use a server started on your worktree — ask the user to add one rather than editing MCP configuration — or the Ark CLI in your worktree (`ark symbol <file>`); do not use the other checkout's results.
 
