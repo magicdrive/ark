@@ -22,6 +22,11 @@ type jsonClient struct {
 	managedBy   string
 	resolvePath func(opts Options) (string, error)
 	buildEntry  func(opts Options) map[string]any
+	// equal, when set, decides whether an existing Ark entry is equivalent to
+	// the desired one (see jsonConfig.classifyWith). Nil means semanticEqual.
+	// Verification after a write always compares with semanticEqual, as the
+	// file then holds exactly the entry Ark wrote.
+	equal func(existing any, desired map[string]any) (bool, error)
 }
 
 // applyJSON runs the generic state machine for a JSON MCP config file.
@@ -53,7 +58,7 @@ func (c jsonClient) applyJSON(opts Options) (*Result, error) {
 	state := baseState
 	if state == StateAbsent {
 		// loadJSONConfig returns Absent as a placeholder; refine against desired.
-		state, err = cfg.classify(desired)
+		state, err = cfg.classifyWith(desired, c.equal)
 		if err != nil {
 			return nil, err
 		}

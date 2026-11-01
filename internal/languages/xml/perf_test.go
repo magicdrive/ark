@@ -4,11 +4,16 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/magicdrive/ark/internal/testutil/scaling"
 )
 
 // TestLinearTime: one long line, deep nesting up to the bound and many
 // nodes are read in time linear in the input: doubling the input at most
-// roughly doubles the time (a quadratic step would quadruple it).
+// roughly doubles the time (a quadratic step would quadruple it), measured as
+// scaling.LinearSlack does, so that a burst of load on the machine does not
+// fail it. The large input stays under xmldoc.MaxNodes: one beyond it is not
+// read to its end, which would hide a quadratic step.
 func TestLinearTime(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing")
@@ -44,24 +49,10 @@ func TestLinearTime(t *testing.T) {
 	}
 	for name, gen := range inputs {
 		small, large := gen(20000), gen(40000)
-		ts, tl := best(t, small), best(t, large)
-		if tl > 3*ts+20*time.Millisecond {
-			t.Errorf("%s: %v for %d bytes, %v for %d bytes", name, ts, len(small), tl, len(large))
-		}
-		t.Logf("%s: %v for %d bytes, %v for %d bytes", name, ts, len(small), tl, len(large))
+		scaling.LinearSlack(t, name, 3, 20*time.Millisecond,
+			func() { extract(t, "p.xml", small) },
+			func() { extract(t, "p.xml", large) })
 	}
-}
-
-func best(t *testing.T, src string) time.Duration {
-	var min time.Duration
-	for i := 0; i < 3; i++ {
-		start := time.Now()
-		extract(t, "p.xml", src)
-		if d := time.Since(start); i == 0 || d < min {
-			min = d
-		}
-	}
-	return min
 }
 
 // TestDoctypesNearMaxBytes: a file of DOCTYPE declarations just under

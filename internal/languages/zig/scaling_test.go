@@ -4,14 +4,15 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/testutil/scaling"
 )
 
 // TestExtractScalesLinearly: extraction of a long literal list (generated
 // tables) and of a file of many declarations grows linearly with it: four
-// times the size must not cost sixteen times the time.
+// times the size must not cost sixteen times the time (scaling.Linear: the
+// sizes alternate, and only a ratio above the bound in every attempt fails).
 func TestExtractScalesLinearly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing test")
@@ -36,24 +37,14 @@ func TestExtractScalesLinearly(t *testing.T) {
 		return []byte(b.String())
 	}
 	p := NewProvider()
-	best := func(src []byte) time.Duration {
-		d := time.Duration(1 << 62)
-		for i := 0; i < 3; i++ {
-			start := time.Now()
+	extract := func(src []byte) func() {
+		return func() {
 			if _, err := p.Extract(context.Background(), source.FileID("src/data.zig"), src); err != nil {
 				t.Fatal(err)
 			}
-			if e := time.Since(start); e < d {
-				d = e
-			}
 		}
-		return d
 	}
 	for name, gen := range map[string]func(int) []byte{"table": table, "declarations": decls} {
-		small, large := best(gen(1000)), best(gen(4000))
-		t.Logf("%s: 1k %v, 4k %v (x%.1f)", name, small, large, float64(large)/float64(small))
-		if large > 10*small {
-			t.Errorf("%s: 4x the size took %.1fx the time (1k: %v, 4k: %v): extraction is not linear", name, float64(large)/float64(small), small, large)
-		}
+		scaling.Linear(t, name+": 1k / 4k", 10, extract(gen(1000)), extract(gen(4000)))
 	}
 }

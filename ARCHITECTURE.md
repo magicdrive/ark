@@ -170,7 +170,8 @@ descent, nesting bounded at 256 so no input exhausts the stack, measured
 against the css-parsing-tests suite and other parsers in
 `docs/scripts/css-parser-eval`). Authority: `languages/css/provider.go`
 (header). Tests: `TestReferences`, `TestImportsAndComposes`,
-`TestModuleClasses`, `TestWorstCases`, `FuzzExtractCSS`.
+`TestModuleClasses`, `TestWorstCases`, `TestReaderStepsLinear`,
+`FuzzExtractCSS`.
 Danger: "the only `@keyframes spin` in the repository is the one" — a
 stylesheet's name resolves within that stylesheet.
 

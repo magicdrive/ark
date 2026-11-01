@@ -44,6 +44,14 @@ type reader struct {
 	i     int
 	items []item
 	deep  bool
+	// steps counts the tokens the reader looks at (peek, and the scans of
+	// importantEnd and of a top-level prelude), tokSteps the code points
+	// the tokenizer decodes: a test's measure of the work, which grows
+	// linearly with the input (reader_steps_test.go). A new loop over
+	// r.toks that does not go through peek must add to steps itself, or
+	// the test does not see it. The extractor's own scans (provider.go)
+	// are not counted.
+	steps, tokSteps int
 }
 
 // read reads a whole stylesheet.
@@ -84,6 +92,7 @@ func read(src []byte) *reader {
 			r.toks = append(r.toks, t)
 		}
 	}
+	r.tokSteps = z.steps
 	if len(r.toks) > 2 && r.toks[0].typ == tAtKeyword && r.toks[0].value == "charset" &&
 		r.toks[2].typ == tString && !utf8Label[strings.ToLower(strings.TrimSpace(r.toks[2].value))] {
 		r.problem("charset", r.toks[0].start, r.toks[2].end, 0)
@@ -101,6 +110,7 @@ func (r *reader) problem(code string, start, end, depth int) {
 }
 
 func (r *reader) peek() token {
+	r.steps++
 	if r.i < len(r.toks) {
 		return r.toks[r.i]
 	}
@@ -256,6 +266,7 @@ func (r *reader) importantEnd() int {
 		return 0
 	}
 	for k := r.i + 1; k < len(r.toks); k++ {
+		r.steps++
 		switch t := r.toks[k]; {
 		case t.typ == tWhitespace:
 		case t.typ == tIdent && strings.EqualFold(t.value, "important"):
@@ -325,6 +336,7 @@ func (r *reader) qualifiedRule(top bool, depth, parent int) {
 				r.problem("rule_from_declaration", first.start, k.start, depth)
 			}
 			if top {
+				r.steps += len(prelude)
 				for _, t := range prelude {
 					if t.typ == tSemicolon || t.typ == tRBrace {
 						r.problem("stray_in_prelude", t.start, t.end, depth)

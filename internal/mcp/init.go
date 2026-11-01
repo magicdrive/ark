@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,8 +16,21 @@ type MCPInitOptions struct {
 	Force      bool
 }
 
+// ErrMCPInitGlobal is returned for `ark mcp-init --global`. The flag used to
+// write ~/.claude/settings.json, which Claude Code does not read MCP servers
+// from; Claude Code's user scope lives in ~/.claude.json and is changed only
+// through the claude CLI, which `ark setup claude --global` does.
+var ErrMCPInitGlobal = errors.New("`ark mcp-init --global` is no longer supported: it wrote ~/.claude/settings.json, " +
+	"which Claude Code does not read MCP servers from, so the entry never took effect\n" +
+	"run `ark setup claude --global` to register Ark in Claude Code's user scope (~/.claude.json) through the claude CLI; " +
+	"an \"ark\" entry left in ~/.claude/settings.json can be deleted\n" +
+	"nothing was written")
+
 func RunMCPInit(opts *MCPInitOptions) error {
-	settingsPath, err := resolveSettingsPath(opts.Global)
+	if opts.Global {
+		return ErrMCPInitGlobal
+	}
+	settingsPath, err := resolveSettingsPath()
 	if err != nil {
 		return err
 	}
@@ -40,13 +54,11 @@ func RunMCPInit(opts *MCPInitOptions) error {
 	}
 
 	rootArg := opts.RootDir
-	if !opts.Global {
-		if cwd, err := os.Getwd(); err == nil {
-			realRoot, err1 := filepath.EvalSymlinks(opts.RootDir)
-			realCwd, err2 := filepath.EvalSymlinks(cwd)
-			if err1 == nil && err2 == nil && realRoot == realCwd {
-				rootArg = "${CLAUDE_PROJECT_DIR:-.}/"
-			}
+	if cwd, err := os.Getwd(); err == nil {
+		realRoot, err1 := filepath.EvalSymlinks(opts.RootDir)
+		realCwd, err2 := filepath.EvalSymlinks(cwd)
+		if err1 == nil && err2 == nil && realRoot == realCwd {
+			rootArg = "${CLAUDE_PROJECT_DIR:-.}/"
 		}
 	}
 
@@ -73,17 +85,10 @@ func RunMCPInit(opts *MCPInitOptions) error {
 	return nil
 }
 
-// resolveSettingsPath returns the path to the MCP settings file.
-// Project scope uses .mcp.json (Claude Code's project-level MCP config).
-// Global scope uses ~/.claude/settings.json.
-func resolveSettingsPath(global bool) (string, error) {
-	if global {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("cannot determine home directory: %w", err)
-		}
-		return filepath.Join(home, ".claude", "settings.json"), nil
-	}
+// resolveSettingsPath returns the path to the MCP settings file: .mcp.json in
+// the current directory (Claude Code's project-level MCP config). There is no
+// global scope; see ErrMCPInitGlobal.
+func resolveSettingsPath() (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine current directory: %w", err)

@@ -57,8 +57,9 @@ type token struct {
 }
 
 type tokenizer struct {
-	src []byte
-	pos int
+	src   []byte
+	pos   int
+	steps int // code points decoded (at): reader.tokSteps
 }
 
 const eof = -1
@@ -66,6 +67,7 @@ const eof = -1
 // at returns the code point at byte offset i (after preprocessing) and its
 // width in bytes; eof past the end.
 func (z *tokenizer) at(i int) (rune, int) {
+	z.steps++
 	if i >= len(z.src) {
 		return eof, 0
 	}

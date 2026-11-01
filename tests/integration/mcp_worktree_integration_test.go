@@ -253,10 +253,12 @@ func TestMCPWorktrees_SetupPerClient(t *testing.T) {
 		config func(worktree, home string) cfgFile // nil: codex
 	}{
 		{"claude", false, func(w, _ string) cfgFile { return cfgFile{filepath.Join(w, ".mcp.json"), "mcpServers"} }},
-		{"claude", true, func(_, h string) cfgFile { return cfgFile{filepath.Join(h, ".claude", "settings.json"), "mcpServers"} }},
+		{"claude", true, func(_, h string) cfgFile { return cfgFile{filepath.Join(h, ".claude.json"), "mcpServers"} }},
 		{"cursor", false, func(w, _ string) cfgFile { return cfgFile{filepath.Join(w, ".cursor", "mcp.json"), "mcpServers"} }},
 		{"cursor", true, func(_, h string) cfgFile { return cfgFile{filepath.Join(h, ".cursor", "mcp.json"), "mcpServers"} }},
-		{"cline", true, func(_, h string) cfgFile { return cfgFile{filepath.Join(h, ".cline", "mcp.json"), "mcpServers"} }},
+		{"cline", true, func(_, h string) cfgFile {
+			return cfgFile{filepath.Join(h, ".cline", "data", "settings", "cline_mcp_settings.json"), "mcpServers"}
+		}},
 		{"copilot-vscode", false, func(w, _ string) cfgFile { return cfgFile{filepath.Join(w, ".vscode", "mcp.json"), "servers"} }},
 		{"copilot-cli", false, func(w, _ string) cfgFile { return cfgFile{filepath.Join(w, ".github", "mcp.json"), "mcpServers"} }},
 		{"codex", true, nil},
@@ -267,8 +269,8 @@ func TestMCPWorktrees_SetupPerClient(t *testing.T) {
 			name += "-global"
 		}
 		t.Run(name, func(t *testing.T) {
-			if cl.id == "codex" && runtime.GOOS == "windows" {
-				t.Skip("the fake codex CLI is a POSIX shell script")
+			if (cl.id == "codex" || (cl.id == "claude" && cl.global)) && runtime.GOOS == "windows" {
+				t.Skip("the fake codex / claude CLI is a POSIX shell script")
 			}
 			main, feature := gitWorktrees(t)
 			home := t.TempDir()
@@ -279,6 +281,9 @@ func TestMCPWorktrees_SetupPerClient(t *testing.T) {
 			}
 			t.Setenv("PATH", fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"))
 			t.Setenv("FAKE_CODEX_STATE", state)
+			// Claude's user scope goes through the claude CLI (it writes
+			// ~/.claude.json, Ark does not).
+			installFakeClaude(t)
 			setup := func(dir string, extra ...string) (string, int) {
 				args := append([]string{"setup", cl.id, "--ark-path", bin}, extra...)
 				if cl.global && (cl.id == "cursor" || cl.id == "claude") {

@@ -11,39 +11,38 @@ import (
 
 // claudeAdapter configures Ark for Claude Code (plan §14 Claude).
 //
-// It is the reference adapter and preserves the pre-existing `ark setup`
-// behavior exactly:
-//
-//	project: <cwd>/.mcp.json      global: ~/.claude/settings.json
-//	entry:   {type:"stdio", command, args:["mcp-server","--root",<root>], env:{}}
-//	         where <root> is "${CLAUDE_PROJECT_DIR:-.}/" when serving cwd.
+//	project:  <cwd>/.mcp.json, written by Ark (jsonClient)
+//	global:   Claude Code's user scope, the top-level "mcpServers" of
+//	          ~/.claude.json, changed only through the claude CLI
+//	          (claudeuser.go)
+//	entry:    {type:"stdio", command, args:["mcp-server","--root",<root>], env:{}}
+//	          where <root> is "${CLAUDE_PROJECT_DIR:-.}/" when the project
+//	          scope serves cwd, and the absolute root otherwise (always for
+//	          the user scope, which is shared by every project).
 //
 // Only this adapter produces Claude-specific artifacts (the repository skill
 // and the CLAUDE.md advisory). No other adapter writes .claude/* (plan §14).
 type claudeAdapter struct {
-	base jsonClient
+	base   jsonClient
+	runner commandRunner // the claude CLI, for the user scope
 }
 
 func newClaudeAdapter() adapter {
 	return claudeAdapter{
 		base: jsonClient{
 			id:          ClientClaude,
-			serverName:  "ark",
+			serverName:  claudeServerName,
 			managedBy:   "config file",
 			resolvePath: claudeConfigPath,
 			buildEntry:  claudeEntry,
 		},
+		runner: execRunner{},
 	}
 }
 
+// claudeConfigPath is the project-scope file. The user scope is not a file
+// Ark writes; see claudeUserConfigPath.
 func claudeConfigPath(opts Options) (string, error) {
-	if opts.Global {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return "", fmt.Errorf("cannot determine home directory: %w", err)
-		}
-		return filepath.Join(home, ".claude", "settings.json"), nil
-	}
 	cwd, err := os.Getwd()
 	if err != nil {
 		return "", fmt.Errorf("cannot determine current directory: %w", err)
@@ -54,7 +53,9 @@ func claudeConfigPath(opts Options) (string, error) {
 // claudeEntry mirrors the historical mcp-init output so existing Claude
 // installations see no artifact drift (plan §40). For project scope that serves
 // the current directory, the portable ${CLAUDE_PROJECT_DIR:-.}/ placeholder is
-// used instead of an absolute path.
+// used instead of an absolute path. The user scope always names the absolute
+// root: one user-scoped entry serves every project, so the placeholder would
+// serve whatever directory Claude Code was started in.
 func claudeEntry(opts Options) map[string]any {
 	rootArg := opts.RootDir
 	if !opts.Global {
@@ -75,7 +76,13 @@ func claudeEntry(opts Options) map[string]any {
 }
 
 func (a claudeAdapter) run(opts Options) (*Result, error) {
-	res, err := a.base.applyJSON(opts)
+	var res *Result
+	var err error
+	if opts.Global {
+		res, err = a.runUserScope(opts)
+	} else {
+		res, err = a.base.applyJSON(opts)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +107,12 @@ func (a claudeAdapter) run(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("MCP server configured, but skill generation failed: %w", err)
 	}
 	res.ExtraLines = append(res.ExtraLines, fmt.Sprintf("✓ Claude skill: %s", output))
-	res.ExtraLines = append(res.ExtraLines, fmt.Sprintf("Next: restart Claude Code to approve the MCP server, then use /%s", name))
+	next := "approve"
+	if opts.Global {
+		// A user-scoped server needs no approval; a project's .mcp.json does.
+		next = "load"
+	}
+	res.ExtraLines = append(res.ExtraLines, fmt.Sprintf("Next: restart Claude Code to %s the MCP server, then use /%s", next, name))
 
 	if suggestion := mcp.CLAUDEMdSuggestion(cwd); suggestion != "" {
 		res.ExtraLines = append(res.ExtraLines, suggestion)
