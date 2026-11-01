@@ -96,7 +96,7 @@ ark instruction claude >> CLAUDE.md   # codex / cursor / cline / copilot-vscode 
 
 **4. 質問する** — 「このリポジトリの概要を教えて」「`PlaceOrder` を呼んでいるのはどこ?」「`store.Save` を変更すると何が壊れうる?」など。
 
-手動での設定を含む詳しい手順は[導入ガイド](docs/getting-started.md)にあります。
+手動での設定や、Git worktree ごとのサーバーを含む詳しい手順は[導入ガイド](docs/getting-started.md)にあります。
 
 ## 例: 関数を変更する前に
 
