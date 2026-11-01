@@ -668,7 +668,7 @@ checked), `toml_too_large` (a file over 4 MiB: only the file is declared),
 `toml_key_too_long`, `toml_truncated`, `pyproject_invalid_requirement`,
 `cargo_workspace_truncated` (a manifest's `workspace = true` entries past
 2048 ancestor lookups, left unresolved). A table or key whose name holds a
-secret by Ark's recommended rules — a token, or a value after `=` or `:` —
+secret by Ark's recommended rules — a token, or an assigned value —
 is not declared, nor what it holds, as a name is shown as written; so is a
 Maven coordinate or an XML path holding one.
 A leading UTF-8 byte order mark is skipped.
@@ -781,11 +781,12 @@ linking to one with `get_callers`, and the broken links in the unresolved
 references `get_context` and `analyze_change_impact` report.
 
 A heading, a raw HTML `id`, a code block's language or a linked file name
-that holds a secret by Ark's recommended rules — a token, or a value after
-`=` or `:` (`## password = …`) — declares or references nothing, as a name
-is shown as written; a link to such a heading is unresolved. A word after a
-`-` (`--password-stdin`) is no secret here. A fragment spelled as an
-anchor (`#password--x`) is a reference's name as written. A leading UTF-8 byte order
+that holds a secret by Ark's recommended rules — a token, or an assigned
+value (`## password = …`, `password => …`) — declares or references nothing, as a name
+is shown as written; a link to such a heading is unresolved, and a
+fragment spelling its anchor (`#password--x`) states no reference. A word
+glued to a word by a `-` (`--password-stdin`) is no secret here, nor, in an
+XML path, a prefix glued by a `:` (`secret:key`). A leading UTF-8 byte order
 mark is skipped.
 
 Bounds: a file over 4 MiB declares itself only; 5000 declarations and

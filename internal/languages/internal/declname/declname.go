@@ -37,15 +37,21 @@ func IsName(s string) bool {
 
 // HoldsSecret reports whether s, a would-be name, holds a secret by Ark's
 // recommended secret policy: a known token format as written (before a
-// slug lowers its case), or a value the policy masks after an "=" or a ":"
-// ("password = …", "api_key: …"). A name is shown as written (the MCP
-// server masks names by a token's form only), so a provider declares or
-// references nothing by such a name. A value after a "-" (the policy's
-// reading of "password-stdin" in a text) is a word of a name, not a
-// secret. A format character (a zero-width space) in s hides nothing: s is
-// also checked without them.
-func HoldsSecret(s string) bool {
-	if holdsSecret(s) {
+// slug lowers its case), or a value the policy masks in a text ("password
+// = …", "api_key: …", "password => …"). A name is shown as written (the
+// MCP server masks names by a token's form only), so a provider declares
+// or references nothing by such a name. A word glued to a word by a "-"
+// (the policy's reading of "password-stdin" in a text) is a part of a
+// name, not a secret. A format character (a zero-width space) in s hides
+// nothing: s is also checked without them.
+func HoldsSecret(s string) bool { return holdsSecretGlued(s, "-") }
+
+// HoldsSecretQName is HoldsSecret for an XML path, in which a ":" glued
+// between words separates a prefix from a local name ("secret:key").
+func HoldsSecretQName(s string) bool { return holdsSecretGlued(s, "-:") }
+
+func holdsSecretGlued(s, glue string) bool {
+	if holdsSecret(s, glue) {
 		return true
 	}
 	if t := strings.Map(func(r rune) rune {
@@ -54,24 +60,27 @@ func HoldsSecret(s string) bool {
 		}
 		return r
 	}, s); t != s {
-		return holdsSecret(t)
+		return holdsSecret(t, glue)
 	}
 	return false
 }
 
-func holdsSecret(s string) bool {
+func holdsSecret(s, glue string) bool {
 	p := secrets.Recommended()
 	if len(p.Find(s, secrets.Mode{Tokens: true})) > 0 {
 		return true
 	}
 	for _, f := range p.Find(s, secrets.Mode{}) {
-		i := f.Start
-		for i > 0 && strings.IndexByte(" \t\"'`", s[i-1]) >= 0 {
-			i--
+		// A value right after a glue byte that follows a word character:
+		// one name ("password-stdin"), not an assignment.
+		if i := f.Start; i >= 2 && f.End > i && strings.IndexByte(glue, s[i-1]) >= 0 && wordByte(s[i-2]) && wordByte(s[i]) {
+			continue
 		}
-		if i > 0 && (s[i-1] == '=' || s[i-1] == ':') {
-			return true
-		}
+		return true
 	}
 	return false
+}
+
+func wordByte(b byte) bool {
+	return b == '_' || b >= '0' && b <= '9' || b >= 'A' && b <= 'Z' || b >= 'a' && b <= 'z' || b >= 0x80
 }

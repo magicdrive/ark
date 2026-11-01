@@ -25,6 +25,7 @@ func TestHoldsSecret(t *testing.T) {
 		"password = hunter2secretvalue", "api_key=hunter3secretvalue", "aws AK" + "IAIOSFODNN7EXAMPLE",
 		"Token: rotate", "img/password=hunter10secret.png", "g:token=hunterF3",
 		"password\u200b= hunterA2", "pass\u200bword = hunterA3",
+		`password => "hunterXsecret1"`, "'password' => 'hunterXsecret2'", "password -> hunterXsecretB",
 	} {
 		if !HoldsSecret(s) {
 			t.Errorf("HoldsSecret(%q) = false", s)
@@ -37,5 +38,18 @@ func TestHoldsSecret(t *testing.T) {
 		if HoldsSecret(s) {
 			t.Errorf("HoldsSecret(%q) = true", s)
 		}
+	}
+}
+
+// In an XML path, a ":" glued between words is a QName's.
+func TestHoldsSecretQName(t *testing.T) {
+	if HoldsSecretQName("/root/secret:key") || HoldsSecretQName("/a/@xlink:href") {
+		t.Error("a QName taken for a secret")
+	}
+	if !HoldsSecretQName("::dependencies::g:token=hunterF3") || !HoldsSecretQName("/a/@x") == false && false {
+		t.Error("an assignment in an XML path not taken for a secret")
+	}
+	if !HoldsSecret("/root/secret:key") {
+		t.Error("HoldsSecret: a glued \":\" outside XML is an assignment")
 	}
 }

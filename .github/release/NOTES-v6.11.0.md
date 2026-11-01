@@ -76,7 +76,7 @@ README files, design documents, runbooks and ADRs become part of the graph.
   read within about 5 seconds. Code blocks are never executed or read as
   code.
 - **Secrets.** A heading, a raw HTML id, a code block's language or a
-  linked file name holding a token or a value after `=` or `:`
+  linked file name holding a token or an assigned value
   (`## password = …`) declares or references nothing, as a name is shown
   as written; so do TOML keys, XML paths and Maven coordinates.
 
@@ -128,7 +128,7 @@ The cost follows the files newly indexed; peak memory stayed within the rounds' 
 
 - TOML: no version requirement, `cfg()` expression, environment marker or glob is evaluated; Poetry and uv settings, `[patch]` and `[replace]` are plain keys; glob workspace members stay unresolved; a `workspace = true` dependency that several ancestor workspaces declare is a Candidate of each (one file cannot see which root is the nearest), and one that only a farther ancestor declares reaches it (Strong), though Cargo rejects such a manifest; `.cargo/config.toml` is not indexed (a hidden directory).
 - XML: no DTD or schema is read, so IDREF attributes other than fragments are not references; only UTF-8 (and ASCII) documents are read; Maven properties from a parent or a profile, `${revision}` and Gradle builds are not resolved.
-- Markdown: links are matched as written (`#Usage` is not `#usage`); links inside raw HTML are not read; a link to a file Ark does not index (a Go source, `LICENSE`, a directory) is unresolved like a missing one; a heading that reads like an assignment (`## Token: rotate`) is taken for a secret and declares no section; a link fragment spelled as an anchor (`#password--x`) is shown as written.
+- Markdown: links are matched as written (`#Usage` is not `#usage`); links inside raw HTML are not read; a link to a file Ark does not index (a Go source, `LICENSE`, a directory) is unresolved like a missing one; a heading that reads like an assignment (`## Token: rotate`) is taken for a secret and declares no section.
 - Data and markup files declare at most 5000 symbols each, and files over 4 MiB declare only themselves.
 
 Details: [language support](https://github.com/magicdrive/ark/blob/v6.11.0/docs/language-support.md) and the design records for [TOML](https://github.com/magicdrive/ark/blob/v6.11.0/docs/development/toml.md), [XML](https://github.com/magicdrive/ark/blob/v6.11.0/docs/development/xml.md) and [Markdown](https://github.com/magicdrive/ark/blob/v6.11.0/docs/development/markdown.md).

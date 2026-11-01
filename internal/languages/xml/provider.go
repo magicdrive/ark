@@ -512,9 +512,9 @@ func (e *extractor) isName(q string) bool {
 		return true
 	}
 	if rest, ok := strings.CutPrefix(q, string(e.file)); ok {
-		return declname.IsName(rest) && !declname.HoldsSecret(rest)
+		return declname.IsName(rest) && !declname.HoldsSecretQName(rest)
 	}
-	return declname.IsName(q) && !declname.HoldsSecret(q)
+	return declname.IsName(q) && !declname.HoldsSecretQName(q)
 }
 
 // oneLine reports whether s, of any length, is one line of names

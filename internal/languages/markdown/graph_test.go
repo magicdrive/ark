@@ -150,7 +150,7 @@ func TestGraph_RootAnchorsAndSecrets(t *testing.T) {
 		"docs" + sep + "a.md#a -references-> docs" + sep + "b.md#sec-1 strong",
 		"docs" + sep + "c.md#c -references-> docs" + sep + "b.md#sec-1 exact",
 	})
-	equalLines(t, "unresolved", unresolvedLines(idx), []string{
-		"docs" + sep + "a.md#a: password--hunter2secretvalue id_reference unresolved",
-	})
+	// The fragment spelling the secret heading's anchor holds the secret
+	// too: no reference is stated by it.
+	equalLines(t, "unresolved", unresolvedLines(idx), nil)
 }

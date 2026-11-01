@@ -939,7 +939,8 @@ text holds a Slack token's trigger, the policy masks the union of its
 pipeline's spans and those of the same pipeline with v6.1.0's slack-token
 expression (`Policy.floor`): a longer token match never shows what a
 later rule masked after the shorter one (`checkNoLessMasked`,
-`TestSlackToken_GluedAssignmentStillMasked`). Danger:
+`TestSlackToken_GluedAssignmentStillMasked`); the text is rebuilt from the
+union, so a mask's run of `*` may differ from the pipeline's alone. Danger:
 editing v6.1.0's own expressions in the oracle — the test would compare
 the policy with itself. The configuration (`.ark-secrets-rules.toml`
 or `ark-secrets-rules.toml` at the root) is read by `internal/secretpolicy`
