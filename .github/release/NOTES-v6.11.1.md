@@ -8,28 +8,35 @@ Nothing about the server changes: no new tool, option or protocol; the index, th
 
 ### Multi-agent, worktree-aware Ark MCP guidance
 
-`ark instruction <target>` — for `claude`, `codex`, `cursor`, `cline`, `copilot-vscode` and `copilot-cli` alike, from one vendor-neutral source — adds three rules to the existing guidance:
+`ark instruction <target>` — for `claude`, `codex`, `cursor`, `cline`, `copilot-vscode` and `copilot-cli` alike, from one vendor-neutral source — adds four rules to the existing guidance:
 
-- **Correct MCP root selection.** A server answers for the root it was started on, from that root's files as they are now. Once a session, the agent checks that this root is the repository or worktree it works in (`git rev-parse --show-toplevel`), through what the server itself reports: `get_repository_map` with `format: "json"` and `detail: "minimal"` holds it as `RootPath`.
-- **Separate MCP instances for independent worktrees.** To work in another worktree, the agent uses an Ark server started on it (`ark mcp-server --root <worktree>`), registered under a name of its own beside the existing one.
-- **No cross-worktree index confusion.** Results of a server started on another checkout describe that checkout, even where they look current; a path outside a server's root is refused. Without a server for its worktree, the agent says so and runs the Ark CLI there (`ark symbol <file>`) or reads the files directly — it does not substitute another checkout's results.
+- **Correct MCP root selection.** A server answers for the root it was started on, from that root's files as they are now. At the start of a session, and again after moving to another worktree, the agent checks that this root is the repository or worktree it works in (`git rev-parse --show-toplevel`) through what the server itself reports: the directory of one small top-level file in `get_files_arklite`, or `RootPath` of `get_repository_map` with `path: "."` and `format: "json"` — compared as paths, symlinks and letter case resolved, not as strings.
+- **Separate MCP instances for independent worktrees.** To work in another worktree, the agent uses a session whose Ark server was started on it, or a server started on it (`ark mcp-server --root <worktree>`) under a name of its own.
+- **No cross-worktree index confusion.** Results of a server started on another checkout describe that checkout, even where they look current; a path outside a server's root is refused; a worktree placed inside the root is part of the root's files, and its results are neither the root's nor that worktree's. Without a server for its worktree, the agent says so and runs the Ark CLI there (`ark symbol <file>`) or reads the files directly — it does not substitute another checkout's results.
+- **Safe configuration practices.** The agent does not repoint, overwrite or remove a server entry other sessions use, and does not edit MCP configuration without your consent: it asks you to add the server. A client sees a new or changed entry only after reloading its MCP configuration.
 
-### Safe configuration practices
+The Ark skill (`ark skill`) carries the same rules in its own words.
 
-The guidance tells the agent not to repoint, overwrite or remove a server entry other sessions use, and that a client sees a new or changed entry only after reloading its MCP configuration. [Getting started → Git worktrees](https://github.com/magicdrive/ark/blob/v6.11.1/docs/getting-started.md#git-worktrees) shows, for every client `ark setup` supports, how a worktree gets its own server:
+### Per-client setup for worktrees
+
+[Getting started → Git worktrees](https://github.com/magicdrive/ark/blob/v6.11.1/docs/getting-started.md#git-worktrees) shows, for every client `ark setup` supports, how a worktree gets its own server:
 
 - **Claude Code** (project `.mcp.json`): the entry serves the project the session starts in — start it in the worktree.
-- **Cursor, Copilot in VS Code, Copilot CLI** (project files with an absolute root): run `ark setup <client>` in each worktree. A file copied from another checkout is reported as a conflict, never silently kept.
-- **User-level entries** (Claude Code and Cursor with `--global`, Cline CLI, Codex): one entry `ark` names one root, so a second worktree gets a second entry under its own name, added by hand; `setup` keeps it and refuses to repoint the first without `--force`.
+- **Cursor, Copilot in VS Code, Copilot CLI** (project files with an absolute root): run `ark setup <client>` at the top of each worktree. A file copied from another checkout is reported as a conflict, never silently kept.
+- **User-level entries** (Claude Code and Cursor with `--global`, Cline CLI, Codex): one entry `ark` names one root, so a second worktree gets a second entry under its own name, added through the client or by hand; `setup` keeps it and refuses to repoint the first without `--force`.
+- **Worktrees inside the repository** (`.worktrees/`, `.claude/worktrees/`): keep them outside, or list their directory in `.arkignore`, so the root's server does not index them.
 
 ### Existing Ark-first workflow preserved
 
-The tool-by-question guidance is unchanged, and now also says to read source files directly for implementation details and to use grep or ripgrep to corroborate Ark's answers or where Ark cannot answer. A single-checkout user's agent only adds one cheap root check per session.
+The tool-by-question guidance is unchanged, and now also says, to confirm implementation details, to read the source files directly, and to use grep or ripgrep to corroborate Ark's answers or where Ark cannot answer. A single-checkout user's agent adds one small root check per session.
 
 ## Changed
 
-- `ark instruction` output (all targets) and `misc/CLAUDE.md.example`.
-- Documentation: Git worktrees in Getting started; `RootPath` of `get_repository_map`'s JSON in the MCP tool reference; `ark instruction` in the CLI reference.
+- `ark instruction` output (all targets), the Ark skill's usage guidance and `misc/CLAUDE.md.example`.
+- Documentation: Git worktrees in Getting started; what `RootPath` of `get_repository_map`'s JSON and `get_files_arklite`'s header show, in the MCP tool reference; `ark instruction` in the CLI reference.
+- CI: the worktree integration tests also run on Windows.
+
+To pick up the new rules, replace the Ark section of your instruction file (`CLAUDE.md`, `AGENTS.md`, …) with the output of `ark instruction <target>`; appending it with `>>` would keep the old section beside the new one.
 
 ## Compatibility
 
@@ -40,8 +47,9 @@ The tool-by-question guidance is unchanged, and now also says to read source fil
 ## Known Limitations
 
 - An agent follows the guidance as prompt text; nothing switches a client's MCP connection automatically. Adding a server for a worktree is a client configuration change and needs the client to reload it.
-- `ark setup` registers one server named `ark` per configuration; a second server in a user-level configuration is added by hand.
+- `ark setup` registers one server named `ark` per configuration; a second server in a user-level configuration is added through the client or by hand.
 - Under a name other than `ark`, Claude Code shows the tools as `mcp__<name>__<tool>`, not the `mcp__ark__` names `ark instruction claude` prints.
+- The clients' current documentation names other user-level files than `ark setup` writes for Claude Code `--global` (`~/.claude.json`) and Cline CLI (`~/.cline/data/settings/cline_mcp_settings.json`); Getting started says what to do if the server does not appear. `setup` is unchanged in this release.
 
 ## Installation / Upgrade
 

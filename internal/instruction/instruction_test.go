@@ -379,14 +379,18 @@ func TestGuidance_WorktreeRules(t *testing.T) {
 		name, bullet string
 		want         []string
 	}{
-		{"A active workspace", "Which repository", []string{"repository or Git worktree you are working in", "git rev-parse --show-toplevel"}},
-		{"B root verification", "Which repository", []string{"get_repository_map", `format: "json"`, `detail: "minimal"`, "`RootPath`", "symlinks resolved"}},
-		{"B root is the server's", "Which repository", []string{"the root it was started on", "A path outside the root is refused"}},
+		{"A active workspace", "Which repository", []string{"repository or Git worktree you work in", "git rev-parse --show-toplevel"}},
+		{"A again on a move", "Which repository", []string{"At the start of a session, and again when you move to another worktree"}},
+		{"A intended subdirectory", "Which repository", []string{"or the subdirectory of it the server was set up for"}},
+		{"B root verification", "Which repository", []string{"get_files_arklite", "one small file at your worktree's top", "get_repository_map", `path: "."`, `format: "json"`, "`RootPath`"}},
+		{"B compare as paths", "Which repository", []string{"as paths after resolving symlinks and letter case", "not as strings"}},
+		{"B root is the server's", "Which repository", []string{"the root it was started on"}},
 		{"C worktree isolation", "Which repository", []string{"another checkout or worktree", "describe that checkout, not yours"}},
-		{"D separate instance", "Several worktrees", []string{"ark mcp-server --root <worktree>", "a name of its own"}},
-		{"E safe configuration", "Several worktrees", []string{"Do not repoint, overwrite or remove", "other sessions use"}},
+		{"C nested worktrees", "Worktrees inside the root", []string{"a path outside the root is refused", "a worktree placed inside it", "own `.git` file", "part of the root's files", "nor for that worktree's"}},
+		{"D separate instance", "Several worktrees", []string{"a session whose Ark MCP server was started on that worktree", "ark mcp-server --root <worktree>", "a name of its own"}},
+		{"E safe configuration", "Several worktrees", []string{"Do not repoint, overwrite or remove", "other sessions use", "without the user's consent", "ask the user to add the server"}},
 		{"E reload", "Several worktrees", []string{"only after it reloads its MCP configuration"}},
-		{"G direct read and grep", "Whole files", []string{"Read source files directly", "grep or ripgrep", "corroborate"}},
+		{"G direct read and grep", "Whole files", []string{"read the source files directly", "grep or ripgrep", "corroborate"}},
 		{"H stale or mismatched", "Which repository", []string{"as they are now", "even where they look current"}},
 		{"I fallback", "Without a server", []string{"say so", "do not use another checkout's results", "Ark CLI in your worktree", "`ark symbol <file>`", "read the files directly"}},
 	}
@@ -410,9 +414,9 @@ func TestGuidance_WorktreeRules(t *testing.T) {
 	}
 }
 
-// What the worktree rules point to exists: get_repository_map takes format
-// "json" and detail "minimal" (its JSON's RootPath is checked against a real
-// server in tests/integration), and the guidance names no client, setting
+// What the worktree rules point to exists: get_repository_map takes a path
+// and format "json", get_files_arklite takes paths (what both report of the
+// root is checked against a real server in tests/integration), and the guidance names no client, setting
 // file or setup command — those are client-specific (docs/getting-started.md).
 func TestGuidance_WorktreeRulesPointToWhatExists(t *testing.T) {
 	var schema map[string]interface{}
@@ -422,11 +426,19 @@ func TestGuidance_WorktreeRulesPointToWhatExists(t *testing.T) {
 		}
 	}
 	props, _ := schema["properties"].(map[string]interface{})
-	for param, value := range map[string]string{"format": "json", "detail": "minimal"} {
-		p, _ := props[param].(map[string]interface{})
-		enum, _ := p["enum"].([]string)
-		if !strings.Contains(strings.Join(enum, ","), value) {
-			t.Errorf("get_repository_map's %s does not accept %q (%v)", param, value, p["enum"])
+	p, _ := props["format"].(map[string]interface{})
+	if enum, _ := p["enum"].([]string); !strings.Contains(strings.Join(enum, ","), "json") {
+		t.Errorf("get_repository_map's format does not accept json (%v)", p["enum"])
+	}
+	if _, ok := props["path"]; !ok {
+		t.Error("get_repository_map takes no path")
+	}
+	for _, tool := range mcp.NewToolsHandler(".", nil).ListTools() {
+		if tool.Name == "get_files_arklite" {
+			ps, _ := tool.InputSchema["properties"].(map[string]interface{})
+			if _, ok := ps["paths"]; !ok {
+				t.Error("get_files_arklite takes no paths")
+			}
 		}
 	}
 	g := instruction.Guidance()

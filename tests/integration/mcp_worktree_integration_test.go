@@ -47,7 +47,8 @@ func gitWorktrees(t *testing.T) (main, feature string) {
 	if err := os.MkdirAll(main, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	git(main, "init", "-q", "-b", "main")
+	git(main, "init", "-q")
+	git(main, "symbolic-ref", "HEAD", "refs/heads/main") // as git init -b main, before git 2.28
 	write(filepath.Join(main, "go.mod"), "module example.com/wt\n\ngo 1.22\n")
 	write(filepath.Join(main, "shared.go"), "package wt\n\nfunc Shared() int { return 1 }\n")
 	write(filepath.Join(main, ".gitignore"), ".ark/\n")
@@ -89,6 +90,33 @@ func rootPath(t *testing.T, c *rpcClient) string {
 	return m.RootPath
 }
 
+// arkliteDir is the directory of file as get_files_arklite shows it, as
+// `ark instruction` tells an agent to check the root with one small file at
+// its worktree's top.
+func arkliteDir(t *testing.T, c *rpcClient, file string) string {
+	t.Helper()
+	text, isErr := c.tool("get_files_arklite", map[string]any{"paths": []string{file}})
+	if isErr {
+		t.Fatalf("get_files_arklite %s: %s", file, text)
+	}
+	for _, l := range strings.Split(text, "\n") {
+		if p, ok := strings.CutPrefix(l, "@"); ok {
+			return filepath.Dir(p)
+		}
+	}
+	t.Fatalf("no file entry in %s", text)
+	return ""
+}
+
+// samePath compares two paths as `ark instruction` says to: after resolving
+// symlinks, not as strings.
+func samePath(t *testing.T, a, b string) bool {
+	t.Helper()
+	ra, err1 := filepath.EvalSymlinks(a)
+	rb, err2 := filepath.EvalSymlinks(b)
+	return err1 == nil && err2 == nil && ra == rb
+}
+
 func hasSymbol(t *testing.T, c *rpcClient, name string) bool {
 	t.Helper()
 	text, isErr := c.tool("find_symbol", map[string]any{"path": ".", "pattern": "^" + name + "$"})
@@ -122,16 +150,20 @@ func TestMCPWorktrees_SeparateServersStaySeparate(t *testing.T) {
 		m.handshake()
 		f.handshake()
 
-		// 6. The root each reports is its own worktree, as Git names it.
-		if got := rootPath(t, m); got != toplevel(t, main) {
+		// 6. The root each reports is its own worktree, as Git names it —
+		// RootPath, and the directory of a top-level file in arklite.
+		if got := rootPath(t, m); !samePath(t, got, toplevel(t, main)) {
 			t.Errorf("round %d: main server RootPath %q, want %q", round, got, toplevel(t, main))
 		}
-		if got := rootPath(t, f); got != toplevel(t, feature) {
+		if got := rootPath(t, f); !samePath(t, got, toplevel(t, feature)) {
 			t.Errorf("round %d: feature server RootPath %q, want %q", round, got, toplevel(t, feature))
+		}
+		if got := arkliteDir(t, f, "go.mod"); !samePath(t, got, toplevel(t, feature)) {
+			t.Errorf("round %d: feature server's arklite of go.mod is in %q, want %q", round, got, toplevel(t, feature))
 		}
 		// 7. An agent comparing the root with its worktree tells a server on
 		// the other worktree apart.
-		if rootPath(t, m) == toplevel(t, feature) {
+		if samePath(t, rootPath(t, m), toplevel(t, feature)) {
 			t.Errorf("round %d: the main server's root reads as the feature worktree", round)
 		}
 
@@ -173,10 +205,18 @@ func TestMCPWorktrees_SeparateServersStaySeparate(t *testing.T) {
 		}
 	}
 
-	// 5. Each worktree keeps its own cache, under its own root.
+	// 5. Each worktree keeps its own cache, under its own root, filled by
+	// its own server.
 	for _, dir := range []string{main, feature} {
-		if fi, err := os.Stat(filepath.Join(dir, ".ark", "index")); err != nil || !fi.IsDir() {
-			t.Errorf("%s: no extraction cache of its own: %v", dir, err)
+		n := 0
+		_ = filepath.WalkDir(filepath.Join(dir, ".ark", "index"), func(_ string, d os.DirEntry, err error) error {
+			if err == nil && !d.IsDir() {
+				n++
+			}
+			return nil
+		})
+		if n == 0 {
+			t.Errorf("%s: no extraction cache entries of its own", dir)
 		}
 	}
 
@@ -306,7 +346,7 @@ func TestMCPWorktrees_SetupPerClient(t *testing.T) {
 				}
 				c := startServer(t, feature, home, bin, "mcp-server", "--root", expandClaude("${CLAUDE_PROJECT_DIR:-.}/", nil), "--no-cache")
 				c.handshake()
-				if got := rootPath(t, c); got != toplevel(t, feature) {
+				if got := rootPath(t, c); !samePath(t, got, toplevel(t, feature)) {
 					t.Errorf("Claude's entry started in the feature worktree serves %q", got)
 				}
 				return
@@ -349,4 +389,72 @@ func TestMCPWorktrees_SetupPerClient(t *testing.T) {
 func jsonQuote(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// A root given through a symlink is reported as it was given: compared with
+// `git rev-parse --show-toplevel` as a string it differs, as a path (symlinks
+// resolved, as `ark instruction` says) it is the same worktree.
+func TestMCPWorktrees_SymlinkedRootComparesAsPath(t *testing.T) {
+	bin := buildArk(t)
+	_, feature := gitWorktrees(t)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(filepath.Dir(feature), link); err != nil {
+		if os.Getenv("ARK_REQUIRE_SYMLINKS") != "" {
+			t.Fatalf("ARK_REQUIRE_SYMLINKS: cannot create symlink %s: %v", link, err)
+		}
+		t.Skipf("no symlinks here: %v", err)
+	}
+	viaLink := filepath.Join(link, filepath.Base(feature))
+	c := startServer(t, t.TempDir(), t.TempDir(), bin, "mcp-server", "--root", viaLink, "--no-cache")
+	c.handshake()
+	for what, got := range map[string]string{"RootPath": rootPath(t, c), "arklite": arkliteDir(t, c, "go.mod")} {
+		if got == toplevel(t, feature) {
+			t.Errorf("%s %q: expected the symlinked spelling, not Git's", what, got)
+		}
+		if !samePath(t, got, toplevel(t, feature)) {
+			t.Errorf("%s %q is not the feature worktree as a path", what, got)
+		}
+	}
+}
+
+// A worktree inside the root is part of the root's files: the root's server
+// sees its declarations (the case `ark instruction` warns of), the check it
+// prescribes tells it apart (from the nested worktree, the root's server
+// reports another directory), and listing the directory in .arkignore takes
+// it out of the root's server.
+func TestMCPWorktrees_NestedWorktree(t *testing.T) {
+	bin := buildArk(t)
+	main, _ := gitWorktrees(t)
+	nested := filepath.Join(main, ".worktrees", "nested")
+	cmd := exec.Command("git", "worktree", "add", "-q", "-b", "nested", nested)
+	cmd.Dir = main
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git worktree add: %v\n%s", err, out)
+	}
+	if err := os.WriteFile(filepath.Join(nested, "nestedOnly.go"), []byte("package wt\n\nfunc NestedOnly() int { return 3 }\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	home := t.TempDir()
+
+	m := startServer(t, main, home, bin, "mcp-server", "--root", "./", "--no-cache")
+	m.handshake()
+	if !hasSymbol(t, m, "NestedOnly") {
+		t.Error("the root's server does not see the nested worktree: the guidance's warning would be moot")
+	}
+	// The check from the nested worktree: the server's file is not its own.
+	if samePath(t, arkliteDir(t, m, "shared.go"), toplevel(t, nested)) || samePath(t, rootPath(t, m), toplevel(t, nested)) {
+		t.Error("the root's server passes the root check for the nested worktree")
+	}
+
+	if err := os.WriteFile(filepath.Join(main, ".arkignore"), []byte(".worktrees/\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m2 := startServer(t, main, home, bin, "mcp-server", "--root", "./", "--no-cache")
+	m2.handshake()
+	if hasSymbol(t, m2, "NestedOnly") {
+		t.Error(".arkignore does not take the nested worktree out of the root's server")
+	}
+	if !hasSymbol(t, m2, "MainDraft") {
+		t.Error(".arkignore took the root's own files out")
+	}
 }

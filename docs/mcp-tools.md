@@ -157,10 +157,10 @@ entry points, exported declarations and declarations other code depends on.
 The text names every package of the map — one that lists nothing too — so
 both ends of every dependency line are in it. `format: "json"`
 adds each symbol's edge counts and lists the packages left out by
-`maxPackages`. Its `RootPath` is the absolute path of the server's root,
-symlinks resolved: `detail: "minimal"` with `maxPackages: 1` is the cheap way
-to check which repository or Git worktree a server serves
-([Git worktrees](getting-started.md#git-worktrees)).
+`maxPackages`. Its `RootPath` is the absolute path of `path` as the server
+spells it (the root as it was given, symlinks not resolved): with `path: "."`,
+the server's root — one way to check which repository or Git worktree a server
+serves ([Git worktrees](getting-started.md#git-worktrees)).
 
 A Terraform module (a directory) lists what it builds rather than its
 interface: managed and ephemeral resources, module calls and data sources
@@ -607,7 +607,9 @@ Reads several files in the compact arklite format (one line per file).
 | `maskSecrets` | boolean |  | `true` | Accepted for compatibility. Masking follows the server's --mask-secrets setting; a call cannot turn it off |
 | `maxFiles` | integer |  | `10` | Maximum number of files to process |
 
-The header and file entries show absolute paths.
+The header and file entries show absolute paths: a file at the root's top
+shows the server's root, which makes one small top-level file the cheapest
+check of which repository or Git worktree a server serves.
 
 ### `list_files`
 

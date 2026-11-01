@@ -84,7 +84,13 @@ Client-specific notes:
 
 - **Cline:** only the Cline CLI file `~/.cline/mcp.json` is managed. The
   settings of Cline's editor extensions live in editor-specific storage that
-  Ark does not touch; configure them by hand.
+  Ark does not touch; configure them by hand. Cline's current documentation
+  names `~/.cline/data/settings/cline_mcp_settings.json` for the CLI; if your
+  Cline does not list the Ark server, add it there by hand.
+- **Claude Code `--global`** writes `~/.claude/settings.json`. Claude Code's
+  current documentation keeps user-scoped servers in `~/.claude.json`
+  (`claude mcp add --scope user`); if `/mcp` does not list the Ark server,
+  add it that way. The project scope (`.mcp.json`) is unaffected.
 - **Copilot in VS Code** and **Copilot CLI:** project scope only (`--global`
   is refused). The generated `--root` is the absolute path of the
   repository, so the file is specific to your machine: do not commit it; let
@@ -154,27 +160,6 @@ codex mcp add ark -- ark mcp-server --root /abs/path/to/repo
 Add `.ark/` to the repository's `.gitignore`: the server keeps its cache in
 `<root>/.ark/index` ([Operations](operations.md#extraction-cache)).
 
-### Git worktrees
-
-A server serves the one root it was started on and refuses paths outside it,
-so a server started on one checkout never sees another worktree's files or
-uncommitted changes. To work in several Git worktrees, give each one a server
-of its own; each keeps its cache in its own `<worktree>/.ark/index`. The
-guidance of `ark instruction` tells the agent to check the root its server
-reports (`get_repository_map`, `format: "json"`: `RootPath`) against the
-worktree it works in, and not to use another checkout's results.
-
-| Client | A server per worktree |
-|---|---|
-| Claude Code (project) | The `.mcp.json` entry serves the project Claude Code starts in: start the session in the worktree (with the file committed, copied, or written there by `ark setup claude`). A session started in another checkout keeps that checkout's server. |
-| Cursor, Copilot in VS Code, Copilot CLI | The project file holds the absolute `--root` of the checkout `setup` ran in: run `ark setup <client>` in each worktree and open that folder. A file committed or copied from another checkout names that checkout: `setup` reports the conflict, and `--force` replaces Ark's entry in this worktree's file only. |
-| Claude Code and Cursor (`--global`), Cline CLI, Codex | The user-level entry `ark` names one root: `setup` in a second worktree stops on the conflict, and `--force` would repoint every session that uses it. Add a second server by hand under its own name, with the same command and the worktree's absolute `--root` (Codex: `codex mcp add ark-feature -- ark mcp-server --root /abs/path/to/worktree`); `setup` keeps entries of other names. |
-
-Reload or restart the client after adding or changing a server. A client
-that prefixes tool names with the server's name shows a second server's
-tools under that name (Claude Code: `mcp__ark-feature__find_symbol`), not
-the `mcp__ark__` names `ark instruction claude` prints.
-
 To keep files away from the agent altogether — credentials, generated or
 vendored code — list them in an `.arkignore` file (`.gitignore` syntax) at
 the repository root or in any directory below it. The MCP server never reads,
@@ -185,6 +170,46 @@ lists, searches or indexes them
 secrets/
 config/*.local.yaml
 .env
+```
+
+### Git worktrees
+
+A server serves the one root it was started on, from its files as they are
+now, and refuses paths outside it: a server started on one checkout does not
+see a sibling worktree's files or uncommitted changes. To work in several Git
+worktrees, give each one a server of its own; each keeps its cache in its own
+`<worktree>/.ark/index`. The guidance of `ark instruction` tells the agent to
+check the root its server reports against the worktree it works in — the
+directory of a top-level file in `get_files_arklite`, or `RootPath` of
+`get_repository_map` with `path: "."` and `format: "json"`, compared as paths
+with symlinks resolved — and not to use another checkout's results. Nothing
+switches a client's server automatically, and the agent is told to ask you
+before any MCP configuration changes.
+
+| Client | A server per worktree |
+|---|---|
+| Claude Code (project) | The `.mcp.json` entry serves the project Claude Code starts in: start the session in the worktree (with the file committed, copied, or written there by `ark setup claude`). A session started in another checkout keeps that checkout's server. |
+| Cursor, Copilot in VS Code, Copilot CLI | The project file holds the absolute `--root` of the directory `setup` ran in: run `ark setup <client>` at the top of each worktree and open that folder. A file committed or copied from another checkout names that checkout: `setup` reports the conflict, and `--force` replaces Ark's entry in this worktree's file only. |
+| Claude Code and Cursor (`--global`), Cline CLI, Codex | The user-level entry `ark` names one root: `setup` in a second worktree stops on the conflict, and `--force` would repoint every session that uses it. Add a second server under its own name, with the same command and the worktree's absolute `--root`, through the client (Codex: `codex mcp add ark-feature -- ark mcp-server --root /abs/path/to/worktree`) or by hand; `setup` keeps entries of other names. |
+
+Some clients have a per-project scope `setup` does not write, which gives a
+worktree its own `ark` entry without a second name: Claude Code's local scope
+(`claude mcp add --scope local …`, run in the worktree) and Codex's project
+`.codex/config.toml` (trusted projects) — see the client's documentation.
+Reload or restart the client after adding or changing a server. A client
+that prefixes tool names with the server's name shows a second server's
+tools under that name (Claude Code: `mcp__ark-feature__find_symbol`), not
+the `mcp__ark__` names `ark instruction claude` prints.
+
+A worktree placed **inside** the repository (`.worktrees/feature`, or a
+client's own worktree directory such as `.claude/worktrees/`) is part of the
+root's files: the root's server indexes and reads it (`.gitignore` does not
+change that), so its declarations show up beside the root's. Keep worktrees
+outside the repository, or list their directory in the root's `.arkignore`:
+
+```gitignore
+.worktrees/
+.claude/worktrees/
 ```
 
 ## 4. Teach the agent to use Ark

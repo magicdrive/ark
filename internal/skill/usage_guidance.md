@@ -37,6 +37,12 @@ Ark answers one question: what code do I need to read to understand or safely mo
 - When the distinction matters (before a risky change, or when reporting findings), confirm in the source with `get_symbol`.
 - A result with `indexDiagnostics` comes from an index with diagnostics: code they cover (e.g. a region the parser rejected) is not analyzed, so "no callers" may be incomplete. List them with `get_diagnostics`. Zero diagnostics proves no completeness either: files of unsupported formats are never examined.
 
+### Which repository
+
+- The server answers for the root it was started on. Before relying on it — at the start of a session, and when you move to another Git worktree — confirm that root: `get_files_arklite` with one small file at the top of your worktree shows the server's absolute path of it (or `get_repository_map` with `path: "."` and `format: "json"`: `RootPath`). Compare it with `git rev-parse --show-toplevel` as paths, symlinks resolved.
+- A worktree placed inside the root (a directory with its own `.git` file) is part of the root's files: what the root's server reports from it is neither the root's code nor that worktree's state.
+- When the root is another checkout, say so and use a server started on your worktree — ask the user to add one rather than editing MCP configuration — or the Ark CLI in your worktree (`ark symbol <file>`); do not use the other checkout's results.
+
 ### Examples
 
 These illustrate how tools combine; they are not sequences to follow.
