@@ -8,7 +8,7 @@ Ark v6.11.4 makes a test that failed the v6.11.3 release CI on a busy runner det
 
 The test now has the writer and the reader take turns through channels and the existing read hook, not time. In each of its rounds:
 
-1. The reader waits until the file is settled, then lets the writer write a burst and reads while it does. A read may fail with `ErrChanged` and no bytes (or find no file between rename steps); a read that succeeds and is settled — one that began before the burst's first change, which may coincide with any of the writes — must be a whole version written. How many reads settle is up to the scheduler, and none is required.
+1. The reader waits until the file is settled, then lets the writer write a burst and reads while it does. A read may fail with `ErrChanged` and no bytes (or find no file between rename steps); a read that succeeds and is settled — one that ended before the burst's first change, since a change during a read makes it fail or leaves it unsettled — must be a whole version written. How many reads settle is up to the scheduler, and none is required; this check is mostly a guard on `Settled` itself.
 2. The writer stops and says which version it left. The reader reads it again after `Stamp.SettleTime` — the same wait `accesspolicy` uses before confirming a rule file — and the read must be settled and that version.
 3. The writer writes once while the reader reads the settled file, between the read's first `fstat` and its first read system call, and does not write again until the next round. In place, to other bytes of the same size with the modification time restored, so that only the change time tells, the read must fail with `ErrChanged` and return no bytes. By rename to another version, it must fail or return the old version whole.
 
@@ -22,7 +22,7 @@ Steps 2 and 3 happen in every round of every run, whatever the scheduler does; a
 
 ### Guarantee removed
 
-- The old test required that *some* read settle within one second while the writer ran. That is a property of the scheduler, not of the code, and nothing in Ark promises it; it is replaced by the settled read of step 2, which is required in every round. The old test met a write during a settled read by chance, some thousands of times a run; step 3 makes one at the first read system call in every round (writes at later points of a read are `TestReadStable_TornByInPlaceRewrite`'s), and step 1 still meets them by chance, fewer times.
+- The old test required that *some* read settle within one second while the writer ran. That is a property of the scheduler, not of the code, and nothing in Ark promises it; it is replaced by the settled read of step 2, which is required in every round. The old test met a write during a settled read by chance, some thousands of times a run; step 3 makes one at the first read system call in every round (writes at later points of a read are `TestReadStable_TornByInPlaceRewrite`'s), and in step 1 such reads fail or stay unsettled, as they must.
 
 ### Verified
 
