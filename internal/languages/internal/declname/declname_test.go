@@ -26,6 +26,7 @@ func TestHoldsSecret(t *testing.T) {
 		"Token: rotate", "img/password=hunter10secret.png", "g:token=hunterF3",
 		"password\u200b= hunterA2", "pass\u200bword = hunterA3",
 		`password => "hunterXsecret1"`, "'password' => 'hunterXsecret2'", "password -> hunterXsecretB",
+		"password-x=hunter2long", "x:password-x=y",
 	} {
 		if !HoldsSecret(s) {
 			t.Errorf("HoldsSecret(%q) = false", s)

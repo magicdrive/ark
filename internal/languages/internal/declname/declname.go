@@ -71,9 +71,11 @@ func holdsSecret(s, glue string) bool {
 		return true
 	}
 	for _, f := range p.Find(s, secrets.Mode{}) {
-		// A value right after a glue byte that follows a word character:
-		// one name ("password-stdin"), not an assignment.
-		if i := f.Start; i >= 2 && f.End > i && strings.IndexByte(glue, s[i-1]) >= 0 && wordByte(s[i-2]) && wordByte(s[i]) {
+		// A value right after a glue byte that follows a word character,
+		// itself no assignment: one name ("password-stdin"), not an
+		// assignment ("password-x=y" is one).
+		if i := f.Start; i >= 2 && f.End > i && strings.IndexByte(glue, s[i-1]) >= 0 && wordByte(s[i-2]) && wordByte(s[i]) &&
+			!strings.ContainsAny(s[i:f.End], "=:") {
 			continue
 		}
 		return true
