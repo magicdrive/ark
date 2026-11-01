@@ -29,7 +29,7 @@ func runArk(t *testing.T, bin, dir, home string, args ...string) (string, string
 // configuration away from HOME. runArkEnv clears them (an empty value is
 // unset for both clients), so a developer's own setting never sends a test
 // to their real configuration.
-var clientLocationVars = []string{"CLAUDE_CONFIG_DIR", "CLINE_MCP_SETTINGS_PATH", "CLINE_DATA_DIR", "CLINE_DIR"}
+var clientLocationVars = []string{"CLAUDE_CONFIG_DIR", "CLAUDE_CODE_CUSTOM_OAUTH_URL", "CLINE_MCP_SETTINGS_PATH", "CLINE_DATA_DIR", "CLINE_DIR"}
 
 // runArkEnv is runArk with extra environment entries ("NAME=value"), applied
 // last.

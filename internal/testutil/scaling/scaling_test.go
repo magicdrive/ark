@@ -39,8 +39,26 @@ func (s *script) clock() time.Duration { return s.now }
 func check(t *testing.T, small, large func(k int) time.Duration) (*recorder, *script) {
 	t.Helper()
 	r, s := &recorder{TB: t}, &script{}
-	linear(r, "x", 10, s.run("s", small), s.run("l", large), s.clock)
+	linear(r, "x", 10, 0, s.run("s", small), s.run("l", large), s.clock)
 	return r, s
+}
+
+// LinearSlack's slack is added to bound times the small cost: a large cost
+// just within it passes, one just beyond it fails in every attempt.
+func TestLinearSlack(t *testing.T) {
+	for _, c := range []struct {
+		large time.Duration
+		fail  bool
+	}{{50 * time.Millisecond, false}, {51 * time.Millisecond, true}} {
+		r, s := &recorder{TB: t}, &script{}
+		linear(r, "x", 3, 20*time.Millisecond, s.run("s", cost(10*time.Millisecond)), s.run("l", cost(c.large)), s.clock)
+		if got := len(r.errors) == 1; got != c.fail {
+			t.Errorf("large %v: reported %q, want failure %v", c.large, r.errors, c.fail)
+		}
+		if c.fail && !strings.Contains(r.errors[0], "3 times as long plus 20ms") {
+			t.Errorf("report %q does not name the limit", r.errors[0])
+		}
+	}
 }
 
 func cost(d time.Duration) func(int) time.Duration { return func(int) time.Duration { return d } }

@@ -127,6 +127,7 @@ func TestClaude_Global_UsesClaudeUserConfig(t *testing.T) {
 	t.Setenv("HOME", tmp)
 	t.Setenv("USERPROFILE", tmp)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv(claudeCustomOAuthEnv, "")
 	chdir(t, root)
 	ark := fakeArk(t)
 

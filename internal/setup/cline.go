@@ -106,6 +106,11 @@ func clineSettingsPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	if !filepath.IsAbs(home) {
+		// Ark would write under its own working directory, a file Cline
+		// started anywhere else does not read.
+		return "", fmt.Errorf("the home directory %q is not an absolute path; set HOME (or CLINE_DATA_DIR) to an absolute path", home)
+	}
 	return filepath.Join(home, ".cline", "data", "settings", clineSettingsFile), nil
 }
 
@@ -144,7 +149,8 @@ func clineLegacyPath() (string, error) {
 // accepts a stdio server both flat, {command, args, env}, and nested,
 // {transport: {type: "stdio", command, args, env}} (the form `cline mcp add`
 // writes); the two are the same server. "type" "stdio" may be omitted in the
-// flat form, and an absent, null or empty env is no environment. Any other
+// flat form, an absent, null or empty env is no environment, and
+// "disabled": false (which `cline mcp add` writes) is the default. Any other
 // field must match exactly, so an entry Ark does not understand is a conflict,
 // never silently taken as equivalent.
 func clineEntryEqual(existing any, desired map[string]any) (bool, error) {
@@ -187,6 +193,9 @@ func normalizeClineEntry(entry any) any {
 	}
 	if isEmptyEnv(out["env"]) {
 		delete(out, "env")
+	}
+	if d, ok := out["disabled"]; ok && d == false {
+		delete(out, "disabled")
 	}
 	return out
 }

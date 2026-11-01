@@ -1,6 +1,7 @@
 package setup
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -26,6 +27,13 @@ import (
 // writes itself (no symlink, a regular file, at most maxConfigSize, valid
 // JSON, an object "mcpServers"), and does not start `claude` when any fails.
 //
+// Claude Code 2.1.316 reads <config home>/.config.json instead when that is
+// a non-empty file (an older location; config home is $CLAUDE_CONFIG_DIR or
+// ~/.claude), and names the file .claude-custom-oauth.json when
+// CLAUDE_CODE_CUSTOM_OAUTH_URL is set. Ark follows the first and refuses the
+// second, so that it never classifies, verifies or restores against a file
+// claude does not use.
+//
 // Earlier Ark versions wrote this scope to ~/.claude/settings.json, which
 // Claude Code does not read MCP servers from. An Ark entry left there is
 // reported (never changed) on every run; see claudeLegacyNotice.
@@ -37,22 +45,35 @@ const (
 )
 
 // claudeUserConfigPath returns the file Claude Code keeps user-scoped servers
-// in: $CLAUDE_CONFIG_DIR/.claude.json when CLAUDE_CONFIG_DIR is non-empty,
-// otherwise ~/.claude.json.
+// in: <config home>/.config.json when that exists and is not an empty regular
+// file, else $CLAUDE_CONFIG_DIR/.claude.json when CLAUDE_CONFIG_DIR is
+// non-empty, else ~/.claude.json. A .config.json that is not a regular file is
+// returned too, so that it is refused rather than passed over.
 func claudeUserConfigPath() (string, error) {
+	var base, configHome string
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
 		abs, err := filepath.Abs(dir)
 		if err != nil {
 			return "", fmt.Errorf("cannot resolve CLAUDE_CONFIG_DIR %q: %w", dir, err)
 		}
-		return filepath.Join(abs, ".claude.json"), nil
+		base, configHome = abs, abs
+	} else {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("cannot determine home directory: %w", err)
+		}
+		base, configHome = home, filepath.Join(home, ".claude")
 	}
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("cannot determine home directory: %w", err)
+	legacy := filepath.Join(configHome, ".config.json")
+	if info, err := os.Lstat(legacy); err == nil && !(info.Mode().IsRegular() && info.Size() == 0) {
+		return legacy, nil
 	}
-	return filepath.Join(home, ".claude.json"), nil
+	return filepath.Join(base, ".claude.json"), nil
 }
+
+// claudeCustomOAuthEnv names the variable under which Claude Code keeps its
+// state in another file (see the file comment).
+const claudeCustomOAuthEnv = "CLAUDE_CODE_CUSTOM_OAUTH_URL"
 
 // claudeLegacySettingsPath is where Ark before this change wrote
 // `ark setup claude --global` and `ark mcp-init --global`.
@@ -123,11 +144,15 @@ func (a claudeAdapter) runUserScope(opts Options) (*Result, error) {
 }
 
 func (a claudeAdapter) applyUserScope(opts Options) (*Result, error) {
+	desired := claudeEntry(opts)
+	if os.Getenv(claudeCustomOAuthEnv) != "" {
+		return nil, fmt.Errorf("%s is set: Claude Code then keeps its MCP servers in a file Ark does not check, so Ark did not run `claude`\n"+
+			"Register Ark yourself:\n  %s", claudeCustomOAuthEnv, describeClaudeAddJSON(desired))
+	}
 	path, err := claudeUserConfigPath()
 	if err != nil {
 		return nil, err
 	}
-	desired := claudeEntry(opts)
 
 	cfg, err := loadClaudeUserConfig(path)
 	if err != nil {
@@ -196,6 +221,11 @@ func (a claudeAdapter) applyUserScope(opts Options) (*Result, error) {
 // keep Ark from handing claude a file it would reset (see the file comment).
 func loadClaudeUserConfig(path string) (*jsonConfig, error) {
 	cfg, _, err := loadJSONConfigKey(path, mcpServersKey, claudeServerName)
+	if err == nil && cfg.existed && len(bytes.TrimSpace(cfg.origBytes)) == 0 {
+		// jsonstore reads an empty file as {}; claude reports it corrupted
+		// and resets it.
+		err = fmt.Errorf("cannot parse %s: the file is empty", path)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w\n"+
 			"Ark did not run `claude`: Claude Code replaces a configuration it cannot read with a default one, which would drop your other MCP servers.\n"+
@@ -235,9 +265,12 @@ func (a claudeAdapter) replaceUserEntry(path string, old, desired map[string]any
 }
 
 // replacementError restores the previous entry and reports the primary
-// failure. The previous entry is never printed: its env may hold secrets.
+// failure. The previous entry's env is never printed, as it may hold secrets:
+// describeEntry shows the command and arguments only, and claude's stderr of
+// the restoring call is dropped. (The entry is still an argument of that
+// call, as add-json takes it on the command line.)
 func (a claudeAdapter) replacementError(old map[string]any, primary error) error {
-	if rErr := a.addUserEntry(old); rErr != nil {
+	if rErr := a.restoreUserEntry(old); rErr != nil {
 		return fmt.Errorf("failed to replace Ark MCP configuration: %w\n"+
 			"WARNING: restoration of the previous Ark configuration (%s) also failed: %v", primary, describeEntry(old), rErr)
 	}
@@ -252,6 +285,18 @@ func (a claudeAdapter) addUserEntry(entry map[string]any) error {
 	}
 	if _, stderr, _, err := a.runner.run("claude", "mcp", "add-json", "--scope", claudeUserScope, claudeServerName, string(data)); err != nil {
 		return fmt.Errorf("`claude mcp add-json` failed: %w\n%s", err, strings.TrimSpace(string(stderr)))
+	}
+	return nil
+}
+
+// restoreUserEntry is addUserEntry without claude's stderr in the error.
+func (a claudeAdapter) restoreUserEntry(entry map[string]any) error {
+	data, err := json.Marshal(entry)
+	if err != nil {
+		return fmt.Errorf("failed to encode the previous Ark MCP entry: %w", err)
+	}
+	if _, _, _, err := a.runner.run("claude", "mcp", "add-json", "--scope", claudeUserScope, claudeServerName, string(data)); err != nil {
+		return fmt.Errorf("`claude mcp add-json` failed: %w", err)
 	}
 	return nil
 }

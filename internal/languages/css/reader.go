@@ -47,7 +47,10 @@ type reader struct {
 	// steps counts the tokens the reader looks at (peek, and the scans of
 	// importantEnd and of a top-level prelude), tokSteps the code points
 	// the tokenizer decodes: a test's measure of the work, which grows
-	// linearly with the input (reader_steps_test.go).
+	// linearly with the input (reader_steps_test.go). A new loop over
+	// r.toks that does not go through peek must add to steps itself, or
+	// the test does not see it. The extractor's own scans (provider.go)
+	// are not counted.
 	steps, tokSteps int
 }
 

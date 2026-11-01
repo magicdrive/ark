@@ -302,6 +302,9 @@ func describeEntry(entry any) string {
 	if !ok {
 		return fmt.Sprintf("%v", entry)
 	}
+	if t, ok := m["transport"].(map[string]any); ok {
+		m = t // Cline's nested form
+	}
 	cmd, _ := m["command"].(string)
 	var args []string
 	switch raw := m["args"].(type) {

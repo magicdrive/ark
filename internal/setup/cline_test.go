@@ -226,6 +226,10 @@ func TestCline_NestedAndFlatAreEquivalent(t *testing.T) {
 		"flat-no-env": func(ark, root string) map[string]any {
 			return map[string]any{"command": ark, "args": []any{"mcp-server", "--root", root}}
 		},
+		"nested-disabled-false": func(ark, root string) map[string]any {
+			// What `cline mcp add` writes (Cline 3.0.74).
+			return map[string]any{"transport": map[string]any{"type": "stdio", "command": ark, "args": []any{"mcp-server", "--root", root}, "env": map[string]any{}}, "disabled": false}
+		},
 		"flat-typed": func(ark, root string) map[string]any {
 			return map[string]any{"type": "stdio", "command": ark, "args": []any{"mcp-server", "--root", root}, "env": map[string]any{}}
 		},
@@ -432,5 +436,42 @@ func TestCline_LegacySymlinkNotFollowed(t *testing.T) {
 	}
 	if w := strings.Join(res.Warnings, "\n"); !strings.Contains(w, "could not check") || !strings.Contains(w, "symlink") {
 		t.Errorf("got %q", w)
+	}
+}
+
+// A conflict with an entry in the nested form names its command and args.
+func TestCline_ConflictDescribesNestedEntry(t *testing.T) {
+	home := clineEnv(t)
+	root, ark := t.TempDir(), fakeArk(t)
+	writeJSON(t, clineDefaultPath(home), map[string]any{"mcpServers": map[string]any{"ark": map[string]any{
+		"transport": map[string]any{"type": "stdio", "command": "/nested/ark", "args": []any{"mcp-server", "--root", "/elsewhere"}}}}})
+	_, err := Run(Options{Client: ClientCline, ArkPath: ark, RootDir: root})
+	if err == nil || !strings.Contains(err.Error(), "/nested/ark") || !strings.Contains(err.Error(), "/elsewhere") {
+		t.Fatalf("got %v", err)
+	}
+}
+
+// A home directory that is not absolute ("~" falls through to the OS home
+// directory, which is $HOME again) is refused rather than resolved against
+// Ark's working directory.
+func TestCline_RelativeHomeRefused(t *testing.T) {
+	for _, h := range []string{"~", "relhome"} {
+		t.Run(h, func(t *testing.T) {
+			clineEnv(t)
+			cwd := t.TempDir()
+			t.Chdir(cwd)
+			t.Setenv("HOME", h)
+			t.Setenv("USERPROFILE", "")
+			t.Setenv("HOMEDRIVE", "")
+			t.Setenv("HOMEPATH", "")
+			_, err := Run(Options{Client: ClientCline, ArkPath: fakeArk(t), RootDir: t.TempDir()})
+			// On Windows, os.UserHomeDir reads USERPROFILE, unset here.
+			if err == nil || !strings.Contains(err.Error(), "not an absolute path") && !strings.Contains(err.Error(), "cannot determine home directory") {
+				t.Fatalf("got %v", err)
+			}
+			if entries, _ := os.ReadDir(cwd); len(entries) != 0 {
+				t.Errorf("wrote under the working directory: %v", entries)
+			}
+		})
 	}
 }

@@ -87,25 +87,34 @@ Client-specific notes:
   `$CLINE_DATA_DIR/settings/cline_mcp_settings.json`, else
   `$CLINE_DIR/data/settings/cline_mcp_settings.json`, else
   `~/.cline/data/settings/cline_mcp_settings.json` (home is `$HOME`, then
-  `%USERPROFILE%`, as for Cline). A relative value of one of these variables
-  is refused. If you start Cline with `--config <dir>` or `--data-dir <dir>`,
-  set `CLINE_DIR` or `CLINE_DATA_DIR` to the same directory when you run
-  `ark setup cline`. An entry in the nested form `cline mcp add` writes
-  (`"transport": {"type": "stdio", …}`) is recognized as the same server.
+  `%USERPROFILE%`, as for Cline; this order is that of the Cline CLI's
+  source, 3.0.74). A relative value of one of these variables, or a relative
+  home directory, is refused. If you start Cline with `--config <dir>` or
+  `--data-dir <dir>`, set `CLINE_DIR` or `CLINE_DATA_DIR` to the same
+  directory when you run `ark setup cline`. An entry in the nested form
+  Cline's own commands write (`"transport": {"type": "stdio", …}`, with
+  `"disabled": false`) is recognized as the same server.
   The settings of Cline's editor extensions live in editor-specific storage
   that Ark does not touch; configure them by hand.
 - **Claude Code `--global`** registers Ark in Claude Code's user scope, the
   top-level `mcpServers` of `~/.claude.json`
-  (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set). That file is Claude
+  (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set; Claude Code, and so
+  Ark, uses `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR` instead
+  when that older file is there and not empty). That file is Claude
   Code's own, so Ark never writes it: it reads it to decide whether anything
   needs doing and changes it only by running `claude mcp add-json --scope
   user ark …` (and `claude mcp remove --scope user ark` for `--force`). The
   `claude` CLI must be on `PATH`; without it, setup prints the command to run
-  yourself. If `~/.claude.json` is malformed, a symlink, not a regular file
-  or larger than 16 MiB, setup stops without starting `claude` (Claude Code
-  would replace a malformed file with a default one and drop your other
-  servers). The user-scope entry names the repository's absolute path. The
-  project scope (`.mcp.json`) is unaffected.
+  yourself (quoted for a POSIX shell). If `~/.claude.json` is empty,
+  malformed, a symlink, not a regular file or larger than 16 MiB, setup stops
+  without starting `claude` (Claude Code would replace a file it cannot read
+  with a default one and drop your other servers). With
+  `CLAUDE_CODE_CUSTOM_OAUTH_URL` set, Claude Code keeps its state in another
+  file, and setup only prints the command. The user-scope entry names the
+  repository's absolute path. When `--force` replaces an entry and fails,
+  Ark puts the previous entry back with `claude mcp add-json`, which takes
+  the entry, `env` included, as a command-line argument. The project scope
+  (`.mcp.json`) is unaffected.
 - **Copilot in VS Code** and **Copilot CLI:** project scope only (`--global`
   is refused). The generated `--root` is the absolute path of the
   repository, so the file is specific to your machine: do not commit it; let

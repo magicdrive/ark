@@ -55,6 +55,7 @@ func regressionEnv(t *testing.T) (root, home, ark, cwd string) {
 	root, home, ark, cwd = t.TempDir(), clineEnv(t), fakeArk(t), t.TempDir()
 	t.Chdir(cwd) // the Claude adapter also writes a skill relative to the cwd
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv(claudeCustomOAuthEnv, "")
 	return root, home, ark, cwd
 }
 

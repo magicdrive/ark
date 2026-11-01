@@ -107,7 +107,12 @@ func (a claudeAdapter) run(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("MCP server configured, but skill generation failed: %w", err)
 	}
 	res.ExtraLines = append(res.ExtraLines, fmt.Sprintf("✓ Claude skill: %s", output))
-	res.ExtraLines = append(res.ExtraLines, fmt.Sprintf("Next: restart Claude Code to approve the MCP server, then use /%s", name))
+	next := "approve"
+	if opts.Global {
+		// A user-scoped server needs no approval; a project's .mcp.json does.
+		next = "load"
+	}
+	res.ExtraLines = append(res.ExtraLines, fmt.Sprintf("Next: restart Claude Code to %s the MCP server, then use /%s", next, name))
 
 	if suggestion := mcp.CLAUDEMdSuggestion(cwd); suggestion != "" {
 		res.ExtraLines = append(res.ExtraLines, suggestion)

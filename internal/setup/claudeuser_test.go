@@ -20,8 +20,9 @@ type fakeClaude struct {
 	path      string
 	calls     [][]string
 
-	addFailRemaining int // upcoming add-json calls that fail
-	addMangle        int // upcoming add-json calls that store a different entry (verify fails)
+	addFailRemaining int  // upcoming add-json calls that fail
+	addMangle        int  // upcoming add-json calls that store a different entry (verify fails)
+	echoInput        bool // a failing add-json echoes its JSON argument on stderr
 	failRemove       bool
 }
 
@@ -53,6 +54,9 @@ func (f *fakeClaude) run(name string, args ...string) ([]byte, []byte, int, erro
 	case args[1] == "add-json" && len(args) == 6 && args[2] == "--scope" && args[3] == "user":
 		if f.addFailRemaining > 0 {
 			f.addFailRemaining--
+			if f.echoInput {
+				return nil, []byte("Invalid configuration: " + args[5]), 1, fmt.Errorf("add failed")
+			}
 			return nil, []byte("add boom"), 1, fmt.Errorf("add failed")
 		}
 		if _, ok := servers[args[4]]; ok {
@@ -104,6 +108,7 @@ func claudeUserEnv(t *testing.T) (home, root, ark string) {
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	t.Setenv(claudeCustomOAuthEnv, "")
 	t.Chdir(t.TempDir()) // the Claude adapter also writes a skill relative to the cwd
 	return home, root, ark
 }
@@ -532,5 +537,139 @@ func TestClaude_Global_WithoutClaudeCLI_WritesNothing(t *testing.T) {
 		if _, err := os.Stat(p); !os.IsNotExist(err) {
 			t.Errorf("%s was written: %v", p, err)
 		}
+	}
+}
+
+// Claude Code reads <config home>/.config.json instead of .claude.json when
+// that is a non-empty file; Ark classifies and verifies against the same file.
+func TestClaudeUser_LegacyConfigJSONFollowed(t *testing.T) {
+	for _, viaEnv := range []bool{false, true} {
+		t.Run(fmt.Sprintf("CLAUDE_CONFIG_DIR=%v", viaEnv), func(t *testing.T) {
+			home, root, ark := claudeUserEnv(t)
+			configHome, base := filepath.Join(home, ".claude"), home
+			if viaEnv {
+				configHome = t.TempDir()
+				base = configHome
+				t.Setenv("CLAUDE_CONFIG_DIR", configHome)
+			}
+			legacy := filepath.Join(configHome, ".config.json")
+			writeJSON(t, legacy, map[string]any{"mcpServers": map[string]any{"other": map[string]any{"command": "x"}}})
+			// A stale file claude does not read holds the very entry.
+			stale := filepath.Join(base, ".claude.json")
+			writeJSON(t, stale, map[string]any{"mcpServers": map[string]any{"ark": wantEntry(ark, root)}})
+			staleBefore, _ := os.ReadFile(stale)
+
+			f := newFakeClaude(legacy)
+			res, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if res.State != StateAbsent || res.ConfigPath != legacy || f.count("add-json") != 1 {
+				t.Fatalf("state=%s path=%s calls=%v", res.State, res.ConfigPath, f.calls)
+			}
+			if got := userEntry(t, legacy); !reflect.DeepEqual(got, wantEntry(ark, root)) {
+				t.Errorf("entry: %v", got)
+			}
+			if after, _ := os.ReadFile(stale); !bytes.Equal(staleBefore, after) {
+				t.Error(".claude.json changed")
+			}
+		})
+	}
+}
+
+// An empty .config.json is passed over, as claude does; one that is not a
+// regular file is refused, not passed over.
+func TestClaudeUser_LegacyConfigJSONEdgeCases(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		home, root, ark := claudeUserEnv(t)
+		if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(home, ".claude", ".config.json"), nil, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(home, ".claude.json")
+		res, err := runClaudeUser(newFakeClaude(path), Options{ArkPath: ark, RootDir: root})
+		if err != nil || res.ConfigPath != path {
+			t.Fatalf("res=%v err=%v", res, err)
+		}
+	})
+	t.Run("symlink", func(t *testing.T) {
+		home, root, ark := claudeUserEnv(t)
+		target := filepath.Join(t.TempDir(), "real.json")
+		writeJSON(t, target, map[string]any{})
+		if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Symlink(target, filepath.Join(home, ".claude", ".config.json")); err != nil {
+			t.Skipf("symlink: %v", err)
+		}
+		f := newFakeClaude(target)
+		if _, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root}); err == nil || !strings.Contains(err.Error(), "Ark did not run `claude`") {
+			t.Fatalf("got %v", err)
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("claude started: %v", f.calls)
+		}
+	})
+}
+
+// With CLAUDE_CODE_CUSTOM_OAUTH_URL set, Claude Code keeps its state in
+// another file; Ark refuses, printing the command, and does not start claude.
+func TestClaudeUser_CustomOAuthRefused(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	t.Setenv(claudeCustomOAuthEnv, "https://example.invalid/oauth")
+	f := newFakeClaude(filepath.Join(home, ".claude.json"))
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root})
+	if err == nil || !strings.Contains(err.Error(), claudeCustomOAuthEnv) || !strings.Contains(err.Error(), "claude mcp add-json --scope user ark") {
+		t.Fatalf("got %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("claude started: %v", f.calls)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".claude.json")); !os.IsNotExist(err) {
+		t.Error("~/.claude.json created")
+	}
+}
+
+// claude reports an empty or blank ~/.claude.json corrupted and resets it, so
+// Ark does not start claude on one.
+func TestClaudeUser_EmptyConfigRefused(t *testing.T) {
+	for name, content := range map[string]string{"empty": "", "blank": "  \n"} {
+		t.Run(name, func(t *testing.T) {
+			home, root, ark := claudeUserEnv(t)
+			path := filepath.Join(home, ".claude.json")
+			if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			f := newFakeClaude(path)
+			if _, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root}); err == nil || !strings.Contains(err.Error(), "empty") {
+				t.Fatalf("got %v", err)
+			}
+			if len(f.calls) != 0 {
+				t.Errorf("claude started: %v", f.calls)
+			}
+			if got, _ := os.ReadFile(path); string(got) != content {
+				t.Error("file changed")
+			}
+		})
+	}
+}
+
+// When restoring the previous entry fails too, claude's stderr of that call,
+// which may echo the entry and its env, is not in the error.
+func TestClaudeUser_RestoreFailure_NoSecretInError(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	old := map[string]any{"type": "stdio", "command": "/old/ark", "args": []any{"mcp-server"}, "env": map[string]any{"TOKEN": "SECRET-VALUE-42"}}
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": old}})
+	f := newFakeClaude(path)
+	f.addFailRemaining, f.echoInput = 2, true
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "restoration of the previous Ark configuration") {
+		t.Fatalf("got %v", err)
+	}
+	if strings.Contains(err.Error(), "SECRET-VALUE-42") {
+		t.Errorf("secret in error: %v", err)
 	}
 }

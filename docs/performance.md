@@ -209,7 +209,11 @@ last through all of them, a quadratic cost exceeds the bound in each. Java
 extraction and resolution also bound the ratio of their allocations, which
 does not depend on load. The CSS reader and tokenizer count their steps, and
 `TestReaderStepsLinear` bounds the steps per token and per byte on the
-worst-case stylesheets, independent of time.
+worst-case stylesheets, independent of time; the CSS extractor's own scans
+are not counted and are covered by `TestWorstCases`'s time bound only, without
+the race detector. The XML test keeps its bound (twice the input, three times
+the time plus 20 ms) with its large input under `xmldoc.MaxNodes`, where the
+input is read to its end.
 
 ## Token figures
 

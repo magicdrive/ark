@@ -9,10 +9,11 @@ import (
 )
 
 // TestLinearTime: one long line, deep nesting up to the bound and many
-// nodes are read in time linear in the input: four times the input takes at
-// most ten times as long (a quadratic step would take sixteen), measured as
-// scaling.Linear does, so that a burst of load on the machine does not fail
-// it.
+// nodes are read in time linear in the input: doubling the input at most
+// roughly doubles the time (a quadratic step would quadruple it), measured as
+// scaling.LinearSlack does, so that a burst of load on the machine does not
+// fail it. The large input stays under xmldoc.MaxNodes: one beyond it is not
+// read to its end, which would hide a quadratic step.
 func TestLinearTime(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing")
@@ -47,8 +48,8 @@ func TestLinearTime(t *testing.T) {
 		},
 	}
 	for name, gen := range inputs {
-		small, large := gen(20000), gen(80000)
-		scaling.Linear(t, name, 10,
+		small, large := gen(20000), gen(40000)
+		scaling.LinearSlack(t, name, 3, 20*time.Millisecond,
 			func() { extract(t, "p.xml", small) },
 			func() { extract(t, "p.xml", large) })
 	}

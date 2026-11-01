@@ -281,14 +281,15 @@ func TestDeterministic(t *testing.T) {
 	}
 }
 
-// Worst cases: nesting bounded, no stack exhaustion, no hang. Linear time is
-// TestReaderStepsLinear's: it counts the reader's work, where a time bound
-// cannot tell a quadratic reading of these cases from a linear one (a
-// reading that steps through each block once per enclosing level instead of
-// over it takes about three times as long here, far inside any bound). The
-// time bound catches a hang, without the race detector only: its slowdown
-// on a CI runner whose other jobs compete for the CPU took a case past the
-// bound with no change in the cost.
+// Worst cases: nesting bounded, no stack exhaustion, no hang. Linear time of
+// the reader and the tokenizer is TestReaderStepsLinear's: it counts their
+// work (not the extractor's, which only this time bound covers), where a
+// time bound cannot tell a quadratic reading of these cases from a linear
+// one (a reading that steps through each block once per enclosing level
+// instead of over it takes a few times as long here, far inside any bound).
+// The time bound catches a hang, without the race detector only: its
+// slowdown on a CI runner whose other jobs compete for the CPU took a case
+// past the bound with no change in the cost.
 func TestWorstCases(t *testing.T) {
 	for name, src := range css.WorstCases() {
 		start := time.Now()

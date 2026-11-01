@@ -43,7 +43,17 @@ const (
 // what names the inputs in the report.
 func Linear(t testing.TB, what string, bound float64, small, large func()) {
 	t.Helper()
-	linear(t, what, bound, small, large, sinceStart)
+	linear(t, what, bound, 0, small, large, sinceStart)
+}
+
+// LinearSlack is Linear for a test whose bound allows slack on top of bound
+// times the small input's cost: it fails when large takes more than
+// bound*small + slack in every attempt. It keeps a test's existing bound
+// (twice the input, three times the time plus a few milliseconds, say) where
+// a larger input would reach a limit of the code under test.
+func LinearSlack(t testing.TB, what string, bound float64, slack time.Duration, small, large func()) {
+	t.Helper()
+	linear(t, what, bound, slack, small, large, sinceStart)
 }
 
 var start = time.Now()
@@ -51,7 +61,7 @@ var start = time.Now()
 // sinceStart reads the wall clock (monotonic) as a duration.
 func sinceStart() time.Duration { return time.Since(start) }
 
-func linear(t testing.TB, what string, bound float64, small, large func(), clock func() time.Duration) {
+func linear(t testing.TB, what string, bound float64, slack time.Duration, small, large func(), clock func() time.Duration) {
 	t.Helper()
 	timed := func(run func()) time.Duration {
 		t0 := clock()
@@ -67,12 +77,16 @@ func linear(t testing.TB, what string, bound float64, small, large func(), clock
 		}
 		ratio := float64(bestLarge) / float64(max(bestSmall, 1))
 		tries = append(tries, fmt.Sprintf("%v / %v (x%.1f)", bestSmall, bestLarge, ratio))
-		if ratio <= bound {
+		if float64(bestLarge) <= bound*float64(bestSmall)+float64(slack) {
 			t.Logf("%s: %s", what, strings.Join(tries, ", "))
 			return
 		}
 	}
-	t.Errorf("%s: took more than %g times as long in every attempt, %s: the cost is not linear", what, bound, strings.Join(tries, ", "))
+	limit := fmt.Sprintf("%g times as long", bound)
+	if slack > 0 {
+		limit += fmt.Sprintf(" plus %v", slack)
+	}
+	t.Errorf("%s: took more than %s in every attempt, %s: the cost is not linear", what, limit, strings.Join(tries, ", "))
 }
 
 // LinearAllocs reports through t.Errorf that large allocates more than bound
