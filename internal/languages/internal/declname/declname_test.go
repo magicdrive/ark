@@ -24,7 +24,7 @@ func TestHoldsSecret(t *testing.T) {
 	for _, s := range []string{
 		"password = hunter2secretvalue", "api_key=hunter3secretvalue", "aws AK" + "IAIOSFODNN7EXAMPLE",
 		"Token: rotate", "img/password=hunter10secret.png", "g:token=hunterF3",
-		"password​= hunterA2", "pass​word = hunterA3",
+		"password\u200b= hunterA2", "pass\u200bword = hunterA3",
 	} {
 		if !HoldsSecret(s) {
 			t.Errorf("HoldsSecret(%q) = false", s)

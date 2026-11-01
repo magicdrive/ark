@@ -506,7 +506,7 @@ func TestSecrets_WordsAndOtherNames(t *testing.T) {
 
 // A zero-width space does not hide a secret in a heading.
 func TestSecrets_FormatCharacters(t *testing.T) {
-	x := extract(t, "a.md", "# password​= hunterA2\n\n# ok\n")
+	x := extract(t, "a.md", "# password\u200b= hunterA2\n\n# ok\n")
 	for _, s := range x.Symbols {
 		if strings.Contains(s.Name, "hunter") || strings.Contains(s.Qualified, "hunter") {
 			t.Errorf("%s %q (%s) shows a secret", s.Kind, s.Name, s.Qualified)
