@@ -335,6 +335,19 @@ list, scopes and safety rules are in
 
 `ark setup` without a client is a deprecated alias of `ark setup claude`.
 
+Where each client's entry goes, and the variables that move it:
+
+| Client | Project scope | `--global` |
+|---|---|---|
+| `claude` | `.mcp.json` | Claude Code's user scope in `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when set), changed only through `claude mcp add-json --scope user` / `claude mcp remove --scope user`; needs `claude` on `PATH` |
+| `cline` | – (user-level only; `--global` is the same file) | `$CLINE_MCP_SETTINGS_PATH`, else `$CLINE_DATA_DIR/settings/cline_mcp_settings.json`, else `$CLINE_DIR/data/settings/cline_mcp_settings.json`, else `~/.cline/data/settings/cline_mcp_settings.json` |
+
+The other clients are listed in
+[Getting started](getting-started.md#3-connect-a-coding-agent). Files that
+earlier versions wrote for `claude --global` (`~/.claude/settings.json`) and
+`cline` (`~/.cline/mcp.json`) are reported, never changed
+([Configuration written by earlier versions](getting-started.md#configuration-written-by-earlier-versions)).
+
 ## `mcp-server`
 
 Runs the MCP server. Agents normally start it themselves from the
@@ -361,15 +374,19 @@ YAML files are indexed), `vendor` and `node_modules`
 
 ## `mcp-init`
 
-Writes an Ark entry into Claude Code's `.mcp.json` (or, with `--global`,
-`~/.claude/settings.json`). `ark setup claude` supersedes it and adds the
-safety contract described in [Getting started](getting-started.md#safety-contract).
+Writes an Ark entry into Claude Code's project `.mcp.json`. `ark setup
+claude` supersedes it and adds the safety contract described in
+[Getting started](getting-started.md#safety-contract).
+
+`--global` is refused and writes nothing: it used to write
+`~/.claude/settings.json`, which Claude Code does not read MCP servers from.
+Use `ark setup claude --global` for Claude Code's user scope.
 
 | Option | Alias | Description | Default |
 |---|---|---|---|
 | `--root <dir>` | `-r` | Root directory to serve | current directory |
 | `--name <name>` | `-n` | MCP server name | `ark` |
-| `--global` | `-g` | Write `~/.claude/settings.json` | `.mcp.json` |
+| `--global` | `-g` | No longer supported: refused with guidance toward `ark setup claude --global` | – |
 | `--force` | `-f` | Overwrite an existing entry | – |
 | `--ark-path <path>` | `-p` | Path of the `ark` binary | auto-detect |
 

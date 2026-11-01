@@ -31,16 +31,31 @@ const regressionExistingDoc = `{
 type jsonRegressionCase struct {
 	client ClientID
 	global bool
-	path   func(root, home string) string
+	path   func(root, home, cwd string) string
 }
 
+// The Claude user scope (--global) is not here: Ark no longer writes a file
+// for it (claudeuser_test.go pins the claude CLI calls instead). The Claude
+// project scope serving another directory writes the same entry, absolute
+// root and all, so it keeps the Claude serialisation pinned. Cline moved to
+// the file the Cline CLI reads; its serialisation is unchanged.
 func jsonRegressionCases() []jsonRegressionCase {
 	return []jsonRegressionCase{
-		{ClientCursor, false, func(root, _ string) string { return filepath.Join(root, ".cursor", "mcp.json") }},
-		{ClientCursor, true, func(_, home string) string { return filepath.Join(home, ".cursor", "mcp.json") }},
-		{ClientCline, false, func(_, home string) string { return filepath.Join(home, ".cline", "mcp.json") }},
-		{ClientClaude, true, func(_, home string) string { return filepath.Join(home, ".claude", "settings.json") }},
+		{ClientCursor, false, func(root, _, _ string) string { return filepath.Join(root, ".cursor", "mcp.json") }},
+		{ClientCursor, true, func(_, home, _ string) string { return filepath.Join(home, ".cursor", "mcp.json") }},
+		{ClientCline, false, func(_, home, _ string) string { return clineDefaultPath(home) }},
+		{ClientClaude, false, func(_, _, cwd string) string { return filepath.Join(cwd, ".mcp.json") }},
 	}
+}
+
+// regressionEnv isolates the environment of one regression subtest and
+// returns root, home, the ark command and the working directory.
+func regressionEnv(t *testing.T) (root, home, ark, cwd string) {
+	t.Helper()
+	root, home, ark, cwd = t.TempDir(), clineEnv(t), fakeArk(t), t.TempDir()
+	t.Chdir(cwd) // the Claude adapter also writes a skill relative to the cwd
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
+	return root, home, ark, cwd
 }
 
 // expectedAbsent / expectedMerged render the golden documents for a client.
@@ -67,14 +82,11 @@ func TestJSONClients_SerializedOutputUnchanged(t *testing.T) {
 			name += "/global"
 		}
 		t.Run(name+"/absent", func(t *testing.T) {
-			root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
-			t.Chdir(t.TempDir()) // the Claude adapter also writes a skill relative to the cwd
-			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
+			root, home, ark, cwd := regressionEnv(t)
 			if _, err := Run(Options{Client: c.client, ArkPath: ark, RootDir: root, Global: c.global}); err != nil {
 				t.Fatal(err)
 			}
-			got, err := os.ReadFile(c.path(root, home))
+			got, err := os.ReadFile(c.path(root, home, cwd))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -84,11 +96,8 @@ func TestJSONClients_SerializedOutputUnchanged(t *testing.T) {
 			}
 		})
 		t.Run(name+"/merge", func(t *testing.T) {
-			root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
-			t.Chdir(t.TempDir()) // the Claude adapter also writes a skill relative to the cwd
-			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
-			p := c.path(root, home)
+			root, home, ark, cwd := regressionEnv(t)
+			p := c.path(root, home, cwd)
 			if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
 				t.Fatal(err)
 			}
@@ -116,11 +125,8 @@ func TestJSONClients_SerializedOutputUnchanged(t *testing.T) {
 			}
 		})
 		t.Run(name+"/malformed", func(t *testing.T) {
-			root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
-			t.Chdir(t.TempDir()) // the Claude adapter also writes a skill relative to the cwd
-			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
-			p := c.path(root, home)
+			root, home, ark, cwd := regressionEnv(t)
+			p := c.path(root, home, cwd)
 			_ = os.MkdirAll(filepath.Dir(p), 0o755)
 			bad := "{\"mcpServers\": [oops"
 			_ = os.WriteFile(p, []byte(bad), 0o644)
@@ -135,11 +141,8 @@ func TestJSONClients_SerializedOutputUnchanged(t *testing.T) {
 			}
 		})
 		t.Run(name+"/wrong-type", func(t *testing.T) {
-			root, home, ark := t.TempDir(), t.TempDir(), fakeArk(t)
-			t.Chdir(t.TempDir()) // the Claude adapter also writes a skill relative to the cwd
-			t.Setenv("HOME", home)
-			t.Setenv("USERPROFILE", home)
-			p := c.path(root, home)
+			root, home, ark, cwd := regressionEnv(t)
+			p := c.path(root, home, cwd)
 			_ = os.MkdirAll(filepath.Dir(p), 0o755)
 			bad := "{\"mcpServers\": []}"
 			_ = os.WriteFile(p, []byte(bad), 0o644)

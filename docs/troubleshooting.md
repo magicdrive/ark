@@ -11,6 +11,12 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
 | `found a different Ark MCP configuration for …` | An Ark entry exists with other settings. Re-run with `--force` to replace Ark's entry (nothing else is touched). |
 | `cannot parse …` / `Ark did not modify the file` | The client configuration is malformed. Fix it by hand; Ark never overwrites a file it cannot parse. |
 | ``the Codex CLI (`codex`) was not found on PATH`` | Install Codex, or register Ark by hand: `codex mcp add ark -- ark mcp-server --root /abs/path`. |
+| ``the Claude Code CLI (`claude`) was not found on PATH`` | `ark setup claude --global` registers Ark through `claude mcp add-json --scope user`. Install Claude Code, or run the command the message prints. |
+| ``Ark did not run `claude` `` | `~/.claude.json` (or `$CLAUDE_CONFIG_DIR/.claude.json`) is malformed, a symlink, not a regular file, or larger than 16 MiB. Claude Code would replace a malformed file with a default one, dropping your other servers, so Ark stops first. Fix the file, then retry. |
+| `Warning: …/.claude/settings.json has an "ark" MCP entry …` | An earlier `ark setup claude --global` or `ark mcp-init --global` wrote it; Claude Code never read it. Delete the entry ([Configuration written by earlier versions](getting-started.md#configuration-written-by-earlier-versions)). |
+| `Warning: …/.cline/mcp.json has …` | An earlier `ark setup cline` wrote that file; Cline never read it. Move any other servers in it to Cline's MCP settings file, then delete it. |
+| `CLINE_… is "…", a relative path` | Cline resolves a relative `CLINE_MCP_SETTINGS_PATH`, `CLINE_DATA_DIR` or `CLINE_DIR` against the directory it starts in. Set it to an absolute path. |
+| `` `ark mcp-init --global` is no longer supported `` | Use `ark setup claude --global`. |
 | `ark setup copilot-cli` refuses | The repository's `.mcp.json` already defines `ark`, which Copilot CLI prefers over `.github/mcp.json`. Use that entry, or remove it. |
 | `configuration … changed while Ark was updating it; no changes were written, retry the command` | Another program wrote the file at the same time. Retry. |
 | Permission denied writing the configuration | Fix the file's permissions, or use the other scope (`--global` or project). |
@@ -25,6 +31,11 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
    (`ark setup <client> --force --ark-path "$(command -v ark)"`).
 4. Run the server by hand with the same arguments to see its error
    ([Getting started](getting-started.md#2-check-the-installation)).
+5. Check that the entry is where the client reads it: `claude mcp get ark`
+   for Claude Code; for Cline, the `Config:` line of `ark setup cline`. A
+   Cline started with `--config <dir>` or `--data-dir <dir>` reads another
+   file: run setup with `CLINE_DIR` or `CLINE_DATA_DIR` set to that
+   directory.
 
 ## Server errors
 

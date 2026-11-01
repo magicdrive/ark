@@ -327,7 +327,9 @@ func TestMCPRoot_SetupEntriesLaunchTheProject(t *testing.T) {
 		{"claude", func(p, _ string) (string, string) { return filepath.Join(p, ".mcp.json"), "mcpServers" },
 			func(s string) string { return expandClaude(s, nil) }},
 		{"cursor", func(p, _ string) (string, string) { return filepath.Join(p, ".cursor", "mcp.json"), "mcpServers" }, nil},
-		{"cline", func(_, h string) (string, string) { return filepath.Join(h, ".cline", "mcp.json"), "mcpServers" }, nil},
+		{"cline", func(_, h string) (string, string) {
+			return filepath.Join(h, ".cline", "data", "settings", "cline_mcp_settings.json"), "mcpServers"
+		}, nil},
 		{"copilot-cli", func(p, _ string) (string, string) { return filepath.Join(p, ".github", "mcp.json"), "mcpServers" }, nil},
 		{"copilot-vscode", func(p, _ string) (string, string) { return filepath.Join(p, ".vscode", "mcp.json"), "servers" }, nil},
 		{"codex", nil, nil},

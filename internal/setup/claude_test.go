@@ -118,21 +118,31 @@ func TestClaude_Conflict_Force_PreservesUnrelated(t *testing.T) {
 	}
 }
 
-func TestClaude_Global_UsesClaudeSettings(t *testing.T) {
+// --global targets Claude Code's user scope, ~/.claude.json (through the
+// claude CLI; see claudeuser_test.go), not ~/.claude/settings.json, which
+// Claude Code does not read MCP servers from.
+func TestClaude_Global_UsesClaudeUserConfig(t *testing.T) {
 	tmp := t.TempDir()
 	root := t.TempDir()
 	t.Setenv("HOME", tmp)
 	t.Setenv("USERPROFILE", tmp)
+	t.Setenv("CLAUDE_CONFIG_DIR", "")
 	chdir(t, root)
 	ark := fakeArk(t)
 
-	res, err := Run(Options{Client: ClientClaude, ArkPath: ark, RootDir: root, Global: true})
+	want := filepath.Join(tmp, ".claude.json")
+	res, err := runClaudeUser(newFakeClaude(want), Options{ArkPath: ark, RootDir: root})
 	if err != nil {
-		t.Fatalf("Run global: %v", err)
+		t.Fatalf("run global: %v", err)
 	}
-	want := filepath.Join(tmp, ".claude", "settings.json")
 	if res.ConfigPath != want {
 		t.Errorf("global config path: got %s want %s", res.ConfigPath, want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Errorf("%s not written by claude: %v", want, err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, ".claude", "settings.json")); !os.IsNotExist(err) {
+		t.Errorf("~/.claude/settings.json was written: %v", err)
 	}
 }
 

@@ -43,7 +43,7 @@ complete -c ark -n '__fish_ark_is_first_arg'    \
         -d 'Configure Ark for a coding agent'
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'mcp-init'                           \
-        -d 'Register MCP server entry in settings.json'
+        -d 'Register MCP server entry in .mcp.json'
 complete -c ark -n '__fish_ark_is_first_arg'    \
         -a 'secrets-scan'                       \
         -d 'Report what secret masking masks, without values'
@@ -208,7 +208,7 @@ complete -c ark -n '__fish_seen_subcommand_from setup' \
 complete -c ark -n '__fish_seen_subcommand_from setup' \
         -l root -s r -d 'Root directory' -r -f
 complete -c ark -n '__fish_seen_subcommand_from setup' \
-        -l global -s g -d 'Write to global settings.json'
+        -l global -s g -d "Use the client's user-level MCP configuration"
 complete -c ark -n '__fish_seen_subcommand_from setup' \
         -l force -s f -d 'Overwrite existing entries'
 complete -c ark -n '__fish_seen_subcommand_from setup' \
@@ -222,7 +222,7 @@ complete -c ark -n '__fish_seen_subcommand_from mcp-init' \
 complete -c ark -n '__fish_seen_subcommand_from mcp-init' \
         -l root -s r -d 'Root directory' -r -f
 complete -c ark -n '__fish_seen_subcommand_from mcp-init' \
-        -l global -s g -d 'Write to global settings.json'
+        -l global -s g -d 'No longer supported; use ark setup claude --global'
 complete -c ark -n '__fish_seen_subcommand_from mcp-init' \
         -l force -s f -d 'Overwrite existing entry'
 complete -c ark -n '__fish_seen_subcommand_from mcp-init' \

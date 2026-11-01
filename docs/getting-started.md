@@ -70,10 +70,10 @@ ark setup claude
 
 | Client | Command | Configuration written |
 |---|---|---|
-| Claude Code | `ark setup claude` | `.mcp.json` (project), `~/.claude/settings.json` (`--global`); also a project skill and slash command |
+| Claude Code | `ark setup claude` | `.mcp.json` (project); the user scope in `~/.claude.json` (`--global`, through the `claude` CLI: `claude mcp add-json --scope user`); also a project skill and slash command |
 | Cursor | `ark setup cursor` | `.cursor/mcp.json` (project), `~/.cursor/mcp.json` (`--global`) |
 | Codex | `ark setup codex` | Codex's own configuration, through the `codex` CLI (`codex mcp add`) |
-| Cline CLI | `ark setup cline` | `~/.cline/mcp.json` |
+| Cline CLI | `ark setup cline` | `~/.cline/data/settings/cline_mcp_settings.json` (or where `CLINE_MCP_SETTINGS_PATH`, `CLINE_DATA_DIR` or `CLINE_DIR` puts it) |
 | GitHub Copilot in VS Code | `ark setup copilot-vscode` | `.vscode/mcp.json` (project only) |
 | GitHub Copilot CLI | `ark setup copilot-cli` | `.github/mcp.json` (project only) |
 
@@ -82,15 +82,30 @@ hand ([below](#manual-configuration)).
 
 Client-specific notes:
 
-- **Cline:** only the Cline CLI file `~/.cline/mcp.json` is managed. The
-  settings of Cline's editor extensions live in editor-specific storage that
-  Ark does not touch; configure them by hand. Cline's current documentation
-  names `~/.cline/data/settings/cline_mcp_settings.json` for the CLI; if your
-  Cline does not list the Ark server, add it there by hand.
-- **Claude Code `--global`** writes `~/.claude/settings.json`. Claude Code's
-  current documentation keeps user-scoped servers in `~/.claude.json`
-  (`claude mcp add --scope user`); if `/mcp` does not list the Ark server,
-  add it that way. The project scope (`.mcp.json`) is unaffected.
+- **Cline:** only the Cline CLI's MCP settings file is managed, found as the
+  CLI finds it: `$CLINE_MCP_SETTINGS_PATH`, else
+  `$CLINE_DATA_DIR/settings/cline_mcp_settings.json`, else
+  `$CLINE_DIR/data/settings/cline_mcp_settings.json`, else
+  `~/.cline/data/settings/cline_mcp_settings.json` (home is `$HOME`, then
+  `%USERPROFILE%`, as for Cline). A relative value of one of these variables
+  is refused. If you start Cline with `--config <dir>` or `--data-dir <dir>`,
+  set `CLINE_DIR` or `CLINE_DATA_DIR` to the same directory when you run
+  `ark setup cline`. An entry in the nested form `cline mcp add` writes
+  (`"transport": {"type": "stdio", …}`) is recognized as the same server.
+  The settings of Cline's editor extensions live in editor-specific storage
+  that Ark does not touch; configure them by hand.
+- **Claude Code `--global`** registers Ark in Claude Code's user scope, the
+  top-level `mcpServers` of `~/.claude.json`
+  (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set). That file is Claude
+  Code's own, so Ark never writes it: it reads it to decide whether anything
+  needs doing and changes it only by running `claude mcp add-json --scope
+  user ark …` (and `claude mcp remove --scope user ark` for `--force`). The
+  `claude` CLI must be on `PATH`; without it, setup prints the command to run
+  yourself. If `~/.claude.json` is malformed, a symlink, not a regular file
+  or larger than 16 MiB, setup stops without starting `claude` (Claude Code
+  would replace a malformed file with a default one and drop your other
+  servers). The user-scope entry names the repository's absolute path. The
+  project scope (`.mcp.json`) is unaffected.
 - **Copilot in VS Code** and **Copilot CLI:** project scope only (`--global`
   is refused). The generated `--root` is the absolute path of the
   repository, so the file is specific to your machine: do not commit it; let
@@ -100,6 +115,26 @@ Client-specific notes:
   `.github/mcp.json`. If the repository's `.mcp.json` already defines `ark`,
   `ark setup copilot-cli` refuses (even with `--force`) and changes nothing.
   Running `ark setup claude` afterwards creates such an entry.
+
+### Configuration written by earlier versions
+
+Up to v6.11.1, two `setup` targets were files their client does not read,
+so those entries never took effect:
+
+- `ark setup claude --global` and `ark mcp-init --global` wrote
+  `~/.claude/settings.json`. Claude Code does not read MCP servers from it.
+- `ark setup cline` wrote `~/.cline/mcp.json`. No Cline version reads it.
+
+Re-run `ark setup claude --global` or `ark setup cline` to configure the file
+the client reads. Ark never changes or deletes the old files; each run
+reports what it finds there (an `ark` entry, other servers, or a file it
+could not inspect). Delete the `ark` entry, or the whole old file, by hand.
+Servers you added to `~/.cline/mcp.json` yourself were not loaded either:
+move them to Cline's MCP settings file. Other servers in
+`~/.claude/settings.json` can be added with `claude mcp add-json --scope
+user`. The project scope of Claude Code (`.mcp.json`) and the other clients
+are unchanged. `ark mcp-init --global` is now refused and writes nothing; use
+`ark setup claude --global`.
 
 ### Safety contract
 
@@ -115,12 +150,16 @@ Client-specific notes:
 - **Atomic.** Files are replaced through a temporary file and rename, with a
   check that nobody modified the file in between and a read-back after
   writing.
+- **Client-owned files through the client.** Codex and Claude Code's user
+  scope are changed only through their own CLI (`codex mcp`, `claude mcp`),
+  with the result read back; a failed `--force` replacement restores the
+  previous entry.
 
 ### Manual configuration
 
 The server command is always `ark mcp-server --root <repository>`.
 
-Claude Code (`.mcp.json` or `~/.claude/settings.json`):
+Claude Code, project scope (`.mcp.json`):
 
 ```json
 {
@@ -136,10 +175,17 @@ Claude Code (`.mcp.json` or `~/.claude/settings.json`):
 ```
 
 Claude Code starts the server in the project directory, so the argument
-resolves to the project. Use an absolute `--root` in the global file or to
-serve another directory.
+resolves to the project. Use an absolute `--root` to serve another directory.
 
-Cursor (`.cursor/mcp.json`) and Cline CLI (`~/.cline/mcp.json`):
+Claude Code, user scope (every project; through the CLI, not by editing
+`~/.claude.json`):
+
+```bash
+claude mcp add-json --scope user ark '{"type":"stdio","command":"ark","args":["mcp-server","--root","/abs/path/to/repo"],"env":{}}'
+```
+
+Cursor (`.cursor/mcp.json`) and Cline CLI
+(`~/.cline/data/settings/cline_mcp_settings.json`):
 
 ```json
 { "mcpServers": { "ark": { "command": "ark", "args": ["mcp-server", "--root", "/abs/path/to/repo"], "env": {} } } }
@@ -191,7 +237,7 @@ before any MCP configuration changes.
 |---|---|
 | Claude Code (project) | The `.mcp.json` entry serves the project Claude Code starts in: start the session in the worktree (with the file committed, copied, or written there by `ark setup claude`). A session started in another checkout keeps that checkout's server. |
 | Cursor, Copilot in VS Code, Copilot CLI | The project file holds the absolute `--root` of the directory `setup` ran in: run `ark setup <client>` at the top of each worktree and open that folder. A file committed or copied from another checkout names that checkout: `setup` reports the conflict, and `--force` replaces Ark's entry in this worktree's file only. |
-| Claude Code and Cursor (`--global`), Cline CLI, Codex | The user-level entry `ark` names one root: `setup` in a second worktree stops on the conflict, and `--force` would repoint every session that uses it. Add a second server under its own name, with the same command and the worktree's absolute `--root`, through the client (Codex: `codex mcp add ark-feature -- ark mcp-server --root /abs/path/to/worktree`) or by hand; `setup` keeps entries of other names. |
+| Claude Code and Cursor (`--global`), Cline CLI, Codex | The user-level entry `ark` names one root: `setup` in a second worktree stops on the conflict, and `--force` would repoint every session that uses it. Add a second server under its own name, with the same command and the worktree's absolute `--root`, through the client (Codex: `codex mcp add ark-feature -- ark mcp-server --root /abs/path/to/worktree`; Claude Code: `claude mcp add-json --scope user ark-feature '{"type":"stdio","command":"ark","args":["mcp-server","--root","/abs/path/to/worktree"]}'`) or by hand; `setup` keeps entries of other names. |
 
 Some clients have a per-project scope `setup` does not write, which gives a
 worktree its own `ark` entry without a second name: Claude Code's local scope
@@ -251,7 +297,10 @@ seconds ([Performance](performance.md)). Later queries reuse it.
 
 Upgrade the binary the way you installed it (`brew upgrade ark`, a new
 archive, or `go install …@main`), then restart the agent so it reloads the
-tool list. The MCP configuration written by an earlier `setup` keeps working;
+tool list. The MCP configuration written by an earlier `setup` keeps working
+(except the Claude Code `--global` and Cline files of earlier versions, which
+their clients never read; see
+[Configuration written by earlier versions](#configuration-written-by-earlier-versions));
 re-running `ark setup <client>` prints "Ark is already configured for …
 No changes required." when nothing needs to change.
 

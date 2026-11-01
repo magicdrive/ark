@@ -106,10 +106,21 @@ func loadJSONConfigKey(path, serversKey, serverName string) (*jsonConfig, State,
 
 // classify compares the current Ark entry (if any) against the desired entry.
 func (c *jsonConfig) classify(desired map[string]any) (State, error) {
+	return c.classifyWith(desired, nil)
+}
+
+// classifyWith is classify with the adapter's own notion of equivalence: equal
+// reports whether the existing entry configures the same server as desired.
+// A nil equal means semanticEqual, which every client uses unless its schema
+// accepts more than one spelling of the same entry.
+func (c *jsonConfig) classifyWith(desired map[string]any, equal func(existing any, desired map[string]any) (bool, error)) (State, error) {
 	if !c.entryExists {
 		return StateAbsent, nil
 	}
-	eq, err := semanticEqual(c.existing, desired)
+	if equal == nil {
+		equal = func(existing any, desired map[string]any) (bool, error) { return semanticEqual(existing, desired) }
+	}
+	eq, err := equal(c.existing, desired)
 	if err != nil {
 		return StateMalformed, err
 	}

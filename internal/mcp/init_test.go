@@ -2,8 +2,10 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -271,5 +273,42 @@ func TestWriteSettings_CreatesDir(t *testing.T) {
 	}
 	if _, err := os.Stat(path); err != nil {
 		t.Errorf("File not created: %v", err)
+	}
+}
+
+// `ark mcp-init --global` used to write ~/.claude/settings.json, which Claude
+// Code does not read MCP servers from. It is refused with guidance toward
+// `ark setup claude --global`, and writes nothing anywhere.
+func TestRunMCPInit_GlobalRefused(t *testing.T) {
+	home, cwd := t.TempDir(), t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Chdir(cwd)
+	for _, force := range []bool{false, true} {
+		err := RunMCPInit(&MCPInitOptions{ArkPath: "/bin/ark", RootDir: cwd, ServerName: "ark", Global: true, Force: force})
+		if !errors.Is(err, ErrMCPInitGlobal) {
+			t.Fatalf("force=%v: got %v", force, err)
+		}
+		if !strings.Contains(err.Error(), "ark setup claude --global") {
+			t.Errorf("error does not name the replacement: %v", err)
+		}
+	}
+	for _, p := range []string{
+		filepath.Join(home, ".claude", "settings.json"),
+		filepath.Join(home, ".claude.json"),
+		filepath.Join(cwd, ".mcp.json"),
+	} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s was written: %v", p, err)
+		}
+	}
+	// An existing settings.json is left byte for byte.
+	settings := filepath.Join(home, ".claude", "settings.json")
+	os.MkdirAll(filepath.Dir(settings), 0o755)
+	body := []byte(`{"mcpServers":{"ark":{"command":"old"}},"theme":"dark"}`)
+	os.WriteFile(settings, body, 0o644)
+	_ = RunMCPInit(&MCPInitOptions{ArkPath: "/bin/ark", RootDir: cwd, ServerName: "ark", Global: true, Force: true})
+	if got, _ := os.ReadFile(settings); string(got) != string(body) {
+		t.Errorf("settings.json changed: %s", got)
 	}
 }

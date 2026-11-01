@@ -34,12 +34,13 @@ func MCPInitOptParse(args []string) (int, *MCPInitOption, error) {
 	fs.StringVar(rootDirOpt, "r", currentDir, "Root directory to serve.")
 
 	// --name
-	nameOpt := fs.String("name", "ark", "MCP server name in settings.json.")
-	fs.StringVar(nameOpt, "n", "ark", "MCP server name in settings.json.")
+	nameOpt := fs.String("name", "ark", "MCP server name in .mcp.json.")
+	fs.StringVar(nameOpt, "n", "ark", "MCP server name in .mcp.json.")
 
 	// --global
-	globalFlagOpt := fs.Bool("global", false, "Write to ~/.claude/settings.json instead of .mcp.json.")
-	fs.BoolVar(globalFlagOpt, "g", false, "Write to ~/.claude/settings.json instead of .mcp.json.")
+	// Kept so the command can refuse it with guidance (mcp.ErrMCPInitGlobal).
+	globalFlagOpt := fs.Bool("global", false, "No longer supported; use `ark setup claude --global`.")
+	fs.BoolVar(globalFlagOpt, "g", false, "No longer supported; use `ark setup claude --global`.")
 
 	// --force
 	forceFlagOpt := fs.Bool("force", false, "Overwrite existing MCP server entry.")

@@ -44,6 +44,8 @@ setup <client> options:
                                                    copilot-vscode = GitHub Copilot in VS Code (Chat / Agent mode; project .vscode/mcp.json only)
                                                    copilot-cli    = GitHub Copilot CLI (project .github/mcp.json only; refused if <root>/.mcp.json
                                                                     already defines "ark", which Copilot CLI prefers)
+                                                   cline          = Cline CLI (user-level ~/.cline/data/settings/cline_mcp_settings.json;
+                                                                    honours CLINE_MCP_SETTINGS_PATH, CLINE_DATA_DIR and CLINE_DIR)
                                                    --global is not supported for copilot-vscode / copilot-cli; neither configures the GitHub-hosted agent.
                                                    (ark setup without a client is a deprecated Claude alias.)
   -h, --help                                       Show help message.
@@ -51,14 +53,15 @@ setup <client> options:
   -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
   -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
   -g, --global                                     Configure Ark in the client's user-level MCP configuration.
+                                                   claude: Claude Code's user scope (~/.claude.json), through the claude CLI.
   -f, --force                                      Replace an existing Ark-owned MCP entry (never touches other config).
 
 mcp-init options:
   -h, --help                                       Show help message.
   -p, --ark-path <path>                            Path to ark binary. (optional. default: auto-detect)
   -r, --root <dirname>                             Root directory to serve. (optional. default: $pwd)
-  -n, --name <name>                                MCP server name in settings.json. (optional. default: 'ark')
-  -g, --global                                     Write to ~/.claude/settings.json. (optional. default: .mcp.json)
+  -n, --name <name>                                MCP server name in .mcp.json. (optional. default: 'ark')
+  -g, --global                                     No longer supported (refused, nothing written); use 'ark setup claude --global'.
   -f, --force                                      Overwrite existing MCP server entry. (optional.)
 
 mcp-server options:

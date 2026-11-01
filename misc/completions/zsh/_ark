@@ -53,7 +53,7 @@ mcp_opts=(
 
 subcommands=(
   'mcp-server:Start MCP server'
-  'mcp-init:Register MCP server entry in settings.json'
+  'mcp-init:Register MCP server entry in .mcp.json'
   'setup:Configure Ark for a coding agent'
   'syntax:Parse file and output AST'
   'symbol:Extract symbols from file'
