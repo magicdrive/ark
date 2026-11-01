@@ -24,6 +24,7 @@ type fakeClaude struct {
 	addFailRemaining int    // upcoming add-json calls that fail
 	addMangle        int    // upcoming add-json calls that store a different entry (verify fails)
 	echoInput        bool   // a failing add-json echoes its JSON argument on stderr
+	stderrText       string // a failing add-json's stderr
 	onLook           func() // runs when Ark looks claude up, between its read and its first call
 	failRemove       bool
 }
@@ -61,6 +62,9 @@ func (f *fakeClaude) run(name string, args ...string) ([]byte, []byte, int, erro
 			f.addFailRemaining--
 			if f.echoInput {
 				return nil, []byte("Invalid configuration: " + args[5]), 1, fmt.Errorf("add failed")
+			}
+			if f.stderrText != "" {
+				return nil, []byte(f.stderrText), 1, fmt.Errorf("add failed")
 			}
 			return nil, []byte("add boom"), 1, fmt.Errorf("add failed")
 		}
@@ -826,7 +830,7 @@ func TestClaudeUser_RestoreRefusesSecretEntries(t *testing.T) {
 			f := newFakeClaude(filepath.Join(t.TempDir(), ".claude.json"))
 			a := newClaudeAdapter().(claudeAdapter)
 			a.runner = f
-			err := a.restoreUserEntry(m)
+			err := a.restoreUserEntry(m, wantEntry("/x/ark", "/r"))
 			if err == nil || len(f.calls) != 0 {
 				t.Fatalf("err=%v calls=%v", err, f.calls)
 			}
@@ -840,10 +844,13 @@ func TestRestorableClaudeEntry(t *testing.T) {
 	ok := []map[string]any{
 		arkShaped("/r"),
 		{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}},
-		{"type": "stdio", "command": `C:\Tools\ARK.EXE`, "args": []any{"mcp-server", "--root", `C:\r`}, "env": nil},
+		{"type": "stdio", "command": `C:\Tools\ARK.EXE`, "args": []any{"mcp-server", "--root", `C:\r`}},
+		// The command Ark is about to write (--ark-path), whatever its name.
+		{"type": "stdio", "command": "/opt/dev/ark-dev", "args": []any{"mcp-server", "--root", "/r"}, "env": map[string]any{}},
 	}
+	desired := wantEntry("/opt/dev/ark-dev", "/new")
 	for _, e := range ok {
-		if _, got := restorableClaudeEntry(e); !got {
+		if _, got := restorableClaudeEntry(e, desired); !got {
 			t.Errorf("refused %v", e)
 		}
 	}
@@ -859,9 +866,15 @@ func TestRestorableClaudeEntry(t *testing.T) {
 		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "env": map[string]any{"A": "b"}},
 		map[string]any{"args": []any{"mcp-server", "--root", "/r"}},
 		map[string]any{"command": 1, "args": []any{"mcp-server", "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{"serve", "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{1, "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root=/r", "x"}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "env": nil},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "type": nil},
+		map[string]any{"command": "/opt/other/ark-dev", "args": []any{"mcp-server", "--root", "/r"}},
 	}
 	for _, e := range bad {
-		if _, got := restorableClaudeEntry(e); got {
+		if _, got := restorableClaudeEntry(e, desired); got {
 			t.Errorf("accepted %v", e)
 		}
 	}
@@ -944,4 +957,77 @@ func TestClaudeUser_Force_ArkShapedArgvHoldsNoOtherSecret(t *testing.T) {
 			}
 		})
 	}
+}
+
+// A file that cannot be read again just before the remove (it became
+// malformed) stops setup: claude would reset it.
+func TestClaudeUser_Force_RereadFailureAborts(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old")}})
+	f := newFakeClaude(path)
+	f.onLook = func() {
+		if err := os.WriteFile(path, []byte(`{"mcpServers":{"ark":`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "changed while Ark was reading it") {
+		t.Fatalf("got %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("claude started: %v", f.calls)
+	}
+}
+
+// An entry Ark wrote with --ark-path, under another name than ark, is
+// replaced with the same --ark-path.
+func TestClaudeUser_Force_ReplacesItsOwnArkPath(t *testing.T) {
+	home, root, _ := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	dev := filepath.Join(t.TempDir(), "ark-dev")
+	if err := os.WriteFile(dev, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": wantEntry(dev, "/old")}})
+	f := newFakeClaude(path)
+	if _, err := runClaudeUser(f, Options{ArkPath: dev, RootDir: root, Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := userEntry(t, path); !reflect.DeepEqual(got, wantEntry(dev, root)) {
+		t.Errorf("entry: %v", got)
+	}
+}
+
+// claude's stderr reaches Ark's error only as one line of a known message;
+// anything else (claude quotes a malformed file's text) is not shown.
+func TestClaudeMessage(t *testing.T) {
+	for in, shown := range map[string]bool{
+		"MCP server ark already exists in user config":                  true,
+		`No MCP server named "ark" found in user config`:                true,
+		"Invalid configuration: : Invalid input":                        true,
+		`JSON Parse error: Unexpected identifier "` + dummySecret + `"`: false,
+		"already exists\n" + dummySecret:                                false,
+		"":                                                              false,
+	} {
+		got := claudeMessage([]byte(in))
+		if (got == in) != shown || (!shown && strings.Contains(got, dummySecret)) {
+			t.Errorf("claudeMessage(%q) = %q", in, got)
+		}
+	}
+}
+
+// A failing add-json whose stderr quotes the file does not bring it into
+// Ark's error.
+func TestClaudeUser_AddFailure_StderrNotShown(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"other": map[string]any{"command": "x", "env": map[string]any{"K": dummySecret + "-OTHER"}}}})
+	f := newFakeClaude(path)
+	f.addFailRemaining, f.stderrText = 1, `JSON Parse error: Unexpected identifier "`+dummySecret+`-OTHER"`
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root})
+	if err == nil || !strings.Contains(err.Error(), "`claude mcp add-json` failed") {
+		t.Fatalf("got %v", err)
+	}
+	assertNoSecret(t, f, err)
 }

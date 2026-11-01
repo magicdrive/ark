@@ -113,15 +113,17 @@ Client-specific notes:
   `CLAUDE_CODE_CUSTOM_OAUTH_URL` set, Claude Code keeps its state in another
   file, and setup only prints the command. The user-scope entry names the
   repository's absolute path. `--force` replaces only an `ark` entry of the
-  form Ark writes (`"command"` an `ark` executable, `"args"` `["mcp-server",
-  "--root", <path>]`, nothing else but `"type": "stdio"` and an empty
-  `"env"`), and puts it back if the replacement fails. `claude mcp add-json`
+  form Ark writes (`"command"` an executable named `ark` or `ark.exe`, or the
+  one `--ark-path` names, `"args"` exactly `["mcp-server", "--root",
+  <path>]`, nothing else but `"type": "stdio"` and an `"env"` of `{}`), and
+  puts it back if the replacement fails. `claude mcp add-json`
   takes an entry only as a command-line argument, which other processes on
   the machine can read, so Ark never passes it any other entry: one with an
   `env`, headers, a URL, other arguments or other fields is refused, with or
   without `--force`, before anything changes, and is not shown. Remove it
-  yourself (`claude mcp remove --scope user ark`) and re-run setup, or keep it
-  and register Ark under another name. The project scope
+  yourself (`claude mcp remove --scope user ark`) and re-run setup. Claude's
+  own error output is shown only when it is one of its short messages (it
+  may quote the file otherwise). The project scope
   (`.mcp.json`) is unaffected.
 - **Copilot in VS Code** and **Copilot CLI:** project scope only (`--global`
   is refused). The generated `--root` is the absolute path of the
@@ -160,7 +162,8 @@ are unchanged. `ark mcp-init --global` is now refused and writes nothing; use
 - **Idempotent.** Running it again with the same options changes nothing and
   does not rewrite the file.
 - **Conflict-safe.** If an Ark entry exists with different settings, setup
-  stops and asks for `--force`. `--force` replaces Ark's entry only.
+  stops and asks for `--force`. `--force` replaces Ark's entry only (for
+  Claude Code `--global`, only one of the form Ark writes).
 - **Preserving.** Other MCP servers and unknown fields are kept.
 - **Never repairs.** A malformed configuration file is reported, never
   overwritten, even with `--force`.
