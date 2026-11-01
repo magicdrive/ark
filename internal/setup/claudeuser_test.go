@@ -21,15 +21,21 @@ type fakeClaude struct {
 	path      string
 	calls     [][]string
 
-	addFailRemaining int  // upcoming add-json calls that fail
-	addMangle        int  // upcoming add-json calls that store a different entry (verify fails)
-	echoInput        bool // a failing add-json echoes its JSON argument on stderr
+	addFailRemaining int    // upcoming add-json calls that fail
+	addMangle        int    // upcoming add-json calls that store a different entry (verify fails)
+	echoInput        bool   // a failing add-json echoes its JSON argument on stderr
+	stderrText       string // a failing add-json's stderr
+	removeStderr     string // a failing remove's stderr
+	onLook           func() // runs when Ark looks claude up, between its read and its first call
 	failRemove       bool
 }
 
 func newFakeClaude(path string) *fakeClaude { return &fakeClaude{installed: true, path: path} }
 
 func (f *fakeClaude) look(name string) (string, error) {
+	if f.onLook != nil {
+		f.onLook()
+	}
 	if name == "claude" && f.installed {
 		return "/usr/local/bin/claude", nil
 	}
@@ -58,6 +64,9 @@ func (f *fakeClaude) run(name string, args ...string) ([]byte, []byte, int, erro
 			if f.echoInput {
 				return nil, []byte("Invalid configuration: " + args[5]), 1, fmt.Errorf("add failed")
 			}
+			if f.stderrText != "" {
+				return nil, []byte(f.stderrText), 1, fmt.Errorf("add failed")
+			}
 			return nil, []byte("add boom"), 1, fmt.Errorf("add failed")
 		}
 		if _, ok := servers[args[4]]; ok {
@@ -74,10 +83,13 @@ func (f *fakeClaude) run(name string, args ...string) ([]byte, []byte, int, erro
 		servers[args[4]] = entry
 	case args[1] == "remove" && len(args) == 5 && args[2] == "--scope" && args[3] == "user":
 		if f.failRemove {
+			if f.removeStderr != "" {
+				return nil, []byte(f.removeStderr), 1, fmt.Errorf("remove failed")
+			}
 			return nil, []byte("remove boom"), 1, fmt.Errorf("remove failed")
 		}
 		if _, ok := servers[args[4]]; !ok {
-			return nil, []byte("No user-scoped MCP server found"), 1, fmt.Errorf("exit 1")
+			return nil, []byte(`No MCP server named "` + args[4] + `" in user scope`), 1, fmt.Errorf("exit 1")
 		}
 		delete(servers, args[4])
 	default:
@@ -231,7 +243,7 @@ func TestClaudeUser_Equivalent_NoCLICall(t *testing.T) {
 func TestClaudeUser_Conflict(t *testing.T) {
 	home, root, ark := claudeUserEnv(t)
 	path := filepath.Join(home, ".claude.json")
-	old := map[string]any{"type": "stdio", "command": "/old/ark", "args": []any{"mcp-server", "--root", "/old"}, "env": map[string]any{"TOKEN": "s3cret"}}
+	old := arkShaped("/old")
 	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": old, "other": map[string]any{"command": "keep"}}})
 	before, _ := os.ReadFile(path)
 
@@ -240,8 +252,8 @@ func TestClaudeUser_Conflict(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "--force") {
 		t.Fatalf("want a conflict naming --force, got %v", err)
 	}
-	if strings.Contains(err.Error(), "s3cret") {
-		t.Error("conflict message shows the existing entry's env")
+	if !strings.Contains(err.Error(), "/old") {
+		t.Errorf("conflict message does not show the existing Ark entry: %v", err)
 	}
 	if len(f.calls) != 0 {
 		t.Errorf("conflict without --force ran claude: %v", f.calls)
@@ -279,7 +291,7 @@ func TestClaudeUser_Force_RestoresOnFailure(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			home, root, ark := claudeUserEnv(t)
 			path := filepath.Join(home, ".claude.json")
-			old := map[string]any{"type": "stdio", "command": "/old/ark", "args": []any{"mcp-server"}, "env": map[string]any{"K": "v"}, "extra": true}
+			old := arkShaped("/old")
 			writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": old}})
 			f := newFakeClaude(path)
 			c.inject(f)
@@ -297,7 +309,7 @@ func TestClaudeUser_Force_RestoresOnFailure(t *testing.T) {
 func TestClaudeUser_Force_RemoveFails_NothingAdded(t *testing.T) {
 	home, root, ark := claudeUserEnv(t)
 	path := filepath.Join(home, ".claude.json")
-	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": map[string]any{"command": "/old"}}})
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old")}})
 	f := newFakeClaude(path)
 	f.failRemove = true
 	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
@@ -314,7 +326,7 @@ func TestClaudeUser_Force_NonObjectEntryIsNotRemoved(t *testing.T) {
 	path := filepath.Join(home, ".claude.json")
 	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": "not an object"}})
 	f := newFakeClaude(path)
-	if _, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true}); err == nil || !strings.Contains(err.Error(), "refusing to replace") {
+	if _, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true}); err == nil || !strings.Contains(err.Error(), "not of the form Ark writes") {
 		t.Fatalf("got %v", err)
 	}
 	if len(f.calls) != 0 {
@@ -707,20 +719,348 @@ func TestClaudeUser_EmptyConfigRefused(t *testing.T) {
 	}
 }
 
-// When restoring the previous entry fails too, claude's stderr of that call,
-// which may echo the entry and its env, is not in the error.
-func TestClaudeUser_RestoreFailure_NoSecretInError(t *testing.T) {
+// When restoring the previous entry fails too, Ark says so (the entry is
+// gone, not hidden), and claude's stderr of that call is not in the error.
+func TestClaudeUser_RestoreFailure_Reported(t *testing.T) {
 	home, root, ark := claudeUserEnv(t)
 	path := filepath.Join(home, ".claude.json")
-	old := map[string]any{"type": "stdio", "command": "/old/ark", "args": []any{"mcp-server"}, "env": map[string]any{"TOKEN": "SECRET-VALUE-42"}}
-	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": old}})
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old"), "other": map[string]any{"command": "keep"}}})
 	f := newFakeClaude(path)
 	f.addFailRemaining, f.echoInput = 2, true
 	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
-	if err == nil || !strings.Contains(err.Error(), "restoration of the previous Ark configuration") {
+	if err == nil || !strings.Contains(err.Error(), "WARNING: restoration of the previous Ark configuration") || !strings.Contains(err.Error(), "also failed") {
 		t.Fatalf("got %v", err)
 	}
-	if strings.Contains(err.Error(), "SECRET-VALUE-42") {
-		t.Errorf("secret in error: %v", err)
+	if strings.Count(err.Error(), "Invalid configuration:") > 1 {
+		t.Errorf("the restoring call's stderr is in the error: %v", err)
 	}
+	if _, ok := mcpServers(t, readJSON(t, path))["ark"]; ok {
+		t.Error("fake claude kept an entry; the test does not exercise a lost entry")
+	}
+	if mcpServers(t, readJSON(t, path))["other"] == nil {
+		t.Error("other server lost")
+	}
+}
+
+// arkShaped is an entry of the form Ark writes, serving root.
+func arkShaped(root string) map[string]any {
+	return map[string]any{"type": "stdio", "command": "/old/bin/ark", "args": []any{"mcp-server", "--root", root}, "env": map[string]any{}}
+}
+
+// dummySecret marks the values of test entries that stand for credentials.
+// It is not shaped like any real token.
+const dummySecret = "DUMMY-SECRET"
+
+// secretEntries are existing "ark" entries that hold credentials in each
+// place an entry can: Ark must never pass them to claude, nor show them.
+func secretEntries() map[string]any {
+	arkArgs := []any{"mcp-server", "--root", "/r"}
+	return map[string]any{
+		"env":        map[string]any{"type": "stdio", "command": "/x/ark", "args": arkArgs, "env": map[string]any{"API_KEY": dummySecret + "-ENV"}},
+		"bearer":     map[string]any{"type": "http", "url": "https://mcp.example.invalid/mcp", "headers": map[string]any{"Authorization": "Bearer " + dummySecret + "-BEARER"}},
+		"url":        map[string]any{"type": "http", "url": "https://user:" + dummySecret + "-URL@mcp.example.invalid/mcp?key=" + dummySecret + "-QUERY"},
+		"unknown":    map[string]any{"type": "stdio", "command": "/x/ark", "args": arkArgs, "x-auth": dummySecret + "-UNKNOWN"},
+		"args":       map[string]any{"type": "stdio", "command": "/x/ark", "args": []any{"mcp-server", "--root", "/r", "--token", dummySecret + "-ARG"}},
+		"root-flag":  map[string]any{"type": "stdio", "command": "/x/ark", "args": []any{"mcp-server", "--root", "--token=" + dummySecret + "-FLAG"}},
+		"command":    map[string]any{"type": "stdio", "command": "/usr/bin/env", "args": []any{"API_KEY=" + dummySecret + "-CMD", "ark", "mcp-server", "--root", "/r"}},
+		"multiple":   map[string]any{"type": "sse", "url": "https://mcp.example.invalid/sse", "headers": map[string]any{"X-Api-Key": dummySecret + "-H1", "Cookie": "s=" + dummySecret + "-H2"}, "env": map[string]any{"A": dummySecret + "-E1"}},
+		"not-object": dummySecret + "-STRING",
+	}
+}
+
+// assertNoSecret fails when a secret value reached claude's argv or Ark's
+// error.
+func assertNoSecret(t *testing.T, f *fakeClaude, err error) {
+	t.Helper()
+	for _, c := range f.calls {
+		if strings.Contains(strings.Join(c, " "), dummySecret) {
+			t.Errorf("a secret reached claude's command line: %v", c)
+		}
+	}
+	if err != nil && strings.Contains(err.Error(), dummySecret) {
+		t.Errorf("a secret is in Ark's error: %v", err)
+	}
+}
+
+// An existing entry that is not of the form Ark writes is refused before
+// anything changes, with and without --force, whatever claude would do: Ark
+// does not start claude, does not show the entry, and leaves the file as it
+// is, other servers included.
+func TestClaudeUser_SecretEntry_RefusedUnchanged(t *testing.T) {
+	failures := map[string]func(*fakeClaude){
+		"none":          func(*fakeClaude) {},
+		"add-fails":     func(f *fakeClaude) { f.addFailRemaining, f.echoInput = 2, true },
+		"verify-fails":  func(f *fakeClaude) { f.addMangle = 1 },
+		"remove-fails":  func(f *fakeClaude) { f.failRemove = true },
+		"not-installed": func(f *fakeClaude) { f.installed = false },
+	}
+	for name, entry := range secretEntries() {
+		for fname, inject := range failures {
+			for _, force := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/force=%v", name, fname, force), func(t *testing.T) {
+					home, root, ark := claudeUserEnv(t)
+					path := filepath.Join(home, ".claude.json")
+					other := map[string]any{"command": "keep", "env": map[string]any{"OTHER": dummySecret + "-OTHER"}}
+					writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": entry, "other": other}, "unknownTop": true})
+					before, _ := os.ReadFile(path)
+					f := newFakeClaude(path)
+					inject(f)
+					res, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: force})
+					if err == nil || !strings.Contains(err.Error(), "not of the form Ark writes") || !strings.Contains(err.Error(), "changed nothing") {
+						t.Fatalf("want a refusal, got res=%v err=%v", res, err)
+					}
+					if len(f.calls) != 0 {
+						t.Errorf("claude started: %v", f.calls)
+					}
+					assertNoSecret(t, f, err)
+					if after, _ := os.ReadFile(path); !bytes.Equal(before, after) {
+						t.Error("file changed")
+					}
+				})
+			}
+		}
+	}
+}
+
+// restoreUserEntry itself refuses an entry that is not of the form Ark
+// writes, so that no path can hand one to claude.
+func TestClaudeUser_RestoreRefusesSecretEntries(t *testing.T) {
+	for name, entry := range secretEntries() {
+		m, ok := entry.(map[string]any)
+		if !ok {
+			continue
+		}
+		t.Run(name, func(t *testing.T) {
+			f := newFakeClaude(filepath.Join(t.TempDir(), ".claude.json"))
+			a := newClaudeAdapter().(claudeAdapter)
+			a.runner = f
+			err := a.restoreUserEntry(m, wantEntry("/x/ark", "/r"))
+			if err == nil || len(f.calls) != 0 {
+				t.Fatalf("err=%v calls=%v", err, f.calls)
+			}
+			assertNoSecret(t, f, err)
+		})
+	}
+}
+
+// restorableClaudeEntry accepts exactly the form Ark writes.
+func TestRestorableClaudeEntry(t *testing.T) {
+	ok := []map[string]any{
+		arkShaped("/r"),
+		{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}},
+		{"type": "stdio", "command": `C:\Tools\ARK.EXE`, "args": []any{"mcp-server", "--root", `C:\r`}},
+		// The command Ark is about to write (--ark-path), whatever its name.
+		{"type": "stdio", "command": "/opt/dev/ark-dev", "args": []any{"mcp-server", "--root", "/r"}, "env": map[string]any{}},
+	}
+	desired := wantEntry("/opt/dev/ark-dev", "/new")
+	for _, e := range ok {
+		if _, got := restorableClaudeEntry(e, desired); !got {
+			t.Errorf("refused %v", e)
+		}
+	}
+	bad := []any{
+		nil, "ark", []any{"ark"},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root"}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", ""}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r", "--no-cache"}},
+		map[string]any{"command": "ark", "args": []string{"mcp-server", "--root", "/r"}},
+		map[string]any{"command": "ark-dev", "args": []any{"mcp-server", "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "disabled": false},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "type": "http"},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "env": map[string]any{"A": "b"}},
+		map[string]any{"args": []any{"mcp-server", "--root", "/r"}},
+		map[string]any{"command": 1, "args": []any{"mcp-server", "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{"serve", "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{1, "--root", "/r"}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root=/r", "x"}},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "env": nil},
+		map[string]any{"command": "ark", "args": []any{"mcp-server", "--root", "/r"}, "type": nil},
+		map[string]any{"command": "/opt/other/ark-dev", "args": []any{"mcp-server", "--root", "/r"}},
+	}
+	for _, e := range bad {
+		if _, got := restorableClaudeEntry(e, desired); got {
+			t.Errorf("accepted %v", e)
+		}
+	}
+}
+
+// An entry changed between Ark's read and its remove (a running Claude Code,
+// or the user, rewrote it) is not removed: Ark changes nothing.
+func TestClaudeUser_Force_ConcurrentChangeAborts(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old")}})
+	f := newFakeClaude(path)
+	var changed []byte
+	f.onLook = func() {
+		withSecret := map[string]any{"command": "/x/ark", "args": []any{"mcp-server", "--root", "/old"}, "env": map[string]any{"K": dummySecret + "-RACE"}}
+		writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": withSecret}})
+		changed, _ = os.ReadFile(path)
+	}
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "changed while Ark was reading it") {
+		t.Fatalf("got %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("claude started: %v", f.calls)
+	}
+	assertNoSecret(t, f, err)
+	if after, _ := os.ReadFile(path); !bytes.Equal(changed, after) {
+		t.Error("file changed after the concurrent write")
+	}
+}
+
+// A ~/.claude.json Ark cannot read is refused without starting claude and
+// without showing its contents.
+func TestClaudeUser_UnreadableConfigRefused(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs POSIX permissions and a non-root user")
+	}
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": secretEntries()["env"]}})
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(path, 0o600) })
+	f := newFakeClaude(path)
+	for _, force := range []bool{false, true} {
+		_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: force})
+		if err == nil || !strings.Contains(err.Error(), "Ark did not run `claude`") {
+			t.Fatalf("force=%v: got %v", force, err)
+		}
+		assertNoSecret(t, f, err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("claude started: %v", f.calls)
+	}
+}
+
+// Replacing an entry of the form Ark writes passes only that entry and Ark's
+// own to claude, whatever fails; the other servers' secrets never reach it.
+func TestClaudeUser_Force_ArkShapedArgvHoldsNoOtherSecret(t *testing.T) {
+	failures := map[string]func(*fakeClaude){
+		"none":         func(*fakeClaude) {},
+		"add-fails":    func(f *fakeClaude) { f.addFailRemaining = 1 },
+		"verify-fails": func(f *fakeClaude) { f.addMangle = 1 },
+		"both-fail":    func(f *fakeClaude) { f.addFailRemaining, f.echoInput = 2, true },
+		"remove-fails": func(f *fakeClaude) { f.failRemove = true },
+	}
+	for name, inject := range failures {
+		t.Run(name, func(t *testing.T) {
+			home, root, ark := claudeUserEnv(t)
+			path := filepath.Join(home, ".claude.json")
+			other := map[string]any{"type": "http", "url": "https://mcp.example.invalid/mcp", "headers": map[string]any{"Authorization": "Bearer " + dummySecret + "-OTHER"}}
+			writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old"), "other": other}})
+			f := newFakeClaude(path)
+			inject(f)
+			_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+			assertNoSecret(t, f, err)
+			if got := mcpServers(t, readJSON(t, path))["other"]; !reflect.DeepEqual(got, other) {
+				t.Errorf("other server changed: %v", got)
+			}
+		})
+	}
+}
+
+// A file that cannot be read again just before the remove (it became
+// malformed) stops setup: claude would reset it.
+func TestClaudeUser_Force_RereadFailureAborts(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old")}})
+	f := newFakeClaude(path)
+	f.onLook = func() {
+		if err := os.WriteFile(path, []byte(`{"mcpServers":{"ark":`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "changed while Ark was reading it") {
+		t.Fatalf("got %v", err)
+	}
+	if len(f.calls) != 0 {
+		t.Errorf("claude started: %v", f.calls)
+	}
+}
+
+// An entry Ark wrote with --ark-path, under another name than ark, is
+// replaced with the same --ark-path.
+func TestClaudeUser_Force_ReplacesItsOwnArkPath(t *testing.T) {
+	home, root, _ := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	dev := filepath.Join(t.TempDir(), "ark-dev")
+	if err := os.WriteFile(dev, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": wantEntry(dev, "/old")}})
+	f := newFakeClaude(path)
+	if _, err := runClaudeUser(f, Options{ArkPath: dev, RootDir: root, Force: true}); err != nil {
+		t.Fatal(err)
+	}
+	if got := userEntry(t, path); !reflect.DeepEqual(got, wantEntry(dev, root)) {
+		t.Errorf("entry: %v", got)
+	}
+}
+
+// claude's stderr reaches Ark's error only as one line of a known message;
+// anything else (claude quotes a malformed file's text) is not shown.
+func TestClaudeMessage(t *testing.T) {
+	for in, shown := range map[string]bool{
+		"MCP server ark already exists in user config":                  true,
+		`No MCP server named "ark" found in user config`:                true,
+		"Invalid configuration: : Invalid input":                        true,
+		`JSON Parse error: Unexpected identifier "` + dummySecret + `"`: false,
+		"already exists\n" + dummySecret:                                false,
+		"":                                                              false,
+	} {
+		got := claudeMessage([]byte(in))
+		if (got == in) != shown || (!shown && strings.Contains(got, dummySecret)) {
+			t.Errorf("claudeMessage(%q) = %q", in, got)
+		}
+	}
+}
+
+// A failing add-json whose stderr quotes the file does not bring it into
+// Ark's error.
+func TestClaudeUser_AddFailure_StderrNotShown(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"other": map[string]any{"command": "x", "env": map[string]any{"K": dummySecret + "-OTHER"}}}})
+	f := newFakeClaude(path)
+	f.addFailRemaining, f.stderrText = 1, `JSON Parse error: Unexpected identifier "`+dummySecret+`-OTHER"`
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root})
+	if err == nil || !strings.Contains(err.Error(), "`claude mcp add-json` failed") {
+		t.Fatalf("got %v", err)
+	}
+	assertNoSecret(t, f, err)
+}
+
+// A failing remove whose stderr quotes the file does not bring it into Ark's
+// error.
+func TestClaudeUser_RemoveFailure_StderrNotShown(t *testing.T) {
+	home, root, ark := claudeUserEnv(t)
+	path := filepath.Join(home, ".claude.json")
+	writeJSON(t, path, map[string]any{"mcpServers": map[string]any{"ark": arkShaped("/old")}})
+	f := newFakeClaude(path)
+	f.failRemove, f.removeStderr = true, `JSON Parse error: Unexpected identifier "`+dummySecret+`-REMOVE"`
+	_, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root, Force: true})
+	if err == nil || !strings.Contains(err.Error(), "`claude mcp remove` failed") {
+		t.Fatalf("got %v", err)
+	}
+	assertNoSecret(t, f, err)
+}
+
+// restoreUserEntry refuses an entry of Ark's argument form under a command
+// that is neither named ark nor the one Ark is about to write.
+func TestClaudeUser_RestoreRefusesForeignCommand(t *testing.T) {
+	f := newFakeClaude(filepath.Join(t.TempDir(), ".claude.json"))
+	a := newClaudeAdapter().(claudeAdapter)
+	a.runner = f
+	foreign := map[string]any{"type": "stdio", "command": "/opt/other/" + dummySecret + "-dev", "args": []any{"mcp-server", "--root", "/r"}, "env": map[string]any{}}
+	err := a.restoreUserEntry(foreign, wantEntry("/opt/mine/ark-dev", "/new"))
+	if err == nil || len(f.calls) != 0 {
+		t.Fatalf("err=%v calls=%v", err, f.calls)
+	}
+	assertNoSecret(t, f, err)
 }

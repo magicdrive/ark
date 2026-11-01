@@ -184,21 +184,21 @@ func (a claudeAdapter) applyUserScope(opts Options) (*Result, error) {
 	case StateEquivalent:
 		return res, nil
 	case StateConflict:
-		if !opts.Force {
-			return nil, conflictError(ClientClaude.DisplayName(), cfg.describeExisting(), describeEntry(desired))
+		old, restorable := restorableClaudeEntry(cfg.existing, desired)
+		if !restorable {
+			// Refused before anything changes, with or without --force: see
+			// restorableClaudeEntry.
+			return nil, unrestorableConflictError(path, opts.Force)
 		}
-		old, ok := cfg.existing.(map[string]any)
-		if !ok {
-			// add-json takes an object; Ark could not put back anything else
-			// if the replacement failed, so it does not remove it.
-			return nil, fmt.Errorf(
-				"refusing to replace the existing Claude Code %q MCP entry in %s: it is not a JSON object, which Ark cannot restore if replacement fails\n"+
-					"remove it yourself (`claude mcp remove --scope user %s`), then re-run `ark setup claude --global`",
-				claudeServerName, path, claudeServerName)
+		if !opts.Force {
+			return nil, conflictError(ClientClaude.DisplayName(), describeEntry(old), describeEntry(desired))
 		}
 		if err := a.requireClaudeCLI(path,
 			describeClaudeCommand("mcp", "remove", "--scope", claudeUserScope, claudeServerName),
 			describeClaudeAddJSON(desired)); err != nil {
+			return nil, err
+		}
+		if err := unchangedSince(path, old); err != nil {
 			return nil, err
 		}
 		if err := a.replaceUserEntry(path, old, desired); err != nil {
@@ -254,6 +254,94 @@ func (a claudeAdapter) requireClaudeCLI(path string, manual ...string) error {
 		path, strings.Join(manual, "\n  "))
 }
 
+// restorableClaudeEntry reports whether entry is one Ark can put back if a
+// replacement fails, and returns it as an object: an entry of the form Ark
+// writes, {"type": "stdio", "command": <ark>, "args": ["mcp-server",
+// "--root", <path>], "env": {}} (type and an empty env optional), where
+// <ark> is the command of desired (the entry Ark is about to write, which
+// add-json is passed anyway) or its base name is ark or ark.exe. An absent
+// env and {} are empty; null is not (claude refuses it, so it could not be
+// put back). claude mcp add-json takes an entry on
+// its command line only (it has no other input), where other users and
+// processes of the machine can read it. Such an entry holds nothing beyond
+// the command line `ark mcp-server` itself runs with, so putting it back
+// exposes nothing new. Any other entry is taken as secret as a whole (its env,
+// headers, URL, arguments or unknown fields may hold credentials): Ark never
+// passes it to a process and never prints it.
+func restorableClaudeEntry(entry any, desired map[string]any) (map[string]any, bool) {
+	m, ok := entry.(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	for k, v := range m {
+		switch k {
+		case "command", "args":
+		case "type":
+			if v != "stdio" {
+				return nil, false
+			}
+		case "env":
+			if e, ok := v.(map[string]any); !ok || len(e) != 0 {
+				return nil, false
+			}
+		default:
+			return nil, false
+		}
+	}
+	cmd, ok := m["command"].(string)
+	if !ok {
+		return nil, false
+	}
+	// The base name on any OS: an entry may name a Windows path.
+	switch strings.ToLower(cmd[strings.LastIndexAny(cmd, `/\`)+1:]) {
+	case "ark", "ark.exe":
+	default:
+		if mine, _ := desired["command"].(string); cmd != mine {
+			return nil, false
+		}
+	}
+	args, ok := m["args"].([]any)
+	if !ok || len(args) != 3 || args[0] != "mcp-server" || args[1] != "--root" {
+		return nil, false
+	}
+	root, ok := args[2].(string)
+	if !ok || root == "" || strings.HasPrefix(root, "-") {
+		return nil, false
+	}
+	return m, true
+}
+
+// unrestorableConflictError refuses to replace an Ark entry Ark could not put
+// back without exposing it (restorableClaudeEntry), before anything changes.
+// It does not show the entry.
+func unrestorableConflictError(path string, force bool) error {
+	why := "re-running with --force does not replace it"
+	if force {
+		why = "--force does not replace it"
+	}
+	return fmt.Errorf(
+		"found a different Ark MCP configuration for %s in %s, not of the form Ark writes (its contents are not shown: they may hold credentials)\n"+
+			"%s: if the replacement failed, Ark could put the entry back only by passing it on the `claude` command line, where other processes can read it. Ark changed nothing.\n"+
+			"To replace it, remove it yourself and re-run `ark setup claude --global`:\n  %s",
+		ClientClaude.DisplayName(), path, why,
+		describeClaudeCommand("mcp", "remove", "--scope", claudeUserScope, claudeServerName))
+}
+
+// unchangedSince re-reads path just before Ark removes the entry and fails,
+// changing nothing, when the entry is no longer old: Claude Code, or the
+// user, changed it after Ark read it, and Ark would remove an entry it could
+// not put back.
+func unchangedSince(path string, old map[string]any) error {
+	cfg, err := loadClaudeUserConfig(path)
+	if err == nil {
+		var same bool
+		if same, err = semanticEqual(cfg.existing, old); err == nil && same {
+			return nil
+		}
+	}
+	return fmt.Errorf("the Claude Code %q MCP entry in %s changed while Ark was reading it; Ark changed nothing. Re-run `ark setup claude --global --force`", claudeServerName, path)
+}
+
 // replaceUserEntry swaps a conflicting Ark entry for desired, restoring the
 // previous entry if the replacement fails (codexAdapter.replace).
 func (a claudeAdapter) replaceUserEntry(path string, old, desired map[string]any) error {
@@ -262,22 +350,19 @@ func (a claudeAdapter) replaceUserEntry(path string, old, desired map[string]any
 			"the previous Ark configuration was left unchanged", err)
 	}
 	if err := a.addUserEntry(desired); err != nil {
-		return a.replacementError(old, err)
+		return a.replacementError(old, desired, err)
 	}
 	if err := verifyClaudeUserEntry(path, desired); err != nil {
 		_ = a.removeUserEntry()
-		return a.replacementError(old, err)
+		return a.replacementError(old, desired, err)
 	}
 	return nil
 }
 
-// replacementError restores the previous entry and reports the primary
-// failure. The previous entry's env is never printed, as it may hold secrets:
-// describeEntry shows the command and arguments only, and claude's stderr of
-// the restoring call is dropped. (The entry is still an argument of that
-// call, as add-json takes it on the command line.)
-func (a claudeAdapter) replacementError(old map[string]any, primary error) error {
-	if rErr := a.restoreUserEntry(old); rErr != nil {
+// replacementError restores the previous entry, one restorableClaudeEntry
+// accepts, and reports the primary failure.
+func (a claudeAdapter) replacementError(old, desired map[string]any, primary error) error {
+	if rErr := a.restoreUserEntry(old, desired); rErr != nil {
 		return fmt.Errorf("failed to replace Ark MCP configuration: %w\n"+
 			"WARNING: restoration of the previous Ark configuration (%s) also failed: %v", primary, describeEntry(old), rErr)
 	}
@@ -291,13 +376,18 @@ func (a claudeAdapter) addUserEntry(entry map[string]any) error {
 		return fmt.Errorf("failed to encode the Ark MCP entry: %w", err)
 	}
 	if _, stderr, _, err := a.runner.run("claude", "mcp", "add-json", "--scope", claudeUserScope, claudeServerName, string(data)); err != nil {
-		return fmt.Errorf("`claude mcp add-json` failed: %w\n%s", err, strings.TrimSpace(string(stderr)))
+		return fmt.Errorf("`claude mcp add-json` failed: %w\n%s", err, claudeMessage(stderr))
 	}
 	return nil
 }
 
-// restoreUserEntry is addUserEntry without claude's stderr in the error.
-func (a claudeAdapter) restoreUserEntry(entry map[string]any) error {
+// restoreUserEntry is addUserEntry for an entry restorableClaudeEntry
+// accepts; it refuses any other, so that no caller can pass one to claude.
+// claude's stderr is left out of the error.
+func (a claudeAdapter) restoreUserEntry(entry, desired map[string]any) error {
+	if _, ok := restorableClaudeEntry(entry, desired); !ok {
+		return fmt.Errorf("refusing to pass an entry Ark did not write to `claude`")
+	}
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return fmt.Errorf("failed to encode the previous Ark MCP entry: %w", err)
@@ -310,9 +400,29 @@ func (a claudeAdapter) restoreUserEntry(entry map[string]any) error {
 
 func (a claudeAdapter) removeUserEntry() error {
 	if _, stderr, _, err := a.runner.run("claude", "mcp", "remove", "--scope", claudeUserScope, claudeServerName); err != nil {
-		return fmt.Errorf("`claude mcp remove` failed: %w\n%s", err, strings.TrimSpace(string(stderr)))
+		return fmt.Errorf("`claude mcp remove` failed: %w\n%s", err, claudeMessage(stderr))
 	}
 	return nil
+}
+
+// claudeKnownMessages are claude's own failure messages for add-json and
+// remove that name a server or a path but no value.
+var claudeKnownMessages = []string{"already exists", "No MCP server named", "Invalid configuration"}
+
+// claudeMessage passes on claude's stderr only when it is one line of a
+// message claudeKnownMessages names. Anything else may quote the
+// configuration file (claude reports a malformed one with the text it could
+// not parse, a credential included), so it is not shown.
+func claudeMessage(stderr []byte) string {
+	msg := strings.TrimSpace(string(stderr))
+	if msg != "" && !strings.ContainsAny(msg, "\r\n") {
+		for _, known := range claudeKnownMessages {
+			if strings.Contains(msg, known) {
+				return msg
+			}
+		}
+	}
+	return "(claude's error output is not shown: it may quote the configuration file)"
 }
 
 // verifyClaudeUserEntry re-reads the file and confirms that claude stored the

@@ -8,7 +8,9 @@ Messages are quoted as Ark prints them; `…` stands for the variable part.
 |---|---|
 | `ark --version` prints `v1.2.3` | Installed with `go install …@latest`, which resolves to the legacy v1 line. Install with Homebrew, a release archive, or `go install github.com/magicdrive/ark@main` ([Getting started](getting-started.md#go-toolchain)). |
 | `ark command "…" not found on PATH` during `setup` | Put `ark` on `PATH`, or pass `--ark-path /full/path/to/ark`. |
-| `found a different Ark MCP configuration for …` | An Ark entry exists with other settings. Re-run with `--force` to replace Ark's entry (nothing else is touched). |
+| `found a different Ark MCP configuration for …` | An Ark entry exists with other settings. Re-run with `--force` to replace Ark's entry (nothing else is touched). For Claude Code `--global`, see the next row when the message says "not of the form Ark writes". |
+| `found a different Ark MCP configuration for Claude Code …, not of the form Ark writes` | The user-scope `ark` entry is not one Ark writes: its command is not named `ark`/`ark.exe` (nor the `--ark-path` you gave), its args are not exactly `mcp-server --root <path>` (an extra flag such as `--no-cache`, or `--root=<path>`), or it has an `env`, headers, a URL or other fields. Ark would have to pass it on the `claude` command line to put it back, so it changes nothing, even with `--force`. Remove it (`claude mcp remove --scope user ark`) and re-run. |
+| `… changed while Ark was reading it` | Claude Code or you changed the entry during setup. Nothing was changed; re-run. |
 | `cannot parse …` / `Ark did not modify the file` | The client configuration is malformed. Fix it by hand; Ark never overwrites a file it cannot parse. |
 | ``the Codex CLI (`codex`) was not found on PATH`` | Install Codex, or register Ark by hand: `codex mcp add ark -- ark mcp-server --root /abs/path`. |
 | ``the Claude Code CLI (`claude`) was not found on PATH`` | `ark setup claude --global` registers Ark through `claude mcp add-json --scope user`. Install Claude Code, or run the command the message prints. |

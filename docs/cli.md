@@ -329,7 +329,7 @@ list, scopes and safety rules are in
 | `<client>` | – | `claude`, `cursor`, `codex`, `cline`, `copilot-vscode`, `copilot-cli` | – |
 | `--root <dir>` | `-r` | Repository root to serve | current directory |
 | `--global` | `-g` | Use the client's user-level configuration (not for `copilot-vscode` / `copilot-cli`) | project |
-| `--force` | `-f` | Replace an existing Ark entry (never other entries) | – |
+| `--force` | `-f` | Replace an existing Ark entry (never other entries); for `claude --global`, only an entry of the form Ark writes ([Getting started](getting-started.md#3-connect-a-coding-agent)) | – |
 | `--ark-path <path>` | `-p` | Path of the `ark` binary to configure | `ark` found on `PATH` |
 | `--name <name>` | `-n` | Name of the generated Claude skill / slash command (Claude only) | directory name |
 
