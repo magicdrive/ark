@@ -665,7 +665,9 @@ read), `toml_invalid` (error: an impossible date, an invalid escape),
 `toml_duplicate_key`, `toml_table_redefined`, `toml_not_checked` (values
 nested over 64 deep or a key of over 8 parts: dates and escapes are not
 checked), `toml_too_large` (a file over 4 MiB: only the file is declared),
-`toml_key_too_long`, `toml_truncated`, `pyproject_invalid_requirement`.
+`toml_key_too_long`, `toml_truncated`, `pyproject_invalid_requirement`,
+`cargo_workspace_truncated` (a manifest's `workspace = true` entries past
+2048 ancestor lookups, left unresolved).
 A leading UTF-8 byte order mark is skipped.
 
 **Limits.** No version requirement, `cfg()` expression, environment marker

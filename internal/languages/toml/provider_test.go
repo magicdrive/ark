@@ -3,6 +3,7 @@ package toml
 import (
 	"context"
 	"fmt"
+	"github.com/magicdrive/ark/internal/languages/toml/manifest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -615,4 +616,28 @@ func TestManifest_InheritedWorkspaceAliases(t *testing.T) {
 		`a\b\Cargo.toml#workspace-root/dependencies/log -> a\Cargo.toml#/workspace/dependencies/log`,
 		`a\b\Cargo.toml#workspace-root/dependencies/log -> Cargo.toml#/workspace/dependencies/log`,
 	})
+}
+
+// A deep manifest's inherited entries have at most maxInheritedAliases
+// aliases: the later ones are reported and left unresolved.
+func TestManifest_InheritedAliasesBounded(t *testing.T) {
+	dir := strings.Repeat("d/", 40) + "m"
+	var b strings.Builder
+	b.WriteString("[package]\nname = \"m\"\n[dependencies]\n")
+	for i := range 200 {
+		fmt.Fprintf(&b, "k%d = { workspace = true }\n", i)
+	}
+	ex := extract(t, dir+"/Cargo.toml", b.String())
+	if n := len(ex.Aliases); n == 0 || n > 2048 {
+		t.Errorf("%d aliases: want 1 to 2048", n)
+	}
+	var found int
+	for _, d := range ex.Diagnostics {
+		if d.Code == manifest.CodeInheritedTruncated {
+			found++
+		}
+	}
+	if found != 1 {
+		t.Errorf("%d %s diagnostics, want 1: %+v", found, manifest.CodeInheritedTruncated, ex.Diagnostics)
+	}
 }

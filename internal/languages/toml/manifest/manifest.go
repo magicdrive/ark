@@ -133,11 +133,24 @@ type reader struct {
 	id             Identity
 	out            Result
 	inherited      map[string]bool // keys whose workspace entry the ancestors' aliases name
+	inheritedFull  bool            // maxInheritedAliases reached
 }
 
 // maxAncestors bounds the directories above a manifest searched for the
-// workspace root of `workspace = true` (the nearest first).
-const maxAncestors = 32
+// workspace root of `workspace = true` (the nearest first), and
+// maxInheritedAliases the aliases of a manifest: an alias per ancestor and
+// inherited key, each resolved to its target or targets, made a deep
+// manifest of thousands of keys cost gigabytes. Past the bound an
+// inherited entry has no alias and stays unresolved, reported
+// (CodeInheritedTruncated).
+const (
+	maxAncestors        = 32
+	maxInheritedAliases = 2048
+)
+
+// CodeInheritedTruncated reports the `workspace = true` entries left
+// unresolved past maxInheritedAliases.
+const CodeInheritedTruncated = "cargo_workspace_truncated"
 
 // WorkspaceRootPrefix starts the pointer of the identity, in a member's
 // own file, of the workspace entry `workspace = true` inherits when no file
@@ -162,6 +175,14 @@ func (r *reader) inheritedEntry(key string, at tomldoc.Span) string {
 		r.inherited = map[string]bool{}
 	}
 	r.inherited[key] = true
+	if min(strings.Count(r.dir, "/")+1, maxAncestors) > maxInheritedAliases-len(r.out.Aliases) {
+		if !r.inheritedFull {
+			r.inheritedFull = true
+			r.out.Problems = append(r.out.Problems, tomldoc.Problem{Code: CodeInheritedTruncated, Start: at.Start, End: at.End,
+				Message: fmt.Sprintf("more workspace = true entries than %d ancestor lookups: this and the later ones are left unresolved", maxInheritedAliases)})
+		}
+		return q
+	}
 	for d, n := r.dir, 0; d != "." && n < maxAncestors; n++ {
 		parent := path.Dir(d)
 		if parent == d {
