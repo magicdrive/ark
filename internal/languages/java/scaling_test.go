@@ -5,14 +5,18 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/magicdrive/ark/internal/source"
+	"github.com/magicdrive/ark/internal/testutil/scaling"
 )
 
 // TestExtractScalesLinearly: extraction grows linearly with the source — a
 // long literal table (generated code) and a class of many methods calling
-// one another. Four times the size must not cost sixteen times the time.
+// one another. Four times the size must not cost sixteen times the time
+// (scaling.Linear: the sizes alternate, and only a ratio above the bound in
+// every attempt fails), nor sixteen times the allocations — a count, the
+// same under any load; a quadratic cost that allocates nothing is left to
+// the time.
 func TestExtractScalesLinearly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing test")
@@ -36,29 +40,25 @@ func TestExtractScalesLinearly(t *testing.T) {
 		return []byte(b.String())
 	}
 	p := NewProvider()
-	best := func(src []byte) time.Duration {
-		d := time.Duration(1 << 62)
-		for i := 0; i < 3; i++ {
-			start := time.Now()
+	extract := func(src []byte) func() {
+		return func() {
 			if _, err := p.Extract(context.Background(), source.FileID("src/p/T.java"), src); err != nil {
 				t.Fatal(err)
 			}
-			if e := time.Since(start); e < d {
-				d = e
-			}
 		}
-		return d
 	}
 	for name, gen := range map[string]func(int) []byte{"table": table, "methods": methods} {
 		n := 5000
 		if name == "methods" {
 			n = 500
 		}
-		small, large := best(gen(n)), best(gen(4*n))
-		t.Logf("%s: %d %v, %d %v (x%.1f)", name, n, small, 4*n, large, float64(large)/float64(small))
-		if large > 10*small {
-			t.Errorf("%s: 4x the size took %.1fx the time (%v, %v): extraction is not linear", name, float64(large)/float64(small), small, large)
-		}
+		small, large := extract(gen(n)), extract(gen(4*n))
+		what := fmt.Sprintf("%s: %d / %d", name, n, 4*n)
+		scaling.Linear(t, what, 10, small, large)
+		// Extraction allocates a constant number per element, plus a few
+		// regrowths: four times the input makes about four times the
+		// allocations (a quadratic cost, sixteen).
+		scaling.LinearAllocs(t, what, 4.5, small, large)
 	}
 }
 
@@ -81,20 +81,11 @@ func TestResolveScalesLinearly(t *testing.T) {
 		b.WriteString("}\n")
 		return map[string]string{"src/p/Outer.java": b.String()}
 	}
-	best := func(files map[string]string) time.Duration {
-		d := time.Duration(1 << 62)
-		for i := 0; i < 3; i++ {
-			start := time.Now()
-			resolveRepo(t, files)
-			if e := time.Since(start); e < d {
-				d = e
-			}
-		}
-		return d
-	}
-	small, large := best(nested(500)), best(nested(2000))
-	t.Logf("500 types %v, 2000 types %v (x%.1f)", small, large, float64(large)/float64(small))
-	if large > 10*small {
-		t.Errorf("4x the types took %.1fx the time (%v, %v): resolution is not linear", float64(large)/float64(small), small, large)
-	}
+	small, large := func() { resolveRepo(t, nested(500)) }, func() { resolveRepo(t, nested(2000)) }
+	scaling.Linear(t, "500 / 2000 types", 10, small, large)
+	// As extraction: about four times the allocations. A per-reference
+	// scan that allocates (an index rebuilt for every type) shows here
+	// first: its time stays under the bound until it costs more than the
+	// rest of the resolution.
+	scaling.LinearAllocs(t, "500 / 2000 types", 4.5, small, large)
 }

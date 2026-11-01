@@ -11,6 +11,8 @@ import (
 
 	ts "github.com/odvcencio/gotreesitter"
 	"github.com/odvcencio/gotreesitter/grammars"
+
+	"github.com/magicdrive/ark/internal/testutil/scaling"
 )
 
 // --- The forest probe (comments blanked before the forest route) ---
@@ -161,32 +163,24 @@ func TestBlankComments(t *testing.T) {
 
 // The probe keeps the parse of a run of commented, attributed code linear:
 // four times the comments cost about four times the time, where the forest
-// route alone took about sixty-four times as long (cubic).
+// route alone took about sixty-four times as long (cubic). scaling.Linear:
+// the sizes alternate, and only a ratio above the bound in every attempt
+// fails.
 func TestProbe_ScalesLinearly(t *testing.T) {
 	if testing.Short() {
 		t.Skip("timing test")
 	}
 	lang := grammars.RustLanguage()
-	best := func(src []byte) time.Duration {
-		d := time.Duration(1 << 62)
-		for i := 0; i < 3; i++ {
-			start := time.Now()
+	parse := func(src []byte) func() {
+		return func() {
 			tree, _, err := parseRoute(lang, src)
 			if err != nil {
 				t.Fatal(err)
 			}
 			tree.Release()
-			if e := time.Since(start); e < d {
-				d = e
-			}
 		}
-		return d
 	}
-	small, large := best(attributedComments(500)), best(attributedComments(2000))
-	t.Logf("500 comments %v, 2000 comments %v (x%.1f)", small, large, float64(large)/float64(small))
-	if large > 10*small {
-		t.Errorf("4x the comments took %.1fx the time (%v, %v): the parse is not linear", float64(large)/float64(small), small, large)
-	}
+	scaling.Linear(t, "500 / 2000 comments", 10, parse(attributedComments(500)), parse(attributedComments(2000)))
 }
 
 // Only a comment is blanked: text that looks like one inside a string, a

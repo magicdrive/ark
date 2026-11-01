@@ -281,23 +281,19 @@ func TestDeterministic(t *testing.T) {
 	}
 }
 
-// Worst cases (docs/scripts/css-parser-eval/run.sh): linear time, nesting
-// bounded, no stack exhaustion.
+// Worst cases: nesting bounded, no stack exhaustion, no hang. Linear time is
+// TestReaderStepsLinear's: it counts the reader's work, where a time bound
+// cannot tell a quadratic reading of these cases from a linear one (a
+// reading that steps through each block once per enclosing level instead of
+// over it takes about three times as long here, far inside any bound). The
+// time bound catches a hang, without the race detector only: its slowdown
+// on a CI runner whose other jobs compete for the CPU took a case past the
+// bound with no change in the cost.
 func TestWorstCases(t *testing.T) {
-	cases := map[string]string{
-		"media32000":       "@media x{" + strings.Repeat("div{color:red}\n", 32000) + "}",
-		"nest4000":         strings.Repeat("a{", 4000),
-		"declnest4000":     ".x{" + strings.Repeat("a:b{", 4000),
-		"custom4000":       ".x{" + strings.Repeat("--a:{", 4000),
-		"paren1m":          ".x{a:" + strings.Repeat("(", 1000000),
-		"brace1m":          strings.Repeat("{", 1000000),
-		"blockvalue":       ".x{" + strings.Repeat("a:{", 250) + strings.Repeat("b ", 400000) + strings.Repeat("}x", 250) + "}",
-		"blockvalue_rules": ".x{" + strings.Repeat("a:{", 200) + strings.Repeat("p{c:d}", 20000) + strings.Repeat("} b", 200) + "}",
-	}
-	for name, src := range cases {
+	for name, src := range css.WorstCases() {
 		start := time.Now()
 		ex := extract(t, name+".css", src)
-		if d := time.Since(start); d > 10*time.Second {
+		if d := time.Since(start); !raceEnabled && d > 10*time.Second {
 			t.Errorf("%s: %v", name, d)
 		}
 		if len(ex.Symbols) == 0 {

@@ -202,7 +202,14 @@ ARK_RUST_CORPUS=/path/to/crate1:/path/to/crate2 \
 
 `TestProbe_ScalesLinearly` and `TestExtractScalesLinearly` run in CI: four
 times the input must not cost more than ten times the time (a quadratic or
-cubic cost does).
+cubic cost does). The two sizes run alternately and their best runs are
+compared, and a ratio over the bound is measured again, up to three attempts
+(`internal/testutil/scaling`): a burst of load on a shared runner does not
+last through all of them, a quadratic cost exceeds the bound in each. Java
+extraction and resolution also bound the ratio of their allocations, which
+does not depend on load. The CSS reader and tokenizer count their steps, and
+`TestReaderStepsLinear` bounds the steps per token and per byte on the
+worst-case stylesheets, independent of time.
 
 ## Token figures
 
