@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -296,62 +295,203 @@ func TestReadStable_RenameReplacement(t *testing.T) {
 	}
 }
 
-// Writers rewriting in place (and by rename) as fast as they can, readers
-// reading (in bursts): a settled read is always one whole version written.
+// rewriteSameSize rewrites the file at p in place to other bytes of the size
+// of old (its content), restoring the modification time: of what fstat
+// reports, only the ctime changes.
+func rewriteSameSize(p, old string) error {
+	fi, err := os.Stat(p)
+	if err != nil {
+		return err
+	}
+	f, err := os.OpenFile(p, os.O_WRONLY|os.O_TRUNC, 0)
+	if err != nil {
+		return err
+	}
+	_, err = f.WriteString("#" + old[1:])
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		return err
+	}
+	return os.Chtimes(p, fi.ModTime(), fi.ModTime())
+}
+
+// A writer rewriting the file in place (and by rename) in bursts, a reader
+// reading it: a settled read is always one whole version written. The
+// writer and the reader take turns through channels, not time, so each step
+// below happens in every run, whatever the scheduler does:
+//
+//  1. The writer writes a burst while the reader reads: any read may fail
+//     with ErrChanged (or, between rename steps, find no file); one that
+//     succeeds and is settled is a whole version.
+//  2. The writer stops after the burst's last version and says which. The
+//     reader reads it again after its SettleTime: settled, that version.
+//  3. The writer resumes while the reader reads the settled file: it writes
+//     once between the read's first fstat and its first read system call
+//     (SetReadHookForTest), and waits for the read to end before its next
+//     burst. In place, to other bytes of the same size with the
+//     modification time restored, so that only the ctime tells: ErrChanged,
+//     and no bytes. By rename: ErrChanged or the old version whole
+//     (TestReadStable_RenameReplacement).
 func TestReadStable_ConcurrentWriters(t *testing.T) {
 	versions := []string{"x.txt\n", "*\n", "x.txt\nok.txt\nanother-longer-line.txt\n", "yy.txt\n"}
 	tr, p := stableTree(t, versions[0])
-	var stop atomic.Bool
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for n := 0; !stop.Load(); n++ {
-			v := versions[n%len(versions)]
-			if n%5 == 4 {
-				tmp := p + ".tmp"
-				if os.WriteFile(tmp, []byte(v), 0o644) == nil {
-					os.Rename(tmp, p)
-				}
-			} else if f, err := os.OpenFile(p, os.O_WRONLY|os.O_TRUNC, 0); err == nil {
-				f.WriteString(v)
-				f.Close()
-			}
-			if n%200 == 199 {
-				time.Sleep(150 * time.Millisecond) // bursts: settled reads between them
-			}
-		}
-	}()
 	valid := map[string]bool{"": true} // between truncate and write
 	for _, v := range versions {
 		valid[v] = true
 	}
-	var reads, changed, unsettled, settled int
-	end := time.Now().Add(time.Second)
-	for time.Now().Before(end) {
-		reads++
-		b, st, err := tr.ReadFileStable("rules", nil)
-		switch {
-		case errors.Is(err, ErrChanged):
-			changed++
-		case err != nil:
-			// Between rename steps the name may briefly be missing.
-			if !errors.Is(err, os.ErrNotExist) {
-				t.Fatal(err)
+	rounds := 8
+	if coarse(t, p) {
+		rounds = 2 // each settle waits two seconds and more
+	}
+	const burst = 50
+
+	write := func(v string, rename bool) error {
+		if rename {
+			tmp := p + ".tmp"
+			if err := os.WriteFile(tmp, []byte(v), 0o644); err != nil {
+				return err
 			}
-		case !st.Settled():
-			unsettled++
-		default:
-			settled++
-			if !valid[string(b)] {
-				t.Errorf("settled read of %q, never written", b)
+			return os.Rename(tmp, p)
+		}
+		f, err := os.OpenFile(p, os.O_WRONLY|os.O_TRUNC, 0)
+		if err != nil {
+			return err
+		}
+		_, err = f.WriteString(v)
+		if cerr := f.Close(); err == nil {
+			err = cerr
+		}
+		return err
+	}
+
+	paused := make(chan string)    // writer -> reader: the burst's last version, now unchanged
+	resume := make(chan struct{})  // reader -> writer: write once now
+	wrote := make(chan error)      // writer -> reader: that write's result
+	proceed := make(chan struct{}) // reader -> writer: that read is over, next burst
+	done := make(chan struct{})    // test end: the writer returns
+	var wg sync.WaitGroup
+	t.Cleanup(func() { close(done); wg.Wait() }) // also after a failure below
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for r := range rounds {
+			var last string
+			for i := range burst {
+				last = versions[(r+i)%len(versions)]
+				rename := i%5 == 4
+				if err := write(last, rename); err != nil && !rename {
+					t.Errorf("round %d: write: %v", r, err) // a rename may fail on Windows while the file is open
+				}
+			}
+			// The burst ends in place, so that the file holds last.
+			if err := write(last, false); err != nil {
+				t.Errorf("round %d: write: %v", r, err)
+			}
+			select {
+			case paused <- last:
+			case <-done:
+				return
+			}
+			select {
+			case <-resume:
+			case <-done:
+				return
+			}
+			var err error
+			if r%2 == 1 {
+				err = write(versions[(r+1)%len(versions)], true)
+			} else {
+				err = rewriteSameSize(p, last)
+			}
+			select {
+			case wrote <- err:
+			case <-done:
+				return
+			}
+			select {
+			case <-proceed:
+			case <-done:
+				return
 			}
 		}
+	}()
+
+	var changed, missing, unsettled, settled int
+	for r := range rounds {
+		// 1. Reads during the burst.
+		var last string
+	burst:
+		for {
+			select {
+			case last = <-paused:
+				break burst
+			default:
+			}
+			b, st, err := tr.ReadFileStable("rules", nil)
+			switch {
+			case errors.Is(err, ErrChanged):
+				changed++
+			case errors.Is(err, os.ErrNotExist):
+				missing++
+			case err != nil:
+				t.Fatalf("round %d: %v", r, err)
+			case !st.Settled():
+				unsettled++
+			default:
+				settled++
+				if !valid[string(b)] {
+					t.Fatalf("round %d: settled read of %q, never written", r, b)
+				}
+			}
+		}
+
+		// 2. The writer has stopped (the receive above happens after its
+		// last write): the file is last, settled after its SettleTime.
+		b, st, err := tr.ReadFileStable("rules", nil)
+		if err != nil || string(b) != last {
+			t.Fatalf("round %d: read with the writer stopped: %q %v, want %q", r, b, err, last)
+		}
+		time.Sleep(time.Until(st.SettleTime()))
+		b, again, err := tr.ReadFileStable("rules", nil)
+		if err != nil || string(b) != last || !again.Same(st) || !again.Settled() {
+			t.Fatalf("round %d: read after SettleTime: %q %v same=%v settled=%v", r, b, err, again.Same(st), again.Settled())
+		}
+		settled++
+
+		// 3. The writer writes once during the next read.
+		var once sync.Once
+		var hooked bool
+		var werr error
+		restore := SetReadHookForTest(func(Identity, int) {
+			once.Do(func() {
+				hooked = true
+				resume <- struct{}{}
+				werr = <-wrote
+			})
+		})
+		b, st, err = tr.ReadFileStable("rules", nil)
+		restore()
+		if !hooked {
+			// No read system call: the writer still waits to resume (the
+			// cleanup releases it).
+			t.Fatalf("round %d: the read made no read system call: %q %v", r, b, err)
+		}
+		proceed <- struct{}{} // the write above is the only one during that read
+		inPlace := r%2 == 0
+		if werr != nil && inPlace {
+			t.Fatalf("round %d: write during the read: %v", r, werr)
+		}
+		switch {
+		case errors.Is(err, ErrChanged) && b == nil:
+			changed++
+		case !inPlace && err == nil && string(b) == last:
+			// By rename: the descriptor read the old object whole (or, on
+			// Windows, the rename failed while the file was open: werr).
+		default:
+			t.Fatalf("round %d: written during a settled read (in place: %v): %q %v settled=%v", r, inPlace, b, err, st.Settled())
+		}
 	}
-	stop.Store(true)
-	wg.Wait()
-	t.Logf("%d reads: %d changed, %d unsettled, %d settled", reads, changed, unsettled, settled)
-	if settled == 0 {
-		t.Error("no read settled between the bursts")
-	}
+	t.Logf("%d rounds: %d changed, %d missing, %d unsettled, %d settled", rounds, changed, missing, unsettled, settled)
 }
