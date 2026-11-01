@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -577,23 +578,73 @@ func TestClaudeUser_LegacyConfigJSONFollowed(t *testing.T) {
 	}
 }
 
-// An empty .config.json is passed over, as claude does; one that is not a
-// regular file is refused, not passed over.
+// .config.json edge cases, as Claude Code 2.1.316 chooses: an empty one is
+// used when it is writable and .claude.json does not exist (Ark then refuses
+// it as empty, without starting claude), and passed over otherwise; a
+// directory or a dangling symlink is passed over; a symlink to a file is used,
+// and refused.
 func TestClaudeUser_LegacyConfigJSONEdgeCases(t *testing.T) {
-	t.Run("empty", func(t *testing.T) {
-		home, root, ark := claudeUserEnv(t)
+	legacyOf := func(home string) string { return filepath.Join(home, ".claude", ".config.json") }
+	mkdir := func(t *testing.T, home string) {
+		t.Helper()
 		if err := os.MkdirAll(filepath.Join(home, ".claude"), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(home, ".claude", ".config.json"), nil, 0o644); err != nil {
+	}
+	emptyFile := func(t *testing.T, path string, mode os.FileMode) {
+		t.Helper()
+		if err := os.WriteFile(path, nil, 0o644); err != nil {
 			t.Fatal(err)
 		}
-		path := filepath.Join(home, ".claude.json")
-		res, err := runClaudeUser(newFakeClaude(path), Options{ArkPath: ark, RootDir: root})
-		if err != nil || res.ConfigPath != path {
-			t.Fatalf("res=%v err=%v", res, err)
+		if err := os.Chmod(path, mode); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Run("empty-writable-no-claude.json", func(t *testing.T) {
+		home, root, ark := claudeUserEnv(t)
+		mkdir(t, home)
+		emptyFile(t, legacyOf(home), 0o644)
+		f := newFakeClaude(legacyOf(home))
+		if _, err := runClaudeUser(f, Options{ArkPath: ark, RootDir: root}); err == nil || !strings.Contains(err.Error(), "empty") || !strings.Contains(err.Error(), ".config.json") {
+			t.Fatalf("got %v", err)
+		}
+		if len(f.calls) != 0 {
+			t.Errorf("claude started: %v", f.calls)
 		}
 	})
+	for name, prepare := range map[string]func(t *testing.T, home string){
+		"empty-read-only": func(t *testing.T, home string) {
+			if runtime.GOOS == "windows" {
+				t.Skip("no write bits to clear")
+			}
+			emptyFile(t, legacyOf(home), 0o444)
+		},
+		"empty-beside-claude.json": func(t *testing.T, home string) {
+			emptyFile(t, legacyOf(home), 0o644)
+			writeJSON(t, filepath.Join(home, ".claude.json"), map[string]any{})
+		},
+		"directory": func(t *testing.T, home string) {
+			if err := os.Mkdir(legacyOf(home), 0o755); err != nil {
+				t.Fatal(err)
+			}
+		},
+		"dangling-symlink": func(t *testing.T, home string) {
+			if err := os.Symlink(filepath.Join(home, "missing.json"), legacyOf(home)); err != nil {
+				t.Skipf("symlink: %v", err)
+			}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			home, root, ark := claudeUserEnv(t)
+			mkdir(t, home)
+			prepare(t, home)
+			path := filepath.Join(home, ".claude.json")
+			res, err := runClaudeUser(newFakeClaude(path), Options{ArkPath: ark, RootDir: root})
+			if err != nil || res.ConfigPath != path {
+				t.Fatalf("res=%v err=%v", res, err)
+			}
+		})
+	}
 	t.Run("symlink", func(t *testing.T) {
 		home, root, ark := claudeUserEnv(t)
 		target := filepath.Join(t.TempDir(), "real.json")

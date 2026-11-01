@@ -339,7 +339,7 @@ Where each client's entry goes, and the variables that move it:
 
 | Client | Project scope | `--global` |
 |---|---|---|
-| `claude` | `.mcp.json` | Claude Code's user scope in `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when set; an older, non-empty `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR` when present, as Claude Code does), changed only through `claude mcp add-json --scope user` / `claude mcp remove --scope user`; needs `claude` on `PATH` |
+| `claude` | `.mcp.json` | Claude Code's user scope in `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when set; an older `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR` where Claude Code uses it instead), changed only through `claude mcp add-json --scope user` / `claude mcp remove --scope user`; needs `claude` on `PATH` |
 | `cline` | – (user-level only; `--global` is the same file) | `$CLINE_MCP_SETTINGS_PATH`, else `$CLINE_DATA_DIR/settings/cline_mcp_settings.json`, else `$CLINE_DIR/data/settings/cline_mcp_settings.json`, else `~/.cline/data/settings/cline_mcp_settings.json` |
 
 The other clients are listed in

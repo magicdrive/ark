@@ -27,9 +27,10 @@ import (
 // writes itself (no symlink, a regular file, at most maxConfigSize, valid
 // JSON, an object "mcpServers"), and does not start `claude` when any fails.
 //
-// Claude Code 2.1.316 reads <config home>/.config.json instead when that is
-// a non-empty file (an older location; config home is $CLAUDE_CONFIG_DIR or
-// ~/.claude), and names the file .claude-custom-oauth.json when
+// Claude Code 2.1.316 reads <config home>/.config.json instead (an older
+// location; config home is $CLAUDE_CONFIG_DIR or ~/.claude) when that is a
+// file, following symlinks, that is not empty, or is empty, writable and
+// .claude.json does not exist; and it names the file .claude-custom-oauth.json when
 // CLAUDE_CODE_CUSTOM_OAUTH_URL is set. Ark follows the first and refuses the
 // second, so that it never classifies, verifies or restores against a file
 // claude does not use.
@@ -45,10 +46,11 @@ const (
 )
 
 // claudeUserConfigPath returns the file Claude Code keeps user-scoped servers
-// in: <config home>/.config.json when that exists and is not an empty regular
-// file, else $CLAUDE_CONFIG_DIR/.claude.json when CLAUDE_CONFIG_DIR is
-// non-empty, else ~/.claude.json. A .config.json that is not a regular file is
-// returned too, so that it is refused rather than passed over.
+// in, chosen as Claude Code chooses it: <config home>/.config.json under the
+// conditions in the file comment, else $CLAUDE_CONFIG_DIR/.claude.json when
+// CLAUDE_CONFIG_DIR is non-empty, else ~/.claude.json. A .config.json chosen
+// through a symlink is returned as it is, and refused by the checks of
+// loadClaudeUserConfig, as is an empty one.
 func claudeUserConfigPath() (string, error) {
 	var base, configHome string
 	if dir := os.Getenv("CLAUDE_CONFIG_DIR"); dir != "" {
@@ -64,11 +66,16 @@ func claudeUserConfigPath() (string, error) {
 		}
 		base, configHome = home, filepath.Join(home, ".claude")
 	}
-	legacy := filepath.Join(configHome, ".config.json")
-	if info, err := os.Lstat(legacy); err == nil && !(info.Mode().IsRegular() && info.Size() == 0) {
-		return legacy, nil
+	legacy, current := filepath.Join(configHome, ".config.json"), filepath.Join(base, ".claude.json")
+	if info, err := os.Stat(legacy); err == nil && info.Mode().IsRegular() {
+		if info.Size() > 0 {
+			return legacy, nil
+		}
+		if _, err := os.Stat(current); info.Mode().Perm()&0o222 != 0 && err != nil {
+			return legacy, nil
+		}
 	}
-	return filepath.Join(base, ".claude.json"), nil
+	return current, nil
 }
 
 // claudeCustomOAuthEnv names the variable under which Claude Code keeps its

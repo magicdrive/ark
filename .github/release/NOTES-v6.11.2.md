@@ -8,7 +8,7 @@ No MCP tool, argument or response changes; the index and the cache are unchanged
 
 ### `ark setup claude --global` registers Ark where Claude Code reads it
 
-Claude Code reads user-scoped MCP servers from the top-level `mcpServers` of `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set; an older, non-empty `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR` instead when present — Ark follows Claude Code there too). Ark used to write `~/.claude/settings.json`, which Claude Code does not read MCP servers from, so the entry never took effect.
+Claude Code reads user-scoped MCP servers from the top-level `mcpServers` of `~/.claude.json` (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set; an older `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR` instead where Claude Code still uses it — Ark follows Claude Code's choice). Ark used to write `~/.claude/settings.json`, which Claude Code does not read MCP servers from, so the entry never took effect.
 
 `ark setup claude --global` now registers Ark through the official CLI — `claude mcp add-json --scope user ark …`, and `claude mcp remove --scope user ark` first for `--force` — and reads `~/.claude.json` back to confirm the entry. Ark never writes `~/.claude.json` itself: the file also holds Claude Code's account and project state.
 
@@ -62,7 +62,7 @@ The counters add one integer increment per step; extraction results are unchange
 - The command setup prints for you to run is quoted for a POSIX shell. On Windows, run it in a POSIX shell or adapt the quoting. With an npm installation of Claude Code or Codex on Windows (`claude.cmd`, `codex.cmd`), a repository path containing `&`, `|`, `<`, `>`, `^` or `%` may not reach the CLI intact; use a path without them, or run the printed command yourself.
 - Windows was tested in CI only, not with the clients themselves.
 - A linear-time test detects a quadratic cost only where, on the smaller input, that cost is large enough against the input's other costs (at least the linear part, and more where a cost does not grow with the input); a quadratic step that allocates nothing and is cheaper than that is not detected, as before. In three of the four XML cases the extraction stops at its symbol limit on both inputs, so their time grows little with the input; the parser's quadratic cost is still detected (one long line).
-- A test with a quadratic regression now takes about three times as long to fail, as every attempt is measured.
+- A case with a quadratic regression now runs up to three times as often before it fails, as every attempt is measured.
 
 ## Installation / Upgrade
 

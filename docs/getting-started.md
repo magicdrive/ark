@@ -99,8 +99,9 @@ Client-specific notes:
 - **Claude Code `--global`** registers Ark in Claude Code's user scope, the
   top-level `mcpServers` of `~/.claude.json`
   (`$CLAUDE_CONFIG_DIR/.claude.json` when that is set; Claude Code, and so
-  Ark, uses `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR` instead
-  when that older file is there and not empty). That file is Claude
+  Ark, uses an older `.config.json` in `~/.claude` or `$CLAUDE_CONFIG_DIR`
+  instead when that file is there and not empty, or is empty and writable
+  with no `.claude.json` beside it). That file is Claude
   Code's own, so Ark never writes it: it reads it to decide whether anything
   needs doing and changes it only by running `claude mcp add-json --scope
   user ark …` (and `claude mcp remove --scope user ark` for `--force`). The
