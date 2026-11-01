@@ -7,8 +7,11 @@
 package declname
 
 import (
+	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"github.com/magicdrive/ark/internal/secrets"
 )
 
 // MaxBytes bounds the bytes of a text that is a declaration's name.
@@ -30,4 +33,45 @@ func IsName(s string) bool {
 		}
 	}
 	return true
+}
+
+// HoldsSecret reports whether s, a would-be name, holds a secret by Ark's
+// recommended secret policy: a known token format as written (before a
+// slug lowers its case), or a value the policy masks after an "=" or a ":"
+// ("password = …", "api_key: …"). A name is shown as written (the MCP
+// server masks names by a token's form only), so a provider declares or
+// references nothing by such a name. A value after a "-" (the policy's
+// reading of "password-stdin" in a text) is a word of a name, not a
+// secret. A format character (a zero-width space) in s hides nothing: s is
+// also checked without them.
+func HoldsSecret(s string) bool {
+	if holdsSecret(s) {
+		return true
+	}
+	if t := strings.Map(func(r rune) rune {
+		if unicode.Is(unicode.Cf, r) {
+			return -1
+		}
+		return r
+	}, s); t != s {
+		return holdsSecret(t)
+	}
+	return false
+}
+
+func holdsSecret(s string) bool {
+	p := secrets.Recommended()
+	if len(p.Find(s, secrets.Mode{Tokens: true})) > 0 {
+		return true
+	}
+	for _, f := range p.Find(s, secrets.Mode{}) {
+		i := f.Start
+		for i > 0 && strings.IndexByte(" \t\"'`", s[i-1]) >= 0 {
+			i--
+		}
+		if i > 0 && (s[i-1] == '=' || s[i-1] == ':') {
+			return true
+		}
+	}
+	return false
 }

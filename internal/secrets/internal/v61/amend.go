@@ -39,7 +39,9 @@ var Amendments = []Amendment{
 			"xox" + "b-123456789012-1234567890123-<secret> kept its secret section. The token is " +
 			"masked whole, and the app-level, refresh, legacy and workflow tokens too. A word " +
 			"glued to a token by \"-\" (xox" + "b-1234567890-password=x) is not the token's: a token's " +
-			"last section is long, hex or numeric, so what v6.1.0 masked after it is still masked.",
+			"last section is long, hex or numeric. The policy also masks what this expression's " +
+			"pipeline with Was masks (secrets.Policy's floor), so a key glued to a token with no " +
+			"separator is still masked as v6.1.0 masked it.",
 	},
 }
 

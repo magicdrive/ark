@@ -687,3 +687,26 @@ func TestUndeclaredPrefixIsNoURI(t *testing.T) {
 		"element n.xml#/r", "element n.xml#/r/p:e", "element n.xml#/r/x:e",
 	})
 }
+
+// A Maven coordinate holding a secret names no dependency: a name is shown
+// as written.
+func TestMaven_SecretCoordinates(t *testing.T) {
+	ex := extract(t, "pom.xml", "<project><groupId>g</groupId><artifactId>a</artifactId><version>1</version><dependencies>"+
+		"<dependency><groupId>g</groupId><artifactId>token=hunterF3</artifactId></dependency>"+
+		"<dependency><groupId>g</groupId><artifactId>ok</artifactId></dependency></dependencies></project>")
+	var found bool
+	for _, s := range ex.Symbols {
+		if strings.Contains(s.Name, "hunter") || strings.Contains(s.Qualified, "hunter") {
+			t.Errorf("%s %q (%s) shows a secret", s.Kind, s.Name, s.Qualified)
+		}
+		found = found || strings.HasSuffix(s.Qualified, "::g:ok")
+	}
+	for _, r := range ex.References {
+		if strings.Contains(r.Name, "hunter") || strings.Contains(r.NameQualified, "hunter") {
+			t.Errorf("reference %q (%s) shows a secret", r.Name, r.NameQualified)
+		}
+	}
+	if !found {
+		t.Errorf("g:ok not declared")
+	}
+}

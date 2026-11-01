@@ -74,7 +74,6 @@ import (
 	"github.com/magicdrive/ark/internal/language"
 	"github.com/magicdrive/ark/internal/languages/internal/declname"
 	"github.com/magicdrive/ark/internal/reference"
-	"github.com/magicdrive/ark/internal/secrets"
 	"github.com/magicdrive/ark/internal/source"
 	"github.com/magicdrive/ark/internal/symbol"
 )
@@ -371,31 +370,11 @@ func (e *extractor) idRef(file, frag, container string, sp span, fromRoot bool) 
 	e.ref(r, sp)
 }
 
-// secret reports whether text holds a secret by Ark's recommended secret
-// policy: a known token format as written (before an anchor lowers its
-// case), or a value the policy masks after an "=" or a ":" ("password =
-// …", "api_key: …"). A heading, an HTML id, a code block's language or a
-// linked file name that does declares or references nothing: the index
-// shows names as they are (the MCP server masks names by a token's form
-// only), and a fragment that names such a heading is unresolved. A value
-// after a "-" (the policy's reading of "password-stdin" in a text) is a
-// word of a heading, not a secret.
-func secret(text string) bool {
-	p := secrets.Recommended()
-	if len(p.Find(text, secrets.Mode{Tokens: true})) > 0 {
-		return true
-	}
-	for _, f := range p.Find(text, secrets.Mode{}) {
-		i := f.Start
-		for i > 0 && strings.IndexByte(" \t\"'`", text[i-1]) >= 0 {
-			i--
-		}
-		if i > 0 && (text[i-1] == '=' || text[i-1] == ':') {
-			return true
-		}
-	}
-	return false
-}
+// secret reports whether a would-be name holds a secret
+// (declname.HoldsSecret): a heading, an HTML id, a code block's language or
+// a linked file name that does declares or references nothing, and a
+// fragment that names such a heading is unresolved.
+func secret(text string) bool { return declname.HoldsSecret(text) }
 
 // filePath spells a slash-separated repository path as the index's file
 // IDs are spelled.

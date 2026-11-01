@@ -123,10 +123,14 @@ func TestSlackToken_GluedAssignmentStillMasked(t *testing.T) {
 		"xap" + "p-1-A0123ABCDEF-1234567890123-0a1b-token=hunterC5",
 		"xox" + "e-1-My0xLTEyMy0xLTEyMy0x-password=hunterC6",
 		"xwf" + "p-Ab0Ab0Ab0Ab0-password=hunterC7",
+		// glued with no separator (the second audit's cases)
+		"xox" + "b-1234567890-1234567890abcdef0123password=hunterC8",
+		"xox" + "b-1-0123456789abcdefABCDEFGHIJpassword=hunterC9",
+		"xox" + "b-1-2-abcdefabcdefAPI_KEY=hunterC10",
 	} {
 		// Assignments are masked in text, not in names (Mode.Tokens).
 		for _, mode := range []secrets.Mode{{}, {Compact: true}} {
-			if got := p.Mask(in, mode); strings.Contains(got, "hunterC") {
+			if got := p.Mask(in, mode); strings.Contains(got, "hunterC") || strings.Contains(got, "1234567890abcdef") {
 				t.Errorf("%+v: Mask(%q) = %q: the assigned value is shown", mode, in, got)
 			}
 		}

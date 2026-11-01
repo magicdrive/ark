@@ -934,7 +934,12 @@ amendments (`secrets/internal/v61` `Amendments`: each a rule ID, version,
 v6.1.0's expression and its replacement, and the triggers every match
 holds — 6.11.0 masks a Slack token whole), and byte for byte v6.1.0's own
 where no amendment's trigger is (`TestRecommended_MatchesV61`,
-`FuzzRecommended_MatchesV61`, `TestRecommended_AmendmentsOnly`). Danger:
+`FuzzRecommended_MatchesV61`, `TestRecommended_AmendmentsOnly`). Where a
+text holds a Slack token's trigger, the policy masks the union of its
+pipeline's spans and those of the same pipeline with v6.1.0's slack-token
+expression (`Policy.floor`): a longer token match never shows what a
+later rule masked after the shorter one (`checkNoLessMasked`,
+`TestSlackToken_GluedAssignmentStillMasked`). Danger:
 editing v6.1.0's own expressions in the oracle — the test would compare
 the policy with itself. The configuration (`.ark-secrets-rules.toml`
 or `ark-secrets-rules.toml` at the root) is read by `internal/secretpolicy`

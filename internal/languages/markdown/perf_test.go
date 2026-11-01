@@ -40,6 +40,7 @@ func TestPerformance_Linear(t *testing.T) {
 		"code fences":           func(n int) string { return strings.Repeat("```go\nx\n```\n", n/12) },
 		"footnotes on a line":   func(n int) string { return strings.Repeat("[^a]: ", n/6) + "x\n" },
 		"wide table":            func(n int) string { return wideTable(n / 6) },
+		"autolinks on a line":   func(n int) string { return strings.Repeat("www.a.bc http://a.b ", n/20) },
 		"escaped pipes in code": func(n int) string { return "|a|\n|-|\n" + strings.Repeat("|`\\|`|\n", n/7) },
 		"short table rows": func(n int) string {
 			return wideTable(maxTableColumns)[:4*maxTableColumns+4] + strings.Repeat("a\n", n/2)

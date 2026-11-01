@@ -240,8 +240,8 @@ func (e *extractor) candidates() ([]decl, map[*tomldoc.Node]string) {
 		for _, c := range children(it.n) {
 			ptr := it.ptr + "/" + c.token
 			q := e.file + "#" + ptr
-			if !declname.IsName(ptr) || !declname.IsName(q) {
-				continue
+			if !declname.IsName(ptr) || !declname.IsName(q) || declname.HoldsSecret(ptr) {
+				continue // nothing declared, nor what it holds
 			}
 			ids[c.n] = q
 			d := decl{node: c.n, parent: it.parent, depth: it.depth + 1, name: ptr, qualified: q, span: c.n.Span, at: c.n.KeySpan}

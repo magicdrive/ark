@@ -6,6 +6,7 @@ import (
 	"github.com/magicdrive/ark/internal/languages/toml/manifest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -639,5 +640,21 @@ func TestManifest_InheritedAliasesBounded(t *testing.T) {
 	}
 	if found != 1 {
 		t.Errorf("%d %s diagnostics, want 1: %+v", found, manifest.CodeInheritedTruncated, ex.Diagnostics)
+	}
+}
+
+// A key holding a secret ("password=x" = …) is no declaration, nor is
+// what it holds: a name is shown as written.
+func TestExtract_SecretKeys(t *testing.T) {
+	ex := extract(t, "Cargo.toml", "[package]\nname = \"a\"\n\"password=hunterE1\" = \"1\"\n[\"client_secret=hunterE5\"]\nx = 1\n[features]\n\"secret=hunterE4\" = []\nok = []\n")
+	var names []string
+	for _, s := range ex.Symbols {
+		if strings.Contains(s.Name, "hunter") || strings.Contains(s.Qualified, "hunter") {
+			t.Errorf("%s %q (%s) shows a secret", s.Kind, s.Name, s.Qualified)
+		}
+		names = append(names, s.Qualified)
+	}
+	if !slices.Contains(names, "Cargo.toml#/features/ok") {
+		t.Errorf("features/ok not declared: %v", names)
 	}
 }

@@ -78,7 +78,7 @@ README files, design documents, runbooks and ADRs become part of the graph.
 - **Secrets.** A heading, a raw HTML id, a code block's language or a
   linked file name holding a token or a value after `=` or `:`
   (`## password = …`) declares or references nothing, as a name is shown
-  as written.
+  as written; so do TOML keys, XML paths and Maven coordinates.
 
 All three are at the **graph** level (not `context_quality_certified`). `toml`, `xml` and `markdown` are accepted wherever a language is named (`--lang`, the `language` / `lang` arguments of MCP tools), and `search_code` accepts the kinds `table`, `dependency`, `attribute`, `section` and `code_block`.
 
@@ -93,7 +93,7 @@ get_callers   docs/design.md                   → the documents and sections li
 
 ### Secret masking
 
-- **A Slack token is masked whole.** Before, the `slack-token` rule stopped at the token's first `-` (and at 48 characters), so `xoxb-123456789012-1234567890123-<secret>` kept its secret section — since v6.1.0. The rule now also masks rotated (`xoxe.xoxb-…`), app-level (`xapp-1-…`), refresh (`xoxe-1-…`), legacy `xoxo-` and workflow (`xwfp-…`) tokens, only in a token's shape (`xapp-style` is left as written). A word glued to a token (`xoxb-1234567890-password=…`) is not taken into it, so what follows is masked as before; no text v6.1.0's rules hid is shown. The rule ID is unchanged; `ark secrets-scan` reports the whole token.
+- **A Slack token is masked whole.** Before, the `slack-token` rule stopped at the token's first `-` (and at 48 characters), so `xoxb-123456789012-1234567890123-<secret>` kept its secret section — since v6.1.0. The rule now also masks rotated (`xoxe.xoxb-…`), app-level (`xapp-1-…`), refresh (`xoxe-1-…`), legacy `xoxo-` and workflow (`xwfp-…`) tokens, only in a token's shape (`xapp-style` is left as written). A word glued to a token (`xoxb-1234567890-password=…`) is not taken into it, and where a text holds a Slack token, it is also masked as v6.1.0's expression would have masked it: no text v6.1.0's rules hid is shown. The rule ID is unchanged; `ark secrets-scan` reports the whole token.
 - **Paths in `get_context` and `analyze_change_impact` text are no longer partly masked.** A path that reads like an assignment (`auth/token-store.go`) was shown as `auth/token-*****MASKED*****` since v6.9.0. Paths and names in their text, and the candidates of an ambiguity error, are now masked as names are — a token in one is still masked — and the sources are masked as before.
 
 ## Changed

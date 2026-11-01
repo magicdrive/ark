@@ -396,8 +396,13 @@ func segmentsSpan(n *ast.AutoLink, src []byte) (int, int) {
 		return start, clamp(start+len(label)+2, len(src)) // <url>
 	}
 	// An extended autolink starts where its trigger is (the space or
-	// delimiter before it): its text follows within the line.
-	end := min(lineEnd(src, start), len(src))
+	// delimiter before it): its text follows at once, within the line. The
+	// search reaches no further than the label and a few bytes (to the line's
+	// end, it was quadratic in the autolinks of one line).
+	end := min(start+len(label)+8, len(src))
+	if nl := bytes.IndexByte(src[start:end], '\n'); nl >= 0 {
+		end = start + nl
+	}
 	i := bytes.Index(src[start:end], label)
 	if i < 0 || len(label) == 0 {
 		return -1, -1

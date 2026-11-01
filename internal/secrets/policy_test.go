@@ -66,6 +66,25 @@ func checkPristine(t *testing.T, what, s string) {
 // wordRE is a word worth hiding: a value, a key, a token's section.
 var wordRE = regexp.MustCompile(`[0-9A-Za-z]{6,}`)
 
+// shownWord returns a word of s that the mask got shows and the mask was
+// does not, or "": words are compared whole, in one pass over each text.
+func shownWord(s, got, was string) string {
+	words := func(x string) map[string]bool {
+		m := map[string]bool{}
+		for _, w := range wordRE.FindAllString(x, -1) {
+			m[w] = true
+		}
+		return m
+	}
+	inGot, inWas := words(got), words(was)
+	for _, w := range wordRE.FindAllString(s, -1) {
+		if w != "MASKED" && inGot[w] && !inWas[w] {
+			return w
+		}
+	}
+	return ""
+}
+
 // checkNoLessMasked holds where an amendment applies: no word that v6.1.0 as
 // it shipped hid is shown by the recommended policy — an amended rule's longer
 // match never takes away what a later rule masked after it.
@@ -74,10 +93,8 @@ func checkNoLessMasked(t *testing.T, what, s string) {
 	p := secrets.Recommended()
 	for _, m := range modes {
 		got, was := p.Mask(s, m.mode), m.pristine(s)
-		for _, w := range wordRE.FindAllString(s, -1) {
-			if w != "MASKED" && !strings.Contains(was, w) && strings.Contains(got, w) {
-				t.Errorf("%s (%s): v6.1.0 hid %q, Recommended().Mask shows it\n got %q\n was %q", what, m.name, w, clip(got), clip(was))
-			}
+		if w := shownWord(s, got, was); w != "" {
+			t.Errorf("%s (%s): v6.1.0 hid %q, Recommended().Mask shows it\n got %q\n was %q", what, m.name, w, clip(got), clip(was))
 		}
 	}
 }
@@ -141,16 +158,23 @@ func rebuild(s string, fs []secrets.Finding) string {
 	return out.String()
 }
 
-// checkRecommended compares the recommended policy with v6.1.0 on s, and
-// Find with Mask.
+// checkRecommended compares the recommended policy's pipeline with v6.1.0
+// amended on s, the policy (that pipeline floored by v6.1.0's slack-token
+// expression) with both, and Find with Mask.
 func checkRecommended(t *testing.T, what, s string) {
 	t.Helper()
 	p := secrets.Recommended()
 	for _, m := range modes {
-		got := p.Mask(s, m.mode)
-		if want := m.v61(s); got != want {
-			t.Errorf("%s (%s): Recommended().Mask differs from v6.1.0\n got %q\nwant %q", what, m.name, clip(got), clip(want))
+		if got, want := p.WithoutFloor().Mask(s, m.mode), m.v61(s); got != want {
+			t.Errorf("%s (%s): the recommended pipeline differs from v6.1.0 amended\n got %q\nwant %q", what, m.name, clip(got), clip(want))
 			continue
+		}
+		got, amended := p.Mask(s, m.mode), m.v61(s)
+		if !triggered(s) && got != amended {
+			t.Errorf("%s (%s): no trigger, yet the floor changes the mask\n got %q\nwant %q", what, m.name, clip(got), clip(amended))
+		}
+		if w := shownWord(s, got, amended); w != "" {
+			t.Errorf("%s (%s): v6.1.0 amended hid %q, Recommended().Mask shows it\n got %q", what, m.name, w, clip(got))
 		}
 		if r := rebuild(s, p.Find(s, m.mode)); r != got {
 			t.Errorf("%s (%s): Find's spans do not make Mask's result\nfind %q\nmask %q", what, m.name, clip(r), clip(got))
@@ -195,6 +219,9 @@ func FuzzRecommended_MatchesV61(f *testing.F) {
 		"xox" + "b-1234567890-password=hunterC1",
 		"xox" + "p-1-2-3-secret=hunterC4",
 		"xap" + "p-1-A01-123-ab-token=hunterC5",
+		"xox" + "b-1234567890-1234567890abcdef0123password=hunterQ1",
+		"xox" + "b-1-2-abcdefabcdefAPI_KEY=hunterQ3",
+		"xwf" + "p-tokenabcdefABCDEFGHIJxox" + "b-0123456789abcdef",
 	} {
 		f.Add(s)
 	}

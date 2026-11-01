@@ -60,6 +60,18 @@ const slackToken = `(?:xoxe\.)?xox[baprs]-(?:(?:[0-9]+-)+(?:[0-9A-Za-z]{20,}|[0-
 	`|xoxo-[0-9]+-[0-9]+-[0-9]+-[0-9A-Fa-f]+` +
 	`|xwfp-[0-9A-Za-z]{10,}(?:-[0-9A-Za-z]{20,})*`
 
+// RuleSlackToken is the slack-token rule's ID.
+const RuleSlackToken = "slack-token"
+
+// slackTokenV61 is the slack-token expression of v6.1.0, which masked a
+// token to its first "-" (secrets/internal/v61 records the amendment): a
+// policy also masks what it masks (Policy.floor), where a text holds one of
+// slackTriggers.
+var slackTokenV61 = regexp.MustCompile(`xox[baprs]-([0-9a-zA-Z]{10,48})?`)
+
+// slackTriggers are in every match of either slack-token expression.
+var slackTriggers = []string{"xox", "xapp-", "xwfp-"}
+
 // builtinPattern is one regular expression of a built-in pattern rule. A rule
 // may have several; they run in this order, which is v6.1.0's.
 type builtinPattern struct {
@@ -97,7 +109,7 @@ var builtinPatterns = []builtinPattern{
 	// one is the secret). v6.1.0's expression stopped at the first "-" and
 	// at 48 characters; this one masks everything it masked and more, and
 	// only where a token's prefix is (secrets/internal/v61 Amendments).
-	{"slack-token", regexp.MustCompile(slackToken)},
+	{RuleSlackToken, regexp.MustCompile(slackToken)},
 	// Stripe
 	{"stripe-live-key", regexp.MustCompile(`sk_live_[0-9a-zA-Z]{24}`)},
 	{"stripe-live-key", regexp.MustCompile(`pk_live_[0-9a-zA-Z]{24}`)},

@@ -667,7 +667,10 @@ nested over 64 deep or a key of over 8 parts: dates and escapes are not
 checked), `toml_too_large` (a file over 4 MiB: only the file is declared),
 `toml_key_too_long`, `toml_truncated`, `pyproject_invalid_requirement`,
 `cargo_workspace_truncated` (a manifest's `workspace = true` entries past
-2048 ancestor lookups, left unresolved).
+2048 ancestor lookups, left unresolved). A table or key whose name holds a
+secret by Ark's recommended rules — a token, or a value after `=` or `:` —
+is not declared, nor what it holds, as a name is shown as written; so is a
+Maven coordinate or an XML path holding one.
 A leading UTF-8 byte order mark is skipped.
 
 **Limits.** No version requirement, `cfg()` expression, environment marker

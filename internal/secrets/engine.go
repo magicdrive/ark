@@ -1,7 +1,9 @@
 package secrets
 
 import (
+	"cmp"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -352,4 +354,41 @@ func (b *valueBlock) opens(a *assignment, line string) {
 	if blockScalarStart.MatchString(val) {
 		*b = valueBlock{indent: loc[2*a.keyGroup], open: true, rule: a.ruleOf(line, loc)}
 	}
+}
+
+// rebuildMasked masks content at the union of rec's spans, as one pipeline
+// masks: overlapping or nested spans are one mask, and an empty span (a
+// mask inserted at an empty value) is one mask where no other span covers
+// it.
+func rebuildMasked(content string, rec spans) string {
+	type span struct{ a, b int }
+	all := make([]span, 0, len(rec))
+	for _, f := range rec {
+		all = append(all, span{f.oStart, f.oEnd})
+	}
+	slices.SortFunc(all, func(x, y span) int { return cmp.Or(cmp.Compare(x.a, y.a), cmp.Compare(y.b, x.b)) })
+	var merged []span
+	for _, x := range all {
+		if n := len(merged); n > 0 {
+			last := &merged[n-1]
+			if x.a < last.b || x.a == last.a && x.b <= last.b && last.b > last.a || x.a == x.b && x.a > last.a && x.a < last.b {
+				last.b = max(last.b, x.b)
+				continue
+			}
+			if x == *last {
+				continue
+			}
+		}
+		merged = append(merged, x)
+	}
+	var out strings.Builder
+	out.Grow(len(content))
+	prev := 0
+	for _, x := range merged {
+		out.WriteString(content[prev:x.a])
+		out.WriteString(maskText)
+		prev = x.b
+	}
+	out.WriteString(content[prev:])
+	return out.String()
 }
