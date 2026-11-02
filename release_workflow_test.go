@@ -427,8 +427,9 @@ func checkCIWorkflow(t tb, all string) {
 	require("gofmt", "gofmt -l")
 	require("go vet", "go vet ./...")
 	require("the unit tests", "go test -json ./... >")
-	require("staticcheck (pinned for Go 1.27.3)",
-		"go install honnef.co/go/tools/cmd/staticcheck@v0.7.0-0.dev.0.20261009230814-452d5bb86b45",
+	// its version: TestMakefile_StaticcheckMatchesCI
+	require("staticcheck",
+		"go install honnef.co/go/tools/cmd/staticcheck@",
 		"./internal/cache/...", "./internal/context/...", "./internal/index/...", "./internal/resolver/...",
 		"./internal/language/...", "./internal/languages/...", "./internal/mcp/...", "./internal/symbol/...",
 		"./internal/reference/...", "./internal/repomap/...", "./internal/impact/...", "./internal/search/...",
@@ -1619,6 +1620,9 @@ func TestMakefile_StaticcheckMatchesCI(t *testing.T) {
 	}
 	if got := variable("STATICCHECK_VERSION"); got != install[1] {
 		t.Errorf("Makefile: STATICCHECK_VERSION %s, ci.yml installs %s", got, install[1])
+	}
+	if !regexp.MustCompile(`^v\d+\.\d+\.\d+(-\S+)?$`).MatchString(install[1]) {
+		t.Errorf("ci.yml: staticcheck@%s is not a pinned version", install[1])
 	}
 	ci := strings.Join(strings.Fields(strings.ReplaceAll(run[1], "\\", " ")), " ")
 	if got := variable("STATICCHECK_PACKAGES"); got != ci {

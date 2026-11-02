@@ -109,6 +109,16 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+ \\??= (?<currentValue>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "The staticcheck the lint job of ci.yml installs: STATICCHECK_VERSION of the Makefile, in the same PR (TestMakefile_StaticcheckMatchesCI keeps them equal)",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": [
+        "go install honnef\\.co/go/tools/cmd/staticcheck@(?<currentValue>v\\S+)"
+      ],
+      "depNameTemplate": "honnef.co/go/tools",
+      "datasourceTemplate": "go"
     }
   ]
 }

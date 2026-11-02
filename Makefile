@@ -61,8 +61,8 @@ vet:
 
 # Run staticcheck as the lint job of ci.yml does: its version and its
 # packages (TestMakefile_StaticcheckMatchesCI keeps them equal).
-# staticcheck 2026.2.1 cannot read Go 1.27.3's export data.
-STATICCHECK_VERSION = v0.7.0-0.dev.0.20261009230814-452d5bb86b45
+# renovate: datasource=go depName=honnef.co/go/tools
+STATICCHECK_VERSION = v0.8.2
 STATICCHECK_PACKAGES = \
 	./internal/cache/... \
 	./internal/context/... \
