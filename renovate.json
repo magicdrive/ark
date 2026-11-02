@@ -73,6 +73,12 @@
       "automerge": false
     },
     {
+      "description": "The Node.js of make renovate-check must satisfy the engines of the pinned Renovate (test_run.py checks it; Renovate 44 requires ^24.11.0): a major is raised from the Dependency Dashboard, when a Renovate that supports it is pinned, not as a PR of its own that cannot pass",
+      "matchFileNames": [".github/renovate-check/.node-version"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "The CI TypeScript compiler (.github/ts-oracle) is the soundness oracle: upgrade it deliberately, re-running the differential",
       "matchFileNames": [".github/ts-oracle/**"],
       "enabled": false
@@ -103,6 +109,16 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+ \\??= (?<currentValue>\\S+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "The staticcheck the lint job of ci.yml installs: STATICCHECK_VERSION of the Makefile, in the same PR (TestMakefile_StaticcheckMatchesCI keeps them equal)",
+      "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
+      "matchStrings": [
+        "go install honnef\\.co/go/tools/cmd/staticcheck@(?<currentValue>v\\S+)"
+      ],
+      "depNameTemplate": "honnef.co/go/tools",
+      "datasourceTemplate": "go"
     }
   ]
 }

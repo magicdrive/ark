@@ -23,7 +23,7 @@ AI ツールは前提にしない。ここに書いたコマンドは、状態�
 | Go の major | （グループ名 `Go major dependencies`） | — | 毎月 1 日 |
 | GitHub Actions | `renovate/github-actions` | checkout・setup-go | digest に pin される |
 | Hephaestus | `renovate/hephaestus` | `magicdrive/hephaestus` action と Makefile の `HEPHAESTUS_VERSION` | 両者を 1 つの PR で上げる（`TestHephaestusVersionIsConsistent` が一致を確かめる） |
-| Makefile のツール | `renovate/development-tools` | govulncheck・actionlint | `customManagers` が `# renovate:` コメントの付いた版を追う。staticcheck は対象外（3.4） |
+| Makefile のツール | `renovate/development-tools` | govulncheck・actionlint・staticcheck | `customManagers` が `# renovate:` コメントの付いた版を追う。staticcheck は `ci.yml` の `go install` の版も同じ PR で上げる（3.4） |
 | Renovate validator | `renovate/renovate-validator` | `.github/renovate-check` の renovate・Node.js（`.node-version`） | `make renovate-check` が使う Renovate。npm manager が `package.json` と `package-lock.json` を、nodenv manager が `.node-version` を上げる |
 | lockfile の更新 | `renovate/lock-file-maintenance` | `.github/renovate-check/package-lock.json` の推移的依存 | 毎週月曜。`.github/ts-oracle` は対象外 |
 | 脆弱性修正 | 例 `renovate/go-golang.org-x-net-vulnerability` | x/net（PR #65） | タイトル末尾が ` [SECURITY]`。スケジュールを待たない |
@@ -257,8 +257,10 @@ GOTOOLCHAIN=local make staticcheck
 `make staticcheck` は CI と同じ版の staticcheck（`go run` で取得）を CI と同じパッケージに対して走らせる
 （`TestMakefile_StaticcheckMatchesCI` が両者の一致を保つ）。staticcheck 2026.2.1（v0.8.1）は Go 1.27.2 と 1.27.3 の
 export data を読めない（1.27.3 は `export data version 5 is greater than maximum supported version 4` で確認）。
-2026.2.2（v0.8.2）は Go 1.27.2 で読めることを確認済み（CI と同じ対象で指摘なし。1.27.3 では未確認）。CI の pin を
-リリース版に戻すときは、`ci.yml` と `Makefile` の版を同時に変える（テストが不一致を検出する）。
+そのため一時は開発版に pin していたが、2026.2.2（v0.8.2）が Go 1.27.3 で読めること（CI と同じ対象で指摘なし）を
+確かめてリリース版に戻した。版は `Makefile` の `STATICCHECK_VERSION`（`# renovate:` コメント付き）と `ci.yml` の
+`go install` の 2 か所にあり、Renovate は両方を `renovate/development-tools` の 1 つの PR で上げる
+（`ci.yml` 側は専用の custom manager）。`TestMakefile_StaticcheckMatchesCI` が一致と、版が pin されていることを確かめる。
 
 `make lint` は vet・test・race・staticcheck をまとめて流す（gofmt は含まない）。
 
@@ -545,7 +547,6 @@ push と PR の作成は通常どおり。取り消した版を Renovate が再�
 
 ## 9. 人が判断すること
 
-- CI の staticcheck を pin した開発版から 2026.2.2（v0.8.2）に戻すか（3.4）
 - 依存の振る舞いの変化を受け入れるか（4.4 の分類が「原因未確定」なら保留）
 - テストの期待値の更新（新しい値が正しいという根拠があるか）
 - 計時テストの失敗を揺れとみなして再実行するか（2.5）
