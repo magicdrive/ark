@@ -24,7 +24,7 @@ jobs:
   provenance:
     # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
     # the release path changes its image only through a reviewed pull request.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     permissions:
       contents: read
@@ -55,7 +55,7 @@ jobs:
     needs: [provenance]
     # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
     # the release path changes its image only through a reviewed pull request.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 45
     permissions:
       contents: read
@@ -107,7 +107,7 @@ jobs:
     needs: [provenance, ci, build]
     # Pinned: ubuntu-latest moves to 26.04 in November 2026 (actions/runner-images#14748);
     # the release path changes its image only through a reviewed pull request.
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 30
     environment: release
     permissions:
