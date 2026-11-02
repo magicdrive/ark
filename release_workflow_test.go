@@ -60,11 +60,63 @@ func splitJobs(t tb, path, s string) (top string, jobs map[string]string) {
 	return top, jobs
 }
 
-// hephaestusAction is the Hephaestus action every workflow step uses: the
-// commit of the v1.3.0 tag (HEPHAESTUS_VERSION of the Makefile). From
-// v1.2.0 the action runs that release's verified binary and installs no Go:
-// the jobs that build set up go.mod's Go themselves.
-const hephaestusAction = "uses: magicdrive/hephaestus@e544acf59c79cbafa04a48002b0f30f91a02f8ba # v1.3.0"
+// actionPin returns the `uses:` line of the first step of the workflow at
+// path that runs action, "" if none. The pins (a commit and its version
+// comment) are Renovate's to update, together in every workflow: the checks
+// read them from the workflows instead of repeating them, and
+// TestActionPins_AreCommitsAndConsistent holds every step to the same pin.
+func actionPin(path, action string) string {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	m := regexp.MustCompile(`(?m)^\s+(uses: ` + regexp.QuoteMeta(action) + `@.*)$`).FindStringSubmatch(string(b))
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
+
+var (
+	// hephaestusAction is the Hephaestus action every workflow step uses:
+	// the commit of the tag HEPHAESTUS_VERSION of the Makefile names. From
+	// v1.2.0 the action runs that release's verified binary and installs no
+	// Go: the jobs that build set up go.mod's Go themselves.
+	hephaestusAction     = actionPin(".github/workflows/release.yml", "magicdrive/hephaestus")
+	setupGoAction        = actionPin(".github/workflows/ci.yml", "actions/setup-go")
+	uploadArtifactAction = actionPin(".github/workflows/ci.yml", "actions/upload-artifact")
+)
+
+// pinnedUses is a pinned `uses:` line: a full commit and a version comment.
+var pinnedUses = regexp.MustCompile(`^uses: [\w.-]+/[\w./-]+@[0-9a-f]{40} # v\d+(\.\d+)*$`)
+
+// The pins the checks read are commits with a version comment, and every
+// step of ci.yml and release.yml that runs one of these actions uses the
+// same pin: Renovate moves them together, and a step left behind (or pinned
+// to a branch or a tag) fails here.
+func TestActionPins_AreCommitsAndConsistent(t *testing.T) {
+	for action, pin := range map[string]string{
+		"magicdrive/hephaestus":   hephaestusAction,
+		"actions/setup-go":        setupGoAction,
+		"actions/upload-artifact": uploadArtifactAction,
+	} {
+		if !pinnedUses.MatchString(pin) {
+			t.Errorf("%s: pin %q is not a commit with a version comment", action, pin)
+			continue
+		}
+		for _, path := range []string{".github/workflows/ci.yml", ".github/workflows/release.yml"} {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, u := range regexp.MustCompile(`(?m)^\s+(uses: `+regexp.QuoteMeta(action)+`@.*)$`).FindAllStringSubmatch(string(b), -1) {
+				if u[1] != pin {
+					t.Errorf("%s: %q, want %q", path, u[1], pin)
+				}
+			}
+		}
+	}
+}
 
 // The release-job conventions of `hephaestus publish` (docs/publish.md of
 // Hephaestus): a plan step, and exactly these two steps — the only ones given
@@ -1247,8 +1299,8 @@ func TestWorkflowChecks_CatchMutations(t *testing.T) {
 			{"rehearsal publishes", replace("          dry-run: \"true\"\n", "")},
 			{"build without go.mod's Go", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version: stable\n          cache: false\n")},
 			{"build with another Go as well", replace("          go-version-file: 'go.mod'\n          cache: false\n", "          go-version-file: 'go.mod'\n          go-version: stable\n          cache: false\n")},
-			{"build without setup-go", replace("        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7\n        with:\n          go-version-file: 'go.mod'\n          cache: false\n", "        run: go version\n")},
-			{"plan pinned to a branch", replace("uses: magicdrive/hephaestus@e544acf59c79cbafa04a48002b0f30f91a02f8ba # v1.3.0\n        with:\n          command: plan", "uses: magicdrive/hephaestus@main # v1.3.0\n        with:\n          command: plan")},
+			{"build without setup-go", replace("        "+setupGoAction+"\n        with:\n          go-version-file: 'go.mod'\n          cache: false\n", "        run: go version\n")},
+			{"plan pinned to a branch", replace(hephaestusAction+"\n        with:\n          command: plan", regexp.MustCompile(`@[0-9a-f]{40} `).ReplaceAllString(hephaestusAction, "@main ")+"\n        with:\n          command: plan")},
 			{"build verifies nothing", replace(`        run: .github/release/verify-dist.sh dist --tag "$GITHUB_REF_NAME"`+"\n\n      - name: Upload dist", "        run: true\n\n      - name: Upload dist")},
 		}},
 		{".github/workflows/ci.yml", checkCIWorkflow, []mutation{
@@ -1261,7 +1313,7 @@ func TestWorkflowChecks_CatchMutations(t *testing.T) {
 			{"native shard runs the whole suite without race-shard.py", replace(`python3 .github/ci/race-shard.py run "${{ matrix.shard }}" "$RUNNER_TEMP/native.json"`, `go test -json ./... > "$RUNNER_TEMP/native.json"`)},
 			{"gate does not check the native shards", replace("\n      - name: macOS native shards ran every package exactly once\n        if: always()\n        run: python3 .github/ci/check-native.py reports\n", "\n")},
 			{"snapshot with another Go", replace("          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/release-snapshot\n", "          go-version: stable\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/release-snapshot\n")},
-			{"Homebrew test without Go", replace("      - name: Set up Go\n        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7\n        with:\n          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/homebrew-e2e\n\n", "")},
+			{"Homebrew test without Go", replace("      - name: Set up Go\n        "+setupGoAction+"\n        with:\n          go-version-file: 'go.mod'\n          cache-dependency-path: |\n            go.sum\n            .github/ci/cache-keys/homebrew-e2e\n\n", "")},
 		}},
 	} {
 		b, err := os.ReadFile(wf.path)
@@ -1401,7 +1453,7 @@ func TestCIWorkflow_FuzzSmokeKeepsFailureDiagnostics(t *testing.T) {
 	run := strings.Index(ci, "timeout-minutes: 20\n"+
 		`        run: .github/ci/fuzz-smoke.sh "${{ matrix.group }}" "$RUNNER_TEMP/fuzz-diagnostics"`)
 	upload := strings.Index(ci, "if: failure() || cancelled()\n"+
-		"        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2\n"+
+		"        "+uploadArtifactAction+"\n"+
 		"        with:\n"+
 		"          name: fuzz-diagnostics-${{ matrix.group }}-attempt-${{ github.run_attempt }}\n"+
 		"          path: ${{ runner.temp }}/fuzz-diagnostics\n")
