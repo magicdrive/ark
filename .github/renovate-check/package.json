@@ -4,6 +4,6 @@
   "description": "CI-only: the Renovate whose renovate-config-validator checks renovate.json (make renovate-check). Never an Ark runtime dependency.",
   "license": "UNLICENSED",
   "dependencies": {
-    "renovate": "44.178.3"
+    "renovate": "44.198.0"
   }
 }
