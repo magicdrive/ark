@@ -73,6 +73,12 @@
       "automerge": false
     },
     {
+      "description": "The Node.js of make renovate-check must satisfy the engines of the pinned Renovate (test_run.py checks it; Renovate 44 requires ^24.11.0): a major is raised from the Dependency Dashboard, when a Renovate that supports it is pinned, not as a PR of its own that cannot pass",
+      "matchFileNames": [".github/renovate-check/.node-version"],
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true
+    },
+    {
       "description": "The CI TypeScript compiler (.github/ts-oracle) is the soundness oracle: upgrade it deliberately, re-running the differential",
       "matchFileNames": [".github/ts-oracle/**"],
       "enabled": false
