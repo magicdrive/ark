@@ -70,7 +70,7 @@ func actionPin(path, action string) string {
 	if err != nil {
 		return ""
 	}
-	m := regexp.MustCompile(`(?m)^\s+(uses: ` + regexp.QuoteMeta(action) + `@.*)$`).FindStringSubmatch(string(b))
+	m := regexp.MustCompile(`(?m)^\s+(?:-\s+)?(uses: ` + regexp.QuoteMeta(action) + `@.*)$`).FindStringSubmatch(string(b))
 	if m == nil {
 		return ""
 	}
@@ -109,7 +109,7 @@ func TestActionPins_AreCommitsAndConsistent(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, u := range regexp.MustCompile(`(?m)^\s+(uses: `+regexp.QuoteMeta(action)+`@.*)$`).FindAllStringSubmatch(string(b), -1) {
+			for _, u := range regexp.MustCompile(`(?m)^\s+(?:-\s+)?(uses: `+regexp.QuoteMeta(action)+`@.*)$`).FindAllStringSubmatch(string(b), -1) {
 				if u[1] != pin {
 					t.Errorf("%s: %q, want %q", path, u[1], pin)
 				}
@@ -929,7 +929,9 @@ func TestCIWorkflow_FuzzSmokeIsComplete(t *testing.T) {
 }
 
 // Every workflow runs the one Hephaestus of the Makefile's HEPHAESTUS_VERSION,
-// pinned to the commit of its tag, and nothing runs GoReleaser any more.
+// pinned to a commit with that version in its comment, and nothing runs
+// GoReleaser any more. That the commit is the tag's is Renovate's (or the
+// reviewer's, docs/maintenance/renovate.md 6.1): no test can tell offline.
 func TestHephaestusVersionIsConsistent(t *testing.T) {
 	mk, err := os.ReadFile("Makefile")
 	if err != nil {
@@ -950,7 +952,7 @@ func TestHephaestusVersionIsConsistent(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		uses := regexp.MustCompile(`(?m)^\s+(uses: magicdrive/hephaestus@.*)$`).FindAllStringSubmatch(string(b), -1)
+		uses := regexp.MustCompile(`(?m)^\s+(?:-\s+)?(uses: magicdrive/hephaestus@.*)$`).FindAllStringSubmatch(string(b), -1)
 		if len(uses) == 0 {
 			t.Errorf("%s: runs no Hephaestus", path)
 		}
