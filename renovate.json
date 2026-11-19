@@ -1,3 +1,4 @@
+
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
@@ -19,13 +20,46 @@
   "rebaseWhen": "behind-base-branch",
   "packageRules": [
     {
-      "description": "Go language dependencies update",
+      "description": "Go toolchain patch updates: create a dedicated PR without waiting for the weekly schedule",
+      "matchManagers": ["gomod"],
+      "matchDatasources": ["golang-version"],
+      "matchPackageNames": ["go"],
+      "matchUpdateTypes": ["patch"],
+      "groupName": "Go toolchain",
+      "schedule": ["at any time"],
+      "minimumReleaseAge": null,
+      "automerge": false,
+      "prPriority": 20
+    },
+    {
+      "description": "Go toolchain minor updates: separate PR with full CI verification",
+      "matchManagers": ["gomod"],
+      "matchDatasources": ["golang-version"],
+      "matchPackageNames": ["go"],
+      "matchUpdateTypes": ["minor"],
+      "groupName": "Go toolchain",
+      "automerge": false
+    },
+    {
+      "description": "Go toolchain major updates require explicit approval",
+      "matchManagers": ["gomod"],
+      "matchDatasources": ["golang-version"],
+      "matchPackageNames": ["go"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "Go toolchain",
+      "dependencyDashboardApproval": true,
+      "automerge": false
+    },
+    {
+      "description": "Go module major updates",
+      "matchManagers": ["gomod"],
       "matchDatasources": ["go"],
       "matchUpdateTypes": ["major"],
       "groupName": "Go major dependencies",
       "schedule": [
         "before 10am on the first day of the month"
-      ]
+      ],
+      "automerge": false
     },
     {
       "description": "golang.org/x packages grouping",
@@ -48,38 +82,40 @@
       "automerge": false
     },
     {
-      "description": "Hephaestus: the action the workflows pin by digest and HEPHAESTUS_VERSION of the Makefile move together (release_workflow_test.go keeps them equal)",
+      "description": "Hephaestus: keep the workflow action digest and Makefile version synchronized",
       "matchPackageNames": ["magicdrive/hephaestus"],
       "groupName": "Hephaestus",
       "automerge": false
     },
     {
-      "description": "Security patches are provided immediately",
-      "matchUpdateTypes": ["patch"],
+      "description": "Go module patch updates are not delayed by the weekly schedule",
+      "matchManagers": ["gomod"],
       "matchDatasources": ["go"],
-      "automerge": false,
-      "minimumReleaseAge": null
+      "matchUpdateTypes": ["patch"],
+      "schedule": ["at any time"],
+      "minimumReleaseAge": null,
+      "automerge": false
     },
     {
-      "description": "Vulnerable packages are given top priority",
+      "description": "Vulnerable Go modules are given top priority",
       "matchDatasources": ["go"],
       "labels": ["security"],
       "prPriority": 10
     },
     {
-      "description": "The Renovate of make renovate-check (.github/renovate-check): package.json, its lockfile and the Node.js its engines require move together",
+      "description": "The Renovate validator, its lockfile, and its required Node.js version move together",
       "matchFileNames": [".github/renovate-check/**"],
       "groupName": "Renovate validator",
       "automerge": false
     },
     {
-      "description": "The Node.js of make renovate-check must satisfy the engines of the pinned Renovate (test_run.py checks it; Renovate 44 requires ^24.11.0): a major is raised from the Dependency Dashboard, when a Renovate that supports it is pinned, not as a PR of its own that cannot pass",
+      "description": "Node.js major updates for the Renovate validator require Dependency Dashboard approval",
       "matchFileNames": [".github/renovate-check/.node-version"],
       "matchUpdateTypes": ["major"],
       "dependencyDashboardApproval": true
     },
     {
-      "description": "The CI TypeScript compiler (.github/ts-oracle) is the soundness oracle: upgrade it deliberately, re-running the differential",
+      "description": "The CI TypeScript compiler is a soundness oracle and must be upgraded deliberately",
       "matchFileNames": [".github/ts-oracle/**"],
       "enabled": false
     }
@@ -104,7 +140,7 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Tool versions pinned in the Makefile, each under a '# renovate: datasource=... depName=...' comment",
+      "description": "Tool versions pinned in the Makefile",
       "managerFilePatterns": ["/(^|/)Makefile$/"],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)\\n[A-Z_]+ \\??= (?<currentValue>\\S+)"
@@ -112,7 +148,7 @@
     },
     {
       "customType": "regex",
-      "description": "The staticcheck the lint job of ci.yml installs: STATICCHECK_VERSION of the Makefile, in the same PR (TestMakefile_StaticcheckMatchesCI keeps them equal)",
+      "description": "Keep staticcheck in CI synchronized with STATICCHECK_VERSION in the Makefile",
       "managerFilePatterns": ["/^\\.github/workflows/ci\\.yml$/"],
       "matchStrings": [
         "go install honnef\\.co/go/tools/cmd/staticcheck@(?<currentValue>v\\S+)"
@@ -122,3 +158,4 @@
     }
   ]
 }
+
