@@ -4,7 +4,7 @@ go 1.27.4
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/odvcencio/gotreesitter v0.56.0
+	github.com/odvcencio/gotreesitter v0.57.0
 	github.com/pelletier/go-toml/v2 v2.4.3
 	github.com/yuin/goldmark v1.8.7
 	go.yaml.in/yaml/v3 v3.0.6
