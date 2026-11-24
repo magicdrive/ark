@@ -90,12 +90,12 @@ class TypedFactory
 		"app/Contracts/KarteInterface.php": "<?php\nnamespace App\\Contracts;\n\ninterface KarteInterface\n{\n    public function render();\n}\n",
 		"app/Models/A.php":                 "<?php\nnamespace App\\Models;\n\nclass A\n{\n    public function save() { return 1; }\n}\n",
 		"app/Models/B.php":                 "<?php\nnamespace App\\Models;\n\nclass B\n{\n    public function save() { return 2; }\n}\n",
-		"app/Services/Mixed.php": `<?php
+		"app/Services/MixedService.php": `<?php
 namespace App\Services;
 
 use App\Models\A;
 
-class Mixed
+class MixedService
 {
     public function none() { return 1; }
     public function onlyExternal($c) { return $c->makeWith('x'); }
@@ -188,11 +188,11 @@ func TestUnresolved_FieldCase_MakeWithIsReported(t *testing.T) {
 // zeros; one whose only call has no target has no edges but says so.
 func TestUnresolved_EmptyVersusIncomplete(t *testing.T) {
 	dir := dynamicRepo(t)
-	none, text := callees(t, dir, `App\Services\Mixed.none`)
+	none, text := callees(t, dir, `App\Services\MixedService.none`)
 	if len(none.Edges) != 0 || *none.Unattributed+*none.Unresolved+*none.OutsideRepository != 0 || len(none.UnresolvedReferences) != 0 {
 		t.Errorf("no references: want an empty, complete answer:\n%s", text)
 	}
-	ext, text := callees(t, dir, `App\Services\Mixed.onlyExternal`)
+	ext, text := callees(t, dir, `App\Services\MixedService.onlyExternal`)
 	if len(ext.Edges) != 0 || *ext.Unresolved != 1 {
 		t.Errorf("only an unknown call: want no edges and unresolved 1:\n%s", text)
 	}
@@ -203,7 +203,7 @@ func TestUnresolved_EmptyVersusIncomplete(t *testing.T) {
 // (never an edge), the dynamic ones unresolved.
 func TestUnresolved_PartialMethod(t *testing.T) {
 	dir := dynamicRepo(t)
-	out, text := callees(t, dir, `App\Services\Mixed.partial`)
+	out, text := callees(t, dir, `App\Services\MixedService.partial`)
 	var calls []string
 	for _, e := range out.Edges {
 		if e.Kind == "calls" {
@@ -237,7 +237,7 @@ func TestUnresolved_ClassStrings(t *testing.T) {
 	var rel struct {
 		Relations []relationEntry `json:"relations"`
 	}
-	_, text := callAt(t, dir, "get_relations", map[string]interface{}{"path": ".", "symbol": `App\Services\Mixed.classString`})
+	_, text := callAt(t, dir, "get_relations", map[string]interface{}{"path": ".", "symbol": `App\Services\MixedService.classString`})
 	if err := json.Unmarshal([]byte(text), &rel); err != nil {
 		t.Fatal(err)
 	}
@@ -253,7 +253,7 @@ func TestUnresolved_ClassStrings(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("relations = %v, want %v\n%s", got, want, text)
 	}
-	out, text := callees(t, dir, `App\Services\Mixed.classString`)
+	out, text := callees(t, dir, `App\Services\MixedService.classString`)
 	// `app(...)` itself is a call the index cannot name.
 	if got := unresolvedNames(out.UnresolvedReferences); !reflect.DeepEqual(got, []string{"app [unresolved]"}) {
 		t.Errorf("unresolvedReferences = %v", got)
