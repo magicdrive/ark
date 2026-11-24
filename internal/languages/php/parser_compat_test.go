@@ -13,13 +13,13 @@ import (
 
 // Keep the MCP regression fixture at the provider boundary, where a missing
 // declaration can be distinguished from a graph resolution failure.
-func TestPHPProvider_MixedClassParserCompatibility(t *testing.T) {
+func TestPHPProvider_MixedServiceParserCompatibility(t *testing.T) {
 	src := []byte(`<?php
 namespace App\Services;
 
 use App\Models\A;
 
-class Mixed
+class MixedService
 {
     public function none() { return 1; }
     public function onlyExternal($c) { return $c->makeWith('x'); }
@@ -38,7 +38,7 @@ class Mixed
     }
 }
 `)
-	ex, err := NewProvider().Extract(context.Background(), source.FileID("Mixed.php"), src)
+	ex, err := NewProvider().Extract(context.Background(), source.FileID("MixedService.php"), src)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ class Mixed
 		found[sym.Qualified] = true
 	}
 	for _, name := range []string{"none", "onlyExternal", "partial", "classString"} {
-		if !found[`App\Services\Mixed.`+name] {
+		if !found[`App\Services\MixedService.`+name] {
 			t.Errorf("missing method %s; extracted symbols: %v", name, found)
 		}
 	}
