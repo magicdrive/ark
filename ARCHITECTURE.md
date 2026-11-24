@@ -815,7 +815,7 @@ after 32 uses, errors or panics; inputs above 64 KiB bypass the pool.
 These limits bound retention opportunities, not exact heap bytes.
 Authority:
 `tsparse/tsparse.go`. Tests: `TestParse_*` (the contract), `TestRoute_*`
-(gotreesitter v0.56.0 route behavior — the upgrade gate), `TestProbe_*`
+(gotreesitter route behavior — the upgrade gate), `TestProbe_*`
 (the probe agrees with the forest route, never skips a derivable source,
 runs only for Go and Rust; linear cost), `TestBlankComments*`,
 `TestParse_PooledParsersShareNoState`,
