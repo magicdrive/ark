@@ -2,6 +2,8 @@ package tsparse
 
 import (
 	"fmt"
+	"os"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -85,6 +87,33 @@ func TestProductionPool_Retention(t *testing.T) {
 	run([]byte(routesDiffer))
 	if idle().parser != nil {
 		t.Fatal("erroneous parse retained")
+	}
+}
+
+// TestProductionPool_HeapPlateau is an opt-in diagnostic, not a timing gate.
+// Compare live heap after full GC at equal lease-cycle boundaries.
+func TestProductionPool_HeapPlateau(t *testing.T) {
+	if os.Getenv("ARK_POOL_HEAP_PROBE") != "1" {
+		t.Skip("set ARK_POOL_HEAP_PROBE=1")
+	}
+	lang := grammars.GoLanguage()
+	src := []byte("package p\n" + strings.Repeat("var X = 42\n", 256))
+	for batch := 0; batch < 6; batch++ {
+		for i := 0; i < 1024; i++ {
+			tree, err := parseProduction(lang, src)
+			if err != nil || tree == nil {
+				t.Fatalf("parse: %v", err)
+			}
+			bad := tree.RootNode().HasError()
+			tree.Release()
+			if bad {
+				t.Fatal("unexpected parse error")
+			}
+		}
+		runtime.GC()
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		t.Logf("batch=%d parses=%d heap_alloc=%d heap_objects=%d heap_inuse=%d", batch, (batch+1)*1024, m.HeapAlloc, m.HeapObjects, m.HeapInuse)
 	}
 }
 
