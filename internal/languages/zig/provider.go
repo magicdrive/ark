@@ -102,7 +102,7 @@ func (p *Provider) Language() language.Language { return "zig" }
 func (p *Provider) Extensions() []string { return []string{".zig"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "zig-1" }
+func (p *Provider) CacheVersion() string { return "zig-2" }
 
 // Diagnostic codes this provider states, beside treediag's.
 const diagNestingTooDeep = "nesting_too_deep" // syntax below maxDepth is not observed
