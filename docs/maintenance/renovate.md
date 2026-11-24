@@ -159,7 +159,7 @@ ls /tmp/ark-report          # unit-linux.packages.tsv  unit-linux.tests.tsv
 
    同じテストコードで他が通り、この PR だけ落ちるなら、依存の更新か偶発的な失敗（flake）である。
 2. **テストが何を固定しているか**をテストのコメントで読む。Ark には「依存の振る舞いを固定するゲート」がある
-   （`TestRoute_*`、`TestParserBehavior_GenericCallsDerivedAsComparisons` など。[4.2](#42-ゲートになっているテスト)）。
+   （`TestRoute_*`、`TestParserBehavior_GenericCalls` など。[4.2](#42-ゲートになっているテスト)）。
    ゲートの失敗は「依存の振る舞いが変わった」という知らせで、Ark の不具合とは限らない。
 3. **失敗の種類**を決める: 依存の API の変化 / 依存の振る舞いの変化 / 計時（性能比）テストの揺れ /
    CI 基盤（ダウンロード失敗など）/ Ark の既存の不具合。
@@ -307,7 +307,7 @@ gotreesitter は Go・Rust・TypeScript/TSX・JavaScript・Python・PHP・Terraf
 |---|---|---|
 | `TestRoute_*`（`internal/tsparse/tsparse_test.go`） | 既知の入力がどの parse route を通るか | route の振る舞いが変わった。fallback を測り直す |
 | `TestParse_*` | Ark が依存する parse の契約（route によらない） | Ark の解析が壊れた。**マージしない** |
-| `TestParserBehavior_GenericCallsDerivedAsComparisons` | TypeScript の `f<T>(x)` を比較式と誤って導出する入力 | 誤導出が変わった。回復処理を測り直す |
+| `TestParserBehavior_GenericCalls` | TypeScript のジェネリック呼び出しの構文木 | 誤導出が変わった。回復処理を測り直す |
 | `TestExtract_GenericCallReadAsComparison` など `TestExtract_*` | 抽出の契約（パーサの版によらない） | **回帰**。マージしない |
 | `TestProbe_*` | forest route の probe と非 probe の一致、線形コスト | probe の前提が崩れた |
 
@@ -493,7 +493,7 @@ push と PR の作成は通常どおり。取り消した版を Renovate が再�
 
 ### 8.1 gotreesitter のゲートの失敗（PR #68、v0.55.1→v0.56.0）
 
-- 症状: unit と race (3) で `TestParserBehavior_GenericCallsDerivedAsComparisons` が
+- 症状: unit と race (3) で `TestParserBehavior_GenericCalls` が
   `gotreesitter's tree changed` で失敗。契約のテストは通った。
 - 原因: v0.56.0 が、ゲートの入力の generic call を正しく call として導出するようになった
   （上流の #1443、#1414）。誤導出が消えたので、ゲートの期待値が古くなった。
