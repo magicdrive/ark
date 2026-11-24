@@ -155,3 +155,35 @@ func BenchmarkProductionPool(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkMigrationWorkload(b *testing.B) {
+	lang := grammars.GoLanguage()
+	for _, fixture := range []struct {
+		name string
+		src  []byte
+	}{
+		{"Small", []byte("package p\nfunc F(x int) int { return x + 1 }\n")},
+		{"Medium", []byte("package p\n" + strings.Repeat("var X = 42\n", 1024))},
+		{"Large", []byte("package p\n" + strings.Repeat("var X = 42\n", 8192))},
+	} {
+		b.Run(fixture.name, func(b *testing.B) {
+			b.ReportAllocs()
+			b.SetBytes(int64(len(fixture.src)))
+			b.RunParallel(func(pb *testing.PB) {
+				for pb.Next() {
+					tree, err := parseProduction(lang, fixture.src)
+					if err != nil || tree == nil {
+						b.Errorf("parse: %v", err)
+						return
+					}
+					bad := tree.RootNode().HasError()
+					tree.Release()
+					if bad {
+						b.Error("unexpected parse error")
+						return
+					}
+				}
+			})
+		})
+	}
+}
