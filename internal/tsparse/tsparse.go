@@ -154,9 +154,9 @@ func parseTraced(lang *ts.Language, src []byte, trace *routeTrace) (_ *ts.Tree, 
 // Upstream cleanup hooks are private, so bound retention by source size
 // and lease count rather than assuming that Parse clears every reference.
 type productionParserLease struct {
-	lang *ts.Language
+	lang   *ts.Language
 	parser *ts.Parser
-	uses int
+	uses   int
 }
 
 var productionParserPool = struct {
@@ -166,8 +166,8 @@ var productionParserPool = struct {
 
 const (
 	maxPooledSourceBytes = 64 << 10
-	maxParserUses = 32
-	maxIdleParsers = 32
+	maxParserUses        = 32
+	maxIdleParsers       = 32
 )
 
 func parseProduction(lang *ts.Language, src []byte) (*ts.Tree, error) {
