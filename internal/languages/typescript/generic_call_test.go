@@ -26,8 +26,8 @@ func refKeys(t *testing.T, src string, kinds ...string) []string {
 }
 
 // misparsedGenericCall is valid TypeScript whose one argument is the generic
-// call a<b, c>(d), as the compiler parses it; gotreesitter v0.56.0 derives two
-// comparison arguments instead, without an error (v0.55.1 parsed the call).
+// call a<b, c>(d), as the compiler parses it. gotreesitter v0.56.0
+// incorrectly derived two comparisons; v0.58.0 derives the call correctly.
 const misparsedGenericCall = "f(a < b, c > (d));\n"
 
 // misparsedGenericCalls is valid TypeScript whose two generic calls
@@ -42,13 +42,13 @@ z.number().apply<z.ZodMiniNumber>((schema) => schema.check(0));
 // which the parser reads as a call: the control for the contract below.
 const parsedAsCall = "const c = processors.aggregateChecks<number>(inst).minimum ?? null;\n"
 
-// --- gotreesitter v0.56.0 behavior (the upgrade gate) ---
+// --- gotreesitter v0.58.0 behavior (the upgrade gate) ---
 //
-// It pins the misparse the recovery exists for, and the trees of the source
+// It pins the corrected generic call tree, and the trees of the source
 // v0.55.1 misparsed. A failure after a gotreesitter upgrade means the parser
 // changed: the contract test below must still pass; re-measure the recovery
 // (ARCHITECTURE.md §3) before updating this one.
-func TestParserBehavior_GenericCallsDerivedAsComparisons(t *testing.T) {
+func TestParserBehavior_GenericCalls(t *testing.T) {
 	lang := grammars.TypescriptLanguage()
 	mis, err := tsparse.Parse(lang, []byte(misparsedGenericCall))
 	if err != nil {
@@ -58,10 +58,10 @@ func TestParserBehavior_GenericCallsDerivedAsComparisons(t *testing.T) {
 	if mis.RootNode().HasError() {
 		t.Fatal("the misparse has no error: the tree must not have one")
 	}
-	// f(a < b, c > (d))
+	// f(a<b, c>(d)) must derive a generic call, not two comparisons.
 	wantMis := "(program (expression_statement (call_expression (identifier) (arguments " +
-		"(binary_expression (identifier) (identifier)) " +
-		"(binary_expression (identifier) (parenthesized_expression (identifier)))))))"
+		"(call_expression (identifier) (type_arguments (type_identifier) (type_identifier)) " +
+		"(arguments (identifier)))))))"
 	if got := mis.RootNode().SExpr(lang); got != wantMis {
 		t.Errorf("gotreesitter's tree changed:\n got %s\nwant %s", got, wantMis)
 	}
