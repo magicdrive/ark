@@ -41,6 +41,18 @@ jobs:
             go list -m github.com/odvcencio/gotreesitter
             go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -benchtime=300ms -cpu=1
           } | tee "$RUNNER_TEMP/parser-benchmark.txt"
+      - name: Measure post-GC live heap
+        run: |
+          set -o pipefail
+          ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_HeapPlateau
+      - name: Publish measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parser-migration-benchmark
+          path: ${{ runner.temp }}/parser-benchmark.txt
+          if-no-files-found: error
+ -count=1 -v | tee -a "$RUNNER_TEMP/parser-benchmark.txt"
       - name: Publish measurements
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
