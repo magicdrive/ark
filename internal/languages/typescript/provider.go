@@ -87,7 +87,7 @@ func (p *Provider) Extensions() []string {
 //	        (docs/development/web-semantic-fidelity/commonjs-boundary).
 //	        ts-15 (an unreleased audit of those routes) is skipped so that
 //	        no cache of it is read.
-func (p *Provider) CacheVersion() string { return "ts-16" }
+func (p *Provider) CacheVersion() string { return "ts-17" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	tsLang := p.tsLang()
