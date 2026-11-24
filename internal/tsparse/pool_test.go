@@ -11,33 +11,57 @@ import (
 	"github.com/odvcencio/gotreesitter/grammars"
 )
 
+// treeSnapshot records all nodes, including anonymous tokens and their spans.
+func treeSnapshot(lang *ts.Language, tree *ts.Tree, src []byte) string {
+	var out strings.Builder
+	var walk func(*ts.Node)
+	walk = func(n *ts.Node) {
+		fmt.Fprintf(&out, "%s %d:%d %v:%v %q\n", n.Type(lang), n.StartByte(), n.EndByte(), n.StartPoint(), n.EndPoint(), src[n.StartByte():n.EndByte()])
+		for i := 0; i < int(n.ChildCount()); i++ {
+			walk(n.Child(i))
+		}
+	}
+	walk(tree.RootNode())
+	return out.String()
+}
+
 func TestProductionPool_ConcurrentTreeOwnership(t *testing.T) {
-	lang := grammars.GoLanguage()
-	for worker := 0; worker < 16; worker++ {
-		t.Run(fmt.Sprint(worker), func(t *testing.T) {
-			t.Parallel()
-			src := []byte(fmt.Sprintf("package p\nfunc F%d() {}\n", worker))
-			want := production(t, lang, string(src)).RootNode().SExpr(lang)
-			first, err := parseProduction(lang, src)
-			if err != nil || first == nil {
-				t.Fatalf("initial parse: %v", err)
-			}
-			defer first.Release()
-			for i := 0; i < 64; i++ {
-				tree, err := parseProduction(lang, []byte("package q\nvar X = 42\n"))
-				if err != nil || tree == nil {
-					t.Fatalf("subsequent parse: %v", err)
+	for _, fixture := range []struct {
+		lang       *ts.Language
+		src, other string
+	}{
+		{grammars.GoLanguage(), "package p\nfunc F%d() {}\n", "package q\nvar X = 42\n"},
+		{grammars.PhpLanguage(), "<?php function F%d() {}\n", "<?php class Other { public function run() { return 42; } }"},
+		{grammars.TypescriptLanguage(), "export function F%d() {}\n", "export const other = { value: 42 };\n"},
+	} {
+		for worker := 0; worker < 8; worker++ {
+			t.Run(fmt.Sprintf("%s/%d", fixture.lang.Name, worker), func(t *testing.T) {
+				t.Parallel()
+				lang := fixture.lang
+				src := []byte(fmt.Sprintf(fixture.src, worker))
+				want := treeSnapshot(lang, production(t, lang, string(src)), src)
+				first, err := parseProduction(lang, src)
+				if err != nil || first == nil {
+					t.Fatalf("initial parse: %v", err)
 				}
-				bad := tree.RootNode().HasError()
-				tree.Release()
-				if bad {
-					t.Fatal("unexpected parse error")
+				defer first.Release()
+				for i := 0; i < 64; i++ {
+					other := []byte(fixture.other + strings.Repeat(" ", i*16))
+					tree, err := parseProduction(lang, other)
+					if err != nil || tree == nil {
+						t.Fatalf("subsequent parse: %v", err)
+					}
+					bad := tree.RootNode().HasError()
+					tree.Release()
+					if bad {
+						t.Fatal("unexpected parse error")
+					}
+					if got := treeSnapshot(lang, first, src); got != want {
+						t.Fatalf("retained tree changed:\n%s", got)
+					}
 				}
-				if got := first.RootNode().SExpr(lang); got != want {
-					t.Fatalf("retained tree changed: %s", got)
-				}
-			}
-		})
+			})
+		}
 	}
 }
 
