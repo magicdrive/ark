@@ -1,0 +1,50 @@
+name: Parser migration benchmark
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    if: github.event.pull_request.number == 120
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Compare parser implementations
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          base="$RUNNER_TEMP/ark-base"
+          git worktree add --detach "$base" "$BASE_SHA"
+          trap 'git worktree remove --force "$base"' EXIT
+          # Copy only the benchmark, not tests referring to the new pool.
+          {
+            printf 'package tsparse\n\nimport (\n"testing"\n ts "github.com/odvcencio/gotreesitter"\n"github.com/odvcencio/gotreesitter/grammars"\n)\n\n'
+            sed -n '/^func BenchmarkProductionPool(/,$p' internal/tsparse/pool_test.go
+          } > "$base/internal/tsparse/migration_bench_test.go"
+          {
+            echo '### Base dependency and parser'
+            (cd "$base" && go list -m github.com/odvcencio/gotreesitter)
+            (cd "$base" && go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -benchtime=300ms -cpu=1)
+            echo '### PR dependency and parser'
+            go list -m github.com/odvcencio/gotreesitter
+            go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -benchtime=300ms -cpu=1
+          } | tee "$RUNNER_TEMP/parser-benchmark.txt"
+      - name: Publish measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parser-migration-benchmark
+          path: ${{ runner.temp }}/parser-benchmark.txt
+          if-no-files-found: error
