@@ -39,13 +39,24 @@ HeapAlloc changed from 12198272 to 12196016 bytes in
 [run 45348027238](https://github.com/magicdrive/ark/actions/runs/45348027238),
 and from 12200240 to 12204576 bytes in run 45349492895.
 This shows stable live heap at sampled lease-cycle boundaries, not a proof
-of leak freedom or a peak-memory bound.
+of leak freedom or a peak-memory bound. Sampling every 1024 parses aligns
+with the 32-use retirement cycle and does not measure a live idle lease.
+The separate idle-heap probe samples at age 31 and after clearing the pool.
 
 ## Reproduction
 
     go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -cpu=1
     go test ./internal/tsparse -run '^$' -bench '^BenchmarkMigrationWorkload$' -benchmem -count=3 -cpu=1,4,8
     ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_HeapPlateau$' -count=1 -v
+
+    ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_IdleHeap is not a permanent CI gate.
+
+## Cache compatibility
+
+Invalidate extraction caches for Go, Python, TypeScript, PHP, Rust, Zig,
+Java and Terraform. JavaScript and HTML inherit the TypeScript version.
+The serialized cache schema is unchanged.
+ -count=1 -v
 
 The temporary migration workflow is not a permanent CI gate.
 
