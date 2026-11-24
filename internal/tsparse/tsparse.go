@@ -71,8 +71,6 @@
 package tsparse
 
 import (
-	"sync"
-
 	ts "github.com/odvcencio/gotreesitter"
 )
 
@@ -104,9 +102,6 @@ func parseTraced(lang *ts.Language, src []byte, trace *routeTrace) (_ *ts.Tree, 
 			for _, t := range owned {
 				t.Release()
 			}
-			// A parser a panic interrupted went back to the pool in whatever
-			// state the panic left: drop the pool, later parses build anew.
-			productionPools.Delete(lang.Name)
 			panic(r)
 		}
 	}()
@@ -151,39 +146,15 @@ func parseTraced(lang *ts.Language, src []byte, trace *routeTrace) (_ *ts.Tree, 
 	return handOver(tree), routeProduction, nil
 }
 
-// productionPools holds one gotreesitter ParserPool per language. Building
-// a Parser rebuilds per-language tables (about 0.7 ms for Rust), which on a
-// small file costs more than parsing it; every file takes the production
-// route, so its parsers are reused. A pooled Parser follows the process-wide
-// admission default, which Ark never changes and which is off: the
-// production route, as an explicit SetAdmissionCandidateRoute(false) asks.
-// Should the default ever be on, the pool is not used. ParserPool.Parse
-// returns its parser to the pool whatever the parse does, and resets it
-// before and after each parse; after a panic the language's pool is dropped
-// (parseTraced) — a parse that loaded the pool before the drop may still
-// take the parser the panic interrupted, reset by the pool.
-var productionPools sync.Map // language name -> *ts.ParserPool
-
-// parseProduction parses src on the production route.
+// parseProduction explicitly selects the legacy route. Since v0.58.0,
+// the upstream pool's implicit default can select the C-faithful core
+// even when AdmissionCandidateRouteDefault reports false.
+// Do not implement a custom pool: upstream ParserPool has private cleanup
+// hooks for parser-owned references. Measure the cost of fresh parsers.
 func parseProduction(lang *ts.Language, src []byte) (*ts.Tree, error) {
-	if ts.AdmissionCandidateRouteDefault() {
-		p := ts.NewParser(lang)
-		p.SetAdmissionCandidateRoute(false)
-		return p.Parse(src)
-	}
-	pool, ok := productionPools.Load(lang.Name)
-	if !ok {
-		pool, _ = productionPools.LoadOrStore(lang.Name, ts.NewParserPool(lang))
-	}
-	if pp := pool.(*ts.ParserPool); pp.Language() == lang {
-		return pp.Parse(src)
-	}
-	// A grammar loaded anew (gotreesitter's grammar cache evicts on
-	// request): its own pool replaces the old one, so the pools stay one
-	// per language.
-	pp := ts.NewParserPool(lang)
-	productionPools.Store(lang.Name, pp)
-	return pp.Parse(src)
+	p := ts.NewParser(lang)
+	p.SetAdmissionCandidateRoute(false)
+	return p.Parse(src)
 }
 
 // probeComments are, per language whose tokens do not depend on the parse,
