@@ -141,6 +141,50 @@ func TestProductionPool_HeapPlateau(t *testing.T) {
 	}
 }
 
+// TestProductionPool_IdleHeap measures a live lease near its retirement age.
+func TestProductionPool_IdleHeap(t *testing.T) {
+	if os.Getenv("ARK_POOL_HEAP_PROBE") != "1" {
+		t.Skip("set ARK_POOL_HEAP_PROBE=1")
+	}
+	lang := grammars.GoLanguage()
+	clear := func() {
+		productionParserPool.Lock()
+		delete(productionParserPool.idle, lang.Name)
+		productionParserPool.Unlock()
+	}
+	clear()
+	t.Cleanup(clear)
+	measure := func(label string) {
+		runtime.GC()
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+		t.Logf("%s heap_alloc=%d heap_objects=%d heap_inuse=%d", label, m.HeapAlloc, m.HeapObjects, m.HeapInuse)
+	}
+	for batch := 0; batch < 6; batch++ {
+		for i := 0; i < maxParserUses-1; i++ {
+			src := []byte(fmt.Sprintf("package p\nvar X = %d\n", i) + strings.Repeat("// padding\n", 2048))
+			tree, err := parseProduction(lang, src)
+			if err != nil || tree == nil {
+				t.Fatalf("parse: %v", err)
+			}
+			bad := tree.RootNode().HasError()
+			tree.Release()
+			if bad {
+				t.Fatal("unexpected parse error")
+			}
+		}
+		productionParserPool.Lock()
+		age := productionParserPool.idle[lang.Name].uses
+		productionParserPool.Unlock()
+		if age != maxParserUses-1 {
+			t.Fatalf("idle lease age = %d", age)
+		}
+		measure(fmt.Sprintf("batch=%d idle_age=%d", batch, age))
+		clear()
+		measure(fmt.Sprintf("batch=%d cleared", batch))
+	}
+}
+
 func BenchmarkProductionPool(b *testing.B) {
 	for _, fixture := range []struct {
 		name string
