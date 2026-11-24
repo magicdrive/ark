@@ -102,7 +102,7 @@ func (p *Provider) Language() language.Language { return "rust" }
 func (p *Provider) Extensions() []string { return []string{".rs"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "rust-4" }
+func (p *Provider) CacheVersion() string { return "rust-5" }
 
 // Diagnostic codes this provider states, beside treediag's.
 const diagNestingTooDeep = "nesting_too_deep" // syntax below maxDepth is not observed

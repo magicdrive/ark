@@ -104,9 +104,6 @@ func parseTraced(lang *ts.Language, src []byte, trace *routeTrace) (_ *ts.Tree, 
 			for _, t := range owned {
 				t.Release()
 			}
-			// A parser a panic interrupted went back to the pool in whatever
-			// state the panic left: drop the pool, later parses build anew.
-			productionPools.Delete(lang.Name)
 			panic(r)
 		}
 	}()
@@ -151,39 +148,54 @@ func parseTraced(lang *ts.Language, src []byte, trace *routeTrace) (_ *ts.Tree, 
 	return handOver(tree), routeProduction, nil
 }
 
-// productionPools holds one gotreesitter ParserPool per language. Building
-// a Parser rebuilds per-language tables (about 0.7 ms for Rust), which on a
-// small file costs more than parsing it; every file takes the production
-// route, so its parsers are reused. A pooled Parser follows the process-wide
-// admission default, which Ark never changes and which is off: the
-// production route, as an explicit SetAdmissionCandidateRoute(false) asks.
-// Should the default ever be on, the pool is not used. ParserPool.Parse
-// returns its parser to the pool whatever the parse does, and resets it
-// before and after each parse; after a panic the language's pool is dropped
-// (parseTraced) — a parse that loaded the pool before the drop may still
-// take the parser the panic interrupted, reset by the pool.
-var productionPools sync.Map // language name -> *ts.ParserPool
+// productionParserPool retains at most one idle parser per language name.
+// A grammar replacement invalidates the idle parser. A parser is leased
+// exclusively, and a failed or panicking parse never returns it to the pool.
+// Upstream cleanup hooks are private, so bound retention by source size
+// and lease count rather than assuming that Parse clears every reference.
+type productionParserLease struct {
+	lang   *ts.Language
+	parser *ts.Parser
+	uses   int
+}
 
-// parseProduction parses src on the production route.
+var productionParserPool = struct {
+	sync.Mutex
+	idle map[string]productionParserLease
+}{idle: make(map[string]productionParserLease)}
+
+const (
+	maxPooledSourceBytes = 64 << 10
+	maxParserUses        = 32
+	maxIdleParsers       = 32
+)
+
 func parseProduction(lang *ts.Language, src []byte) (*ts.Tree, error) {
-	if ts.AdmissionCandidateRouteDefault() {
+	if lang == nil || len(src) > maxPooledSourceBytes {
 		p := ts.NewParser(lang)
 		p.SetAdmissionCandidateRoute(false)
 		return p.Parse(src)
 	}
-	pool, ok := productionPools.Load(lang.Name)
-	if !ok {
-		pool, _ = productionPools.LoadOrStore(lang.Name, ts.NewParserPool(lang))
+	productionParserPool.Lock()
+	lease := productionParserPool.idle[lang.Name]
+	delete(productionParserPool.idle, lang.Name)
+	productionParserPool.Unlock()
+	if lease.lang != lang || lease.parser == nil {
+		lease = productionParserLease{lang: lang, parser: ts.NewParser(lang)}
 	}
-	if pp := pool.(*ts.ParserPool); pp.Language() == lang {
-		return pp.Parse(src)
+	lease.parser.SetAdmissionCandidateRoute(false)
+	tree, err := lease.parser.Parse(src)
+	lease.uses++
+	// Do not retain parsers after errors, incomplete trees or large inputs.
+	// No deferred return: a panic discards the lease.
+	if err == nil && tree != nil && !tree.RootNode().HasError() && lease.uses < maxParserUses {
+		productionParserPool.Lock()
+		if _, exists := productionParserPool.idle[lang.Name]; !exists && len(productionParserPool.idle) < maxIdleParsers {
+			productionParserPool.idle[lang.Name] = lease
+		}
+		productionParserPool.Unlock()
 	}
-	// A grammar loaded anew (gotreesitter's grammar cache evicts on
-	// request): its own pool replaces the old one, so the pools stay one
-	// per language.
-	pp := ts.NewParserPool(lang)
-	productionPools.Store(lang.Name, pp)
-	return pp.Parse(src)
+	return tree, err
 }
 
 // probeComments are, per language whose tokens do not depend on the parse,

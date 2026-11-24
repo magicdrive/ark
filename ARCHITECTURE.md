@@ -808,11 +808,14 @@ found). Languages whose parse decides the tokens (JavaScript regular
 expressions, JSX text, PHP `?>`, Python indentation) are not probed. The
 probe only decides whether to run the forest route; its tree is never
 returned, so a wrong probe could only keep the production tree. The
-production route's parsers come from gotreesitter's ParserPool (building a
-parser costs more than parsing a small file); a panic drops the pool.
+production route uses Ark-owned exclusive parser leases with an explicit
+legacy-route override. Idle retention is bounded to one parser per language
+name and 32 total; grammar changes invalidate leases. Parsers are discarded
+after 32 uses, errors or panics; inputs above 64 KiB bypass the pool.
+These limits bound retention opportunities, not exact heap bytes.
 Authority:
 `tsparse/tsparse.go`. Tests: `TestParse_*` (the contract), `TestRoute_*`
-(gotreesitter v0.56.0 route behavior — the upgrade gate), `TestProbe_*`
+(gotreesitter route behavior — the upgrade gate), `TestProbe_*`
 (the probe agrees with the forest route, never skips a derivable source,
 runs only for Go and Rust; linear cost), `TestBlankComments*`,
 `TestParse_PooledParsersShareNoState`,

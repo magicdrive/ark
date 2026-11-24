@@ -40,9 +40,9 @@ package cache
 // names, js-7); the JavaScript and TypeScript providers emit it too since
 // js-8 and ts-9 (CSS Modules classes, symbol.FileScoped). Since html-4 the
 // HTML provider's version joins the CSS and JavaScript providers' ones
-// ("html-6+css-4+js-12+ts-16"): it reads inline styles and scripts with
+// ("html-6+css-4+js-12+ts-17"): it reads inline styles and scripts with
 // their extractors, and the JavaScript provider's joins the TypeScript
-// provider's ("js-12+ts-16"), whose extractor it shares. SymbolDraft.
+// provider's ("js-12+ts-17"), whose extractor it shares. SymbolDraft.
 // Placement is optional the same way; the TypeScript and JavaScript
 // providers, which state it, are ts-10 and js-9. SymbolDraft.ConfidenceCap,
 // BindingDraft.Scope, ModuleCandidate.Unless and Extraction.LexicalNesting
@@ -57,6 +57,10 @@ package cache
 // "contains" is a value of the existing Kind field; only the YAML provider
 // (yaml-1, its first version) states it, so no entry of another provider
 // changes.
+//
+// The gotreesitter v0.58.0 migration invalidates parser-dependent extractions
+// (go-10, python 6, ts-17, php-15, rust-5, zig-2, java-2, terraform-9).
+// JavaScript and HTML inherit ts-17 through their composed versions.
 //
 // Asset files (internal/asset: images, fonts, media) have no extraction and
 // no entry: the index records their paths from the walk and makes a node for

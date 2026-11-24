@@ -182,12 +182,17 @@ func (c *indexCache) run(key indexKey, e *indexEntry) {
 				}
 			}
 			c.mu.Unlock()
+			close(e.done)
 		} else {
-			c.touch(e)
-		}
-		close(e.done)
-		if !failed {
-			c.evict() // after done: this entry now counts as completed
+			// Publish completion and enforce the retention bound under the
+			// same lock. Waiters may wake at close, but cannot observe the
+			// cache or touch the entry until eviction has finished.
+			c.mu.Lock()
+			c.clock++
+			e.used = c.clock
+			close(e.done)
+			c.evictLocked()
+			c.mu.Unlock()
 		}
 	}()
 	e.idx, e.err = c.build(context.Background(), key.root)
@@ -213,10 +218,9 @@ func (c *indexCache) touch(e *indexEntry) {
 	c.mu.Unlock()
 }
 
-// evict drops least recently used completed entries beyond the bound.
-func (c *indexCache) evict() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// evictLocked drops least recently used completed entries beyond the bound.
+// The caller must hold c.mu.
+func (c *indexCache) evictLocked() {
 	for {
 		completed := 0
 		var oldest indexKey

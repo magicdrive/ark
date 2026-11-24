@@ -97,7 +97,7 @@ func (p *Provider) Language() language.Language { return "java" }
 func (p *Provider) Extensions() []string { return []string{".java"} }
 
 // CacheVersion must change whenever extraction semantics change.
-func (p *Provider) CacheVersion() string { return "java-1" }
+func (p *Provider) CacheVersion() string { return "java-2" }
 
 // Diagnostic codes this provider states, beside treediag's.
 const diagNestingTooDeep = "nesting_too_deep" // syntax below maxDepth is not observed

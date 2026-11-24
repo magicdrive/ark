@@ -25,7 +25,7 @@ func NewProvider() *Provider { return &Provider{} }
 
 func (p *Provider) Language() language.Language { return "go" }
 func (p *Provider) Extensions() []string        { return []string{".go"} }
-func (p *Provider) CacheVersion() string        { return "go-9" }
+func (p *Provider) CacheVersion() string        { return "go-10" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.GoLanguage()
@@ -474,6 +474,12 @@ func (c *goRefCollector) walk(node *ts.Node, container string, env goTypeEnv) {
 		defer func() { c.inError-- }()
 	}
 	t := node.Type(c.lang)
+	// Recovery can place a valid-looking type beside an ERROR or missing
+	// token inside an invalid assertion. Its type is not reliable evidence.
+	if t == "type_assertion_expression" && node.HasError() {
+		c.inError++
+		defer func() { c.inError-- }()
+	}
 	switch t {
 	case "function_declaration":
 		name := childText(node, c.lang, c.src, "identifier")
