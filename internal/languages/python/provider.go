@@ -76,7 +76,7 @@ func (p *Provider) Extensions() []string        { return []string{".py", ".pyw"}
 //	"5": scopes, members, nested declarations, variables, import bindings
 //	     and exports (ModuleScoped), inheritance, type uses, decorators,
 //	     self / cls / super receivers, Dynamic calls, declaration caps.
-func (p *Provider) CacheVersion() string { return "5" }
+func (p *Provider) CacheVersion() string { return "6" }
 
 func (p *Provider) Extract(ctx context.Context, file source.FileID, src []byte) (language.Extraction, error) {
 	lang := grammars.PythonLanguage()
