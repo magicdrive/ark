@@ -25,20 +25,20 @@ func refKeys(t *testing.T, src string, kinds ...string) []string {
 	return out
 }
 
-// misparsedGenericCall is valid TypeScript whose one argument is the generic
+// historicallyMisparsedGenericCall is valid TypeScript whose one argument is the generic
 // call a<b, c>(d), as the compiler parses it. gotreesitter v0.56.0
 // incorrectly derived two comparisons; v0.58.0 derives the call correctly.
-const misparsedGenericCall = "f(a < b, c > (d));\n"
+const historicallyMisparsedGenericCall = "f(a < b, c > (d));\n"
 
-// misparsedGenericCalls is valid TypeScript whose two generic calls
+// historicallyMisparsedGenericCalls is valid TypeScript whose two generic calls
 // gotreesitter v0.55.1 derived as comparisons, without an error; v0.56.0
 // parses both as calls. The defect depended on the context: the first
 // statement alone parsed as a call.
-const misparsedGenericCalls = `const c = processors.aggregateChecks<number>(inst).minimum ?? null;
+const historicallyMisparsedGenericCalls = `const c = processors.aggregateChecks<number>(inst).minimum ?? null;
 z.number().apply<z.ZodMiniNumber>((schema) => schema.check(0));
 `
 
-// parsedAsCall is the first statement of misparsedGenericCalls on its own,
+// parsedAsCall is the first statement of historicallyMisparsedGenericCalls on its own,
 // which the parser reads as a call: the control for the contract below.
 const parsedAsCall = "const c = processors.aggregateChecks<number>(inst).minimum ?? null;\n"
 
@@ -50,13 +50,13 @@ const parsedAsCall = "const c = processors.aggregateChecks<number>(inst).minimum
 // (ARCHITECTURE.md §3) before updating this one.
 func TestParserBehavior_GenericCalls(t *testing.T) {
 	lang := grammars.TypescriptLanguage()
-	mis, err := tsparse.Parse(lang, []byte(misparsedGenericCall))
+	mis, err := tsparse.Parse(lang, []byte(historicallyMisparsedGenericCall))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer mis.Release()
 	if mis.RootNode().HasError() {
-		t.Fatal("the misparse has no error: the tree must not have one")
+		t.Fatal("valid generic call must parse without errors")
 	}
 	// f(a<b, c>(d)) must derive a generic call, not two comparisons.
 	wantMis := "(program (expression_statement (call_expression (identifier) (arguments " +
@@ -65,7 +65,7 @@ func TestParserBehavior_GenericCalls(t *testing.T) {
 	if got := mis.RootNode().SExpr(lang); got != wantMis {
 		t.Errorf("gotreesitter's tree changed:\n got %s\nwant %s", got, wantMis)
 	}
-	tree, err := tsparse.Parse(lang, []byte(misparsedGenericCalls))
+	tree, err := tsparse.Parse(lang, []byte(historicallyMisparsedGenericCalls))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestParserBehavior_GenericCalls(t *testing.T) {
 // name, receiver, position, once each — however the parser derives them.
 func TestExtract_GenericCallReadAsComparison(t *testing.T) {
 	wantMis := []string{"call .a L1:3", "call .f L1:1", "type_use .b L1:7", "type_use .c L1:10"}
-	if got := refKeys(t, misparsedGenericCall, "call", "type_use", "construction"); !slices.Equal(got, wantMis) {
+	if got := refKeys(t, historicallyMisparsedGenericCall, "call", "type_use", "construction"); !slices.Equal(got, wantMis) {
 		t.Errorf("misparsed source:\n got %v\nwant %v", got, wantMis)
 	}
 	want := []string{
@@ -114,7 +114,7 @@ func TestExtract_GenericCallReadAsComparison(t *testing.T) {
 		"type_use z.ZodMiniNumber L2:18",
 	}
 	slices.Sort(want)
-	if got := refKeys(t, misparsedGenericCalls, "call", "type_use", "construction"); !slices.Equal(got, want) {
+	if got := refKeys(t, historicallyMisparsedGenericCalls, "call", "type_use", "construction"); !slices.Equal(got, want) {
 		t.Errorf("source v0.55.1 misparsed:\n got %v\nwant %v", got, want)
 	}
 	// The statement parsed as a call yields the same reference.
