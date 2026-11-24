@@ -43,10 +43,35 @@ of leak freedom or a peak-memory bound. Sampling every 1024 parses aligns
 with the 32-use retirement cycle and does not measure a live idle lease.
 The separate idle-heap probe samples at age 31 and after clearing the pool.
 
+## Idle lease retention audit
+
+[Run 45354764511](https://github.com/magicdrive/ark/actions/runs/45354764511)
+measured six cycles of 31 Go parses, followed by GC with the idle parser
+retained and again after clearing its pool entry.
+
+| Cycle | Idle HeapAlloc (bytes) | Cleared HeapAlloc (bytes) |
+| --- | ---: | ---: |
+| 1 | 22484776 | 12553968 |
+| 2 | 17525368 | 12554000 |
+| 3 | 17525496 | 12554112 |
+| 4 | 17525616 | 12554112 |
+| 5 | 17529080 | 12554112 |
+| 6 | 17525632 | 12554128 |
+
+The steady-state difference was about 4.74 MiB; the first cycle retained
+about 9.47 MiB more than the cleared measurement. Cleared HeapAlloc grew
+by only 160 bytes across the six cycles. These are process-wide post-GC
+measurements, not exact per-parser accounting or a bound across languages,
+inputs or concurrent leases. They do not measure peak RSS.
+
+The expanded ownership test compares node types, spans, points and source
+slices across Go, PHP and TypeScript under concurrent reuse. All 28 normal
+CI jobs passed in [run 45354764336](https://github.com/magicdrive/ark/actions/runs/45354764336).
+
 ## Reproduction
 
-    go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -cpu=1
-    go test ./internal/tsparse -run '^$' -bench '^BenchmarkMigrationWorkload$' -benchmem -count=3 -cpu=1,4,8
+    go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -benchtime=300ms -count=5 -cpu=1
+    go test ./internal/tsparse -run '^$' -bench '^BenchmarkMigrationWorkload$' -benchmem -benchtime=300ms -count=3 -cpu=1,4,8
     ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_HeapPlateau$' -count=1 -v
 
     ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_IdleHeap is not a permanent CI gate.
