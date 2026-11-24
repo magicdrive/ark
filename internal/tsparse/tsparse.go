@@ -71,6 +71,8 @@
 package tsparse
 
 import (
+	"sync"
+
 	ts "github.com/odvcencio/gotreesitter"
 )
 
@@ -146,15 +148,54 @@ func parseTraced(lang *ts.Language, src []byte, trace *routeTrace) (_ *ts.Tree, 
 	return handOver(tree), routeProduction, nil
 }
 
-// parseProduction explicitly selects the legacy route. Since v0.58.0,
-// the upstream pool's implicit default can select the C-faithful core
-// even when AdmissionCandidateRouteDefault reports false.
-// Do not implement a custom pool: upstream ParserPool has private cleanup
-// hooks for parser-owned references. Measure the cost of fresh parsers.
+// productionParserPool retains at most one idle parser per language name.
+// A grammar replacement invalidates the idle parser. A parser is leased
+// exclusively, and a failed or panicking parse never returns it to the pool.
+// Upstream cleanup hooks are private, so bound retention by source size
+// and lease count rather than assuming that Parse clears every reference.
+type productionParserLease struct {
+	lang *ts.Language
+	parser *ts.Parser
+	uses int
+}
+
+var productionParserPool = struct {
+	sync.Mutex
+	idle map[string]productionParserLease
+}{idle: make(map[string]productionParserLease)}
+
+const (
+	maxPooledSourceBytes = 64 << 10
+	maxParserUses = 32
+	maxIdleParsers = 32
+)
+
 func parseProduction(lang *ts.Language, src []byte) (*ts.Tree, error) {
-	p := ts.NewParser(lang)
-	p.SetAdmissionCandidateRoute(false)
-	return p.Parse(src)
+	if lang == nil || len(src) > maxPooledSourceBytes {
+		p := ts.NewParser(lang)
+		p.SetAdmissionCandidateRoute(false)
+		return p.Parse(src)
+	}
+	productionParserPool.Lock()
+	lease := productionParserPool.idle[lang.Name]
+	delete(productionParserPool.idle, lang.Name)
+	productionParserPool.Unlock()
+	if lease.lang != lang || lease.parser == nil {
+		lease = productionParserLease{lang: lang, parser: ts.NewParser(lang)}
+	}
+	lease.parser.SetAdmissionCandidateRoute(false)
+	tree, err := lease.parser.Parse(src)
+	lease.uses++
+	// Do not retain parsers after errors, incomplete trees or large inputs.
+	// No deferred return: a panic discards the lease.
+	if err == nil && tree != nil && !tree.RootNode().HasError() && lease.uses < maxParserUses {
+		productionParserPool.Lock()
+		if _, exists := productionParserPool.idle[lang.Name]; !exists && len(productionParserPool.idle) < maxIdleParsers {
+			productionParserPool.idle[lang.Name] = lease
+		}
+		productionParserPool.Unlock()
+	}
+	return tree, err
 }
 
 // probeComments are, per language whose tokens do not depend on the parse,
