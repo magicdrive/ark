@@ -30,16 +30,47 @@ jobs:
           trap 'git worktree remove --force "$base"' EXIT
           # Copy only the benchmark, not tests referring to the new pool.
           {
-            printf 'package tsparse\n\nimport (\n"testing"\n ts "github.com/odvcencio/gotreesitter"\n"github.com/odvcencio/gotreesitter/grammars"\n)\n\n'
+            printf 'package tsparse\n\nimport (\n"strings"\n"testing"\n ts "github.com/odvcencio/gotreesitter"\n"github.com/odvcencio/gotreesitter/grammars"\n)\n\n'
             sed -n '/^func BenchmarkProductionPool(/,$p' internal/tsparse/pool_test.go
           } > "$base/internal/tsparse/migration_bench_test.go"
           {
             echo '### Base dependency and parser'
             (cd "$base" && go list -m github.com/odvcencio/gotreesitter)
-            (cd "$base" && go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -benchtime=300ms -cpu=1)
+            (cd "$base" && go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool)
+            (cd "$base" && go test ./internal/tsparse -run '^$' -bench '^BenchmarkMigrationWorkload$' -benchmem -count=3 -benchtime=300ms -cpu=1,4,8)
             echo '### PR dependency and parser'
             go list -m github.com/odvcencio/gotreesitter
             go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool$' -benchmem -count=5 -benchtime=300ms -cpu=1
+            go test ./internal/tsparse -run '^$' -bench '^BenchmarkMigrationWorkload$' -benchmem -count=3 -benchtime=300ms -cpu=1,4,8
+          } | tee "$RUNNER_TEMP/parser-benchmark.txt"
+      - name: Measure post-GC live heap
+        run: |
+          set -o pipefail
+          ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_HeapPlateau$' -count=1 -v | tee -a "$RUNNER_TEMP/parser-benchmark.txt"
+      - name: Publish measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parser-migration-benchmark
+          path: ${{ runner.temp }}/parser-benchmark.txt
+          if-no-files-found: error
+ -benchmem -count=5 -benchtime=300ms -cpu=1)
+            echo '### PR dependency and parser'
+            go list -m github.com/odvcencio/gotreesitter
+            go test ./internal/tsparse -run '^$' -bench '^BenchmarkProductionPool
+          } | tee "$RUNNER_TEMP/parser-benchmark.txt"
+      - name: Measure post-GC live heap
+        run: |
+          set -o pipefail
+          ARK_POOL_HEAP_PROBE=1 go test ./internal/tsparse -run '^TestProductionPool_HeapPlateau$' -count=1 -v | tee -a "$RUNNER_TEMP/parser-benchmark.txt"
+      - name: Publish measurements
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: parser-migration-benchmark
+          path: ${{ runner.temp }}/parser-benchmark.txt
+          if-no-files-found: error
+ -benchmem -count=5 -benchtime=300ms -cpu=1
           } | tee "$RUNNER_TEMP/parser-benchmark.txt"
       - name: Measure post-GC live heap
         run: |
